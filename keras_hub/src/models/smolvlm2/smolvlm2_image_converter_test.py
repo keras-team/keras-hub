@@ -1,13 +1,13 @@
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
+from keras_hub.src.tests.test_case import TestCase
 
 
-class SmolVLM2ImageConverterTest(tf.test.TestCase):
+class SmolVLM2ImageConverterTest(TestCase):
     def test_single_crop_output(self):
         """Small image that fits in one crop produces 1 sub-image."""
         converter = SmolVLM2ImageConverter(
@@ -103,6 +103,7 @@ class SmolVLM2ImageConverterTest(tf.test.TestCase):
             size=2048,
             do_image_splitting=True,
         )
+        self.run_serialization_test(converter)
         config = converter.get_config()
         self.assertEqual(config["max_image_size"], 512)
         self.assertEqual(config["size"], 2048)
@@ -124,6 +125,32 @@ class SmolVLM2ImageConverterTest(tf.test.TestCase):
         self.assertEqual(pixel_values.shape[1], 32)
         self.assertEqual(pixel_values.shape[2], 32)
 
+    def test_batched_input_without_splitting(self):
+        """A batch of images is resized without a Python loop."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = np.random.randint(0, 256, size=(4, 20, 24, 3)).astype("uint8")
+        result = converter(images)
 
-if __name__ == "__main__":
-    tf.test.main()
+        pixel_values = ops.convert_to_numpy(result["pixel_values"])
+        self.assertEqual(pixel_values.shape, (4, 16, 16, 3))
+        self.assertEqual(int(result["rows"]), 0)
+        self.assertEqual(int(result["cols"]), 0)
+
+    def test_batched_input_with_splitting_raises(self):
+        """Splitting a batch is ambiguous and must raise."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=True,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = np.random.randint(0, 256, size=(2, 20, 24, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "do_image_splitting"):
+            converter(images)

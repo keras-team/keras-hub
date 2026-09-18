@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -75,30 +76,10 @@ class SmolVLM2CausalLM(CausalLM):
         )
 
     def __call__(self, inputs, *args, **kwargs):
-        """Override to inject default empty vision inputs for text-only calls.
-
-        When the CausalLM receives text-only inputs (no `pixel_values`
-        or `vision_indices`), this injects zero-sized dummy tensors so
-        the functional graph receives all required keys. This follows
-        the Qwen3.5/Gemma4 pattern.
-        """
-        if isinstance(inputs, dict):
-            inputs = dict(inputs)  # shallow copy
-            if "pixel_values" not in inputs:
-                batch_size = ops.shape(inputs["token_ids"])[0]
-                inputs["pixel_values"] = ops.zeros(
-                    (
-                        batch_size,
-                        self.backbone.image_size,
-                        self.backbone.image_size,
-                        3,
-                    ),
-                )
-            if "vision_indices" not in inputs:
-                batch_size = ops.shape(inputs["token_ids"])[0]
-                inputs["vision_indices"] = ops.zeros(
-                    (batch_size, 0), dtype="int32"
-                )
+        # The task's functional graph has the same four inputs as the
+        # backbone, so text-only callers need the same empty vision
+        # placeholders. Delegate rather than duplicate the logic.
+        inputs = self.backbone.add_empty_vision_inputs(inputs)
         return super().__call__(inputs, *args, **kwargs)
 
     def compile(
@@ -134,6 +115,8 @@ class SmolVLM2CausalLM(CausalLM):
             return x, False
 
         if isinstance(inputs, dict):
+            # Shallow copy: `generate()` must not rewrite the caller's dict.
+            inputs = dict(inputs)
             inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
 
             if input_is_scalar and "images" in inputs:
@@ -273,6 +256,14 @@ class SmolVLM2CausalLM(CausalLM):
         # Run vision encoder + connector if we have pixel data.
         img_embeddings = None
         if pixel_values is not None:
+            if vision_indices is None:
+                raise ValueError(
+                    "`pixel_values` was provided without `vision_indices`. "
+                    "Vision embeddings can only be merged into the text "
+                    "sequence at the positions given by `vision_indices`, so "
+                    "the images would be silently ignored. Pass both keys, or "
+                    "use the preprocessor to build the inputs."
+                )
             # Handle unbatched images.
             if len(ops.shape(pixel_values)) == 3:
                 pixel_values = ops.expand_dims(pixel_values, axis=0)
@@ -365,8 +356,6 @@ class SmolVLM2CausalLM(CausalLM):
         Returns:
             The per-token scores as a tensor.
         """
-        import keras
-
         if scoring_mode not in ("logits", "loss"):
             raise ValueError(
                 "Unsupported scoring_mode. Must be 'logits' or 'loss'."

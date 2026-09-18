@@ -264,3 +264,136 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         # Each frame wrapped with <fake_token_around_image>.
         self.assertIn("<fake_token_around_image>", prompt)
         self.assertIn("<global-img>", prompt)
+
+    def _image_preprocessor(self, **overrides):
+        kwargs = {
+            "tokenizer": self.tokenizer,
+            "image_converter": SmolVLM2ImageConverter(
+                max_image_size=32,
+                size=64,
+                do_image_splitting=False,
+                scale=[1 / 255.0] * 3,
+                offset=[0.0] * 3,
+                interpolation="bicubic",
+            ),
+            "sequence_length": 128,
+            "image_seq_len": 4,
+        }
+        kwargs.update(overrides)
+        return SmolVLM2CausalLMPreprocessor(**kwargs)
+
+    def test_generate_preprocess_with_batched_images(self):
+        """Every prompt/image in a batch is preprocessed, not just the first."""
+        preprocessor = self._image_preprocessor()
+        images = np.random.randint(0, 256, size=(3, 20, 20, 3)).astype("uint8")
+        prompts = [
+            "<|im_start|>User:<image>describe<end_of_utterance>\nAssistant:",
+            "<|im_start|>User:<image>what is this<end_of_utterance>\n"
+            "Assistant:",
+            "<|im_start|>User:<image>caption<end_of_utterance>\nAssistant:",
+        ]
+
+        x = preprocessor.generate_preprocess(
+            {"prompts": prompts, "images": images}
+        )
+
+        self.assertEqual(ops.shape(x["token_ids"])[0], 3)
+        pixel_values = ops.convert_to_numpy(x["pixel_values"])
+        self.assertEqual(pixel_values.shape, (3, 32, 32, 3))
+        # Four `<image>` slots per prompt, as flat `batch * seq + pos`
+        # offsets into the packed sequence.
+        vision_indices = ops.convert_to_numpy(x["vision_indices"])
+        self.assertEqual(vision_indices.shape, (3, 4))
+        sequence_length = ops.shape(x["token_ids"])[1]
+        for i, row in enumerate(vision_indices):
+            self.assertTrue(np.all(row // int(sequence_length) == i))
+
+    def test_generate_preprocess_image_count_mismatch(self):
+        """Mismatched prompt/image counts must raise, not silently truncate."""
+        preprocessor = self._image_preprocessor()
+        images = np.random.randint(0, 256, size=(2, 20, 20, 3)).astype("uint8")
+        prompts = ["<image>a", "<image>b", "<image>c"]
+        with self.assertRaisesRegex(ValueError, "images"):
+            preprocessor.generate_preprocess(
+                {"prompts": prompts, "images": images}
+            )
+
+    def test_generate_preprocess_truncated_image_tokens(self):
+        """Too short a sequence must raise instead of misaligning vision."""
+        preprocessor = self._image_preprocessor(sequence_length=4)
+        img = np.random.randint(0, 256, size=(20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "image_seq_len"):
+            preprocessor.generate_preprocess(
+                {"prompts": "<image>describe", "images": img}
+            )
+
+    def test_config_roundtrip(self):
+        """`image_seq_len` must survive serialization."""
+        preprocessor = self._image_preprocessor(image_seq_len=7)
+        config = preprocessor.get_config()
+        self.assertEqual(config["image_seq_len"], 7)
+        restored = SmolVLM2CausalLMPreprocessor.from_config(config)
+        self.assertEqual(restored.image_seq_len, 7)
+
+    def test_call_with_images(self):
+        """The training path expands `<image>` and emits vision indices."""
+        preprocessor = self._image_preprocessor()
+        images = np.random.randint(0, 256, size=(2, 20, 20, 3)).astype("uint8")
+        x, y, sw = preprocessor(
+            {
+                "prompts": ["<image>describe", "<image>caption"],
+                "responses": [" airplane", " airport"],
+                "images": images,
+            }
+        )
+        pixel_values = ops.convert_to_numpy(x["pixel_values"])
+        self.assertEqual(pixel_values.shape, (2, 32, 32, 3))
+        vision_indices = ops.convert_to_numpy(x["vision_indices"])
+        self.assertEqual(vision_indices.shape, (2, 4))
+        token_ids = ops.convert_to_numpy(x["token_ids"])
+        image_token_id = self.tokenizer.image_token_id
+        self.assertEqual(int((token_ids == image_token_id).sum()), 8)
+
+    def test_call_text_only_emits_empty_vision(self):
+        """Text-only training batches carry zero-length `pixel_values`."""
+        preprocessor = self._image_preprocessor()
+        x, y, sw = preprocessor([" airplane at airport"] * 2)
+        pixel_values = ops.convert_to_numpy(x["pixel_values"])
+        self.assertEqual(pixel_values.shape, (0, 32, 32, 3))
+        self.assertEqual(ops.shape(x["vision_indices"]), (2, 0))
+
+    def test_call_with_splitting_raises(self):
+        """Image splitting cannot be resolved inside a `tf.data` graph."""
+        preprocessor = self._image_preprocessor(
+            image_converter=SmolVLM2ImageConverter(
+                max_image_size=32,
+                size=64,
+                do_image_splitting=True,
+                scale=[1 / 255.0] * 3,
+                offset=[0.0] * 3,
+            )
+        )
+        img = np.random.randint(0, 256, size=(1, 20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "do_image_splitting"):
+            preprocessor(
+                {
+                    "prompts": ["<image>describe"],
+                    "responses": [" airplane"],
+                    "images": img,
+                }
+            )
+
+    def test_call_with_videos_raises(self):
+        """Videos are inference-only."""
+        preprocessor = self._image_preprocessor()
+        video = np.random.randint(0, 256, size=(1, 3, 20, 20, 3)).astype(
+            "uint8"
+        )
+        with self.assertRaisesRegex(ValueError, "video"):
+            preprocessor(
+                {
+                    "prompts": ["<video>describe"],
+                    "responses": [" airplane"],
+                    "videos": video,
+                }
+            )

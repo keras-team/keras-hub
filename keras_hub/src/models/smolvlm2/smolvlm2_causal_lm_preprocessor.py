@@ -110,7 +110,12 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         N = (max_image_size / patch_size)² / scale_factor²
 
     For text-only inputs, no ``pixel_values`` or ``vision_indices``
-    are returned, following the Qwen3.5 pattern.
+    are returned; `SmolVLM2Backbone` fills in empty placeholders.
+
+    During training (``fit()``), image inputs are supported only when the
+    image converter is created with ``do_image_splitting=False``: the number
+    of crops for a split image depends on its original size, which cannot be
+    resolved inside the ``tf.data`` graph. Video inputs are inference-only.
 
     Args:
         tokenizer: A ``SmolVLM2Tokenizer`` instance.
@@ -210,21 +215,20 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         if special_map is None:
             special_map = self._build_special_token_map()
 
-        # Add row/col tokens dynamically.
+        # Add row/col tokens dynamically. `get_vocabulary()` materializes the
+        # entire vocabulary, so look it up at most once per call.
         row_col_pattern = re.compile(r"<row_\d+_col_\d+>")
-        for match in row_col_pattern.finditer(text):
-            token = match.group()
-            if token not in special_map:
-                # Look up in vocabulary.
-                vocab = self.tokenizer.get_vocabulary()
-                if isinstance(vocab, dict):
-                    tid = vocab.get(token, None)
-                else:
-                    # vocab is a list — build lookup.
-                    try:
-                        tid = vocab.index(token)
-                    except (ValueError, AttributeError):
-                        tid = None
+        row_col_tokens = {
+            match.group()
+            for match in row_col_pattern.finditer(text)
+            if match.group() not in special_map
+        }
+        if row_col_tokens:
+            vocab = self.tokenizer.get_vocabulary()
+            if not isinstance(vocab, dict):
+                vocab = {token: i for i, token in enumerate(vocab)}
+            for token in row_col_tokens:
+                tid = vocab.get(token, None)
                 if tid is not None:
                     special_map[token] = tid
 
@@ -252,33 +256,49 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         return all_ids
 
     # ------------------------------------------------------------------
-    # Prompt extraction helper
+    # Prompt extraction helpers
     # ------------------------------------------------------------------
     @staticmethod
-    def _extract_prompt_string(prompts):
-        """Extract a Python str from various input types."""
+    def _to_python_string(value):
+        """Convert a single scalar prompt of any type to a Python str."""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        if hasattr(value, "numpy"):
+            value = value.numpy()
+        if isinstance(value, np.ndarray):
+            value = value.item() if value.ndim == 0 else value.tolist()
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return str(value)
+
+    @classmethod
+    def _extract_prompt_strings(cls, prompts):
+        """Return `(list[str], input_is_scalar)` for any prompt input."""
+        if isinstance(prompts, (str, bytes)):
+            return [cls._to_python_string(prompts)], True
         if isinstance(prompts, (list, tuple)):
-            val = prompts[0]
-            if isinstance(val, bytes):
-                return val.decode("utf-8")
-            if hasattr(val, "numpy"):
-                val = val.numpy()
-                if isinstance(val, bytes):
-                    return val.decode("utf-8")
-            return str(val)
-        if isinstance(prompts, str):
-            return prompts
-        if isinstance(prompts, bytes):
-            return prompts.decode("utf-8")
+            return [cls._to_python_string(p) for p in prompts], False
         # tf.Tensor, np.ndarray, or np scalar.
-        val = prompts
-        if hasattr(val, "numpy"):
-            val = val.numpy()
-        if isinstance(val, np.ndarray):
-            val = val.flat[0] if val.ndim > 0 else val.item()
-        if isinstance(val, bytes):
-            val = val.decode("utf-8")
-        return str(val)
+        value = prompts
+        if hasattr(value, "numpy"):
+            value = value.numpy()
+        if isinstance(value, np.ndarray) and value.ndim > 0:
+            return [cls._to_python_string(p) for p in value], False
+        return [cls._to_python_string(value)], True
+
+    def _image_token_strings(self):
+        """Return the `(image, fake_image, global_image)` token strings."""
+        return (
+            getattr(self.tokenizer, "image_token", "<image>"),
+            getattr(
+                self.tokenizer,
+                "fake_image_token",
+                "<fake_token_around_image>",
+            ),
+            getattr(self.tokenizer, "global_image_token", "<global-img>"),
+        )
 
     # ------------------------------------------------------------------
     # Vision indices
@@ -301,6 +321,38 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         indices = np.where(mask)[0].astype(np.int32)
         return tf.constant(indices)
 
+    def _graph_vision_indices(self, token_ids, num_images):
+        """Graph-mode version of `_compute_vision_indices`.
+
+        `SmolVLM2InterleaveEmbeddings` scatters into the *flattened*
+        `(batch * seq_len, hidden_dim)` text tensor, so the indices here are
+        flat offsets `batch_index * seq_len + position`.
+
+        Args:
+            token_ids: `(batch, seq_len)` int tensor of packed token ids.
+            num_images: int tensor. Total number of (sub-)images in the batch.
+        Returns:
+            `(batch, image_seq_len)` int32 tensor of flat indices.
+        """
+        image_token_id = self.tokenizer.image_token_id
+        mask = tf.equal(token_ids, image_token_id)
+        counts = tf.reduce_sum(tf.cast(mask, "int32"), axis=-1)
+        # Every `<image>` token must survive packing, otherwise the image
+        # embeddings and the slots they are scattered into no longer line up.
+        tf.debugging.assert_equal(
+            tf.reduce_sum(counts),
+            num_images * self.image_seq_len,
+            message=(
+                "The packed sequence does not contain "
+                "`num_images * image_seq_len` `<image>` tokens. This usually "
+                "means `sequence_length` is too short and truncated the "
+                "expanded image tokens."
+            ),
+        )
+        flat_mask = tf.reshape(mask, [-1])
+        indices = tf.cast(tf.where(flat_mask)[:, 0], "int32")
+        return tf.reshape(indices, (tf.shape(token_ids)[0], -1))
+
     # ------------------------------------------------------------------
     # call (training)
     # ------------------------------------------------------------------
@@ -317,17 +369,59 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # Handle both dict and string inputs.
         if isinstance(x, dict):
             images = x.get("images", None)
+            videos = x.get("videos", None)
             prompts = x["prompts"]
             responses = x["responses"]
         else:
             images = None
+            videos = None
             prompts = x
             responses = x
 
+        if videos is not None:
+            raise ValueError(
+                "Training on video inputs is not supported. Pass `videos` to "
+                "`generate_preprocess()` for inference instead."
+            )
+        if images is not None and self.image_converter is None:
+            raise ValueError(
+                "Received `images` in the input, but this preprocessor was "
+                "created with `image_converter=None`."
+            )
+
+        pixel_values = None
+        if images is not None:
+            if self.image_converter.do_image_splitting:
+                raise ValueError(
+                    "Training with `do_image_splitting=True` is not "
+                    "supported: the number of crops (and therefore the "
+                    "number of `<image>` tokens) depends on each image's "
+                    "original size, which cannot be resolved inside the "
+                    "`tf.data` graph that `fit()` runs on. Set "
+                    "`do_image_splitting=False` on the image converter."
+                )
+            pixel_values = self.image_converter(images)
+            if isinstance(pixel_values, dict):
+                pixel_values = pixel_values["pixel_values"]
+            # With splitting disabled, every image expands to the same
+            # constant token run, so the expansion can be done with graph
+            # mode string ops.
+            image_token, fake_token, global_token = self._image_token_strings()
+            prompts = tf.strings.regex_replace(
+                prompts,
+                image_token,
+                _get_image_prompt_string(
+                    image_seq_len=self.image_seq_len,
+                    image_rows=0,
+                    image_cols=0,
+                    fake_token_around_image=fake_token,
+                    image_token=image_token,
+                    global_image_token=global_token,
+                ),
+            )
+
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
-        if images is not None and self.image_converter:
-            images = self.image_converter(images)
 
         # Pad with one extra token for truncation below.
         token_ids, segment_ids = self._training_packer(
@@ -339,28 +433,33 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         padding_mask = token_ids != self.tokenizer.pad_token_id
         response_mask = segment_ids == 1
 
-        batch_size = tf.shape(token_ids)[0]
-
         out = {
             "token_ids": token_ids[..., :-1],
             "padding_mask": padding_mask[..., :-1],
         }
 
-        # Always include vision keys — the backbone functional graph
-        # requires all 4 inputs.  For text-only, use dummy tensors.
-        if images is not None and self.image_converter:
-            if isinstance(images, dict):
-                out["pixel_values"] = images["pixel_values"]
-            else:
-                out["pixel_values"] = images
-        else:
-            # Dummy pixel values sized to image_size (from backbone).
-            dummy_size = 32  # will be overridden by real preset
-            out["pixel_values"] = tf.zeros(
-                (batch_size, dummy_size, dummy_size, 3),
-                dtype="float32",
+        # Text-only batches omit the vision keys entirely;
+        # `SmolVLM2Backbone.__call__` fills in empty placeholders, which keeps
+        # the vision encoder from running on dummy pixels.
+        if pixel_values is not None:
+            out["pixel_values"] = pixel_values
+            out["vision_indices"] = self._graph_vision_indices(
+                out["token_ids"], tf.shape(pixel_values)[0]
             )
-        out["vision_indices"] = tf.zeros((batch_size, 0), dtype=tf.int32)
+        elif self.image_converter is not None:
+            # Text-only batch for a vision model. Pass a zero-length image
+            # batch (the Gemma3 pattern) so the vision encoder does no work,
+            # while the output structure still matches the model inputs.
+            crop_size = self.image_converter.max_image_size
+            out["pixel_values"] = tf.zeros(
+                (0, crop_size, crop_size, 3), dtype="float32"
+            )
+            out["vision_indices"] = tf.zeros(
+                (tf.shape(token_ids)[0], 0), dtype="int32"
+            )
+        # With no image converter at all there is no way to know the image
+        # size, so the vision keys are omitted entirely and
+        # `SmolVLM2Backbone.__call__` fills in the placeholders.
 
         y = token_ids[..., 1:]
         sample_weight = response_mask[..., 1:]
@@ -369,34 +468,48 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     # ------------------------------------------------------------------
     # Image preprocessing
     # ------------------------------------------------------------------
-    def _preprocess_images(self, images):
-        """Normalize image inputs and process through the converter.
-
-        Handles lists, batched 4-D arrays, and single 3-D images.
-        Currently supports one image per prompt.
+    @staticmethod
+    def _split_per_sample(media, batch_size, sample_rank, name):
+        """Split a batched media input into one entry per prompt.
 
         Args:
-            images: A single image (3-D), a batch (4-D), or a list.
+            media: A list of samples, a batched array of rank
+                `sample_rank + 1`, or a single sample of rank `sample_rank`.
+            batch_size: int. The number of prompts.
+            sample_rank: int. Rank of a single sample (3 for images,
+                4 for videos).
+            name: str. Input name, used in error messages.
+        Returns:
+            list. One entry per prompt.
+        """
+        if isinstance(media, (list, tuple)):
+            items = list(media)
+        elif hasattr(media, "shape") and len(media.shape) == sample_rank + 1:
+            items = [media[i] for i in range(media.shape[0])]
+        else:
+            items = [media]
+        if len(items) != batch_size:
+            raise ValueError(
+                f"Received {len(items)} `{name}` for {batch_size} prompts. "
+                f"Pass exactly one entry in `{name}` per prompt."
+            )
+        return items
+
+    def _preprocess_image(self, image):
+        """Process a single image through the converter.
+
+        Args:
+            image: A single 2-D (grayscale) or 3-D image.
         Returns:
             dict with ``pixel_values`` (N, H, W, 3), ``rows``, ``cols``.
+            ``N`` is the number of crops, which is 1 unless image splitting
+            is enabled.
         """
-        # Flatten to a single 3-D image.
-        if isinstance(images, (list, tuple)):
-            img = images[0]
-            if hasattr(img, "shape") and len(img.shape) == 4:
-                img = img[0]
-        elif hasattr(images, "shape") and len(images.shape) == 4:
-            img = images[0]
-        elif hasattr(images, "shape") and len(images.shape) == 3:
-            img = images
-        else:
-            img = images
-
-        if isinstance(img, np.ndarray) and img.ndim == 2:
-            img = np.stack([img] * 3, axis=-1)
+        if isinstance(image, np.ndarray) and image.ndim == 2:
+            image = np.stack([image] * 3, axis=-1)
 
         if self.image_converter is not None:
-            result = self.image_converter(img)
+            result = self.image_converter(image)
             if isinstance(result, dict):
                 pixel_values = result["pixel_values"]
                 rows = result.get("rows", 0)
@@ -406,7 +519,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 rows = 0
                 cols = 0
         else:
-            pixel_values = np.array(img, dtype="float32")
+            pixel_values = np.array(image, dtype="float32")
             if pixel_values.ndim == 3:
                 pixel_values = np.expand_dims(pixel_values, 0)
             rows = 0
@@ -416,34 +529,24 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         if not isinstance(pixel_values, np.ndarray):
             pixel_values = ops.convert_to_numpy(pixel_values)
 
-        return {"pixel_values": pixel_values, "rows": rows, "cols": cols}
+        return {
+            "pixel_values": pixel_values,
+            "rows": int(rows),
+            "cols": int(cols),
+        }
 
     # ------------------------------------------------------------------
     # Video preprocessing
     # ------------------------------------------------------------------
-    def _preprocess_video(self, videos):
-        """Process video through the video converter.
-
-        Handles lists, 4-D tensors (T, H, W, 3), and 5-D batched
-        tensors.  Currently supports one video per prompt.
+    def _preprocess_video(self, video):
+        """Process a single video through the video converter.
 
         Args:
-            videos: A single video (4-D), or a list of videos.
+            video: A single 4-D `(T, H, W, 3)` video.
         Returns:
             dict with ``pixel_values`` (num_frames, ms, ms, 3) and
             ``num_frames`` int.
         """
-        if isinstance(videos, (list, tuple)):
-            video = videos[0]
-            if hasattr(video, "shape") and len(video.shape) == 5:
-                video = video[0]
-        elif hasattr(videos, "shape") and len(videos.shape) == 5:
-            video = videos[0]
-        elif hasattr(videos, "shape") and len(videos.shape) == 4:
-            video = videos
-        else:
-            video = videos
-
         if self.video_converter is not None:
             result = self.video_converter(video)
             pixel_values = result["pixel_values"]
@@ -555,15 +658,24 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         Multimodal prompts must contain ``<image>`` placeholder tokens.
         Each ``<image>`` is expanded to the full sub-image token
         sequence matching HuggingFace's ``SmolVLMProcessor``.
+
+        Args:
+            x: A string, a batch of strings, or a dict with a
+                ``"prompts"`` key plus one of ``"images"``/``"videos"``
+                (one entry per prompt) and an optional
+                ``"video_metadata"``.
+            sequence_length: int or None. Overrides `self.sequence_length`.
         """
         if not self.built:
             self.build(None)
         sequence_length = sequence_length or self.sequence_length
 
         # Handle both dict and string inputs.
+        video_metadata = self.video_metadata
         if isinstance(x, dict):
             images = x.get("images", None)
             videos = x.get("videos", None)
+            video_metadata = x.get("video_metadata", video_metadata)
             prompts = x["prompts"]
         else:
             images = None
@@ -575,79 +687,67 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             return super().generate_preprocess(
                 prompts, sequence_length=sequence_length
             )
+        if images is not None and videos is not None:
+            raise ValueError(
+                "Received both `images` and `videos`. Pass only one of them."
+            )
+
+        prompt_strings, _ = self._extract_prompt_strings(prompts)
+        batch_size = len(prompt_strings)
+        image_token_str, _, _ = self._image_token_strings()
+
+        expanded_prompts = []
+        pixel_values_per_sample = []
 
         # ------ Image path ------
         if images is not None:
-            image_output = self._preprocess_images(images)
-            pixel_values = image_output["pixel_values"]
-            image_rows = int(image_output["rows"])
-            image_cols = int(image_output["cols"])
-
-            prompt_str = self._extract_prompt_string(prompts)
-
-            image_token_str = getattr(self.tokenizer, "image_token", "<image>")
-            fake_image_str = getattr(
-                self.tokenizer,
-                "fake_image_token",
-                "<fake_token_around_image>",
-            )
-            global_image_str = getattr(
-                self.tokenizer, "global_image_token", "<global-img>"
-            )
-
-            image_prompt = _get_image_prompt_string(
-                image_seq_len=self.image_seq_len,
-                image_rows=image_rows,
-                image_cols=image_cols,
-                fake_token_around_image=fake_image_str,
-                image_token=image_token_str,
-                global_image_token=global_image_str,
-            )
-            expanded_prompt = prompt_str.replace(
-                image_token_str, image_prompt, 1
-            )
-
+            for prompt, image in zip(
+                prompt_strings,
+                self._split_per_sample(images, batch_size, 3, "images"),
+            ):
+                image_output = self._preprocess_image(image)
+                pixel_values_per_sample.append(image_output["pixel_values"])
+                image_prompt = self._expand_image_prompt(
+                    image_output["rows"], image_output["cols"]
+                )
+                expanded_prompts.append(
+                    prompt.replace(image_token_str, image_prompt, 1)
+                )
         # ------ Video path ------
-        elif videos is not None:
-            video_output = self._preprocess_video(videos)
-            pixel_values = video_output["pixel_values"]
-            num_frames = video_output["num_frames"]
-
-            prompt_str = self._extract_prompt_string(prompts)
-
-            # Get per-video metadata.
-            metadata = None
-            if self.video_metadata is not None:
-                if isinstance(self.video_metadata, (list, tuple)):
-                    metadata = self.video_metadata[0]
-                else:
-                    metadata = self.video_metadata
-
-            # <video> is a chat-template marker, not a vocab token.
-            video_token_str = "<video>"
-            video_prompt = self._get_video_prompt_string(
-                num_frames=num_frames,
-                metadata=metadata,
-            )
-            expanded_prompt = prompt_str.replace(
-                video_token_str, video_prompt, 1
-            )
         else:
-            raise ValueError(
-                "generate_preprocess received dict without 'images' or "
-                "'videos' key."
+            # `<video>` is a chat-template marker, not a vocab token.
+            video_token_str = "<video>"
+            metadata_per_sample = self._split_video_metadata(
+                video_metadata, batch_size
             )
+            for prompt, video, metadata in zip(
+                prompt_strings,
+                self._split_per_sample(videos, batch_size, 4, "videos"),
+                metadata_per_sample,
+            ):
+                video_output = self._preprocess_video(video)
+                pixel_values_per_sample.append(video_output["pixel_values"])
+                video_prompt = self._get_video_prompt_string(
+                    num_frames=video_output["num_frames"],
+                    metadata=metadata,
+                )
+                expanded_prompts.append(
+                    prompt.replace(video_token_str, video_prompt, 1)
+                )
+
+        pixel_values = np.concatenate(pixel_values_per_sample, axis=0)
 
         # Tokenize with special token handling.
         special_map = self._build_special_token_map()
-        token_ids_list = self._tokenize_with_special_tokens(
-            expanded_prompt, special_map
-        )
+        token_id_lists = [
+            self._tokenize_with_special_tokens(prompt, special_map)
+            for prompt in expanded_prompts
+        ]
 
         # Pack to fixed length using the training packer which
         # supports the tuple input + segment_ids return format.
-        token_ids_tensor = tf.ragged.constant([token_ids_list], dtype="int32")
-        token_ids, segment_ids = self._training_packer(
+        token_ids_tensor = tf.ragged.constant(token_id_lists, dtype="int32")
+        token_ids, _ = self._training_packer(
             (token_ids_tensor,),
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
@@ -655,8 +755,20 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
 
-        # Compute vision_indices.
+        # Compute vision_indices as flat `batch_index * seq_len + position`
+        # offsets, which is what `SmolVLM2InterleaveEmbeddings` scatters on.
         vision_indices = self._compute_vision_indices(token_ids)
+        expected = pixel_values.shape[0] * self.image_seq_len
+        if int(tf.size(vision_indices)) != expected:
+            raise ValueError(
+                f"Expected {expected} `<image>` tokens in the packed prompts "
+                f"({pixel_values.shape[0]} sub-images x image_seq_len="
+                f"{self.image_seq_len}), but found "
+                f"{int(tf.size(vision_indices))}. Either the prompts are "
+                "missing an `<image>` placeholder, or `sequence_length="
+                f"{sequence_length}` is too short and truncated them."
+            )
+        vision_indices = tf.reshape(vision_indices, (batch_size, -1))
 
         return {
             "token_ids": token_ids,
@@ -664,3 +776,37 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             "pixel_values": pixel_values,
             "vision_indices": vision_indices,
         }
+
+    @staticmethod
+    def _split_video_metadata(video_metadata, batch_size):
+        """Return one metadata dict (or None) per prompt."""
+        if video_metadata is None:
+            return [None] * batch_size
+        if isinstance(video_metadata, dict):
+            return [video_metadata] * batch_size
+        metadata = list(video_metadata)
+        if len(metadata) != batch_size:
+            raise ValueError(
+                f"Received {len(metadata)} `video_metadata` entries for "
+                f"{batch_size} prompts. Pass exactly one entry per prompt."
+            )
+        return metadata
+
+    def _expand_image_prompt(self, rows, cols):
+        """Expand a single `<image>` placeholder for a `rows x cols` split."""
+        image_token, fake_token, global_token = self._image_token_strings()
+        return _get_image_prompt_string(
+            image_seq_len=self.image_seq_len,
+            image_rows=rows,
+            image_cols=cols,
+            fake_token_around_image=fake_token,
+            image_token=image_token,
+            global_image_token=global_token,
+        )
+
+    def get_config(self):
+        config = super().get_config()
+        # `image_seq_len` is preset specific and is not derivable from the
+        # tokenizer or the converters, so it has to be serialized here.
+        config.update({"image_seq_len": self.image_seq_len})
+        return config

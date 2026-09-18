@@ -171,10 +171,6 @@ class SmolVLM2Backbone(Backbone):
             name="final_normalization",
         )
 
-        # Compute image sequence length from config.
-        num_patches = (image_size // patch_size) ** 2
-        image_seq_len = num_patches // (scale_factor**2)
-
         # === Functional Model ===
         # Vision inputs.
         pixel_values_input = keras.Input(
@@ -248,33 +244,53 @@ class SmolVLM2Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.vision_layer_norm_epsilon = vision_layer_norm_epsilon
         self.tie_word_embeddings = tie_word_embeddings
-        self.image_sequence_length = image_seq_len
+
+    @property
+    def image_sequence_length(self):
+        """Number of text token slots a single (sub-)image expands into."""
+        num_patches = (self.image_size // self.patch_size) ** 2
+        return num_patches // (self.scale_factor**2)
+
+    def add_empty_vision_inputs(self, inputs):
+        """Fill in empty `pixel_values`/`vision_indices` if missing.
+
+        The functional graph always has a `pixel_values` and a
+        `vision_indices` input, but text-only callers (e.g. `fit()` on a
+        text dataset, or `SmolVLM2CausalLM.generate` without images) do not
+        provide them. We inject *zero-sized* tensors, so the vision encoder
+        runs on an empty batch and the interleave layer scatters nothing.
+        This mirrors `Qwen3MoeBackbone.__call__`, which likewise injects
+        empty vision placeholders rather than dummy pixels.
+        """
+        if not isinstance(inputs, dict):
+            return inputs
+        if "pixel_values" in inputs and "vision_indices" in inputs:
+            return inputs
+        inputs = dict(inputs)  # shallow copy to avoid mutating the caller's
+        symbolic = any(
+            isinstance(v, keras.KerasTensor) for v in inputs.values()
+        )
+        if not symbolic:
+            # Keras refuses nested call() arguments that mix tensors with
+            # non-tensors, so the caller's numpy arrays have to be converted
+            # alongside the injected placeholders.
+            inputs = {k: ops.convert_to_tensor(v) for k, v in inputs.items()}
+        batch_size = ops.shape(inputs["token_ids"])[0]
+        if "pixel_values" not in inputs:
+            # Zero *images*, not zero pixels: a `(batch, H, W, 3)` dummy would
+            # run the full ViT on black images on every text-only step.
+            inputs["pixel_values"] = ops.zeros(
+                (0, self.image_size, self.image_size, 3),
+                dtype=self.dtype,
+            )
+        if "vision_indices" not in inputs:
+            inputs["vision_indices"] = ops.zeros((batch_size, 0), dtype="int32")
+        return inputs
 
     def __call__(self, inputs, *args, **kwargs):
-        """Override to inject default empty vision inputs for text-only calls.
-
-        When the backbone receives text-only inputs (no `pixel_values`
-        or `vision_indices`), this injects zero-sized dummy tensors so
-        the functional graph receives all required keys. This follows
-        the Qwen3.5/Gemma4 multimodal backbone pattern.
-        """
-        if isinstance(inputs, dict):
-            inputs = dict(inputs)  # shallow copy to avoid mutation
-            batch_size = ops.shape(inputs["token_ids"])[0]
-            if "pixel_values" not in inputs:
-                inputs["pixel_values"] = ops.zeros(
-                    (
-                        batch_size,
-                        self.image_size,
-                        self.image_size,
-                        3,
-                    ),
-                )
-            if "vision_indices" not in inputs:
-                inputs["vision_indices"] = ops.zeros(
-                    (batch_size, 0), dtype="int32"
-                )
-        return super().__call__(inputs, *args, **kwargs)
+        return super().__call__(
+            self.add_empty_vision_inputs(inputs), *args, **kwargs
+        )
 
     def get_config(self):
         config = super().get_config()

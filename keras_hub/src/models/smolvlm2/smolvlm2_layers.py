@@ -21,8 +21,9 @@ class SmolVLM2InterleaveEmbeddings(keras.layers.Layer):
     list of vision token embeddings, this layer replaces positions indicated
     by `vision_indices` with the corresponding vision embeddings.
 
-    This follows the same pattern as `Qwen3_5InterleaveEmbeddings` and
-    replaces the static `_inputs_merger` method previously in the CausalLM.
+    This is the KerasHub equivalent of the HF
+    `inputs_embeds.masked_scatter(image_mask, image_embeds)` pattern, and
+    mirrors `Qwen3_5InterleaveEmbeddings`.
 
     Args:
         hidden_dim: int. The embedding dimension (must match both text and
@@ -107,7 +108,6 @@ class SmolVLM2Attention(layers.Layer):
         num_query_heads: int. Number of query attention heads.
         num_key_value_heads: int. Number of key/value attention heads.
         rope_max_wavelength: float. Maximum wavelength for RoPE.
-        layer_norm_epsilon: float. Epsilon for RMS normalization.
         dropout: float. Dropout probability for attention weights.
         dtype: string or keras DTypePolicy. Computation/weight dtype.
     """
@@ -181,9 +181,17 @@ class SmolVLM2Attention(layers.Layer):
             name="attention_softmax",
         )
 
+        self._dropout_layer = layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="attention_dropout",
+        )
+
         super().build(input_shape)
 
-    def _compute_attention(self, query, key, value, attention_mask=None):
+    def _compute_attention(
+        self, query, key, value, attention_mask=None, training=None
+    ):
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
         attention_scores = ops.multiply(
             attention_scores,
@@ -198,6 +206,9 @@ class SmolVLM2Attention(layers.Layer):
             attention_scores = self._softmax(attention_scores)
 
         attention_scores = ops.cast(attention_scores, self.compute_dtype)
+        attention_scores = self._dropout_layer(
+            attention_scores, training=training
+        )
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )
@@ -209,6 +220,7 @@ class SmolVLM2Attention(layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        training=None,
     ):
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
@@ -454,6 +466,7 @@ class SmolVLM2DecoderBlock(layers.Layer):
         decoder_attention_mask=None,
         cache=None,
         cache_update_index=None,
+        training=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=hidden_states,
@@ -471,6 +484,7 @@ class SmolVLM2DecoderBlock(layers.Layer):
             attention_mask=self_attention_mask,
             cache=cache,
             cache_update_index=cache_update_index,
+            training=training,
         )
 
         if isinstance(x, tuple):
@@ -550,8 +564,8 @@ class SmolVLM2Connector(layers.Layer):
         """Rearrange spatial tokens via space-to-depth.
 
         Converts (batch, H*W, D) -> (batch, H*W/s², D*s²) where
-        s = scale_factor. Assumes input sequence length is a perfect
-        square (H = W = sqrt(seq_len)).
+        s = scale_factor. The input sequence length must be a perfect
+        square (H = W = sqrt(seq_len)) and H must be divisible by s.
 
         Args:
             x: Input tensor of shape (batch, seq_len, embed_dim).
@@ -566,8 +580,25 @@ class SmolVLM2Connector(layers.Layer):
         # at graph-build time and avoid JAX tracer issues.
         seq_len = x.shape[1]
         embed_dim = x.shape[2]
+        if seq_len is None or embed_dim is None:
+            raise ValueError(
+                "`SmolVLM2Connector` needs a static sequence length and "
+                "embedding dim to pixel-shuffle vision tokens. Received "
+                f"an input with shape {tuple(x.shape)}."
+            )
 
         height = width = int(seq_len**0.5)
+        if height * width != seq_len:
+            raise ValueError(
+                "The number of vision patches must be a perfect square. "
+                f"Received `seq_len={seq_len}`."
+            )
+        if height % scale_factor != 0:
+            raise ValueError(
+                "The vision patch grid must be divisible by `scale_factor`. "
+                f"Received a {height}x{width} grid with "
+                f"`scale_factor={scale_factor}`."
+            )
 
         x = ops.reshape(x, (bsz, height, width, embed_dim))
         x = ops.reshape(

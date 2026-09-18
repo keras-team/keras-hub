@@ -27,13 +27,16 @@ class SmolVLM2VideoConverter(VideoConverter):
 
     Args:
         max_image_size: int. Side length of each frame after resizing.
-            Default 512 (from HF's ``max_image_size.longest_edge``).
+            Default 512 (from HF's `max_image_size.longest_edge`).
         size: int. Longest edge for initial resize before squaring.
-            Default 2048 (from HF's ``video_sampling.video_size``).
-        num_frames: int. Maximum number of frames to sample. Default
-            64 (from HF's ``video_sampling.max_frames``).
-        fps: int or float. Target frames per second for sampling.
-            Default 1 (from HF's ``video_sampling.fps``).
+            Default 2048 (from HF's `video_sampling.video_size`).
+        num_frames: int. Maximum number of frames to sample. Frames are
+            sampled uniformly over the clip. Default 64 (from HF's
+            `video_sampling.max_frames`).
+        fps: int or float. Frame rate the sampled frames are assumed to
+            have. Only used to build per-frame timestamps in
+            `SmolVLM2CausalLMPreprocessor`; it does not affect sampling
+            here. Default 1 (from HF's `video_sampling.fps`).
     """
 
     backbone_cls = SmolVLM2Backbone
@@ -52,8 +55,9 @@ class SmolVLM2VideoConverter(VideoConverter):
         scale = kwargs.pop("scale", None)
         offset = kwargs.pop("offset", None)
         super().__init__(scale=scale, offset=offset, **kwargs)
-        # Internal image converter with splitting disabled.
-        self.frame_converter = SmolVLM2ImageConverter(
+        # Replace the generic converter created by `VideoConverter` with
+        # the SmolVLM2 one, so there is a single frame converter.
+        self.image_converter = SmolVLM2ImageConverter(
             max_image_size=max_image_size,
             size=size,
             do_image_splitting=False,
@@ -69,19 +73,37 @@ class SmolVLM2VideoConverter(VideoConverter):
         self.interpolation = interpolation
         self.antialias = antialias
 
+    @property
+    def frame_converter(self):
+        """The `SmolVLM2ImageConverter` applied to each sampled frame."""
+        return self.image_converter
+
     @preprocessing_function
     def call(self, inputs):
         """Process a video into per-frame pixel values.
 
         Args:
-            inputs: uint8 or float32 tensor ``(T, H, W, 3)`` with pixel
-                values in ``[0, 255]``.
+            inputs: uint8 or float32 tensor `(T, H, W, 3)` with pixel
+                values in `[0, 255]`.
+
         Returns:
-            dict with ``"pixel_values"`` ``(num_sampled, max_image_size,
-            max_image_size, 3)`` and ``"num_frames"`` int32 scalar.
+            dict with `"pixel_values"` `(num_sampled, max_image_size,
+            max_image_size, 3)` and `"num_frames"` int32 scalar.
         """
+        if len(inputs.shape) != 4:
+            raise ValueError(
+                "`SmolVLM2VideoConverter` expects a single video of shape "
+                "`(num_frames, height, width, channels)`. Received inputs "
+                f"with shape {tuple(inputs.shape)}."
+            )
         video = ops.cast(inputs, "float32")
-        total_frames = int(ops.shape(video)[0])
+        total_frames = video.shape[0]
+        if total_frames is None:
+            raise ValueError(
+                "`SmolVLM2VideoConverter` needs a static frame count to "
+                "sample frames uniformly. Received a video with shape "
+                f"{tuple(inputs.shape)}."
+            )
 
         # Uniform frame sampling.
         sample_count = min(total_frames, self.num_frames)
@@ -90,24 +112,14 @@ class SmolVLM2VideoConverter(VideoConverter):
                 ops.linspace(0, total_frames - 1, sample_count), "int32"
             )
             video = ops.take(video, indices, axis=0)
-        actual_frames = int(ops.shape(video)[0])
 
-        # Process each frame individually through the image converter.
-        frame_outputs = []
-        for i in range(actual_frames):
-            frame = video[i]  # (H, W, 3)
-            result = self.frame_converter(frame)
-            # Each frame → (1, ms, ms, 3) since do_image_splitting=False.
-            frame_outputs.append(result["pixel_values"])
-
-        # Stack all frames: (num_frames, ms, ms, 3).
-        # Each frame_output is (1, ms, ms, 3), so squeeze and re-stack.
-        frames = [f[0] for f in frame_outputs]
-        pixel_values = ops.stack(frames, axis=0)
+        # All frames share the same target size, so resize them in one
+        # batched call instead of looping frame by frame.
+        pixel_values = self.image_converter(video)["pixel_values"]
 
         return {
             "pixel_values": pixel_values,
-            "num_frames": ops.convert_to_tensor(actual_frames, dtype="int32"),
+            "num_frames": ops.convert_to_tensor(sample_count, dtype="int32"),
         }
 
     def get_config(self):
@@ -118,6 +130,8 @@ class SmolVLM2VideoConverter(VideoConverter):
                 "size": self.size,
                 "num_frames": self.num_frames,
                 "fps": self.fps,
+                "interpolation": self.interpolation,
+                "antialias": self.antialias,
             }
         )
         return config

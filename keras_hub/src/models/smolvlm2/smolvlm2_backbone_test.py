@@ -27,10 +27,12 @@ class SmolVLM2BackboneTest(TestCase):
             "layer_norm_epsilon": 1e-5,
             "vision_layer_norm_epsilon": 1e-6,
         }
-        # Provide all four required functional-model inputs so that both
-        # eager __call__ *and* jit-traced predict() paths work correctly.
-        # (predict → stateless_call bypasses the __call__ override that
-        # would otherwise inject dummy vision tensors.)
+        # All four functional-model inputs are passed explicitly here.
+        # `predict()` on raw arrays requires every input to share the same
+        # first dimension, so `pixel_values` carries one (unused) image per
+        # row; `vision_indices` is empty, so nothing is scattered. Text-only
+        # callers can instead omit both keys and let `__call__` inject
+        # zero-length placeholders.
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
@@ -47,8 +49,6 @@ class SmolVLM2BackboneTest(TestCase):
             # Prevent default sequence-axis slicing which would corrupt
             # the 4D pixel_values tensor.
             variable_length_data=[self.input_data],
-            run_mixed_precision_check=False,
-            run_quantization_check=False,
         )
 
     @pytest.mark.large
@@ -61,8 +61,8 @@ class SmolVLM2BackboneTest(TestCase):
 
     def test_num_parameters(self):
         model = SmolVLM2Backbone(**self.init_kwargs)
-        # Verify the model is constructable and has expected parameter count.
-        self.assertGreater(model.count_params(), 0)
+        # Pinned so architecture changes have to be intentional.
+        self.assertEqual(model.count_params(), 227456)
 
     def test_config_roundtrip(self):
         model = SmolVLM2Backbone(**self.init_kwargs)

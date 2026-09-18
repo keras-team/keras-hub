@@ -300,11 +300,8 @@ def validate_text_output(keras_model, hf_results):
 
     print(f"\n  HF token ids:      {hf_ids[0][:10].tolist()}")
     print(f"  KerasHub token ids: {keras_valid[:10].tolist()}")
-    try:
-        np.testing.assert_array_equal(keras_valid, hf_ids[0])
-        print("  ✓ Token IDs match.")
-    except AssertionError as e:
-        print(f"  ⚠ Token IDs mismatch: {e}")
+    np.testing.assert_array_equal(keras_valid, hf_ids[0])
+    print("  ✓ Token IDs match.")
 
     # --- Logit comparison (preprocessor-free forward pass) ---
     token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
@@ -322,11 +319,8 @@ def validate_text_output(keras_model, hf_results):
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ Logits do not match within atol=1e-3: {e}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+    print("  ✓ Logits match within atol=1e-3.")
 
     if not FLAGS.skip_generation:
         # --- End-to-end generation ---
@@ -361,6 +355,22 @@ def validate_multimodal_output(keras_model, hf_results):
     pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 1))
     pixel_values = ops.convert_to_tensor(pixel_values_np)
 
+    # --- Image converter parity ---
+    # The logit check below runs on HF's `pixel_values`, so without this the
+    # KerasHub image converter itself would never be validated.
+    converter_out = keras_model.preprocessor.image_converter(
+        np.array(hf_results["raw_image"])
+    )
+    keras_pixels = ops.convert_to_numpy(
+        converter_out["pixel_values"]
+        if isinstance(converter_out, dict)
+        else converter_out
+    ).astype(np.float32)
+    print(f"\n  HF pixel_values shape:       {pixel_values_np.shape}")
+    print(f"  KerasHub pixel_values shape: {keras_pixels.shape}")
+    np.testing.assert_allclose(keras_pixels, pixel_values_np, atol=1e-3)
+    print("  ✓ Image converter matches HF processor within atol=1e-3.")
+
     # Encode images through vision encoder + connector.
     img_embeds = backbone.vision_encoder({"pixel_values": pixel_values})
     img_embeds = backbone.connector(img_embeds)
@@ -393,11 +403,8 @@ def validate_multimodal_output(keras_model, hf_results):
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Multimodal logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ Multimodal logits do not match within atol=1e-3: {e}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+    print("  ✓ Multimodal logits match within atol=1e-3.")
 
     if not FLAGS.skip_generation:
         # --- End-to-end generation ---
@@ -478,11 +485,8 @@ def validate_video_output(keras_model, hf_results):
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"\n  Video logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Video logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  ✓ Video logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  ⚠ Video logits do not match within atol=1e-3: {e}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+    print("  ✓ Video logits match within atol=1e-3.")
 
     if not FLAGS.skip_generation:
         # --- End-to-end video generation ---

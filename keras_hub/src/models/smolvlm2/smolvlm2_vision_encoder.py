@@ -8,8 +8,10 @@ from keras_hub.src.models.backbone import Backbone
 class SmolVLM2VisionEmbedding(layers.Layer):
     """Patch + position embedding for the SmolVLM2 vision encoder.
 
-    Uses a Conv2D for patch extraction and fractional-coordinate bucket
-    position embeddings to handle variable aspect ratios.
+    Extracts patches with a `Conv2D` and adds a learned position
+    embedding, one entry per patch of an `image_size x image_size`
+    input. Inputs must therefore match `image_size`; the image
+    converter is responsible for resizing images to that size.
 
     Args:
         hidden_dim: int. Dimensionality of the embedding output.
@@ -59,18 +61,30 @@ class SmolVLM2VisionEmbedding(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, pixel_values, patch_attention_mask=None):
+    def call(self, pixel_values):
         """Compute patch embeddings with position encoding.
 
         Args:
-            pixel_values: Tensor of shape (batch, height, width, channels).
-            patch_attention_mask: Optional bool tensor of shape
-                (batch, num_patches_h, num_patches_w) indicating
-                valid (non-padded) patches.
+            pixel_values: Tensor of shape
+                `(batch, image_size, image_size, channels)`.
 
         Returns:
-            Tensor of shape (batch, num_patches, hidden_dim).
+            Tensor of shape `(batch, num_patches, hidden_dim)`.
         """
+        height, width = pixel_values.shape[1], pixel_values.shape[2]
+        if height is not None and width is not None:
+            num_patches = (height // self.patch_size) * (
+                width // self.patch_size
+            )
+            if num_patches != self.num_patches:
+                raise ValueError(
+                    "Input images must match the vision encoder "
+                    f"`image_size={self.image_size}`. Received images of "
+                    f"size ({height}, {width}), which yields "
+                    f"{num_patches} patches instead of {self.num_patches}. "
+                    "Resize the images with `SmolVLM2ImageConverter` first."
+                )
+
         batch_size = ops.shape(pixel_values)[0]
 
         # Extract patches: (batch, H', W', hidden_dim)
@@ -82,9 +96,7 @@ class SmolVLM2VisionEmbedding(layers.Layer):
             patch_embeds, (batch_size, ph * pw, self.hidden_dim)
         )
 
-        # Use pre-computed num_patches for position IDs. For standard
-        # fixed-resolution input, all patches get simple sequential
-        # position IDs.
+        # One position id per patch, in raster order.
         position_ids = ops.broadcast_to(
             ops.arange(self.num_patches, dtype="int32")[None, :],
             (batch_size, self.num_patches),
@@ -167,10 +179,15 @@ class SmolVLM2VisionAttention(layers.Layer):
             dtype="float32",
             name="attention_softmax",
         )
+        self._dropout_layer = layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="attention_dropout",
+        )
 
         super().build(input_shape)
 
-    def call(self, hidden_states, attention_mask=None):
+    def call(self, hidden_states, attention_mask=None, training=None):
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
 
@@ -200,6 +217,7 @@ class SmolVLM2VisionAttention(layers.Layer):
 
         attn_weights = self._softmax(attn_weights)
         attn_weights = ops.cast(attn_weights, self.compute_dtype)
+        attn_weights = self._dropout_layer(attn_weights, training=training)
 
         attn_output = ops.matmul(attn_weights, values)
 
@@ -347,11 +365,11 @@ class SmolVLM2VisionEncoderBlock(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, hidden_states, attention_mask=None):
+    def call(self, hidden_states, attention_mask=None, training=None):
         residual = hidden_states
         hidden_states = self.layer_norm1(hidden_states)
         hidden_states = self.self_attn(
-            hidden_states, attention_mask=attention_mask
+            hidden_states, attention_mask=attention_mask, training=training
         )
         hidden_states = residual + hidden_states
 

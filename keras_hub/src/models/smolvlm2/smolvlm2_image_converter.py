@@ -81,20 +81,56 @@ class SmolVLM2ImageConverter(ImageConverter):
         self.size = size
         self.do_image_splitting = do_image_splitting
 
+    def _static_hw(self, image):
+        """Return the static `(height, width)` of an unbatched image."""
+        shape = image.shape
+        if shape[0] is None or shape[1] is None:
+            raise ValueError(
+                "`SmolVLM2ImageConverter` needs static image height and "
+                "width to compute the sub-image grid. Received an image "
+                f"with shape {tuple(shape)}. If you are mapping this layer "
+                "over a `tf.data.Dataset`, resize or `set_shape` the images "
+                "to a known size first."
+            )
+        return int(shape[0]), int(shape[1])
+
     @preprocessing_function
     def call(self, inputs):
-        """Process a single image into sub-image crops.
+        """Process an image into sub-image crops.
 
         Args:
-            inputs: uint8 or float32 tensor ``(H, W, 3)`` with pixel
-                values in ``[0, 255]``.
+            inputs: uint8 or float32 tensor with pixel values in
+                `[0, 255]`. Either a single image `(H, W, 3)`, or a batch
+                of images `(B, H, W, 3)`. Batched inputs are only
+                supported when `do_image_splitting=False`, since the
+                number of crops is image dependent.
+
         Returns:
-            dict with ``"pixel_values"`` ``(N, max_image_size,
-            max_image_size, 3)``, ``"rows"`` int, ``"cols"`` int.
+            dict with `"pixel_values"` `(N, max_image_size,
+            max_image_size, 3)`, `"rows"` int, `"cols"` int.
         """
+        rank = len(inputs.shape)
+        if rank == 4:
+            if self.do_image_splitting:
+                raise ValueError(
+                    "`SmolVLM2ImageConverter` cannot process a batch of "
+                    "images with `do_image_splitting=True`, because each "
+                    "image yields a different number of crops. Call the "
+                    "converter once per image, or set "
+                    "`do_image_splitting=False`. "
+                    f"Received inputs with shape {tuple(inputs.shape)}."
+                )
+            return self._resize_batch(inputs)
+        if rank != 3:
+            raise ValueError(
+                "`SmolVLM2ImageConverter` expects a single image of shape "
+                "`(height, width, channels)` or a batch of shape "
+                "`(batch_size, height, width, channels)`. Received inputs "
+                f"with shape {tuple(inputs.shape)}."
+            )
+
         image = ops.cast(inputs, "float32")
-        h = int(ops.shape(image)[0])
-        w = int(ops.shape(image)[1])
+        h, w = self._static_hw(image)
 
         # Step 1: Resize so longest edge = self.size.
         new_h, new_w = _resize_output_size_rescale_to_max_len(
@@ -191,7 +227,14 @@ class SmolVLM2ImageConverter(ImageConverter):
                 ops.clip(pixel_values, 0.0, 255.0), "float32"
             )
 
-        # Step 4: Rescale and normalize.
+        return {
+            "pixel_values": self._rescale_and_normalize(pixel_values),
+            "rows": ops.convert_to_tensor(num_rows, dtype="int32"),
+            "cols": ops.convert_to_tensor(num_cols, dtype="int32"),
+        }
+
+    def _rescale_and_normalize(self, pixel_values):
+        """Apply the HF `rescale_factor` and mean/std normalization."""
         if self.scale is not None:
             scale = ops.convert_to_tensor(self.scale, dtype="float32")
             scale = ops.reshape(scale, (1, 1, 1, -1))
@@ -200,11 +243,28 @@ class SmolVLM2ImageConverter(ImageConverter):
             offset = ops.convert_to_tensor(self.offset, dtype="float32")
             offset = ops.reshape(offset, (1, 1, 1, -1))
             pixel_values = pixel_values + offset
+        return pixel_values
 
+    def _resize_batch(self, images):
+        """Resize a batch of images to `(max_image_size, max_image_size)`.
+
+        Used when `do_image_splitting=False`, where every image maps to
+        exactly one sub-image. Keeps the batch axis, so video frames and
+        multimodal training batches can be processed in one call.
+        """
+        ms = self.max_image_size
+        images = ops.cast(images, "float32")
+        pixel_values = ops.image.resize(
+            images,
+            size=(ms, ms),
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+        )
+        pixel_values = ops.cast(ops.clip(pixel_values, 0.0, 255.0), "float32")
         return {
-            "pixel_values": pixel_values,
-            "rows": ops.convert_to_tensor(num_rows, dtype="int32"),
-            "cols": ops.convert_to_tensor(num_cols, dtype="int32"),
+            "pixel_values": self._rescale_and_normalize(pixel_values),
+            "rows": ops.convert_to_tensor(0, dtype="int32"),
+            "cols": ops.convert_to_tensor(0, dtype="int32"),
         }
 
     def get_config(self):

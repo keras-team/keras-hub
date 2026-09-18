@@ -11,9 +11,10 @@ backbone_cls = SmolVLM2Backbone
 def convert_backbone_config(transformers_config):
     """Map HF SmolVLM config.json to KerasHub backbone kwargs.
 
-    All values are read directly from the preset's config.json.
-    No hardcoded defaults — if a required key is missing from the
-    preset, this will raise a KeyError immediately.
+    Keys that HF's `SmolVLMConfig`/`LlamaConfig` themselves require raise a
+    `KeyError` if missing. Keys that HF resolves from its own class defaults
+    (most of `vision_config`) fall back to the same defaults here, so a
+    partial `config.json` converts exactly the way `transformers` reads it.
     """
     text_config = transformers_config["text_config"]
     vision_config = transformers_config["vision_config"]
@@ -65,9 +66,6 @@ def convert_weights(backbone, loader, transformers_config):
         # HF Conv2D kernel: (out_channels, in_channels, kH, kW)
         # Keras Conv2D kernel: (kH, kW, in_channels, out_channels)
         return np.transpose(hf_tensor, axes=(2, 3, 1, 0))
-
-    def transpose_and_reshape(x, shape):
-        return np.reshape(np.transpose(x), shape)
 
     # Vision Encoder.
     vision_encoder = backbone.vision_encoder
@@ -216,22 +214,22 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer.self_attn.q_proj.kernel,
             hf_weight_key=f"{prefix}.self_attn.q_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=transpose,
         )
         loader.port_weight(
             keras_variable=decoder_layer.self_attn.k_proj.kernel,
             hf_weight_key=f"{prefix}.self_attn.k_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=transpose,
         )
         loader.port_weight(
             keras_variable=decoder_layer.self_attn.v_proj.kernel,
             hf_weight_key=f"{prefix}.self_attn.v_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=transpose,
         )
         loader.port_weight(
             keras_variable=decoder_layer.self_attn.o_proj.kernel,
             hf_weight_key=f"{prefix}.self_attn.o_proj.weight",
-            hook_fn=transpose_and_reshape,
+            hook_fn=transpose,
         )
 
         # MLP.
@@ -365,3 +363,19 @@ def load_video_converter_config(preset, transformers_config):
         }
     )
     return shared
+
+
+def load_preprocessor_config(preset, transformers_config):
+    """Return extra kwargs for SmolVLM2CausalLMPreprocessor.
+
+    `image_seq_len` is not stored in HF's config, it is derived the same way
+    `SmolVLMProcessor` does it: each sub-image is `max_image_size` pixels
+    wide, split into `patch_size` patches, then pixel-shuffled by
+    `scale_factor`.
+    """
+    preprocessor_config = _load_preprocessor_config(preset)
+    max_image_size = preprocessor_config["max_image_size"]["longest_edge"]
+    patch_size = transformers_config["vision_config"]["patch_size"]
+    scale_factor = transformers_config["scale_factor"]
+    num_patches = (max_image_size // patch_size) ** 2
+    return {"image_seq_len": num_patches // (scale_factor**2)}

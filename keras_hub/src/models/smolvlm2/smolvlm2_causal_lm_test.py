@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from keras import ops
 
@@ -7,6 +8,9 @@ from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm import SmolVLM2CausalLM
 from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
     SmolVLM2CausalLMPreprocessor,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    SmolVLM2ImageConverter,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
 from keras_hub.src.tests.test_case import TestCase
@@ -32,9 +36,18 @@ class SmolVLM2CausalLMTest(TestCase):
         self.vocab += ["<fake_token_around_image>"]
         self.vocab += ["<global-img>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.image_converter = SmolVLM2ImageConverter(
+            max_image_size=32,
+            size=32,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
         self.preprocessor = SmolVLM2CausalLMPreprocessor(
             SmolVLM2Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            image_converter=self.image_converter,
             sequence_length=8,
+            image_seq_len=4,
         )
         self.backbone = SmolVLM2Backbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
@@ -73,6 +86,30 @@ class SmolVLM2CausalLMTest(TestCase):
                 self.preprocessor.tokenizer.vocabulary_size(),
             ),
         )
+
+    def test_multimodal_fit(self):
+        causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
+        images = np.random.randint(0, 256, size=(2, 20, 20, 3)).astype("uint8")
+        x = {
+            "prompts": ["<image> airplane", "<image> airport"],
+            "responses": [" at airport", " at airport"],
+            "images": images,
+        }
+        causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)
+
+    def test_batched_multimodal_generate(self):
+        causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
+        images = np.random.randint(0, 256, size=(2, 20, 20, 3)).astype("uint8")
+        outputs = causal_lm.generate(
+            {
+                "prompts": ["<image> airplane", "<image> airport"],
+                "images": images,
+            },
+            max_length=16,
+        )
+        # One output per prompt: batched multimodal inputs used to collapse
+        # to a single sample.
+        self.assertEqual(len(outputs), 2)
 
     def test_generate(self):
         causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
