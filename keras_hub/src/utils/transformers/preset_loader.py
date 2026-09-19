@@ -3,6 +3,7 @@
 import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
@@ -25,6 +26,7 @@ from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -32,7 +34,6 @@ from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
-from keras_hub.src.utils.transformers import convert_roberta
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
 from keras_hub.src.utils.transformers import convert_swin_transformer
@@ -59,6 +60,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
+        elif model_type == "modernbert":
+            self.converter = convert_modern_bert
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
         elif model_type == "dinov3_vit":
@@ -104,8 +107,6 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
             self.converter = convert_qwen3_5
-        elif model_type == "roberta":
-            self.converter = convert_roberta
         elif model_type == "sam3_video":
             self.converter = convert_sam3
         elif model_type == "xlm-roberta":
@@ -149,6 +150,15 @@ class TransformersPresetLoader(PresetLoader):
         architecture = self.config["architectures"][0]
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
+        # `convert_head` is only defined for task-specific heads (e.g.
+        # ModernBERT's MaskedLM prediction head). Gate on the task class
+        # itself, not just on whether the converter happens to define
+        # `convert_head` , otherwise any task sharing this converter
+        #  would incorrectly fall through
+        # into a `convert_head` written for a different task class.
+        has_matching_convert_head = hasattr(
+            self.converter, "convert_head"
+        ) and issubclass(cls, MaskedLM)
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -163,6 +173,7 @@ class TransformersPresetLoader(PresetLoader):
             not is_classifier
             and not is_assistant
             and architecture != "ViTModel"
+            and not has_matching_convert_head
         ):
             return super().load_task(
                 cls, load_weights, load_task_weights, **kwargs
