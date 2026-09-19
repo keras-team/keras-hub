@@ -1,7 +1,10 @@
+import collections
+import unittest
+from types import MappingProxyType
+
 import grain
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
@@ -9,6 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tests.test_case import assert_grain_safe_types
 from keras_hub.src.tests.test_case import grain_ragged_batch
 from keras_hub.src.tests.test_case import grain_source_from_tensor_slices
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class AssertionsTest(TestCase):
@@ -44,13 +48,14 @@ class AssertionsTest(TestCase):
         with self.assertRaises(AssertionError):
             self.assertAllClose(5.0, [5.0, 5.0])
         with self.assertRaises(AssertionError):
-            self.assertAllEqual(np.zeros((2, 3)), np.zeros((3, 2)))
+            self.assertAllEqual(np.zeros(()), np.zeros((2, 3)))
 
     def test_detect_nesting_depth_mismatch(self):
         # `[3]` vs `3` is a rank mismatch reached partway down the recursion.
         with self.assertRaises(AssertionError):
             self.assertAllEqual([[1, 2], [3]], [[1, 2], 3])
 
+    @unittest.skipIf(tf is None, "Requires TF")
     def test_ragged_tensors(self):
         ragged = tf.ragged.constant([[9, 10, 11, 12], [9, 12]])
         self.assertAllEqual(ragged, [[9, 10, 11, 12], [9, 12]])
@@ -81,10 +86,70 @@ class AssertionsTest(TestCase):
     def test_strings(self):
         self.assertAllEqual(["a", "bb"], ["a", "bb"])
         self.assertAllClose([["a"], ["b", "c"]], [["a"], ["b", "c"]])
-        self.assertAllEqual(tf.constant(["a", "bb"]), ["a", "bb"])
+        if tf is not None:
+            self.assertAllEqual(tf.constant(["a", "bb"]), ["a", "bb"])
         self.assertAllEqual(np.array([b"a", b"bb"]), ["a", "bb"])
         with self.assertRaises(AssertionError):
             self.assertAllEqual(["a", "bb"], ["a", "cc"])
+
+    def test_bytes_are_not_equal_to_str(self):
+        with self.assertRaises(AssertionError):
+            self.assertEqual(b"abc", "abc")
+        with self.assertRaises(AssertionError):
+            self.assertEqual([b"abc", b"d"], ["abc", "d"])
+
+    def test_bytes_that_are_not_utf8(self):
+        # Must compare equal rather than raising `UnicodeDecodeError`.
+        self.assertAllEqual([b"\xe4\xbd"], [b"\xe4\xbd"])
+        self.assertAllEqual([b"abc"], ["abc"])
+
+    def test_dicts_of_arrays(self):
+        self.assertEqual({"ids": np.array([1, 2])}, {"ids": np.array([1, 2])})
+        with self.assertRaises(AssertionError):
+            self.assertEqual(
+                {"x": np.array([1.0, 2.0])}, {"x": np.array([1.0, 2.0000001])}
+            )
+
+    def test_dict_keys_of_mixed_types(self):
+        self.assertAllEqual({1: 1, "a": 2}, {1: 1, "a": 2})
+
+    def test_zero_dim_and_non_array_leaves(self):
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], [3]], np.array(5))
+        policy = keras.DTypePolicy("float32")
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual(policy, policy)
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual(2**70, 2**70)
+
+    def test_non_dict_mappings(self):
+        # A `MappingProxyType` must be walked like a dict. Comparing the two
+        # mappings directly with `==` raises on the array values, so a
+        # fallback that does not recurse reports these as unequal.
+        self.assertAllClose(
+            MappingProxyType({"k": np.array([1.0, 2.0])}),
+            MappingProxyType({"k": np.array([1.0, 2.0])}),
+        )
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                MappingProxyType({"k": 1.0}), MappingProxyType({"k": 2.0})
+            )
+
+    def test_namedtuples_compare_by_field_name(self):
+        nt = collections.namedtuple("NT", ["a", "b"])
+        nt2 = collections.namedtuple("NT2", ["b", "a"])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                nt(a=[1.0], b=[2.0, 3.0]), nt2(b=[1.0], a=[2.0, 3.0])
+            )
+
+    @unittest.skipIf(tf is None, "Requires TensorFlow")
+    def test_ragged_is_not_equal_to_dense(self):
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(
+                tf.ragged.constant([[1, 2], [3, 4]]),
+                tf.constant([[1, 2], [3, 4]]),
+            )
 
     def test_assert_not_all_equal(self):
         self.assertNotAllEqual([1, 2], [1, 3])
@@ -120,6 +185,7 @@ class GrainSourceFromTensorSlicesTest(TestCase):
         self.assertEqual(float(sw), 1.0)
         assert_grain_safe_types(ds[1])
 
+    @unittest.skipIf(tf is None, "Requires TF")
     def test_ragged_and_string_tensors(self):
         ragged = tf.ragged.constant([[1, 2, 3], [4]])
         strings = tf.constant(["a", "bb"])
@@ -163,8 +229,9 @@ class AssertGrainSafeTypesTest(TestCase):
     def test_rejects_backend_and_tf_tensors(self):
         with self.assertRaisesRegex(AssertionError, "NumPy arrays"):
             assert_grain_safe_types({"a": ops.ones(2)})
-        with self.assertRaisesRegex(AssertionError, "NumPy arrays"):
-            assert_grain_safe_types((tf.ones(2),))
+        if tf is not None:
+            with self.assertRaisesRegex(AssertionError, "NumPy arrays"):
+                assert_grain_safe_types((tf.ones(2),))
 
 
 class LeakyLayer(keras.layers.Layer):
@@ -180,6 +247,7 @@ class LeakyLayer(keras.layers.Layer):
 
 
 class GrainHarnessTest(TestCase):
+    @unittest.skipIf(tf is None, "Requires TF")
     def test_grain_checks_pass_for_grain_safe_layer(self):
         layer = StartEndPacker(
             sequence_length=4, start_value=1, end_value=2, pad_value=0

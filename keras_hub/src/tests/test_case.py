@@ -1,15 +1,16 @@
+import collections.abc
 import gc
 import json
 import os
 import pathlib
 import re
+import shutil
 import tempfile
 import unittest
 
 import grain
 import keras
 import numpy as np
-from absl.testing import parameterized
 from keras import ops
 from keras import tree
 from keras.layers import ReversibleEmbedding
@@ -18,11 +19,7 @@ from keras.src.testing import TestCase as KerasTestCase
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def convert_to_comparible_type(x):
@@ -42,8 +39,6 @@ def convert_to_comparible_type(x):
         if isinstance(x, tf.RaggedTensor):
             return x.to_list()
         return x.numpy()
-    if isinstance(x, bytes):
-        return x.decode("utf-8")
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
@@ -56,8 +51,6 @@ def _as_dense_array(x):
     `[[9, 10, 11, 12], [9, 12]]`, which `np.array` cannot represent. Those
     have to be compared recursively, element by element.
     """
-    if isinstance(x, np.ndarray) and x.dtype.kind not in ("O", "S"):
-        return x
     if isinstance(x, dict):
         return None
     try:
@@ -68,8 +61,12 @@ def _as_dense_array(x):
     if x.dtype.kind == "O":
         return None
     if x.dtype.kind == "S":
-        # Compare all strings as `str`, never as `bytes`.
-        flat = [e.decode("utf-8") for e in x.reshape(-1).tolist()]
+        # Compare all strings as `str`, never as `bytes`. Bytes that are not
+        # valid UTF-8 still have to survive the round trip and compare equal.
+        flat = [
+            e.decode("utf-8", errors="surrogateescape")
+            for e in x.reshape(-1).tolist()
+        ]
         return np.array(flat, dtype=str).reshape(x.shape)
     return x
 
@@ -84,21 +81,52 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
     """
     where = f" at {path}" if path else ""
     detail = f"\n{msg}" if msg else ""
+
+    if (
+        tf is not None
+        and isinstance(x1, (tf.Tensor, tf.RaggedTensor))
+        and isinstance(x2, (tf.Tensor, tf.RaggedTensor))
+    ):
+        is_ragged_1 = isinstance(x1, tf.RaggedTensor)
+        is_ragged_2 = isinstance(x2, tf.RaggedTensor)
+        if is_ragged_1 != is_ragged_2:
+            raise AssertionError(
+                f"Structures differ{where}: ragged vs dense.{detail}"
+            )
+        if is_ragged_1 and x1.ragged_rank != x2.ragged_rank:
+            raise AssertionError(
+                f"ragged_rank differs{where}: {x1.ragged_rank} vs "
+                f"{x2.ragged_rank}.{detail}"
+            )
+
+    x1 = convert_to_comparible_type(x1)
+    x2 = convert_to_comparible_type(x2)
+
     if x1 is None or x2 is None:
         if x1 is not None or x2 is not None:
             raise AssertionError(
                 f"Structures differ{where}: {x1} vs {x2}.{detail}"
             )
         return
-    if isinstance(x1, dict) or isinstance(x2, dict):
-        if not isinstance(x1, dict) or not isinstance(x2, dict):
+
+    if hasattr(x1, "_asdict"):
+        x1 = x1._asdict()
+    if hasattr(x2, "_asdict"):
+        x2 = x2._asdict()
+
+    if isinstance(x1, collections.abc.Mapping) or isinstance(
+        x2, collections.abc.Mapping
+    ):
+        if not isinstance(x1, collections.abc.Mapping) or not isinstance(
+            x2, collections.abc.Mapping
+        ):
             raise AssertionError(
                 f"Structures differ{where}: {type(x1)} vs {type(x2)}.{detail}"
             )
-        if sorted(x1.keys()) != sorted(x2.keys()):
+        if x1.keys() != x2.keys():
             raise AssertionError(
-                f"Dict keys differ{where}: {sorted(x1.keys())} vs "
-                f"{sorted(x2.keys())}.{detail}"
+                f"Dict keys differ{where}: {list(x1.keys())} vs "
+                f"{list(x2.keys())}.{detail}"
             )
         for key in x1:
             _compare_structures(
@@ -109,11 +137,29 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
     if dense1 is not None and dense2 is not None:
         compare_dense(dense1, dense2, f"{msg or ''}{where}")
         return
-    # At least one side is jagged. Descend a level and compare pairwise.
-    if not hasattr(x1, "__len__") or not hasattr(x2, "__len__"):
-        raise AssertionError(
-            f"Structures differ{where}: {type(x1)} vs {type(x2)}.{detail}"
-        )
+
+    # At least one side is jagged or a leaf.
+    def is_leaf(x):
+        if isinstance(x, (str, bytes)):
+            return True
+        try:
+            if np.ndim(x) == 0:
+                return True
+        except ValueError:
+            pass
+        if not hasattr(x, "__len__"):
+            return True
+        return False
+
+    if is_leaf(x1) or is_leaf(x2):
+        try:
+            is_equal = bool(x1 == x2)
+        except (ValueError, TypeError):
+            is_equal = False
+        if not is_equal:
+            raise AssertionError(f"Values differ{where}: {x1} vs {x2}.{detail}")
+        return
+
     if len(x1) != len(x2):
         raise AssertionError(
             f"Lengths differ{where}: {len(x1)} vs {len(x2)}.{detail}"
@@ -122,28 +168,15 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
         _compare_structures(e1, e2, compare_dense, msg, f"{path}[{i}]")
 
 
-def _assert_dense_shapes_match(x1, x2, msg):
-    """Reject a shape mismatch before numpy gets a chance to broadcast it.
-
-    `np.testing.assert_array_equal(5, [5, 5])` passes, and so does the rank
-    mismatch `[[1, 2], [3]]` vs `[[1, 2], 3]` once the recursion reaches it.
-    `tf.test.TestCase` compared shapes first, so keep doing that.
-    """
-    if x1.shape != x2.shape:
-        raise AssertionError(
-            f"Shapes differ: {x1.shape} vs {x2.shape}.\n{msg or ''}"
-        )
-
-
-def _assert_dense_equal(x1, x2, msg):
-    _assert_dense_shapes_match(x1, x2, msg)
-    np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
-
-
 def _dense_allclose_fn(atol, rtol):
     def compare(x1, x2, msg):
-        _assert_dense_shapes_match(x1, x2, msg)
-        if x1.dtype.kind == "U" or x2.dtype.kind == "U":
+        if x1.shape != x2.shape:
+            raise AssertionError(
+                f"Shapes differ: {x1.shape} vs {x2.shape}.\n{msg or ''}"
+            )
+        if atol is None and rtol is None:
+            np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
+        elif x1.dtype.kind == "U" or x2.dtype.kind == "U":
             # Strings have no tolerance; compare them exactly.
             np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
         else:
@@ -260,19 +293,22 @@ def assert_grain_safe_types(x):
     tree.map_structure(check, x)
 
 
-class TestCase(KerasTestCase, parameterized.TestCase):
+class TestCase(KerasTestCase):
     """Base test case class for KerasHub."""
 
+    def setUp(self):
+        super().setUp()
+        keras.utils.set_random_seed(87654321)
+
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
-        # This metric dict hack is only needed for tf.keras, and can be
-        # removed after we fully migrate to keras-core/Keras 3.
         if x1.__class__.__name__ == "_MetricDict":
             x1 = dict(x1)
         if x2.__class__.__name__ == "_MetricDict":
             x2 = dict(x2)
-        x1 = tree.map_structure(convert_to_comparible_type, x1)
-        x2 = tree.map_structure(convert_to_comparible_type, x2)
         _compare_structures(x1, x2, _dense_allclose_fn(atol, rtol), msg, "")
+
+    def assertDictEqual(self, x1, x2, msg=None):
+        _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
 
     def assertEqual(self, x1, x2, msg=None):
         x1 = tree.map_structure(convert_to_comparible_type, x1)
@@ -280,9 +316,7 @@ class TestCase(KerasTestCase, parameterized.TestCase):
         super().assertEqual(x1, x2, msg=msg)
 
     def assertAllEqual(self, x1, x2, msg=None):
-        x1 = tree.map_structure(convert_to_comparible_type, x1)
-        x2 = tree.map_structure(convert_to_comparible_type, x2)
-        _compare_structures(x1, x2, _assert_dense_equal, msg, "")
+        _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
 
     def assertNotAllEqual(self, x1, x2, msg=None):
         try:
@@ -308,21 +342,19 @@ class TestCase(KerasTestCase, parameterized.TestCase):
         self.assertIsNotNone(
             x, "`assertAllInRange` requires dense, numeric input."
         )
-        self.assertTrue(
-            np.all(x >= lower_bound) and np.all(x <= upper_bound),
-            msg=msg
-            or (
-                f"Values are not all in [{lower_bound}, {upper_bound}]. "
+        if not (np.all(x >= lower_bound) and np.all(x <= upper_bound)):
+            self.fail(
+                msg
+                or f"Values are not all in [{lower_bound}, {upper_bound}]. "
                 f"Range: [{np.min(x)}, {np.max(x)}]"
-            ),
-        )
+            )
 
     def get_temp_dir(self):
-        # `tf.test.TestCase` handed out one directory per test, but Keras'
-        # version calls `tempfile.mkdtemp()` on every call. Tests that write
-        # in one call and read in the next rely on getting the same path.
         if getattr(self, "_keras_hub_temp_dir", None) is None:
-            self._keras_hub_temp_dir = super().get_temp_dir()
+            self._keras_hub_temp_dir = tempfile.mkdtemp()
+            self.addCleanup(
+                shutil.rmtree, self._keras_hub_temp_dir, ignore_errors=True
+            )
         return self._keras_hub_temp_dir
 
     def assertDTypeEqual(self, x, expected_dtype, msg=None):
@@ -1454,16 +1486,8 @@ class TestCase(KerasTestCase, parameterized.TestCase):
             task.preprocessor = preprocessor
         # Turn off default compilation, should error during `fit()`.
         task = cls(**init_kwargs, compile=False)
-        fit_args, fit_kwargs = (
-            ((ds,), {})
-            if ds is not None
-            else (
-                (x, y),
-                {"sample_weight": sw},
-            )
-        )
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
-            task.fit(*fit_args, **fit_kwargs)
+            task.fit(x, y, sample_weight=sw)
 
     def run_preset_test(
         self,
