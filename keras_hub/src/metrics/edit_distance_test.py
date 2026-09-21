@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 import pytest
 import tensorflow as tf
 
@@ -187,6 +188,44 @@ class EditDistanceTest(TestCase):
         edit_distance.update_state(y_true_2, y_pred_2)
         edit_distance_val = edit_distance.result()
         self.assertAlmostEqual(edit_distance_val, 5.667, delta=1e-3)
+
+    def test_zero_is_a_real_token(self):
+        # `tf.sparse.from_dense` dropped zeros, so a padded token id was
+        # invisible to the metric.
+        edit_distance = EditDistance(normalize=False)
+        edit_distance_val = edit_distance([[1, 2, 0]], [[1, 2]])
+        self.assertAlmostEqual(edit_distance_val, 1.0, delta=1e-3)
+
+    def test_empty_string_is_a_real_token(self):
+        edit_distance = EditDistance(normalize=False)
+        edit_distance_val = edit_distance([["a", "", "b"]], [["a", "b"]])
+        self.assertAlmostEqual(edit_distance_val, 1.0, delta=1e-3)
+
+    def test_numpy_input(self):
+        edit_distance = EditDistance()
+        y_true = np.array([[1, 2], [3, 4]])
+        y_pred = np.array([[1, 2], [3, 5]])
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 0.25, delta=1e-3)
+
+    def test_backend_tensor_input(self):
+        edit_distance = EditDistance()
+        y_true = keras.ops.convert_to_tensor([[1, 2], [3, 4]])
+        y_pred = keras.ops.convert_to_tensor([[1, 2], [3, 5]])
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 0.25, delta=1e-3)
+
+    def test_rank_3_input_raises(self):
+        edit_distance = EditDistance()
+        with self.assertRaisesRegex(ValueError, "must be of rank 1 or 2"):
+            edit_distance([[[1, 2]]], [[[1, 2]]])
+
+    def test_batch_size_mismatch_raises(self):
+        edit_distance = EditDistance()
+        with self.assertRaisesRegex(ValueError, "same number of samples"):
+            edit_distance([[1, 2], [3, 4]], [[1, 2]])
 
     def test_get_config(self):
         rouge = EditDistance(
