@@ -72,3 +72,24 @@ class MuseGlimmerLayersTest(TestCase):
         np.testing.assert_allclose(result_np[0, 1, :], 1.0)
         np.testing.assert_allclose(result_np[0, 2, :], 0.0)
         np.testing.assert_allclose(result_np[0, 3, :], 1.0)
+
+    def test_interleave_embeddings_2d_indices_with_batch_offset(self):
+        layer = MuseGlimmerInterleaveEmbeddings(hidden_dim=4)
+        text_emb = ops.zeros((2, 6, 4))
+        vision_emb = np.stack(
+            [np.full((4,), i, dtype="float32") for i in range(4)]
+        )
+        # Local per-example positions: example 0 uses cols 1, 3; example 1
+        # uses cols 0, 2. Without a batch offset these collide in the
+        # flattened buffer.
+        indices = ops.convert_to_tensor([[1, 3], [0, 2]], dtype="int32")
+        result = layer(
+            image_embeddings=vision_emb,
+            text_embeddings=text_emb,
+            vision_indices=indices,
+        )
+        result_np = ops.convert_to_numpy(result)
+        np.testing.assert_allclose(result_np[0, 1, :], 0.0)
+        np.testing.assert_allclose(result_np[0, 3, :], 1.0)
+        np.testing.assert_allclose(result_np[1, 0, :], 2.0)
+        np.testing.assert_allclose(result_np[1, 2, :], 3.0)

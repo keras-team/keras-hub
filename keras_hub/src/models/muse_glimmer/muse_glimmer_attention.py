@@ -8,6 +8,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerRMSNorm,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class MuseGlimmerTextAttention(keras.layers.Layer):
@@ -374,8 +375,6 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         _, query_len, key_len = ops.shape(attention_mask)
         all_ones = ops.ones((key_len, key_len), "bool")
         if keras.config.backend() == "tensorflow":
-            import tensorflow as tf
-
             band_size = ops.minimum(key_len, self.sliding_window_size - 1)
             band_size = ops.cast(band_size, "int32")
             sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)

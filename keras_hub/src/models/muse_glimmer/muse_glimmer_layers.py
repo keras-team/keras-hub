@@ -108,11 +108,17 @@ class MuseGlimmerInterleaveEmbeddings(keras.layers.Layer):
             image_embeddings = ops.reshape(
                 image_embeddings, (-1, self.hidden_dim)
             )
+        vision_indices = ops.cast(vision_indices, "int32")
         if len(ops.shape(vision_indices)) == 2:
+            # Local per-example indices — add each row's batch offset
+            # before flattening into `flat_text`'s (batch * seq_len) axis.
+            batch_offsets = ops.arange(batch_size, dtype="int32") * seq_len
+            vision_indices = vision_indices + ops.expand_dims(
+                batch_offsets, axis=-1
+            )
             vision_indices = ops.reshape(vision_indices, (-1,))
 
         flat_text = ops.reshape(text_embeddings, (-1, self.hidden_dim))
-        vision_indices = ops.cast(vision_indices, "int32")
         vision_indices = ops.expand_dims(vision_indices, axis=-1)
 
         flat_out = ops.scatter_update(
