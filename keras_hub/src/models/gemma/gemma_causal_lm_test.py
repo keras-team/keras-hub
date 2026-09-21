@@ -11,10 +11,11 @@ from keras_hub.src.models.gemma.gemma_causal_lm_preprocessor import (
     GemmaCausalLMPreprocessor,
 )
 from keras_hub.src.models.gemma.gemma_tokenizer import GemmaTokenizer
+from keras_hub.src.tests.mocks.mock_attention import assert_fused_attention_used
+from keras_hub.src.tests.mocks.mock_attention import patch_dot_product_attention
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class GemmaCausalLMTest(TestCase):
@@ -116,20 +117,10 @@ class GemmaCausalLMTest(TestCase):
             **self.init_kwargs,
             "backbone": GemmaBackbone.from_config(cap_free_config),
         }
-        # Must be read before `patch` installs the mock.
-        real_dpa = keras.ops.dot_product_attention
-
-        with patch(
-            "keras.ops.dot_product_attention",
-            autospec=True,
-            side_effect=real_dpa,
-        ) as mock_func:
+        with patch_dot_product_attention() as mock_func:
             causal_lm = GemmaCausalLM(**init_kwargs)
             causal_lm.generate("the quick brown fox")
-            if running_on_gpu():
-                mock_func.assert_called()
-            else:
-                mock_func.assert_not_called()
+            assert_fused_attention_used(mock_func)
 
     def test_generate_with_bfloat16(self):
         original_floatx = keras.config.floatx()
