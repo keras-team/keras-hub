@@ -2,11 +2,6 @@ import keras
 import numpy as np
 from keras import ops
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.block_diffusion_lm import BlockDiffusionLM
 from keras_hub.src.models.block_diffusion_lm import get_diffusion_sampler
@@ -16,6 +11,7 @@ from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
     DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.DiffusionGemmaBlockDiffusionLM")

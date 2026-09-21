@@ -3,11 +3,6 @@ import re
 import keras
 import numpy as np
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
@@ -25,6 +20,7 @@ from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.DiffusionGemmaBlockDiffusionLMPreprocessor")
