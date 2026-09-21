@@ -20,31 +20,35 @@ class TimestepEmbedding(keras.layers.Layer):
         dimension `dim`.
     """
 
-    def call(self, t, dim=256):
-        t = keras.ops.cast(t, "float32")
+    def call(self, t, dim=256, max_period=10000, time_factor=1000.0):
+        # Cast before scaling so that low-precision global policies (e.g.
+        # bfloat16) do not lose resolution on the `time_factor` multiply.
+        # `floatx()` rather than a hardcoded "float32": under a bfloat16
+        # policy floatx is still float32, but this avoids silently
+        # downcasting when the model is genuinely run in float64.
+        compute_dtype = keras.backend.floatx()
+        t = ops.cast(t, compute_dtype) * time_factor
         half_dim = dim // 2
 
-        exponent = (
-            -keras.ops.log(keras.ops.cast(10000.0, "float32"))
-            * keras.ops.arange(
-                half_dim,
-                dtype="float32",
-            )
-            / keras.ops.cast(
-                half_dim,
-                "float32",
-            )
+        freqs = ops.exp(
+            -ops.log(ops.cast(max_period, compute_dtype))
+            * ops.arange(half_dim, dtype=compute_dtype)
+            / ops.cast(half_dim, compute_dtype)
         )
 
-        emb = keras.ops.exp(exponent)
-        emb = t[..., None] * emb[None, ...]
-        return keras.ops.concatenate(
-            [
-                keras.ops.sin(emb),
-                keras.ops.cos(emb),
-            ],
-            axis=-1,
-        )
+        args = t[..., None] * freqs[None, ...]
+        # NOTE: cos comes first. This matches the reference implementation at
+        # https://github.com/black-forest-labs/flux, and the pretrained
+        # `time_in` weights are ordered to match. Swapping these silently
+        # permutes the input features of the following MLP.
+        embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
+
+        if dim % 2 != 0:
+            embedding = ops.concatenate(
+                [embedding, ops.zeros_like(embedding[..., :1])], axis=-1
+            )
+
+        return embedding
 
 
 class RotaryPositionalEmbedding(keras.layers.Layer):

@@ -3,22 +3,15 @@
 presets = {
     "flux1_schnell": {
         "metadata": {
-            "description": "FLUX.1 [schnell] text-to-image model.",
-            "params": 11891885120,
-            "official_name": "FLUX.1 [schnell]",
+            "description": (
+                "FLUX.1 [schnell] 12B rectified flow transformer for "
+                "text-to-image generation, timestep-distilled for "
+                "few-step sampling."
+            ),
+            "params": 11901408256,
             "path": "flux",
             "model_card": "https://huggingface.co/black-forest-labs/FLUX.1-schnell",
         },
         "kaggle_handle": "kaggle://keras/flux/keras/flux1_schnell",
-    },
-    "flux1_dev": {
-        "metadata": {
-            "description": "FLUX.1 [dev] text-to-image model.",
-            "params": 11891885120,
-            "official_name": "FLUX.1 [dev]",
-            "path": "flux",
-            "model_card": "https://huggingface.co/black-forest-labs/FLUX.1-dev",
-        },
-        "kaggle_handle": "kaggle://keras/flux/keras/flux1_dev",
     },
 }

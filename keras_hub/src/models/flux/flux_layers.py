@@ -8,6 +8,44 @@ from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 
 
+class ApproximateGELU(layers.Layer):
+    """GELU using the tanh approximation.
+
+    FLUX uses `nn.GELU(approximate="tanh")` in the double-stream MLPs
+    (`activation_fn="gelu-approximate"` in diffusers). Keras's
+    `Activation("gelu")` is the *exact*, erf-based formulation, which is a
+    different function -- close enough to look plausible, but it perturbs
+    every double-block MLP output and compounds across the 19 blocks.
+    """
+
+    def call(self, inputs):
+        return keras.activations.gelu(inputs, approximate=True)
+
+
+class StripTextTokens(layers.Layer):
+    """Drop the leading text tokens from a fused `[text, image]` sequence.
+
+    The single-stream blocks run on `concat([text, image])`, so the image
+    tokens have to be sliced back out afterwards. That slice cannot be done
+    while building the functional graph when the sequence axes are dynamic:
+    `KerasTensor.shape[1]` is `None` there (and `ops.shape` returns the same
+    static `None`), so `sequence[:, None:, ...]` is a silent no-op that
+    leaves the text tokens in the output. Performing it inside a layer
+    defers it to a context where the true runtime length is known.
+    """
+
+    def call(self, sequence, text):
+        return sequence[:, ops.shape(text)[1] :, ...]
+
+    def compute_output_spec(self, sequence, text):
+        shape = list(sequence.shape)
+        if shape[1] is not None and text.shape[1] is not None:
+            shape[1] = shape[1] - text.shape[1]
+        else:
+            shape[1] = None
+        return keras.KerasTensor(tuple(shape), dtype=self.compute_dtype)
+
+
 class EmbedND(keras.Model):
     """Embedding layer for N-dimensional inputs using RoPE.
 
@@ -131,58 +169,6 @@ class QKNorm(keras.layers.Layer):
         return q, k
 
 
-class SelfAttention(keras.Model):
-    """Multi-head self-attention layer with RoPE and RMS normalization.
-
-    This layer performs self-attention over the input sequence and applies RMS
-    normalization to the query and key tensors before computing the attention
-    scores.
-
-    Args:
-        dim: int. Dimensionality of the input tensor.
-        num_heads: int. Number of attention heads. Default is 8.
-        use_bias: bool. Whether to use bias in the query, key, value projection
-            layers. Default is False.
-    """
-
-    def __init__(self, dim, num_heads=8, use_bias=False):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.dim = dim
-
-        self.qkv = layers.Dense(dim * 3, use_bias=use_bias)
-        self.norm = QKNorm(head_dim)
-        self.proj = layers.Dense(dim)
-        self.attention = FluxRoPEAttention()
-
-    def build(self, input_shape):
-        self.qkv.build(input_shape)
-        head_dim = input_shape[-1] // self.num_heads
-        self.norm.build((None, input_shape[1], head_dim))
-        self.proj.build((None, input_shape[1], input_shape[-1]))
-
-    def call(self, x, positional_encoding):
-        """Applies self-attention with RoPE embeddings.
-
-        Args:
-            x: KerasTensor. Input tensor of shape (batch_size, seq_len, dim).
-            positional_encoding: KerasTensor. Positional encoding tensor for
-                RoPE.
-
-        Returns:
-            KerasTensor: Output tensor after self-attention and projection.
-        """
-        qkv = self.qkv(x)
-        q, k, v = rearrange_symbolic_tensors(qkv, K=3, H=self.num_heads)
-        q, k = self.norm(q, k)
-        x = self.attention(
-            q=q, k=k, v=v, positional_encoding=positional_encoding
-        )
-        x = self.proj(x)
-        return x
-
-
 class Modulation(keras.Model):
     """Modulation layer that produces shift, scale, and gate tensors.
 
@@ -264,6 +250,7 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.mlp_ratio = mlp_ratio
         self.use_bias = use_bias
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        head_dim = hidden_size // num_heads
 
         # Image stream layers
         self.image_mod = Modulation(hidden_size, double=True)
@@ -273,6 +260,9 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.image_qkv = keras.layers.Dense(
             3 * hidden_size, use_bias=use_bias, name="img_qkv"
         )
+        # Maps to `double_blocks.{i}.img_attn.norm.*` in the reference
+        # checkpoint. Without this the q/k RMS scales are silently dropped.
+        self.image_attn_norm = QKNorm(head_dim)
         self.image_attn_proj = keras.layers.Dense(
             hidden_size, use_bias=use_bias, name="img_attn_proj"
         )
@@ -283,7 +273,7 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.image_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation("gelu"),
+                ApproximateGELU(),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ],
             name="image_mlp",
@@ -297,6 +287,8 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.text_qkv = keras.layers.Dense(
             3 * hidden_size, use_bias=use_bias, name="txt_qkv"
         )
+        # Maps to `double_blocks.{i}.txt_attn.norm.*`.
+        self.text_attn_norm = QKNorm(head_dim)
         self.text_attn_proj = keras.layers.Dense(
             hidden_size, use_bias=use_bias, name="txt_attn_proj"
         )
@@ -307,7 +299,7 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.text_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation("gelu"),
+                ApproximateGELU(),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ],
             name="text_mlp",
@@ -315,6 +307,70 @@ class DoubleStreamBlock(keras.layers.Layer):
 
         # RoPE Attention
         self.attention = FluxRoPEAttention()
+
+    def build(
+        self,
+        image_shape,
+        text_shape,
+        modulation_encoding_shape,
+        positional_encoding_shape,
+    ):
+        """Build every sublayer explicitly.
+
+        This cannot be left to `call`: `compute_output_spec` below stops
+        Keras from tracing `call` during functional construction, so nothing
+        else would ever create these weights. Symptom if omitted: checkpoint
+        conversion dies with "You must build the layer before accessing
+        `kernel`" on the JAX and torch backends.
+        """
+        head_dim = self.hidden_size // self.num_heads
+        image_qk_shape = (
+            image_shape[0],
+            self.num_heads,
+            image_shape[1],
+            head_dim,
+        )
+        text_qk_shape = (
+            text_shape[0],
+            self.num_heads,
+            text_shape[1],
+            head_dim,
+        )
+
+        # Image stream.
+        self.image_mod.build(modulation_encoding_shape)
+        self.image_norm1.build(image_shape)
+        self.image_qkv.build(image_shape)
+        self.image_attn_norm.build(image_qk_shape)
+        self.image_attn_proj.build(image_shape)
+        self.image_norm2.build(image_shape)
+        self.image_mlp.build(image_shape)
+
+        # Text stream.
+        self.text_mod.build(modulation_encoding_shape)
+        self.text_norm1.build(text_shape)
+        self.text_qkv.build(text_shape)
+        self.text_attn_norm.build(text_qk_shape)
+        self.text_attn_proj.build(text_shape)
+        self.text_norm2.build(text_shape)
+        self.text_mlp.build(text_shape)
+
+    def compute_output_spec(
+        self, image, text, modulation_encoding, positional_encoding
+    ):
+        """Declare the output spec instead of tracing `call`.
+
+        The streams are residual, so shapes are unchanged. Declaring this
+        matters for dynamic sequence lengths: otherwise Keras infers the spec
+        by running `call` on placeholder tensors, and it picks *independent*
+        placeholder lengths for `image`, `text` and `positional_encoding`.
+        Those cannot satisfy `len(ids) == len(text) + len(image)`, so RoPE
+        broadcasting fails during tracing on the torch and JAX backends.
+        """
+        return (
+            keras.KerasTensor(image.shape, dtype=self.compute_dtype),
+            keras.KerasTensor(text.shape, dtype=self.compute_dtype),
+        )
 
     def call(self, image, text, modulation_encoding, positional_encoding):
         """
@@ -350,15 +406,24 @@ class DoubleStreamBlock(keras.layers.Layer):
             txt_qkv, 3, self.num_heads
         )
 
-        q = ops.concatenate([img_q, txt_q], axis=2)
-        k = ops.concatenate([img_k, txt_k], axis=2)
-        v = ops.concatenate([img_v, txt_v], axis=2)
+        img_q, img_k = self.image_attn_norm(img_q, img_k)
+        txt_q, txt_k = self.text_attn_norm(txt_q, txt_k)
+
+        # NOTE: text comes first. `FluxBackbone` builds the RoPE positions as
+        # `concatenate([text_ids, image_ids])`, so the sequence assembled here
+        # must use the same order or every token receives the wrong rotary
+        # position. This is silent: shapes are identical either way.
+        q = ops.concatenate([txt_q, img_q], axis=2)
+        k = ops.concatenate([txt_k, img_k], axis=2)
+        v = ops.concatenate([txt_v, img_v], axis=2)
 
         attn_out = self.attention(q, k, v, positional_encoding)
 
-        img_seq_len = ops.shape(image)[1]
-        img_attn = attn_out[:, :img_seq_len, :]
-        txt_attn = attn_out[:, img_seq_len:, :]
+        txt_seq_len = text.shape[1]
+        if txt_seq_len is None:
+            txt_seq_len = ops.shape(text)[1]
+        txt_attn = attn_out[:, :txt_seq_len, :]
+        img_attn = attn_out[:, txt_seq_len:, :]
 
         image = image + img_mod1["gate"] * self.image_attn_proj(img_attn)
         text = text + txt_mod1["gate"] * self.text_attn_proj(txt_attn)
@@ -427,7 +492,9 @@ class SingleStreamBlock(keras.Model):
         self.norm = QKNorm(head_dim)
 
         self.hidden_size = hidden_size
-        self.pre_norm = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.pre_norm = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
         self.modulation = Modulation(hidden_size, double=False)
         self.attention = FluxRoPEAttention()
 
@@ -486,6 +553,14 @@ class SingleStreamBlock(keras.Model):
         )
         return x + mod["gate"] * output
 
+    def compute_output_spec(self, x, modulation_encoding, positional_encoding):
+        """Declare the output spec instead of tracing `call`.
+
+        See `DoubleStreamBlock.compute_output_spec` — same reasoning; the
+        block is residual, so the shape is unchanged.
+        """
+        return keras.KerasTensor(x.shape, dtype=self.compute_dtype)
+
 
 class LastLayer(keras.Model):
     """
@@ -499,7 +574,9 @@ class LastLayer(keras.Model):
 
     def __init__(self, hidden_size, patch_size, output_channels):
         super().__init__()
-        self.norm_final = keras.layers.LayerNormalization(epsilon=1e-6)
+        self.norm_final = keras.layers.LayerNormalization(
+            epsilon=1e-6, scale=False, center=False
+        )
         self.linear = keras.layers.Dense(
             patch_size * patch_size * output_channels, use_bias=True
         )

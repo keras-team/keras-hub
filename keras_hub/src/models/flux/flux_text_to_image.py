@@ -1,7 +1,7 @@
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.flux.flux_model import FluxBackbone
+from keras_hub.src.models.flux.flux_backbone import FluxBackbone
 from keras_hub.src.models.flux.flux_text_to_image_preprocessor import (
     FluxTextToImagePreprocessor,
 )
@@ -29,7 +29,7 @@ class FluxTextToImage(TextToImage):
         "detailed, 8k"
     )
     text_to_image = keras_hub.models.FluxTextToImage.from_preset(
-        "TBA", height=512, width=512
+        "flux1_schnell", height=512, width=512
     )
     text_to_image.generate(
         prompt
