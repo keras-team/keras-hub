@@ -149,6 +149,7 @@ class DeiTBackbone(Backbone):
                 "attention_dropout": self.attention_dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "use_mha_bias": self.use_mha_bias,
+                "data_format": self.data_format,
             }
         )
         return config
