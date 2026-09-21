@@ -11,6 +11,29 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor impor
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
+def _set_vision_encoder_padding_caps(backbone, preprocessor):
+    """Set vision encoder padding caps from processor limits."""
+    vision_encoder = backbone.vision_encoder
+    if vision_encoder is None or preprocessor is None:
+        return
+    window_patches = max(
+        vision_encoder.window_size // vision_encoder.patch_size, 1
+    )
+    image_converter = preprocessor.image_converter
+    if image_converter is not None:
+        # Derive the window cap from the image token budget.
+        raw_side = image_converter.max_image_tokens * image_converter.merge_size
+        vision_encoder.max_num_windows = -(-raw_side // window_patches)
+    video_converter = preprocessor.video_converter
+    if video_converter is not None:
+        vision_encoder.max_num_frames = video_converter.num_frames
+        # Derive the frame patch cap from the video token budget.
+        vision_encoder.max_frame_size = (
+            video_converter.max_video_frame_tokens
+            * video_converter.merge_size**2
+        )
+
+
 @keras_hub_export("keras_hub.models.MuseGlimmerCausalLM")
 class MuseGlimmerCausalLM(CausalLM):
     """An end-to-end MuseGlimmer model for causal language modeling.
@@ -34,6 +57,7 @@ class MuseGlimmerCausalLM(CausalLM):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
+        _set_vision_encoder_padding_caps(backbone, preprocessor)
 
         # === Functional Model ===
         inputs = backbone.input
