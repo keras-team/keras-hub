@@ -259,13 +259,29 @@ class SmolVLM2Backbone(Backbone):
         text dataset, or `SmolVLM2CausalLM.generate` without images) do not
         provide them. We inject *zero-sized* tensors, so the vision encoder
         runs on an empty batch and the interleave layer scatters nothing.
-        This mirrors `Qwen3MoeBackbone.__call__`, which likewise injects
+        This mirrors `Qwen3_5Backbone.__call__`, which likewise injects
         empty vision placeholders rather than dummy pixels.
+
+        Args:
+            inputs: The inputs passed to `__call__`.
+        Returns:
+            The same inputs, with zero-sized vision placeholders added.
+        Raises:
+            ValueError: If `pixel_values` is passed without
+                `vision_indices`, which would silently drop the images.
         """
         if not isinstance(inputs, dict):
             return inputs
         if "pixel_values" in inputs and "vision_indices" in inputs:
             return inputs
+        if "pixel_values" in inputs:
+            raise ValueError(
+                "`pixel_values` was passed without `vision_indices`. Vision "
+                "embeddings are merged into the text sequence at the "
+                "positions given by `vision_indices`, so the images would be "
+                "silently ignored. Pass both keys, or use "
+                "`SmolVLM2CausalLMPreprocessor` to build the inputs."
+            )
         inputs = dict(inputs)  # shallow copy to avoid mutating the caller's
         symbolic = any(
             isinstance(v, keras.KerasTensor) for v in inputs.values()
@@ -276,13 +292,12 @@ class SmolVLM2Backbone(Backbone):
             # alongside the injected placeholders.
             inputs = {k: ops.convert_to_tensor(v) for k, v in inputs.items()}
         batch_size = ops.shape(inputs["token_ids"])[0]
-        if "pixel_values" not in inputs:
-            # Zero *images*, not zero pixels: a `(batch, H, W, 3)` dummy would
-            # run the full ViT on black images on every text-only step.
-            inputs["pixel_values"] = ops.zeros(
-                (0, self.image_size, self.image_size, 3),
-                dtype=self.dtype,
-            )
+        # Zero *images*, not zero pixels: a `(batch, H, W, 3)` dummy would
+        # run the full ViT on black images on every text-only step.
+        inputs["pixel_values"] = ops.zeros(
+            (0, self.image_size, self.image_size, 3),
+            dtype=self.dtype,
+        )
         if "vision_indices" not in inputs:
             inputs["vision_indices"] = ops.zeros((batch_size, 0), dtype="int32")
         return inputs

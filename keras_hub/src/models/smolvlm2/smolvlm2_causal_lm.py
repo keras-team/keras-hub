@@ -9,11 +9,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
     SmolVLM2CausalLMPreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.SmolVLM2CausalLM")
@@ -49,6 +45,26 @@ class SmolVLM2CausalLM(CausalLM):
         "smolvlm2_2.2b_instruct"
     )
     smolvlm2_lm.generate("Hello, world!")
+    ```
+
+    Use `generate()` with an image. The prompt must contain one `<image>`
+    placeholder per image, which the preprocessor expands into the full
+    sub-image token sequence.
+    ```python
+    smolvlm2_lm = keras_hub.models.SmolVLM2CausalLM.from_preset(
+        "smolvlm2_2.2b_instruct"
+    )
+    image = np.random.randint(0, 256, (512, 512, 3)).astype("uint8")
+    smolvlm2_lm.generate(
+        {
+            "prompts": (
+                "<|im_start|>User:<image>What is in this image?"
+                "<end_of_utterance>\nAssistant:"
+            ),
+            "images": image,
+        },
+        max_length=512,
+    )
     ```
     """
 
@@ -338,6 +354,10 @@ class SmolVLM2CausalLM(CausalLM):
         target_ids=None,
     ):
         """Score a generation represented by the provided token ids.
+
+        This is a text-only path: it runs the text decoder directly and
+        does not accept images, so any `<image>` placeholder tokens are
+        scored as their plain token embeddings.
 
         Args:
             token_ids: A `<int>[batch_size, num_tokens]` tensor

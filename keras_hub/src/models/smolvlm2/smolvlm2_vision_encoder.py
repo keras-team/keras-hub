@@ -398,10 +398,12 @@ class SmolVLM2VisionEncoderBlock(layers.Layer):
 class SmolVLM2VisionEncoder(Backbone):
     """SmolVLM2 vision encoder (Idefics3-style SigLIP ViT).
 
-    A vision transformer that processes images into patch embeddings
-    using fractional-coordinate position encoding for variable aspect
-    ratios, followed by a stack of encoder blocks and a final
-    LayerNorm.
+    A vision transformer that embeds images into patch features with a
+    `Conv2D` patch embedding plus a learned, raster-order position
+    embedding, followed by a stack of encoder blocks and a final
+    LayerNorm. Inputs must already be square and match `image_size`;
+    `SmolVLM2ImageConverter` is responsible for resizing and splitting
+    images to that size.
 
     Args:
         image_size: int. Expected input image size (square).

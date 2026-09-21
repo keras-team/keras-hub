@@ -29,7 +29,7 @@ class SmolVLM2Tokenizer(BytePairTokenizer):
     Examples:
     ```python
     tokenizer = keras_hub.tokenizers.SmolVLM2Tokenizer.from_preset(
-        "smolvlm2_2b_instruct"
+        "smolvlm2_2.2b_instruct"
     )
     tokenizer("Hello, world!")
     ```

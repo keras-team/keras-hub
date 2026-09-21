@@ -327,6 +327,31 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
                 {"prompts": "<image>describe", "images": img}
             )
 
+    def test_generate_preprocess_uneven_crops_raises(self):
+        """Prompts expanding to different crop counts must raise clearly."""
+        preprocessor = self._image_preprocessor(
+            sequence_length=512,
+            image_converter=SmolVLM2ImageConverter(
+                max_image_size=32,
+                size=64,
+                do_image_splitting=True,
+                scale=[1 / 255.0] * 3,
+                offset=[0.0] * 3,
+            ),
+        )
+        # Crop count follows the aspect ratio: the wide image snaps to a
+        # 1x2 grid plus a global view, the square one to a 2x2 grid plus a
+        # global view, so the prompts expand to a different number of
+        # `<image>` tokens.
+        images = [
+            np.random.randint(0, 256, size=(16, 64, 3)).astype("uint8"),
+            np.random.randint(0, 256, size=(64, 64, 3)).astype("uint8"),
+        ]
+        with self.assertRaisesRegex(ValueError, "same number"):
+            preprocessor.generate_preprocess(
+                {"prompts": ["<image>a", "<image>b"], "images": images}
+            )
+
     def test_config_roundtrip(self):
         """`image_seq_len` must survive serialization."""
         preprocessor = self._image_preprocessor(image_seq_len=7)

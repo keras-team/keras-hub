@@ -107,3 +107,28 @@ class SmolVLM2BackboneTest(TestCase):
             }
         )
         self.assertEqual(ops.shape(output), (1, 5, 64))
+
+    def test_text_only_forward(self):
+        """Text-only calls get zero-sized vision placeholders injected."""
+        model = SmolVLM2Backbone(**self.init_kwargs)
+        output = model(
+            {
+                "token_ids": np.ones((2, 5), dtype="int32"),
+                "padding_mask": np.ones((2, 5), dtype="int32"),
+            }
+        )
+        self.assertEqual(ops.shape(output), (2, 5, 64))
+
+    def test_pixel_values_without_vision_indices_raises(self):
+        """Images with no scatter positions must raise, not be dropped."""
+        model = SmolVLM2Backbone(**self.init_kwargs)
+        with self.assertRaisesRegex(ValueError, "vision_indices"):
+            model(
+                {
+                    "token_ids": np.ones((1, 5), dtype="int32"),
+                    "padding_mask": np.ones((1, 5), dtype="int32"),
+                    "pixel_values": np.random.rand(1, 32, 32, 3).astype(
+                        "float32"
+                    ),
+                }
+            )

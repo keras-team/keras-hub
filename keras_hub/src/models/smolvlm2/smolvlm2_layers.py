@@ -269,7 +269,9 @@ class SmolVLM2Attention(layers.Layer):
             key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
             value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
-        attn_output = self._compute_attention(query, key, value, attention_mask)
+        attn_output = self._compute_attention(
+            query, key, value, attention_mask, training=training
+        )
 
         # Reshape back to original shape
         attn_output = ops.reshape(

@@ -88,7 +88,19 @@ class SmolVLM2CausalLMTest(TestCase):
         )
 
     def test_multimodal_fit(self):
-        causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
+        # A single image expands to `<fake_token_around_image><global-img>` +
+        # `image_seq_len` x `<image>` + `<fake_token_around_image>`, so the
+        # shared `sequence_length=8` preprocessor would truncate the image
+        # placeholders and leave fewer of them than there are image crops.
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            self.preprocessor.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=32,
+            image_seq_len=4,
+        )
+        causal_lm = SmolVLM2CausalLM(
+            preprocessor=preprocessor, backbone=self.backbone
+        )
         images = np.random.randint(0, 256, size=(2, 20, 20, 3)).astype("uint8")
         x = {
             "prompts": ["<image> airplane", "<image> airport"],

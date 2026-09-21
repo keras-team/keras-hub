@@ -19,12 +19,9 @@ from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
 from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
     SmolVLM2VideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 # HF-compatible video prompt templates.
 DEFAULT_VIDEO_INTRO = (
@@ -33,6 +30,8 @@ DEFAULT_VIDEO_INTRO = (
 )
 DEFAULT_MEDIA_OUTTRO = "\n\n"
 FRAME_TIMESTAMP_MESSAGE = "\nFrame from {timestamp}:"
+# `<row_R_col_C>` tags marking each crop of a split image.
+ROW_COL_PATTERN = re.compile(r"<row_\d+_col_\d+>")
 
 
 def _get_image_prompt_string(
@@ -160,6 +159,9 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # "duration" and "frames_indices". Set before calling
         # generate_preprocess for accurate timestamps.
         self.video_metadata = None
+        # Lazily filled `{"<row_R_col_C>": id}` cache, so the vocabulary is
+        # only materialized once per preprocessor.
+        self._row_col_token_ids = {}
 
     def build(self, input_shape):
         # Let parent create self.packer = StartEndPacker (used by
@@ -195,6 +197,25 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 special_map[tok_str] = tok_id
         return special_map
 
+    def _row_col_token_id(self, token):
+        """Return the vocabulary id of a `<row_R_col_C>` tag, or `None`.
+
+        `get_vocabulary()` materializes the whole vocabulary, so the
+        lookups are cached on the layer instead of being redone for every
+        prompt that contains a split image.
+        """
+        if token in self._row_col_token_ids:
+            return self._row_col_token_ids[token]
+        vocab = self.tokenizer.get_vocabulary()
+        if not isinstance(vocab, dict):
+            vocab = {t: i for i, t in enumerate(vocab)}
+        # Cache every row/col tag in one pass over the vocabulary.
+        for vocab_token, token_id in vocab.items():
+            if ROW_COL_PATTERN.fullmatch(vocab_token):
+                self._row_col_token_ids[vocab_token] = token_id
+        self._row_col_token_ids.setdefault(token, None)
+        return self._row_col_token_ids[token]
+
     def _tokenize_with_special_tokens(self, text, special_map=None):
         """Tokenize text while preserving special tokens as single IDs.
 
@@ -204,7 +225,9 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         correct token IDs.
 
         Additionally, ``<row_R_col_C>`` positional tokens are recognised
-        and mapped to their vocabulary IDs.
+        and mapped to their vocabulary IDs. Tags that are not in the
+        vocabulary are tokenized as plain text, matching how HuggingFace
+        treats them when they are not registered as added tokens.
 
         Args:
             text: str. The fully-expanded prompt string.
@@ -215,28 +238,19 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         if special_map is None:
             special_map = self._build_special_token_map()
 
-        # Add row/col tokens dynamically. `get_vocabulary()` materializes the
-        # entire vocabulary, so look it up at most once per call.
-        row_col_pattern = re.compile(r"<row_\d+_col_\d+>")
-        row_col_tokens = {
-            match.group()
-            for match in row_col_pattern.finditer(text)
-            if match.group() not in special_map
-        }
-        if row_col_tokens:
-            vocab = self.tokenizer.get_vocabulary()
-            if not isinstance(vocab, dict):
-                vocab = {token: i for i, token in enumerate(vocab)}
-            for token in row_col_tokens:
-                tid = vocab.get(token, None)
-                if tid is not None:
-                    special_map[token] = tid
+        for match in ROW_COL_PATTERN.finditer(text):
+            token = match.group()
+            if token in special_map:
+                continue
+            token_id = self._row_col_token_id(token)
+            if token_id is not None:
+                special_map[token] = token_id
 
         # Build regex for splitting.
         escaped = [re.escape(t) for t in special_map]
         # Also match <row_R_col_C> generically.
         pattern = re.compile(
-            "(" + "|".join(escaped) + "|" + r"<row_\d+_col_\d+>" + ")"
+            "(" + "|".join(escaped) + "|" + ROW_COL_PATTERN.pattern + ")"
         )
 
         parts = pattern.split(text)
@@ -244,9 +258,6 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         for part in parts:
             if part in special_map:
                 all_ids.append(special_map[part])
-            elif row_col_pattern.fullmatch(part):
-                # Unknown row/col token — skip (shouldn't happen).
-                pass
             elif part:
                 tokenized = self.tokenizer(part)
                 if hasattr(tokenized, "numpy"):
@@ -304,22 +315,26 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     # Vision indices
     # ------------------------------------------------------------------
     def _compute_vision_indices(self, token_ids):
-        """Return flat indices where token_ids == image_token_id."""
-        if hasattr(token_ids, "detach"):
-            # Torch tensors may live on a non-CPU device (MPS/CUDA), where
-            # calling `.numpy()` directly raises a TypeError.
-            token_ids_np = token_ids.detach().cpu().numpy()
-        elif hasattr(token_ids, "numpy"):
-            token_ids_np = token_ids.numpy()
-        else:
-            token_ids_np = np.array(token_ids)
+        """Return flat indices where token_ids == image_token_id.
+
+        This runs on the eager `generate_preprocess()` path only, so the
+        indices are computed with NumPy. `convert_to_numpy` handles tensors
+        from any backend, including torch tensors on a non-CPU device, where
+        a bare `.numpy()` call would raise.
+
+        Args:
+            token_ids: `(batch, seq_len)` int tensor of packed token ids.
+        Returns:
+            `np.ndarray` of int32 flat indices into the flattened
+            `(batch * seq_len,)` sequence.
+        """
         image_token_id = getattr(self.tokenizer, "image_token_id", None)
         if image_token_id is None:
-            return tf.zeros((0,), dtype=tf.int32)
+            return np.zeros((0,), dtype="int32")
 
-        mask = token_ids_np.reshape(-1) == image_token_id
-        indices = np.where(mask)[0].astype(np.int32)
-        return tf.constant(indices)
+        token_ids = convert_to_numpy(token_ids)
+        mask = token_ids.reshape(-1) == image_token_id
+        return np.where(mask)[0].astype("int32")
 
     def _graph_vision_indices(self, token_ids, num_images):
         """Graph-mode version of `_compute_vision_indices`.
@@ -443,8 +458,15 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # the vision encoder from running on dummy pixels.
         if pixel_values is not None:
             out["pixel_values"] = pixel_values
+            # `pixel_values` is a backend tensor, and `tf.shape()` would
+            # convert it through `__array__`, which fails for torch tensors
+            # on a non-CPU device. The static shape is known whenever the
+            # converter ran eagerly; only a graph-mode batch needs `tf`.
+            num_images = pixel_values.shape[0]
+            if num_images is None:
+                num_images = tf.shape(pixel_values)[0]
             out["vision_indices"] = self._graph_vision_indices(
-                out["token_ids"], tf.shape(pixel_values)[0]
+                out["token_ids"], num_images
             )
         elif self.image_converter is not None:
             # Text-only batch for a vision model. Pass a zero-length image
@@ -759,16 +781,34 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # offsets, which is what `SmolVLM2InterleaveEmbeddings` scatters on.
         vision_indices = self._compute_vision_indices(token_ids)
         expected = pixel_values.shape[0] * self.image_seq_len
-        if int(tf.size(vision_indices)) != expected:
+        if vision_indices.size != expected:
             raise ValueError(
                 f"Expected {expected} `<image>` tokens in the packed prompts "
                 f"({pixel_values.shape[0]} sub-images x image_seq_len="
                 f"{self.image_seq_len}), but found "
-                f"{int(tf.size(vision_indices))}. Either the prompts are "
+                f"{vision_indices.size}. Either the prompts are "
                 "missing an `<image>` placeholder, or `sequence_length="
                 f"{sequence_length}` is too short and truncated them."
             )
-        vision_indices = tf.reshape(vision_indices, (batch_size, -1))
+        # `vision_indices` is a dense `(batch, n)` tensor, so every prompt
+        # has to expand to the same number of `<image>` slots. With image
+        # splitting on, that means every image in the batch has to produce
+        # the same number of crops.
+        per_sample = vision_indices.size // batch_size
+        if batch_size > 1:
+            sample_ids = vision_indices // int(token_ids.shape[1])
+            counts = np.bincount(sample_ids, minlength=batch_size)
+            if not np.all(counts == per_sample):
+                raise ValueError(
+                    "Every prompt in a batch must expand to the same number "
+                    "of `<image>` tokens, but the batch produced "
+                    f"{counts.tolist()} tokens per prompt. This happens when "
+                    "images of different sizes are split into different "
+                    "numbers of crops. Either call `generate()` once per "
+                    "image, or create the image converter with "
+                    "`do_image_splitting=False`."
+                )
+        vision_indices = vision_indices.reshape((batch_size, per_sample))
 
         return {
             "token_ids": token_ids,
