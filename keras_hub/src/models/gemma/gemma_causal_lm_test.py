@@ -106,8 +106,20 @@ class GemmaCausalLMTest(TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the Jax backend.")
 
-        with patch("keras.ops.dot_product_attention") as mock_func:
-            causal_lm = GemmaCausalLM(**self.init_kwargs)
+        # The shared backbone sets `attention_logit_soft_cap`, which disables
+        # the fused op on GPU.
+        config = self.backbone.get_config()
+        config["attention_logit_soft_cap"] = None
+        # `wraps` runs the real kernel; a bare mock returns a `MagicMock`
+        # that downstream ops reject.
+        with patch(
+            "keras.ops.dot_product_attention",
+            wraps=keras.ops.dot_product_attention,
+        ) as mock_func:
+            causal_lm = GemmaCausalLM(
+                preprocessor=self.preprocessor,
+                backbone=GemmaBackbone.from_config(config),
+            )
             causal_lm.generate("the quick brown fox")
             if running_on_gpu():
                 mock_func.assert_called()
