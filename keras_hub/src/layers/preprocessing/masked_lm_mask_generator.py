@@ -1,15 +1,17 @@
 import random
 
-import keras
 import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -128,10 +130,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
         random_token_rate=0.1,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
 
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
@@ -147,6 +146,15 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             )
         self.mask_token_id = mask_token_id
 
+        # The `tf_text` selectors are only needed on the TensorFlow path, so
+        # they are created lazily to keep `tensorflow-text` optional.
+        self._random_selector = None
+        self._mask_values_chooser = None
+
+    def _maybe_initialize_tf(self):
+        if self._random_selector is not None:
+            return
+        assert_tf_libs_installed(self.__class__.__name__)
         max_selections = self.mask_selection_length
         if max_selections is None:
             # Set a large number to remove the `max_selections_per_batch` cap.
@@ -165,6 +173,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
 
     @preprocessing_function
     def _call_tf(self, inputs):
+        self._maybe_initialize_tf()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
         (
@@ -300,11 +309,14 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             out_mask_weights = out_mask_weights[0]
 
         def _canonicalize_outputs(outputs, dtype=None):
+            # Ragged outputs stay as (lists of) python lists. Rectangular
+            # outputs are converted to backend tensors, or NumPy arrays inside
+            # a Grain pipeline.
             try:
                 arr = np.array(outputs, dtype=dtype or "int32")
                 if arr.dtype == object:
                     return outputs
-                return keras.ops.convert_to_tensor(arr)
+                return convert_preprocessing_outputs_python(arr)
             except (ValueError, TypeError):
                 return outputs
 
@@ -318,7 +330,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
         }
 
     def call(self, inputs):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(inputs)
         else:
             return self._call_python(inputs)

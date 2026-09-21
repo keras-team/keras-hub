@@ -11,15 +11,11 @@ from keras_hub.src.tokenizers import tokenizer
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 try:
     import tensorflow_text as tf_text
 except ImportError:
@@ -118,10 +114,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"Received: dtype={dtype}"
             )
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            dtype=dtype, _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(dtype=dtype, **kwargs)
 
         self.proto = None
         self.sequence_length = sequence_length
@@ -149,14 +142,27 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         )
 
     def _set_proto_spm(self, proto):
-        self._sentence_piece_spm = spm.SentencePieceProcessor()
-        self._sentence_piece_spm.Init(
-            model_proto=proto,
-            out_type=str if is_string_dtype(self.compute_dtype) else int,
-            add_bos=self.add_bos,
-            add_eos=self.add_eos,
-            alpha=1.0,
-        )
+        out_type = str if is_string_dtype(self.compute_dtype) else int
+
+        if hasattr(spm.SentencePieceProcessor, "Init"):
+            # Old SWIG wrapper (sentencepiece < 0.2.2)
+            self._sentence_piece_spm = spm.SentencePieceProcessor()
+            self._sentence_piece_spm.Init(
+                model_proto=proto,
+                out_type=out_type,
+                add_bos=self.add_bos,
+                add_eos=self.add_eos,
+                alpha=1.0,
+            )
+        else:
+            # New pybind11 wrapper (sentencepiece >= 0.2.2)
+            self._sentence_piece_spm = spm.SentencePieceProcessor(
+                model_proto=proto,
+                out_type=out_type,
+                add_bos=self.add_bos,
+                add_eos=self.add_eos,
+                alpha=1.0,
+            )
 
     def set_proto(self, proto):
         if proto is None:
@@ -280,7 +286,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
                 f"Received: {id}"
             )
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._id_to_token_tf(id)
         else:
             return self._id_to_token_spm(id)
@@ -358,8 +364,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                             val_list[i] = val_list[i].decode("utf-8")
                         elif not isinstance(val_list[i], str):
                             raise ValueError(
-                                "If a array is provided as input, all elements "
-                                f"must be strings. Received: {inputs}"
+                                "If an array is provided as input, all "
+                                f"elements must be strings. Received: {inputs}"
                             )
                     return val_list, True
                 else:
@@ -389,14 +395,28 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 tokens + [pad_token_id] * (self.sequence_length - len(tokens))
                 for tokens in batched_tokens
             ]
+            if is_int_dtype(self.compute_dtype):
+                # Dense int outputs are arrays, so that direct calls return
+                # backend tensors and Grain pipelines return NumPy.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
 
         if not batched:
             batched_tokens = batched_tokens[0]
+            if not self.sequence_length and is_int_dtype(self.compute_dtype):
+                # An unbatched sequence is dense even without
+                # `sequence_length`, so return an array here too. Without
+                # this, the output would fall back to NumPy's default int64
+                # rather than the `compute_dtype` the TF path returns.
+                batched_tokens = np.array(
+                    batched_tokens, dtype=self.compute_dtype
+                )
         return batched_tokens
 
     def tokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._tokenize_tf(inputs)
         else:
             return self._tokenize_spm(inputs)
@@ -461,7 +481,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         self._check_vocabulary()
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._detokenize_tf(inputs)
         else:
             return self._detokenize_spm(inputs)

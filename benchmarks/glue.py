@@ -16,17 +16,17 @@ Disclaimer: This script only supports GLUE/mrpc (for now).
 import inspect
 import time
 
+import keras
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from absl import app
 from absl import flags
 from absl import logging
-from tensorflow import keras
 
 import keras_hub
 
 seed = 42
-tf.random.set_seed(seed)
+keras.utils.set_random_seed(seed)
 
 
 flags.DEFINE_string(
@@ -138,12 +138,12 @@ def main(_):
     loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     metrics = [keras.metrics.SparseCategoricalAccuracy()]
     # Configure optimizer.
-    lr = tf.keras.optimizers.schedules.PolynomialDecay(
+    lr = keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
-        decay_steps=train_ds.cardinality() * FLAGS.epochs,
+        decay_steps=int(train_ds.cardinality()) * FLAGS.epochs,
         end_learning_rate=0.0,
     )
-    optimizer = tf.keras.optimizers.experimental.AdamW(lr, weight_decay=0.01)
+    optimizer = keras.optimizers.AdamW(learning_rate=lr, weight_decay=0.01)
     optimizer.exclude_from_weight_decay(
         var_names=["LayerNorm", "layer_norm", "bias"]
     )

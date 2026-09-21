@@ -38,8 +38,11 @@ class MetaCLIP2CausalLMPreprocessorTest(TestCase):
         }
 
     def test_preprocessor_basics(self):
-        preprocessor = MetaCLIP2CausalLMPreprocessor(**self.init_kwargs)
-        output = preprocessor(self.input_data)
+        output = self.run_preprocessor_test(
+            cls=MetaCLIP2CausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
         self.assertEqual(output["token_ids"].shape, (1, 16))
         self.assertEqual(output["images"].shape, (1, 32, 32, 3))
 
