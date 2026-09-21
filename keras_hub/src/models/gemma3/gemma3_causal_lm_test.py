@@ -150,7 +150,7 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the JAX backend.")
 
-        with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
+        with patch("keras.ops.dot_product_attention") as mock_func:
             causal_lm = Gemma3CausalLM(**self.text_init_kwargs)
             causal_lm.generate("the quick brown fox")
             if running_on_gpu():
