@@ -6,17 +6,16 @@ from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import tf
 
 
-def _to_python(inputs):
-    """Recursively decode `bytes` to `str` and normalize tuples to lists."""
+def _to_nested_list(inputs):
+    """Convert `inputs` to nested Python lists of tokens.
+
+    Tensors are unwrapped at any depth, so a list of per-sample tensors works
+    as well as a single batched one, and `bytes` are decoded to `str`.
+    """
     if isinstance(inputs, bytes):
         return inputs.decode("utf-8", errors="ignore")
-    if isinstance(inputs, (list, tuple)):
-        return [_to_python(x) for x in inputs]
-    return inputs
-
-
-def _to_nested_list(inputs):
-    """Convert `inputs` to nested Python lists of tokens."""
+    if isinstance(inputs, (str, int, float, bool)):
+        return inputs
     if tf is not None and isinstance(inputs, tf.RaggedTensor):
         inputs = inputs.to_list()
     elif tf is not None and isinstance(inputs, tf.Tensor):
@@ -25,7 +24,9 @@ def _to_nested_list(inputs):
         inputs = inputs.tolist()
     elif keras.ops.is_tensor(inputs):
         inputs = keras.ops.convert_to_numpy(inputs).tolist()
-    return _to_python(inputs)
+    if isinstance(inputs, (list, tuple)):
+        return [_to_nested_list(x) for x in inputs]
+    return inputs
 
 
 def _nested_rank(inputs):

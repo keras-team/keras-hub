@@ -217,6 +217,14 @@ class EditDistanceTest(TestCase):
         edit_distance_val = edit_distance(y_true, y_pred)
         self.assertAlmostEqual(edit_distance_val, 0.25, delta=1e-3)
 
+    def test_list_of_per_sample_tensors_input(self):
+        edit_distance = EditDistance()
+        y_true = [np.array([1, 2]), tf.constant([3, 4])]
+        y_pred = [np.array([1, 2]), tf.constant([3, 5])]
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 0.25, delta=1e-3)
+
     def test_rank_3_input_raises(self):
         edit_distance = EditDistance()
         with self.assertRaisesRegex(ValueError, "must be of rank 1 or 2"):
