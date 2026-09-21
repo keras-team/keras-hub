@@ -11,11 +11,7 @@ from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_resize_size,
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 # CLIP normalization stats, in [0, 255] pixel-value units.
 _CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]

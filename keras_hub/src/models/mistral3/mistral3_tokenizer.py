@@ -1,12 +1,8 @@
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import tokenizers as hf_tokenizers
