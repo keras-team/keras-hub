@@ -17,7 +17,7 @@ module.exports = async ({ github, context }) => {
     author = context.payload.issue.user.login;
   } else if (isPr) {
     // Reviewer list for PRs
-    candidates = ["laxmareddyp", "divyashreepathihalli"];
+    candidates = ["laxmareddyp", "JyotinderSingh"];
     itemNumber = context.payload.pull_request.number;
     author = context.payload.pull_request.user.login;
   } else {

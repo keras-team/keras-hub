@@ -35,3 +35,10 @@ class SwinTransformerBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_drop_path_training_step(self):
+        """DropPath should not corrupt tensor rank during training."""
+        backbone = SwinTransformerBackbone(**self.init_kwargs)
+        # Before fix: ValueError: too many values to unpack (expected 3)
+        # because DropPath's 4D mask broadcasts with 3D token sequence
+        backbone(self.input_data, training=True)

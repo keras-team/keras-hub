@@ -15,6 +15,8 @@ from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
 from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import check_bounding_box_support
+from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -123,10 +125,7 @@ class ImageConverter(PreprocessingLayer):
             scale = [scale / s for s in std]
             offset = [-m / s for m, s in zip(kwargs.pop("mean"), std)]
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
 
         if crop_to_aspect_ratio and pad_to_aspect_ratio:
             raise ValueError(
@@ -223,6 +222,10 @@ class ImageConverter(PreprocessingLayer):
             inputs["images"] = x
         else:
             inputs = x
+        if in_grain_data_pipeline():
+            # Grain pickles outputs across worker processes, so return NumPy
+            # arrays rather than backend tensors.
+            return convert_preprocessing_outputs_grain(inputs)
         return inputs
 
     @preprocessing_function
@@ -230,7 +233,7 @@ class ImageConverter(PreprocessingLayer):
         return self._call_python(inputs)
 
     def call(self, inputs):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(inputs)
         else:
             return self._call_python(inputs)

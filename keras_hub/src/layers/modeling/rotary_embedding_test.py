@@ -236,6 +236,61 @@ class RotaryEmbeddingTest(TestCase):
             ops.convert_to_tensor(expected),
         )
 
+    def test_yarn_rope_scaling(self):
+        # Reference values computed from the Huggingface mistral
+        # implementation, running `MistralRotaryEmbedding` and
+        # `apply_rotary_pos_emb` over `torch.ones((1, 2, 3, 8))` at positions
+        # `arange(3)`, with the YaRN parameters set below (`rope_theta` is
+        # `max_wavelength` and `factor` is `scaling_factor`).
+        row0 = [1.069314718] * 8
+        row1 = [
+            -0.322044015,
+            0.753861070,
+            0.995704532,
+            1.052274466,
+            1.477550507,
+            1.310939193,
+            1.138174176,
+            1.086087704,
+        ]
+        row2 = [
+            -1.417317033,
+            0.386358202,
+            0.917670548,
+            1.034970999,
+            0.527333140,
+            1.462051630,
+            1.201977015,
+            1.102589130,
+        ]
+        expected = [[[row0, row0], [row1, row1], [row2, row2]]]
+
+        layer = RotaryEmbedding(
+            max_wavelength=100.0,
+            rope_type="yarn",
+            scaling_factor=2.0,
+            beta_fast=32.0,
+            beta_slow=1.0,
+            original_max_position_embeddings=64,
+        )
+        self.assertAllClose(
+            layer(ops.ones((1, 3, 2, 8))),
+            ops.convert_to_tensor(expected),
+        )
+
+    def test_yarn_beyond_original_context(self):
+        # Positions past `original_max_position_embeddings` must keep
+        # advancing, which is the case YaRN exists for.
+        layer = RotaryEmbedding(
+            max_wavelength=10000.0,
+            rope_type="yarn",
+            scaling_factor=2.0,
+            original_max_position_embeddings=4,
+            truncate=True,
+        )
+        output = ops.convert_to_numpy(layer(ops.ones((1, 8, 2, 4))))
+        self.assertNotAllClose(output[:, 4], output[:, 7])
+
     def test_rope_scaling_with_kv_cache(self):
         # Reference values computed from Huggingface llama implementation
         # With `scaling_factor` = 5.0

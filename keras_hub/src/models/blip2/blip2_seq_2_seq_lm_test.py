@@ -154,6 +154,17 @@ class BLIP2Seq2SeqLMTest(TestCase):
         seq_2_seq_lm.compile(sampler="top_k")
         seq_2_seq_lm.generate(prompt, max_length=8)
 
+    def test_beam_search(self):
+        seq_2_seq_lm = BLIP2Seq2SeqLM(**self.init_kwargs)
+        seq_2_seq_lm.compile(sampler="beam")
+        seq_2_seq_lm.generate(
+            {
+                "images": np.ones((2, 32, 32, 3), dtype="float32"),
+                "encoder_text": ["a photo of", "a photo of"],
+            },
+            max_length=8,
+        )
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
