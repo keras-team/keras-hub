@@ -604,6 +604,11 @@ def test_assistant_generation(target_preset, kh_assistant, hf_gen_data):
     kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
         f"hf://{target_preset}", dtype="float32"
     )
+    # The auto-configured caps can OOM, so shrink them for validation.
+    if kh_target.backbone.vision_encoder is not None:
+        kh_target.backbone.vision_encoder.max_num_windows = 6
+        kh_target.backbone.vision_encoder.max_num_frames = 1
+        kh_target.backbone.vision_encoder.max_frame_size = 1600
     kh_target.compile(sampler="greedy")
     print("\n--- Section 3: Speculative generation ---")
     for label, data in hf_gen_data.items():
