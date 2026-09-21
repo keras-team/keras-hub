@@ -248,10 +248,90 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         x = (x * cos_emb) + (_rotate_half(x) * sin_emb)
         return ops.cast(x, x_dtype)
 
-    def call(self, x, position_embeddings, segment_id):
-        # `segment_id`: shape (seq_len,). Rows only attend within their
-        # own segment (one image for full attention, one window for
-        # window attention).
+    def _masked_full_attention(self, q, k, v, segment_id):
+        """Every row attends over the whole sequence, masked to its own
+        segment. `segment_id`: shape `(seq_len,)`.
+        """
+        q = ops.transpose(q, (1, 0, 2))
+        k = ops.transpose(k, (1, 0, 2))
+        v = ops.transpose(v, (1, 0, 2))
+
+        scores = ops.matmul(q, ops.transpose(k, (0, 2, 1)))
+        scores = ops.cast(scores * self._inv_scale, "float32")
+        same_segment = ops.equal(
+            ops.expand_dims(segment_id, 0), ops.expand_dims(segment_id, 1)
+        )
+        mask = ops.cast(same_segment, "float32")
+        # Mask `scores` before `exp()`, not just the final probabilities,
+        # to avoid overflow from out-of-segment raw scores.
+        scores = ops.where(same_segment, scores, -1e9)
+        row_max = ops.max(scores, axis=-1, keepdims=True)
+        exp_scores = ops.exp(scores - row_max) * mask
+        probs = exp_scores / ops.sum(exp_scores, axis=-1, keepdims=True)
+        probs = ops.cast(probs, v.dtype)
+        out = ops.matmul(probs, v)
+        return ops.transpose(out, (1, 0, 2))
+
+    def _padded_segment_attention(
+        self, q, k, v, padded_index, num_slots, slot_size
+    ):
+        """Batched per-segment attention (a window, or a frame for full
+        attention): scatter rows into a `(num_slots, slot_size)` buffer
+        by segment and in-segment rank, matmul+softmax per slot, gather
+        the real rows back out.
+        """
+        padded_len = num_slots * slot_size
+        seq_len = ops.shape(q)[0]
+
+        def scatter_pad(x):
+            return ops.scatter(
+                ops.expand_dims(padded_index, -1),
+                x,
+                (padded_len, self.num_heads, self.head_dim),
+            )
+
+        def to_blocks(x):
+            x = ops.reshape(
+                x, (num_slots, slot_size, self.num_heads, self.head_dim)
+            )
+            return ops.transpose(x, (0, 2, 1, 3))
+
+        q_pad = to_blocks(scatter_pad(q))
+        k_pad = to_blocks(scatter_pad(k))
+        v_pad = to_blocks(scatter_pad(v))
+        valid = ops.scatter(
+            ops.expand_dims(padded_index, -1),
+            ops.ones((seq_len,), dtype="float32"),
+            (padded_len,),
+        )
+        valid_key = ops.reshape(valid, (num_slots, 1, 1, slot_size)) > 0
+
+        scores = ops.matmul(q_pad, ops.transpose(k_pad, (0, 1, 3, 2)))
+        scores = ops.cast(scores * self._inv_scale, "float32")
+        scores = ops.where(valid_key, scores, -1e9)
+        row_max = ops.max(scores, axis=-1, keepdims=True)
+        exp_scores = ops.exp(scores - row_max) * ops.cast(valid_key, "float32")
+
+        probs = exp_scores / ops.maximum(
+            ops.sum(exp_scores, axis=-1, keepdims=True), 1e-9
+        )
+        probs = ops.cast(probs, v.dtype)
+        out_pad = ops.matmul(probs, v_pad)
+        out_pad = ops.transpose(out_pad, (0, 2, 1, 3))
+        out_pad = ops.reshape(
+            out_pad, (padded_len, self.num_heads, self.head_dim)
+        )
+        return ops.take(out_pad, padded_index, axis=0)
+
+    def call(
+        self,
+        x,
+        position_embeddings,
+        segment_id,
+        padded_index=None,
+        num_slots=None,
+        slot_size=None,
+    ):
         seq_len = ops.shape(x)[0]
         q = ops.reshape(
             self.q_proj(x), (seq_len, self.num_heads, self.head_dim)
@@ -267,21 +347,13 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         q = self._apply_rotary(q, cos_emb, sin_emb)
         k = self._apply_rotary(k, cos_emb, sin_emb)
 
-        q = ops.transpose(q, (1, 0, 2))
-        k = ops.transpose(k, (1, 0, 2))
-        v = ops.transpose(v, (1, 0, 2))
+        if padded_index is not None:
+            out = self._padded_segment_attention(
+                q, k, v, padded_index, num_slots, slot_size
+            )
+        else:
+            out = self._masked_full_attention(q, k, v, segment_id)
 
-        scores = ops.matmul(q, ops.transpose(k, (0, 2, 1)))
-        scores = ops.cast(scores, "float32") * self._inv_scale
-        same_segment = ops.equal(
-            ops.expand_dims(segment_id, 0), ops.expand_dims(segment_id, 1)
-        )
-        neg_inf = ops.cast(float("-inf"), "float32")
-        scores = ops.where(same_segment, scores, neg_inf)
-        probs = ops.cast(ops.softmax(scores, axis=-1), v.dtype)
-        out = ops.matmul(probs, v)
-
-        out = ops.transpose(out, (1, 0, 2))
         out = ops.reshape(out, (seq_len, self.hidden_size))
         return self.proj(out)
 
@@ -374,8 +446,23 @@ class MuseGlimmerVisionEncoderLayer(keras.layers.Layer):
         self.mlp.build(input_shape)
         self.built = True
 
-    def call(self, x, position_embeddings, segment_id):
-        x = x + self.attn(self.norm1(x), position_embeddings, segment_id)
+    def call(
+        self,
+        x,
+        position_embeddings,
+        segment_id,
+        padded_index=None,
+        num_slots=None,
+        slot_size=None,
+    ):
+        x = x + self.attn(
+            self.norm1(x),
+            position_embeddings,
+            segment_id,
+            padded_index=padded_index,
+            num_slots=num_slots,
+            slot_size=slot_size,
+        )
         x = x + self.mlp(self.norm2(x))
         return x
 
@@ -514,6 +601,22 @@ class MuseGlimmerVisionEncoder(keras.Model):
             last) being full attention.
         out_hidden_size: int or `None`. Output dim after pixel-shuffle
             merge; defaults to `hidden_size * merge_size ** 2`.
+        max_num_windows: int or `None`. When set, window-attention layers
+            batch each window into a fixed `(max_num_windows, window_
+            patches ** 2)` buffer for one matmul+softmax per window slot,
+            instead of one sequence-wide masked matmul — closer to plain
+            per-window attention numerically. Must be at least the real
+            number of windows in any call (across all images/frames);
+            exceeding it produces incorrect (out-of-bounds) results.
+            Defaults to `None` (the sequence-wide masked path, no cap).
+        max_num_frames: int or `None`. Same idea as `max_num_windows`,
+            for full-attention layers: batches each frame into a fixed
+            `(max_num_frames, max_frame_size)` buffer. Requires
+            `max_frame_size` too. Must be at least the real number of
+            frames (across all images/videos) in any call.
+        max_frame_size: int or `None`. The per-slot size for
+            `max_num_frames` — must be at least the largest real
+            per-frame patch count (`height * width`) in any call.
     """
 
     def __init__(
@@ -531,6 +634,9 @@ class MuseGlimmerVisionEncoder(keras.Model):
         layer_norm_eps=1e-5,
         layer_types=None,
         out_hidden_size=None,
+        max_num_windows=None,
+        max_num_frames=None,
+        max_frame_size=None,
         dtype=None,
         **kwargs,
     ):
@@ -556,6 +662,9 @@ class MuseGlimmerVisionEncoder(keras.Model):
             ]
         self.layer_types = layer_types
         self.out_hidden_size = out_hidden_size or (hidden_size * merge_size**2)
+        self.max_num_windows = max_num_windows
+        self.max_num_frames = max_num_frames
+        self.max_frame_size = max_frame_size
         self.window_size = pos_emb_height * patch_size
 
         head_dim = hidden_size // num_heads
@@ -642,9 +751,34 @@ class MuseGlimmerVisionEncoder(keras.Model):
         )
         hidden_states = ops.take(hidden_states, window_index, axis=0)
 
-        _, _, _, _, full_segment_id, _ = _per_patch_coordinates(
+        window_padded_index, window_size_val = None, None
+        if self.max_num_windows is not None:
+            window_size_val = window_patches * window_patches
+            positions = ops.arange(num_patches, dtype="int32")
+            # `window_segment_id` is non-decreasing (windows are already
+            # contiguous), so `searchsorted` against itself gives each
+            # row's window's first position — hence its in-window rank.
+            window_start = ops.cast(
+                ops.searchsorted(
+                    window_segment_id, window_segment_id, side="left"
+                ),
+                "int32",
+            )
+            local_rank = positions - window_start
+            window_padded_index = (
+                window_segment_id * window_size_val + local_rank
+            )
+
+        row, col, _, w_per_patch, full_segment_id, _ = _per_patch_coordinates(
             grid_thw, num_patches
         )
+        frame_padded_index = None
+        if self.max_num_frames is not None and self.max_frame_size is not None:
+            offset_in_frame = row * w_per_patch + col
+            frame_padded_index = (
+                full_segment_id * self.max_frame_size + offset_in_frame
+            )
+
         shuffle_index = _shuffle_index_positions(
             grid_thw, num_patches, self.merge_size
         )
@@ -654,12 +788,24 @@ class MuseGlimmerVisionEncoder(keras.Model):
         sin = ops.take(sin, window_index, axis=0)
 
         for layer, layer_type in zip(self.blocks, self.layer_types):
-            segment_id = (
-                full_segment_id
-                if layer_type == "full_attention"
-                else window_segment_id
+            if layer_type == "full_attention":
+                segment_id = full_segment_id
+                layer_padded_index = frame_padded_index
+                num_slots, slot_size = self.max_num_frames, self.max_frame_size
+            else:
+                segment_id = window_segment_id
+                layer_padded_index = window_padded_index
+                num_slots, slot_size = self.max_num_windows, window_size_val
+            if layer_padded_index is None:
+                num_slots, slot_size = None, None
+            hidden_states = layer(
+                hidden_states,
+                (cos, sin),
+                segment_id,
+                padded_index=layer_padded_index,
+                num_slots=num_slots,
+                slot_size=slot_size,
             )
-            hidden_states = layer(hidden_states, (cos, sin), segment_id)
 
         hidden_states = ops.take(hidden_states, reverse_indices, axis=0)
         hidden_states = self.ln_post(hidden_states)
@@ -702,6 +848,9 @@ class MuseGlimmerVisionEncoder(keras.Model):
                 "layer_norm_eps": self.layer_norm_eps,
                 "layer_types": self.layer_types,
                 "out_hidden_size": self.out_hidden_size,
+                "max_num_windows": self.max_num_windows,
+                "max_num_frames": self.max_num_frames,
+                "max_frame_size": self.max_frame_size,
             }
         )
         return config

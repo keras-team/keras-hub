@@ -762,6 +762,12 @@ def main(_):
     )
     print("   KerasHub model loaded!")
 
+    # The auto-configured caps can OOM, so shrink them for validation.
+    if keras_model.backbone.vision_encoder is not None:
+        keras_model.backbone.vision_encoder.max_num_windows = 6
+        keras_model.backbone.vision_encoder.max_num_frames = 1
+        keras_model.backbone.vision_encoder.max_frame_size = 1600
+
     validate_output(keras_model, hf_results)
 
     # Parity was just verified in float32; always save in bfloat16.
