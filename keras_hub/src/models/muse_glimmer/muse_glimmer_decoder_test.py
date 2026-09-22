@@ -8,12 +8,17 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MuseGlimmerTextDecoderTest(TestCase):
-    def test_forward_full_attention_nope(self):
+    def setUp(self):
+        self.init_kwargs = {
+            "intermediate_dim": 16,
+            "num_query_heads": 4,
+            "num_key_value_heads": 2,
+            "head_dim": 4,
+        }
+
+    def test_call_full_attention_nope(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             use_rope=False,
             sliding_window_size=None,
         )
@@ -22,12 +27,9 @@ class MuseGlimmerTextDecoderTest(TestCase):
         output = layer(x, decoder_padding_mask=padding_mask)
         self.assertEqual(ops.shape(output), (2, 5, 8))
 
-    def test_forward_sliding_window_rope(self):
+    def test_call_sliding_window_rope(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             use_rope=True,
             sliding_window_size=2,
         )
@@ -36,23 +38,12 @@ class MuseGlimmerTextDecoderTest(TestCase):
         output = layer(x, decoder_padding_mask=padding_mask)
         self.assertEqual(ops.shape(output), (2, 5, 8))
 
-    def test_get_config(self):
-        layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
-        )
-        config = layer.get_config()
-        restored = MuseGlimmerTextDecoder.from_config(config)
-        self.assertEqual(restored.intermediate_dim, 16)
+    def test_serialization(self):
+        self.run_serialization_test(MuseGlimmerTextDecoder(**self.init_kwargs))
 
     def test_use_bidirectional_attention_mask(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             use_bidirectional_attention=True,
             sliding_window_size=None,
         )
@@ -69,14 +60,11 @@ class MuseGlimmerTextDecoderTest(TestCase):
         # Bidirectional: every query position attends to every key
         # position (no causal triangle), unlike the default causal mask.
         self.assertEqual(ops.shape(mask), (2, 5, 5))
-        self.assertTrue(bool(ops.all(mask)))
+        self.assertAllEqual(ops.all(mask), True)
 
     def test_use_bidirectional_attention_with_context(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             use_bidirectional_attention=True,
             sliding_window_size=3,
         )
@@ -98,10 +86,11 @@ class MuseGlimmerTextDecoderTest(TestCase):
         # written); later slots are unwritten and must be masked out. A
         # sliding window further restricts by absolute-position distance.
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=1,
-            num_key_value_heads=1,
-            head_dim=4,
+            **dict(
+                self.init_kwargs,
+                num_query_heads=1,
+                num_key_value_heads=1,
+            ),
             use_bidirectional_attention=True,
             sliding_window_size=3,
         )
@@ -141,10 +130,7 @@ class MuseGlimmerTextDecoderTest(TestCase):
 
     def test_enable_qk_scale_and_gate_false(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             enable_qk_scale_and_gate=False,
         )
         x = ops.convert_to_tensor(np.random.randn(2, 5, 8).astype("float32"))
@@ -155,10 +141,7 @@ class MuseGlimmerTextDecoderTest(TestCase):
 
     def test_use_sandwich_norm_false(self):
         layer = MuseGlimmerTextDecoder(
-            intermediate_dim=16,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            head_dim=4,
+            **self.init_kwargs,
             use_sandwich_norm=False,
         )
         x = ops.convert_to_tensor(np.random.randn(2, 5, 8).astype("float32"))

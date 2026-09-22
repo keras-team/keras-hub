@@ -17,31 +17,47 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MuseGlimmerLayersTest(TestCase):
-    def test_scaleless_rms_norm(self):
-        self.run_serialization_test(MuseGlimmerRMSNorm(with_scale=False))
-        layer = MuseGlimmerRMSNorm(with_scale=False)
-        x = ops.convert_to_tensor(np.random.randn(2, 3, 8).astype("float32"))
-        output = layer(x)
-        self.assertEqual(ops.shape(output), (2, 3, 8))
-        self.assertEqual(len(layer.weights), 0)
-
-    def test_scaled_rms_norm_has_weight(self):
-        self.run_serialization_test(MuseGlimmerRMSNorm(with_scale=True))
-        layer = MuseGlimmerRMSNorm(with_scale=True)
-        x = ops.convert_to_tensor(np.random.randn(2, 3, 8).astype("float32"))
-        layer(x)
-        self.assertEqual(len(layer.weights), 1)
-
-    def test_centered_rms_norm_identity_at_init(self):
-        self.run_serialization_test(MuseGlimmerCenteredRMSNorm(eps=1e-6))
-        # Weight initialized to zero -> `(1 + 0) * norm(x)` == plain RMSNorm.
-        layer = MuseGlimmerCenteredRMSNorm(eps=1e-6)
-        x = ops.convert_to_tensor(np.random.randn(2, 3, 8).astype("float32"))
-        output = layer(x)
-        expected = x * ops.rsqrt(
-            ops.mean(ops.square(x), axis=-1, keepdims=True) + 1e-6
+    def test_scaleless_rms_norm_basics(self):
+        self.run_layer_test(
+            cls=MuseGlimmerRMSNorm,
+            init_kwargs={"with_scale": False},
+            input_data=ops.convert_to_tensor(
+                np.random.randn(2, 3, 8).astype("float32")
+            ),
+            expected_output_shape=(2, 3, 8),
+            expected_num_trainable_weights=0,
+            run_precision_checks=False,
         )
-        self.assertAllClose(output, expected, atol=1e-5)
+
+    def test_scaled_rms_norm_basics(self):
+        self.run_layer_test(
+            cls=MuseGlimmerRMSNorm,
+            init_kwargs={"with_scale": True},
+            input_data=ops.convert_to_tensor(
+                np.random.randn(2, 3, 8).astype("float32")
+            ),
+            expected_output_shape=(2, 3, 8),
+            expected_num_trainable_weights=1,
+            run_precision_checks=False,
+        )
+
+    def test_centered_rms_norm_basics(self):
+        # Weight initialized to zero -> `(1 + 0) * norm(x)` == plain RMSNorm.
+        input_data = ops.convert_to_tensor(
+            np.random.randn(2, 3, 8).astype("float32")
+        )
+        self.run_layer_test(
+            cls=MuseGlimmerCenteredRMSNorm,
+            init_kwargs={"eps": 1e-6},
+            input_data=input_data,
+            expected_output_shape=(2, 3, 8),
+            expected_output_data=input_data
+            * ops.rsqrt(
+                ops.mean(ops.square(input_data), axis=-1, keepdims=True) + 1e-6
+            ),
+            expected_num_trainable_weights=1,
+            run_precision_checks=False,
+        )
 
     def test_context_projection(self):
         self.run_layer_test(
@@ -55,10 +71,8 @@ class MuseGlimmerLayersTest(TestCase):
         )
 
     def test_interleave_embeddings(self):
-        self.run_serialization_test(
-            MuseGlimmerInterleaveEmbeddings(hidden_dim=4)
-        )
         layer = MuseGlimmerInterleaveEmbeddings(hidden_dim=4)
+        self.run_serialization_test(layer)
         text_emb = ops.zeros((1, 6, 4))
         vision_emb = np.ones((2, 4), dtype="float32")
         indices = ops.convert_to_tensor([1, 3], dtype="int32")

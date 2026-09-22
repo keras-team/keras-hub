@@ -5,6 +5,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionMLP,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionPatchEmbedder,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
@@ -27,48 +30,57 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             "pos_emb_width": 4,
             "layer_types": ["window_attention", "full_attention"],
         }
+        self.encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
 
-    def test_vision_encoder_standalone(self):
-        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
+    def test_call_with_single_image(self):
         grid_thw = np.array([[1, 4, 4]], dtype="int32")
         total_patches = 1 * 4 * 4
         patch_dim = 2 * 3 * 2 * 2  # patch_temporal * 3 * patch_size**2
         pixel_values = np.random.randn(total_patches, patch_dim).astype(
             "float32"
         )
-        output = encoder(
+        output = self.encoder(
             ops.convert_to_tensor(pixel_values),
             ops.convert_to_tensor(grid_thw),
         )
         # 16 patches merged 2x2 -> 4 tokens, out_hidden_size = 8 * 2**2 = 32.
         self.assertEqual(ops.shape(output), (4, 32))
 
-    def test_vision_encoder_unbatched_grid(self):
-        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
+    def test_call_with_unbatched_grid(self):
         patch_dim = 2 * 3 * 2 * 2
         pixel_values = np.random.randn(16, patch_dim).astype("float32")
-        output = encoder(
+        output = self.encoder(
             ops.convert_to_tensor(pixel_values),
             ops.convert_to_tensor([1, 4, 4], dtype="int32"),
         )
         self.assertEqual(ops.shape(output), (4, 32))
 
-    def test_vision_encoder_multi_image(self):
-        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
+    def test_call_with_multiple_images(self):
         grid_thw = np.array([[1, 4, 4], [1, 2, 2]], dtype="int32")
         total_patches = 1 * 4 * 4 + 1 * 2 * 2
         patch_dim = 2 * 3 * 2 * 2
         pixel_values = np.random.randn(total_patches, patch_dim).astype(
             "float32"
         )
-        output = encoder(
+        output = self.encoder(
             ops.convert_to_tensor(pixel_values),
             ops.convert_to_tensor(grid_thw),
         )
         # (16 + 4) patches merged 2x2 -> 4 + 1 = 5 tokens.
         self.assertEqual(ops.shape(output), (5, 32))
 
-    def test_position_interpolation_uses_half_pixel_coordinates(self):
+    def test_mlp_basics(self):
+        self.run_layer_test(
+            cls=MuseGlimmerVisionMLP,
+            init_kwargs={"hidden_size": 8, "intermediate_size": 16},
+            input_data=ops.zeros((2, 5, 8)),
+            expected_output_shape=(2, 5, 8),
+            expected_num_trainable_weights=4,
+        )
+
+    def test_position_embedding_interpolation_uses_half_pixel_coordinates(
+        self,
+    ):
         patch_embedder = MuseGlimmerVisionPatchEmbedder(
             hidden_size=1,
             pos_emb_height=4,
@@ -118,9 +130,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
 
         self.assertAllClose(output, expected, atol=1e-6, rtol=1e-6)
 
-    def test_rotary_positions_use_one_based_width_height_coordinates(self):
-        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
-        cos, sin = encoder._rot_pos_emb(np.array([[1, 2, 2]], dtype="int32"))
+    def test_rotary_positions_use_one_based_coordinates(self):
+        cos, sin = self.encoder._rot_pos_emb(
+            np.array([[1, 2, 2]], dtype="int32")
+        )
         expected_positions = np.array(
             [[1, 1], [2, 1], [1, 2], [2, 2]], dtype="float32"
         )
@@ -147,7 +160,7 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllClose(cos, expected_cos)
         self.assertAllClose(sin, expected_sin)
 
-    def test_window_index_pads_ragged_windows(self):
+    def test_window_layout_pads_ragged_windows(self):
         window_index, reverse_indices, window_segment_id = _window_layout(
             ops.convert_to_tensor(np.array([[1, 3, 5]], dtype="int32")),
             num_patches=15,
@@ -162,7 +175,7 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllEqual(reverse_indices, np.argsort(expected_window_index))
         self.assertAllEqual(window_segment_id, np.repeat([0, 1], [12, 3]))
 
-    def test_window_index_offsets_each_video_frame(self):
+    def test_window_layout_offsets_each_video_frame(self):
         window_index, reverse_indices, window_segment_id = _window_layout(
             ops.convert_to_tensor(np.array([[2, 3, 5]], dtype="int32")),
             num_patches=30,
@@ -180,8 +193,5 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             window_segment_id, np.repeat([0, 1, 2, 3], [12, 3, 12, 3])
         )
 
-    def test_get_config(self):
-        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs)
-        config = encoder.get_config()
-        restored = MuseGlimmerVisionEncoder.from_config(config)
-        self.assertEqual(restored.hidden_size, encoder.hidden_size)
+    def test_serialization(self):
+        self.run_serialization_test(self.encoder)

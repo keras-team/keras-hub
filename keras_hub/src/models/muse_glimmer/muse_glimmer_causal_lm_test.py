@@ -65,6 +65,7 @@ class MuseGlimmerCausalLMTest(TestCase):
             "preprocessor": self.preprocessor,
             "backbone": self.backbone,
         }
+        self.causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
@@ -81,13 +82,12 @@ class MuseGlimmerCausalLMTest(TestCase):
         )
 
     def test_generate(self):
-        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
         prompt = " airplane at airport"
-        output = causal_lm.generate(" airplane at airport")
+        output = self.causal_lm.generate(" airplane at airport")
         self.assertTrue(prompt in output)
         prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.causal_lm.preprocessor = None
+        outputs = self.causal_lm.generate(prompt_ids, stop_token_ids=None)
         self.assertAllEqual(
             outputs["token_ids"][:, :5], prompt_ids["token_ids"][:, :5]
         )
@@ -173,8 +173,7 @@ class MuseGlimmerCausalLMTest(TestCase):
         self.assertEqual(ops.shape(output["token_ids"]), (1, sequence_length))
 
     def test_early_stopping(self):
-        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
+        call_with_cache = self.causal_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
@@ -184,9 +183,9 @@ class MuseGlimmerCausalLMTest(TestCase):
             logits = ops.slice_update(logits, (0, 0, index), update)
             return logits, hidden_states, cache
 
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+        with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
             prompt = [" airplane at airport", " airplane"]
-            output = causal_lm.generate(prompt)
+            output = self.causal_lm.generate(prompt)
             self.assertEqual(prompt, output)
 
     def test_generate_with_assistant(self):
@@ -216,18 +215,19 @@ class MuseGlimmerCausalLMTest(TestCase):
             block_size=3,
             mask_token_id=0,
         )
-        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
         # Greedy on both sides: speculative decoding's accept/reject step
         # is only guaranteed to reproduce the target model's own output
         # exactly under matching (here, greedy) acceptance semantics.
-        causal_lm.compile(sampler="greedy")
+        self.causal_lm.compile(sampler="greedy")
         prompt_ids = self.preprocessor.generate_preprocess(
             [" airplane at airport"]
         )
-        causal_lm.preprocessor = None
-        reference_output = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.causal_lm.preprocessor = None
+        reference_output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None
+        )
 
-        output = causal_lm.generate(
+        output = self.causal_lm.generate(
             prompt_ids,
             stop_token_ids=None,
             assistant_model=assistant,
@@ -240,7 +240,7 @@ class MuseGlimmerCausalLMTest(TestCase):
             output["padding_mask"], reference_output["padding_mask"]
         )
         # Assistant wiring must not leak into the model's state afterward.
-        self.assertIsNone(getattr(causal_lm, "_assistant_model", None))
+        self.assertIsNone(getattr(self.causal_lm, "_assistant_model", None))
 
     def test_generate_with_assistant_multi_cycle(self):
         # block_size=2 (1 candidate per cycle) over a long sequence forces
@@ -269,9 +269,8 @@ class MuseGlimmerCausalLMTest(TestCase):
             block_size=2,
             mask_token_id=0,
         )
-        causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
-        causal_lm.compile(sampler="greedy")
-        causal_lm.preprocessor = None
+        self.causal_lm.compile(sampler="greedy")
+        self.causal_lm.preprocessor = None
 
         vocab_size = self.preprocessor.tokenizer.vocabulary_size()
         seq_len, prompt_len = 16, 4
@@ -286,8 +285,10 @@ class MuseGlimmerCausalLMTest(TestCase):
         )
         prompt_ids = {"token_ids": token_ids, "padding_mask": padding_mask}
 
-        reference_output = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        output = causal_lm.generate(
+        reference_output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None
+        )
+        output = self.causal_lm.generate(
             prompt_ids, stop_token_ids=None, assistant_model=assistant
         )
         self.assertAllEqual(output["token_ids"], reference_output["token_ids"])

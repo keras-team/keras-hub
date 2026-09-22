@@ -121,20 +121,35 @@ class MuseGlimmerBackboneTest(TestCase, parameterized.TestCase):
             input_data=input_data,
         )
 
-    def test_num_parameters(self):
-        model = MuseGlimmerBackbone(**self.text_init_kwargs)
-        self.assertGreater(model.count_params(), 0)
-
-    def test_multimodal_backbone_builds(self):
-        model = MuseGlimmerBackbone(**self.init_kwargs)
-        self.assertGreater(model.count_params(), 0)
-        self.assertIsNotNone(model.vision_encoder)
-        self.assertTrue(hasattr(model, "interleave_embeddings"))
-
     def test_text_only_call_on_multimodal_backbone(self):
         model = MuseGlimmerBackbone(**self.init_kwargs)
         output = model(self.text_backbone_input_data)
         self.assertEqual(ops.shape(output), (2, 5, 32))
+
+    def test_assistant_backbone_basics(self):
+        # All five opt-in flags combined, mirroring
+        # `MuseGlimmerAssistantCausalLM`'s real constructor arguments.
+        init_kwargs = dict(
+            self.assistant_base_kwargs,
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=[0, 1],
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            use_sandwich_norm=False,
+        )
+        input_data = {
+            "noise_embeds": np.random.randn(2, 5, 16).astype("float32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
+            "context_hidden_states": np.random.randn(2, 5, 32).astype(
+                "float32"
+            ),
+        }
+        self.run_backbone_test(
+            cls=MuseGlimmerBackbone,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape=(2, 5, 16),
+        )
 
     def test_use_bidirectional_attention_flag(self):
         init_kwargs = dict(
@@ -211,42 +226,3 @@ class MuseGlimmerBackboneTest(TestCase, parameterized.TestCase):
         for layer in model.transformer_layers:
             self.assertFalse(hasattr(layer, "_post_attention_layernorm"))
             self.assertFalse(hasattr(layer, "_post_feedforward_layernorm"))
-
-    def test_assistant_configuration_forward(self):
-        # All five opt-in flags combined, mirroring
-        # `MuseGlimmerAssistantCausalLM`'s real constructor arguments.
-        init_kwargs = dict(
-            self.assistant_base_kwargs,
-            use_bidirectional_attention=True,
-            context_projection_layer_ids=[0, 1],
-            use_external_embeddings=True,
-            enable_qk_scale_and_gate=False,
-            use_sandwich_norm=False,
-        )
-        model = MuseGlimmerBackbone(**init_kwargs)
-        input_data = {
-            "noise_embeds": np.random.randn(2, 5, 16).astype("float32"),
-            "padding_mask": np.ones((2, 5), dtype="int32"),
-            "context_hidden_states": np.random.randn(2, 5, 32).astype(
-                "float32"
-            ),
-        }
-        output = model(input_data)
-        self.assertEqual(ops.shape(output), (2, 5, 16))
-
-    def test_assistant_config_get_config_round_trip(self):
-        init_kwargs = dict(
-            self.assistant_base_kwargs,
-            use_bidirectional_attention=True,
-            context_projection_layer_ids=[0, 1],
-            use_external_embeddings=True,
-            enable_qk_scale_and_gate=False,
-            use_sandwich_norm=False,
-        )
-        model = MuseGlimmerBackbone(**init_kwargs)
-        restored = MuseGlimmerBackbone.from_config(model.get_config())
-        self.assertTrue(restored.use_bidirectional_attention)
-        self.assertEqual(restored.context_projection_layer_ids, [0, 1])
-        self.assertTrue(restored.use_external_embeddings)
-        self.assertFalse(restored.enable_qk_scale_and_gate)
-        self.assertFalse(restored.use_sandwich_norm)
