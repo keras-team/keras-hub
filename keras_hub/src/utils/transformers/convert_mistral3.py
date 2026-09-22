@@ -180,7 +180,7 @@ def _port_text_weights(backbone, loader, tie_word_embeddings):
     lm_head_key = (
         "language_model.model.embed_tokens.weight"
         if tie_word_embeddings
-        else "lm_head.weight"
+        else "language_model.lm_head.weight"
     )
     loader.port_weight(
         keras_variable=backbone.token_embedding.reverse_embeddings,
