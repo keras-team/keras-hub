@@ -140,9 +140,8 @@ class MuseGlimmerAssistantCausalLMTest(TestCase):
                 }
             )
 
-    def test_get_config(self):
-        config = self.model.get_config()
-        self.assertEqual(config["block_size"], 5)
+    def test_serialization(self):
+        self.run_serialization_test(self.model)
 
     @pytest.mark.large
     def test_model_saving(self):
