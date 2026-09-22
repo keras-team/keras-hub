@@ -3,6 +3,7 @@ import gc
 import json
 import os
 import pathlib
+import random
 import re
 import shutil
 import tempfile
@@ -298,7 +299,28 @@ class TestCase(KerasTestCase):
 
     def setUp(self):
         super().setUp()
-        keras.utils.set_random_seed(87654321)
+        try:
+            keras.utils.set_random_seed(87654321)
+        except AttributeError:
+            # A partly uninstalled TensorFlow makes Keras' `tf.available`
+            # true, so `set_random_seed` raises on `tf.random`.
+            #
+            # `tensor_utils.tf` is None in exactly that state, so anything
+            # else is a real `AttributeError` and must not be swallowed --
+            # the suite would otherwise run silently unseeded.
+            #
+            # This repairs `setUp` only. Other `tf.available` call sites in
+            # Keras Core still fail in that environment, notably
+            # `serialization_lib`, which `run_serialization_test` reaches.
+            # Tracked upstream as keras-team/keras#23709.
+            if tf is not None:
+                raise
+            random.seed(87654321)
+            np.random.seed(87654321)
+            if keras.config.backend() == "torch":
+                import torch
+
+                torch.manual_seed(87654321)
 
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
         if x1.__class__.__name__ == "_MetricDict":

@@ -1,6 +1,10 @@
 import collections
+import os
+import subprocess
+import sys
 import unittest
 from types import MappingProxyType
+from unittest import mock
 
 import grain
 import keras
@@ -272,3 +276,141 @@ class GrainHarnessTest(TestCase):
             self.run_grain_preprocessing_test(
                 layer, input_data, [[1, 5, 6], [1, 7, 7]]
             )
+
+
+class TestCaseTest(TestCase):
+    @unittest.skipIf(
+        keras.config.backend() == "tensorflow",
+        reason=(
+            "The TensorFlow backend cannot boot with an attribute-less "
+            "`tensorflow` planted in `sys.modules`."
+        ),
+    )
+    def test_setup_with_empty_tensorflow(self):
+        """Pin the `setUp` guard against a partly uninstalled TensorFlow.
+
+        A leftover empty `tensorflow/` directory imports as a PEP 420
+        namespace package: the import succeeds, the module has no
+        attributes, and Keras' `LazyModule.available` still reports True, so
+        `set_random_seed` raises `AttributeError` on `tf.random`.
+
+        A real directory cannot reproduce that while TensorFlow is installed
+        -- a namespace portion does not terminate the import search, so the
+        regular package wins -- hence the planted module below, in a
+        subprocess so it cannot leak into the rest of the session.
+        """
+        script = """
+import importlib.machinery
+import random
+import sys
+import types
+import unittest
+
+import numpy as np
+
+# `origin=None` mirrors a PEP 420 namespace package. A bare ModuleType with
+# `__spec__ = None` is not equivalent: on torch it makes `find_spec` raise
+# `ValueError: tensorflow.__spec__ is None`, a different failure.
+_tf_proxy = types.ModuleType("tensorflow")
+_tf_proxy.__spec__ = importlib.machinery.ModuleSpec(
+    "tensorflow", loader=None, origin=None
+)
+sys.modules["tensorflow"] = _tf_proxy
+
+import keras
+
+# Liveness check: prove the environment really is broken before testing the
+# guard against it. If this stops raising, the guard is no longer exercised
+# and the test must fail rather than pass for free.
+try:
+    keras.utils.set_random_seed(87654321)
+except AttributeError:
+    pass
+else:
+    raise AssertionError(
+        "Precondition not met: set_random_seed did not raise, so the "
+        "attribute-less TensorFlow was not picked up by Keras."
+    )
+
+from keras_hub.src.tests.test_case import TestCase
+
+
+def _draw():
+    values = [random.random(), float(np.random.rand())]
+    if keras.config.backend() == "torch":
+        import torch
+
+        values.append(float(torch.rand(1)))
+    return values
+
+
+class DummyTest(TestCase):
+    def test_setup_reseeds_under_broken_tensorflow(self):
+        # Two `setUp` calls must draw the same values. That is what fails if
+        # the fallback swallows the error without reseeding torch.
+        self.setUp()
+        first = _draw()
+        self.setUp()
+        second = _draw()
+        # Bare `assert` is stripped under `PYTHONOPTIMIZE`, which the parent
+        # propagates via `os.environ.copy()`. Use real assertions.
+        self.assertEqual(first, second, "setUp did not reseed")
+        if keras.config.backend() == "torch":
+            import torch
+
+            # `torch.manual_seed` is the only statement the fallback
+            # actually replays, so pin it directly.
+            self.assertEqual(torch.initial_seed(), 87654321)
+
+
+if __name__ == '__main__':
+    unittest.main()
+"""
+        if not sys.executable:
+            self.skipTest("sys.executable is not available.")
+        tmpdir = self.get_temp_dir()
+        script_path = os.path.join(tmpdir, "test_dummy.py")
+        with open(script_path, "w") as f:
+            f.write(script)
+
+        env = os.environ.copy()
+        wt_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../..")
+        )
+        # Joining with an empty existing value would leave a trailing
+        # separator, which puts the CWD on the child's `sys.path`.
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            wt_path + os.pathsep + existing if existing else wt_path
+        )
+
+        result = subprocess.run(
+            [sys.executable, script_path],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # Pin that the child ran the one test, rather than trusting the
+        # exit code alone to tell us the body executed.
+        self.assertIn("Ran 1 test", result.stderr)
+
+    def test_setup_propagates_unrelated_attribute_error(self):
+        """The guard must not swallow an unrelated `AttributeError`.
+
+        It exists for a partly uninstalled TensorFlow, which is exactly the
+        state where `tensor_utils.tf` is None. With TensorFlow healthy, an
+        `AttributeError` from inside `set_random_seed` is a real bug, and
+        swallowing it would leave the whole suite running unseeded with no
+        diagnostic.
+        """
+        if tf is None:
+            self.skipTest("Requires TensorFlow to be installed.")
+
+        def raise_unrelated(seed):
+            raise AttributeError("nothing to do with TensorFlow")
+
+        with mock.patch.object(keras.utils, "set_random_seed", raise_unrelated):
+            with self.assertRaises(AttributeError):
+                self.setUp()
