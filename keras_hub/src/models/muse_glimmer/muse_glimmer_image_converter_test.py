@@ -74,8 +74,6 @@ class MuseGlimmerImageConverterTest(TestCase):
         patch_dim = 2 * 3 * 4 * 4  # patch_temporal * 3 * patch_size**2
         self.assertEqual(output["patches"].shape, (num_patches, patch_dim))
 
-    def test_get_config(self):
+    def test_serialization(self):
         converter = MuseGlimmerImageConverter(patch_size=14)
-        config = converter.get_config()
-        restored = MuseGlimmerImageConverter.from_config(config)
-        self.assertEqual(restored.patch_size, 14)
+        self.run_serialization_test(converter)

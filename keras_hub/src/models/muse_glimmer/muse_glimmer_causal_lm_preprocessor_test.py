@@ -29,56 +29,54 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
             vocabulary=self.vocab, merges=self.merges
         )
         self.init_kwargs = {"tokenizer": self.tokenizer, "sequence_length": 8}
-
-    def test_text_only_generate_preprocess(self):
-        preprocessor = MuseGlimmerCausalLMPreprocessor(**self.init_kwargs)
-        output = preprocessor.generate_preprocess(" airplane at airport")
-        self.assertIn("token_ids", output)
-        self.assertIn("padding_mask", output)
-
-    def test_image_generate_preprocess_expands_placeholder(self):
-        image_converter = MuseGlimmerImageConverter(
+        self.preprocessor = MuseGlimmerCausalLMPreprocessor(**self.init_kwargs)
+        self.image_converter = MuseGlimmerImageConverter(
             patch_size=4,
             patch_temporal=2,
             merge_size=2,
             max_image_tokens=64,
             scale=1 / 255.0,
         )
-        preprocessor = MuseGlimmerCausalLMPreprocessor(
-            **self.init_kwargs, image_converter=image_converter
+        self.image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
+        self.image_preprocessor = MuseGlimmerCausalLMPreprocessor(
+            **self.init_kwargs,
+            image_converter=self.image_converter,
         )
-        # Build a prompt with a single image placeholder token id directly.
-        image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
-        result = image_converter(image)
-        t, h, w = (int(v) for v in result["grid_thw"])
-        num_merged_tokens = t * (h // 2) * (w // 2)
 
-        ids = preprocessor._expand_vision_placeholders(
-            [preprocessor.tokenizer.image_token_id, 5, 6],
+    def test_text_preprocessor_basics(self):
+        self.run_preprocessor_test(
+            cls=MuseGlimmerCausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=([" airplane at airport"],),
+        )
+
+    def test_text_only_generate_preprocess(self):
+        output = self.preprocessor.generate_preprocess(" airplane at airport")
+        self.assertIn("token_ids", output)
+        self.assertIn("padding_mask", output)
+
+    def test_image_generate_preprocess_expands_placeholder(self):
+        # Build a prompt with a single image placeholder token id directly.
+        result = self.image_converter(self.image)
+        t, h, w = (int(v) for v in result["grid_thw"])
+        num_merged_tokens = (
+            t
+            * (h // self.image_converter.merge_size)
+            * (w // self.image_converter.merge_size)
+        )
+
+        ids = self.image_preprocessor._expand_vision_placeholders(
+            [self.tokenizer.image_token_id, 5, 6],
             [num_merged_tokens],
             [],
         )
         self.assertEqual(
             ids,
-            [preprocessor.tokenizer.image_token_id] * num_merged_tokens
-            + [5, 6],
+            [self.tokenizer.image_token_id] * num_merged_tokens + [5, 6],
         )
 
     def test_image_generate_preprocess_stacks_media_grids(self):
-        image_converter = MuseGlimmerImageConverter(
-            patch_size=4,
-            patch_temporal=2,
-            merge_size=2,
-            max_image_tokens=64,
-            scale=1 / 255.0,
+        output = self.image_preprocessor.generate_preprocess(
+            {"prompts": ["test"], "images": [self.image, self.image]}
         )
-        preprocessor = MuseGlimmerCausalLMPreprocessor(
-            **self.init_kwargs, image_converter=image_converter
-        )
-        image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
-
-        output = preprocessor.generate_preprocess(
-            {"prompts": ["test"], "images": [image, image]}
-        )
-
         self.assertEqual(output["image_grid_thw"].shape, (2, 3))
