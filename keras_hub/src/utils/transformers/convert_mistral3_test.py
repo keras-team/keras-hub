@@ -60,6 +60,18 @@ class TestTask(TestCase):
 
         with tempfile.TemporaryDirectory() as preset_dir:
             hf_model.save_pretrained(preset_dir)
+            # Safetensors omits the shared LM head from this tiny fixture.
+            # Released Mistral3 checkpoints store a separate LM head tensor.
+            safetensors = pytest.importorskip("safetensors.numpy")
+            weights_path = os.path.join(preset_dir, "model.safetensors")
+            weights = safetensors.load_file(weights_path)
+            lm_head = getattr(hf_model, "lm_head", None)
+            if lm_head is None:
+                lm_head = hf_model.language_model.lm_head
+            weights["language_model.lm_head.weight"] = (
+                lm_head.weight.detach().cpu().numpy().copy()
+            )
+            safetensors.save_file(weights, weights_path)
             keras_backbone = Mistral3Backbone.from_preset(preset_dir)
 
         self.assertIsNotNone(keras_backbone.vision_encoder)
