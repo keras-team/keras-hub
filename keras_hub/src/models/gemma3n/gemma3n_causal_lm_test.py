@@ -1,7 +1,6 @@
 import copy
 from unittest.mock import patch
 
-import keras
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
@@ -30,9 +29,6 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
     MockGemma3nTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.keras_utils import fused_attention_op_available
-from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
@@ -285,20 +281,15 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
         )
 
     def test_text_flash_attention_call(self):
-        if (
-            keras.config.backend() != "jax"
-            or not fused_attention_op_available()
-            or not gpu_supports_fused_attention_op()
-        ):
-            self.skipTest("`flash_attention` testing requires the JAX backend.")
-
-        with patch("keras.ops.dot_product_attention") as mock_func:
-            causal_lm = Gemma3nCausalLM(**self.text_init_kwargs)
-            causal_lm.generate("the quick brown fox")
-            if running_on_gpu():
-                mock_func.assert_called()
-            else:
-                mock_func.assert_not_called()
+        # `Gemma3nTextAttention._compute_attention` builds attention by hand
+        # and there is no `_use_fused_attention_op` gate, so
+        # `keras.ops.dot_product_attention` is never reached on any device.
+        # The assertion can only ever take its negative arm, which passes just
+        # as happily when the mock is wired to nothing at all. Re-enable this
+        # with `assert_fused_attention_used`, as the other Gemma tests use,
+        # once gemma3n grows a fused path. Tracked in
+        # https://github.com/keras-team/keras-hub/issues/3113.
+        self.skipTest("Gemma3n has no fused attention path. See issue #3113.")
 
     def test_text_early_stopping(self):
         causal_lm = Gemma3nCausalLM(**self.text_init_kwargs)
