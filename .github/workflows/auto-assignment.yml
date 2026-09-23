@@ -19,4 +19,5 @@ jobs:
     with:
       ref: '5ee0604fc2fb4bf0ff6032083a20d1da69e8b923'
       issue_assignees: 'maitry63,mrinalghoshh,dhantule'
+      # TODO(jeffcarp): Transition to CODEOWNERS for this.
       pr_reviewers: 'laxmareddyp,JyotinderSingh'
