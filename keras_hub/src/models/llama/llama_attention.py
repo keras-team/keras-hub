@@ -280,6 +280,9 @@ class LlamaAttention(keras.layers.Layer):
                 "rope_position_scaling_factor": (
                     self.rope_position_scaling_factor
                 ),
+                "rope_frequency_adjustment_factor": (
+                    self.rope_frequency_adjustment_factor
+                ),
                 "rope_low_freq_factor": self.rope_low_freq_factor,
                 "rope_high_freq_factor": self.rope_high_freq_factor,
                 "rope_pretraining_sequence_length": (
