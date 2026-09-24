@@ -4,11 +4,9 @@ from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.modern_bert import modern_bert_masked_lm_preprocessor
 from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
-)
-from keras_hub.src.models.modern_bert.modern_bert_masked_lm_preprocessor import (
-    ModernBertMaskedLMPreprocessor,
 )
 
 
@@ -69,7 +67,9 @@ class ModernBertMaskedLM(MaskedLM):
     """
 
     backbone_cls = ModernBertBackbone
-    preprocessor_cls = ModernBertMaskedLMPreprocessor
+    preprocessor_cls = (
+        modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+    )
 
     def __init__(
         self,

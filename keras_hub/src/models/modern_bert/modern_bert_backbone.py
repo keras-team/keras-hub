@@ -9,7 +9,9 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.modern_bert.modern_bert_layers import (
     ModernBertEncoderLayer,
 )
-from keras_hub.src.models.modern_bert.modern_bert_presets import backbone_presets
+from keras_hub.src.models.modern_bert.modern_bert_presets import (
+    backbone_presets,
+)
 
 
 @keras_hub_export("keras_hub.models.ModernBertBackbone")

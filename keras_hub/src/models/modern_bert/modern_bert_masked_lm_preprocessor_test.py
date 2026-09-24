@@ -1,6 +1,4 @@
-from keras_hub.src.models.modern_bert.modern_bert_masked_lm_preprocessor import (
-    ModernBertMaskedLMPreprocessor,
-)
+from keras_hub.src.models.modern_bert import modern_bert_masked_lm_preprocessor
 from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
@@ -77,7 +75,9 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
         test_init_kwargs = self.init_kwargs.copy()
         test_init_kwargs["mask_selection_rate"] = 0.0
 
-        preprocessor = ModernBertMaskedLMPreprocessor(**test_init_kwargs)
+        preprocessor = (
+            modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+        )(**test_init_kwargs)
         x, y, sample_weight = preprocessor(self.input_data)
 
         self.assertEqual(x["token_ids"].shape, (1, 12))
@@ -91,7 +91,9 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
 
     def test_no_masking_zero_rate(self):
         """Verify that zero mask selection rate produces no masked tokens."""
-        preprocessor = ModernBertMaskedLMPreprocessor(
+        preprocessor = (
+            modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+        )(
             tokenizer=self.tokenizer,
             mask_selection_rate=0.0,
             mask_selection_length=4,
@@ -107,10 +109,14 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
 
     def test_serialization(self):
         """Verify that the preprocessor can be serialized and restored."""
-        preprocessor = ModernBertMaskedLMPreprocessor(**self.init_kwargs)
+        preprocessor = (
+            modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+        )(**self.init_kwargs)
 
         config = preprocessor.get_config()
-        restored = ModernBertMaskedLMPreprocessor.from_config(config)
+        restored = (
+            modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+        ).from_config(config)
 
         self.assertEqual(
             restored.sequence_length,
