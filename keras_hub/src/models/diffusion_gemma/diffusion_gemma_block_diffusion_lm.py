@@ -105,6 +105,12 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             inputs, max_length=max_length, stop_token_ids=stop_token_ids
         )
 
+    def fit(self, *args, **kwargs):
+        raise NotImplementedError(
+            "DiffusionGemmaBlockDiffusionLM only supports inference for "
+            "now. Training the model isn't supported yet."
+        )
+
     def __init__(
         self,
         preprocessor,
@@ -371,6 +377,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         pixel_values = inputs.get("pixel_values", None)
         pixel_position_ids = inputs.get("pixel_position_ids", None)
         vision_indices = inputs.get("vision_indices", None)
+        vision_mask = inputs.get("vision_mask", None)
 
         # Text embeddings are unscaled until after vision interleaving.
         x = self.backbone.token_embedding(token_ids)
@@ -437,6 +444,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 cache_update_index=0,
                 padding_mask=padding_mask,
                 is_encoder=True,
+                vision_mask=vision_mask,
             )
             caches.append(next_cache)
 

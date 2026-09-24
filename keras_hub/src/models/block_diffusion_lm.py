@@ -36,7 +36,7 @@ class BlockDiffusionLM(Task):
 
     `BlockDiffusionLM` tasks wrap a `keras_hub.models.Backbone` and a
     `keras_hub.models.Preprocessor` to create a model that can be used for
-    block-diffusion generation and generative fine-tuning.
+    block-diffusion generation.
 
     `BlockDiffusionLM` tasks provide an additional, high-level `generate()`
     function which iteratively denoises blocks of tokens in parallel. The
@@ -45,9 +45,7 @@ class BlockDiffusionLM(Task):
     `keras_hub.samplers.Sampler` to control token commitment and re-noising
     during generation.
 
-    When calling `fit()`, tokenized inputs are trained with shifted token
-    labels. A task preprocessor may use sample weights to restrict the loss to
-    response tokens for supervised fine-tuning.
+    `fit()` support depends on the subclass; check the subclass docstring.
 
     All `BlockDiffusionLM` tasks include a `from_preset()` constructor which
     can be used to load a pre-trained config and weights.

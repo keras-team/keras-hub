@@ -130,7 +130,10 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         # num_vision_tokens_per_image (4) = 8, regardless of how many
         # image tokens this particular sample actually has.
         self.assertEqual(x["vision_indices"].shape[-1], 8)
-        self.assertNotIn("vision_mask", x)
+        # vision_mask marks image placeholder positions, used to build the
+        # encoder's vision-bidirectional attention mask.
+        self.assertEqual(x["vision_mask"].shape[-1], 24)
+        self.assertEqual(int(np.sum(x["vision_mask"][0])), 4)
 
     def test_vision_raw_images_input(self):
         # Passing raw `images` (rather than precomputed pixel_values)

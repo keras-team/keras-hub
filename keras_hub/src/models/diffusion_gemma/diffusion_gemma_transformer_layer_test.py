@@ -143,3 +143,70 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
 
     def test_serialization(self):
         self.run_serialization_test(self.layer)
+
+    def test_vision_bidirectional_mask_applies_only_during_encoder_pass(self):
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_vision_bidirectional_attention=True,
+            is_global_attention=False,
+        )
+        vision_mask = np.array(
+            [[False, False, True, True, True, False, False, False]] * 2,
+            dtype=bool,
+        )
+
+        encoder_mask = layer._compute_attention_mask(
+            self.dummy_input,
+            padding_mask=None,
+            cache=None,
+            cache_update_index=0,
+            is_encoder=True,
+            vision_mask=vision_mask,
+        )
+        decoder_mask = layer._compute_attention_mask(
+            self.dummy_input,
+            padding_mask=None,
+            cache=None,
+            cache_update_index=0,
+            is_encoder=False,
+            vision_mask=vision_mask,
+        )
+        encoder_mask_np = ops.convert_to_numpy(encoder_mask)
+        decoder_mask_np = ops.convert_to_numpy(decoder_mask)
+
+        # Encoder pass: image token 2 attends to later image token 4.
+        self.assertTrue(encoder_mask_np[0, 2, 4])
+        # Decoder pass (is_encoder=False): stays purely causal.
+        self.assertFalse(decoder_mask_np[0, 2, 4])
+
+    def test_vision_bidirectional_mask_skipped_for_global_layers(self):
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_vision_bidirectional_attention=True,
+            is_global_attention=True,
+        )
+        vision_mask = np.array(
+            [[False, False, True, True, True, False, False, False]] * 2,
+            dtype=bool,
+        )
+        mask = layer._compute_attention_mask(
+            self.dummy_input,
+            padding_mask=None,
+            cache=None,
+            cache_update_index=0,
+            is_encoder=True,
+            vision_mask=vision_mask,
+        )
+        mask_np = ops.convert_to_numpy(mask)
+        # Global (full-attention) layers stay purely causal even during the
+        # encoder pass — HF applies the vision mask to sliding_attention
+        # layers only.
+        self.assertFalse(mask_np[0, 2, 4])

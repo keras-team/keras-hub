@@ -300,6 +300,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 if batched
                 else tf.squeeze(vision_indices, axis=0)
             ),
+            "vision_mask": (
+                vision_mask if batched else tf.squeeze(vision_mask, axis=0)
+            ),
         }
 
         return x

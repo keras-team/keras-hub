@@ -114,6 +114,9 @@ def convert_backbone_config(transformers_config):
             or text_cfg.get("expert_intermediate_size")
         ),
         "num_experts_per_token": text_cfg.get("top_k_experts") or 8,
+        "use_vision_bidirectional_attention": (
+            text_cfg.get("use_bidirectional_attention") == "vision"
+        ),
     }
 
 

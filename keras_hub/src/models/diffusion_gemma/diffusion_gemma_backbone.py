@@ -89,6 +89,9 @@ class DiffusionGemmaBackbone(Backbone):
             `1e-6`.
         use_bidirectional_attention: bool. When `True` the model uses fully
             bidirectional attention for ALL tokens. Defaults to `False`.
+        use_vision_bidirectional_attention: bool. When `True`, image tokens
+            attend to each other bidirectionally during the causal encoder
+            pass. Defaults to `False`.
         dropout: float. Dropout probability. Defaults to `0`.
         num_global_key_value_heads: int or `None`. When set, global attention
             layers use this many K/V heads instead of `num_key_value_heads`
@@ -152,6 +155,7 @@ class DiffusionGemmaBackbone(Backbone):
         vision_encoder=None,
         layer_norm_epsilon=1e-6,
         use_bidirectional_attention=False,
+        use_vision_bidirectional_attention=False,
         dropout=0,
         num_global_key_value_heads=None,
         global_rope_wavelength=None,
@@ -228,6 +232,9 @@ class DiffusionGemmaBackbone(Backbone):
                 rope_scaling_factor=rope_scaling_factor,
                 rope_partial_rotary_factor=layer_rope_partial,
                 use_bidirectional_attention=use_bidirectional_attention,
+                use_vision_bidirectional_attention=(
+                    use_vision_bidirectional_attention
+                ),
                 is_global_attention=is_global,
                 global_head_dim=global_head_dim,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -391,6 +398,9 @@ class DiffusionGemmaBackbone(Backbone):
         self.local_rope_scaling_factor = local_rope_scaling_factor
         self.global_rope_scaling_factor = global_rope_scaling_factor
         self.use_bidirectional_attention = use_bidirectional_attention
+        self.use_vision_bidirectional_attention = (
+            use_vision_bidirectional_attention
+        )
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.num_global_key_value_heads = num_global_key_value_heads
@@ -438,6 +448,9 @@ class DiffusionGemmaBackbone(Backbone):
                 if self.vision_encoder is None
                 else keras.layers.serialize(self.vision_encoder),
                 "use_bidirectional_attention": self.use_bidirectional_attention,
+                "use_vision_bidirectional_attention": (
+                    self.use_vision_bidirectional_attention
+                ),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "num_global_key_value_heads": self.num_global_key_value_heads,

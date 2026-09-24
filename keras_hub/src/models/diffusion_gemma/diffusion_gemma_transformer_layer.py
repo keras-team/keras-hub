@@ -55,6 +55,12 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             receive rotary embeddings. Defaults to `1.0`.
         use_bidirectional_attention: bool. Whether to enable bidirectional
             (non-causal) attention. Defaults to `False`.
+        use_vision_bidirectional_attention: bool. When `True`, image tokens
+            within the same image attend to each other bidirectionally
+            during the causal encoder pass (`is_encoder=True`), on local
+            (sliding-window) layers only. Matches HF's `generate()` mask,
+            not `forward()`'s (see `use_bidirectional_attention: "vision"`
+            in the HF config). Defaults to `False`.
         is_global_attention: bool. Whether this layer uses global (full-
             sequence) attention rather than sliding-window attention. Defaults
             to `False`.
@@ -96,6 +102,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         rope_scaling_factor=1.0,
         rope_partial_rotary_factor=1.0,
         use_bidirectional_attention=False,
+        use_vision_bidirectional_attention=False,
         is_global_attention=False,
         global_head_dim=None,
         dropout=0,
@@ -123,6 +130,9 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         self.rope_partial_rotary_factor = rope_partial_rotary_factor
         self.use_bidirectional_attention = use_bidirectional_attention
+        self.use_vision_bidirectional_attention = (
+            use_vision_bidirectional_attention
+        )
         self.is_global_attention = is_global_attention
         self.global_head_dim = global_head_dim
         self.dropout = dropout
@@ -289,13 +299,33 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
 
         self.built = True
 
-    # This layer does not implement vision-bidirectional attention within
-    # image blocks. The HF reference (`DiffusionGemmaEncoderModel.forward`)
-    # computes it via `create_masks_for_generate`, but discards the result
-    # and reuses the plain causal mask, so `use_bidirectional_attention:
-    # "vision"` has no effect on the checkpoint's actual numerics. Matching
-    # that (rather than the intended-but-unreachable HF behavior) keeps
-    # parity with `from_preset()` output.
+    def _compute_image_bidirectional_attention_mask(self, vision_mask):
+        """Allow image tokens to attend to each other within the same image.
+
+        Ported from `Gemma4TextDecoderBlock`. Consecutive runs of `True` in
+        `vision_mask` are numbered as separate image blocks; positions in
+        the same block attend to each other bidirectionally.
+        """
+        bidirectional_mask = vision_mask
+
+        padded_mask = ops.cast(
+            ops.pad(bidirectional_mask, [(0, 0), (1, 0)], constant_values=0),
+            dtype="int32",
+        )
+        boundary = ops.cast(
+            ops.greater(padded_mask[..., 1:], padded_mask[..., :-1]),
+            dtype="int32",
+        )
+        numbered_boundary = ops.cumsum(boundary, -1)
+        indices = ops.multiply(bidirectional_mask, numbered_boundary)
+
+        indices_expanded_1 = ops.expand_dims(indices, 1)
+        indices_expanded_2 = ops.expand_dims(indices, -1)
+        return ops.logical_and(
+            ops.equal(indices_expanded_1, indices_expanded_2),
+            indices_expanded_2,
+        )
+
     def _compute_attention_mask(
         self,
         x,
@@ -303,6 +333,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         cache,
         cache_update_index,
         is_encoder=False,
+        vision_mask=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -336,6 +367,24 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 causal_mask,
                 cache_update_index=cache_update_index,
             )
+
+        # Image tokens attend bidirectionally within the same image, on
+        # local (sliding-window) layers only, during the causal encoder
+        # pass. Matches HF's `generate()` mask — see `use_bidirectional_
+        # attention: "vision"` in the HF config, applied via
+        # `create_masks_for_generate` in `_prepare_encoder_inputs` (not
+        # `forward()`, which discards it for a plain, non-dict attention
+        # mask).
+        if (
+            vision_mask is not None
+            and self.use_vision_bidirectional_attention
+            and not self.is_global_attention
+            and is_encoder
+        ):
+            bidirectional_image_mask = (
+                self._compute_image_bidirectional_attention_mask(vision_mask)
+            )
+            causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
 
         if decoder_mask is not None:
             causal_mask = ops.minimum(decoder_mask, causal_mask)
@@ -389,6 +438,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         positions=None,
         canvas_mask=None,
         is_encoder=False,
+        vision_mask=None,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -404,6 +454,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             cache,
             cache_update_index,
             is_encoder=is_encoder,
+            vision_mask=vision_mask,
         )
 
         # Canvas bidirectional mask: all canvas queries attend to all canvas
@@ -537,6 +588,9 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "rope_partial_rotary_factor": self.rope_partial_rotary_factor,
                 "use_bidirectional_attention": self.use_bidirectional_attention,
+                "use_vision_bidirectional_attention": (
+                    self.use_vision_bidirectional_attention
+                ),
                 "is_global_attention": self.is_global_attention,
                 "global_head_dim": self.global_head_dim,
                 "attention_k_eq_v": self.attention_k_eq_v,
