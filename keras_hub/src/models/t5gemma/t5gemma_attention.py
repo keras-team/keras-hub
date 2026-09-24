@@ -2,6 +2,7 @@ import inspect
 
 import keras
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma.gemma_attention import CachedGemmaAttention
 from keras_hub.src.models.t5gemma.t5gemma_layers import (
@@ -141,7 +142,7 @@ class T5GemmaAttention(CachedGemmaAttention):
             kv_states_shape = input_shape
         # Query projection layer.
         self.hidden_dim = hidden_states_shape[-1]
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -152,7 +153,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         self.query_dense.build(hidden_states_shape)
 
         # Key projection layer.
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -163,7 +164,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         self.key_dense.build(kv_states_shape)
 
         # Value projection layer.
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -174,7 +175,7 @@ class T5GemmaAttention(CachedGemmaAttention):
         self.value_dense.build(kv_states_shape)
 
         # Output projection layer.
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),

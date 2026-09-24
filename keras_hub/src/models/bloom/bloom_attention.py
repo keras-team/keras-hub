@@ -4,6 +4,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.layers.modeling.alibi_bias import AlibiBias
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -30,7 +31,7 @@ class BloomAttention(keras.layers.Layer):
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             equation="btm,mnh->btnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
@@ -41,7 +42,7 @@ class BloomAttention(keras.layers.Layer):
         )
         self._query_dense.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
@@ -52,7 +53,7 @@ class BloomAttention(keras.layers.Layer):
         )
         self._key_dense.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",

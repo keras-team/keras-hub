@@ -3,6 +3,7 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.utils.keras_utils import clone_initializer
 
@@ -76,7 +77,7 @@ class GptOssAttention(keras.layers.Layer):
 
         self._rotary_dim = (self._head_dim // 2) * 2
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self._head_dim),
             bias_axes="uh",
@@ -87,7 +88,7 @@ class GptOssAttention(keras.layers.Layer):
         )
         self.query_dense.build(inputs_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -102,7 +103,7 @@ class GptOssAttention(keras.layers.Layer):
         )
         self.key_dense.build(inputs_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
@@ -122,7 +123,7 @@ class GptOssAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
         )
 
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
             bias_axes="m",

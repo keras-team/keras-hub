@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
@@ -222,19 +223,19 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # Feed-forward network uses standard gated GELU activation.
         # `actual_intermediate_dim` may be 2x for KV-shared layers when
         # `use_double_wide_mlp=True` (E2B architecture).
-        self.gating_ffw = keras.layers.EinsumDense(
+        self.gating_ffw = EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.actual_intermediate_dim),
             dtype=self.dtype_policy,
             name="ffw_gating",
         )
-        self.gating_ffw_2 = keras.layers.EinsumDense(
+        self.gating_ffw_2 = EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.actual_intermediate_dim),
             dtype=self.dtype_policy,
             name="ffw_gating_2",
         )
-        self.ffw_linear = keras.layers.EinsumDense(
+        self.ffw_linear = EinsumDense(
             equation="btf,fd->btd",
             output_shape=(None, self.hidden_dim),
             dtype=self.dtype_policy,
