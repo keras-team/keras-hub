@@ -1,6 +1,6 @@
 import pytest
 
-from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -224,7 +224,7 @@ class ModernBertTokenizerTest(TestCase):
         """
         from transformers import AutoTokenizer
 
-        from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
+        from keras_hub.src.models.modern_bert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
             ModernBertTextClassifierPreprocessor,
         )
 

@@ -1,10 +1,10 @@
 import keras
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
+from keras_hub.src.models.modern_bert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
     ModernBertTextClassifierPreprocessor,
 )
 from keras_hub.src.models.text_classifier import TextClassifier

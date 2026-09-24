@@ -1,15 +1,15 @@
 import pytest
 
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
+from keras_hub.src.models.modern_bert.modern_bert_masked_lm import (
     ModernBertMaskedLM,
 )
-from keras_hub.src.models.modernbert.modern_bert_masked_lm_preprocessor import (
+from keras_hub.src.models.modern_bert.modern_bert_masked_lm_preprocessor import (
     ModernBertMaskedLMPreprocessor,
 )
-from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase

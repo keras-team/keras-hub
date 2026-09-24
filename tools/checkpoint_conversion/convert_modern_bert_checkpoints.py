@@ -22,7 +22,7 @@ import torch
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 
-from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
+from keras_hub.src.models.modern_bert.modern_bert_masked_lm import (
     ModernBertMaskedLM,
 )
 

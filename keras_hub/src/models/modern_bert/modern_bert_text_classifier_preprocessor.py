@@ -4,10 +4,10 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.models.text_classifier_preprocessor import (

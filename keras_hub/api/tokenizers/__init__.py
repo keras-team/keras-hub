@@ -80,7 +80,7 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
-from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer as ModernBertTokenizer,
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (

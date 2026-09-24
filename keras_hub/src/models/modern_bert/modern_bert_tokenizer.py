@@ -1,7 +1,7 @@
 import re
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer

@@ -1,7 +1,7 @@
 import numpy as np
 from keras import layers
 
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
 from keras_hub.src.utils.preset_utils import load_json

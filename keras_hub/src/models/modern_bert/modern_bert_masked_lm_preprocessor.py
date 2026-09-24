@@ -2,10 +2,10 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.masked_lm_preprocessor import MaskedLMPreprocessor
-from keras_hub.src.models.modernbert.modern_bert_backbone import (
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
-from keras_hub.src.models.modernbert.modern_bert_tokenizer import (
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 
