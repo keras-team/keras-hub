@@ -25,15 +25,17 @@ class WhisperAudioConverterTest(TestCase):
         )
 
     def test_feature_extractor_basics(self):
-        self.run_preprocessing_layer_test(
-            cls=WhisperAudioConverter,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
+        with tf.device("/CPU:0"):
+            self.run_preprocessing_layer_test(
+                cls=WhisperAudioConverter,
+                init_kwargs=self.init_kwargs,
+                input_data=self.input_data,
+            )
 
     def test_correctness(self):
-        audio_tensor = tf.ones((2,), dtype="float32")
-        outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
+        with tf.device("/CPU:0"):
+            audio_tensor = tf.ones((2,), dtype="float32")
+            outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (5, 80))
@@ -44,9 +46,11 @@ class WhisperAudioConverterTest(TestCase):
     def test_python_matches_tf(self):
         converter = WhisperAudioConverter(**self.init_kwargs)
         audio = np.random.default_rng(42).random((2, 300)).astype("float32")
+        with tf.device("/CPU:0"):
+            tf_output = converter._call_tf(audio)
         self.assertAllClose(
             converter._call_python(audio),
-            converter._call_tf(audio),
+            tf_output,
             atol=1e-4,
         )
 

@@ -5,6 +5,7 @@ from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class CachedMultiHeadAttentionTest(TestCase):
@@ -89,8 +90,12 @@ class CachedMultiHeadAttentionTest(TestCase):
 
         output, output_cache = call(outputs, input_cache)
 
-        self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(output_cache, no_loop_cache)
+        # Stepping through the sequence one token at a time dispatches
+        # different kernels than a single full-sequence call, so the two
+        # accumulate float32 error differently on GPU.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(output, no_loop_outputs, atol=tol, rtol=tol)
+        self.assertAllClose(output_cache, no_loop_cache, atol=tol, rtol=tol)
 
     def test_return_attention_scores(self):
         x = random.uniform(
