@@ -1,48 +1,198 @@
+import collections.abc
 import gc
 import json
 import os
 import pathlib
+import random
 import re
+import shutil
 import tempfile
+import unittest
 
 import grain
 import keras
 import numpy as np
-import tensorflow as tf
-from absl.testing import parameterized
 from keras import ops
 from keras import tree
 from keras.layers import ReversibleEmbedding
+from keras.src.testing import TestCase as KerasTestCase
 
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def convert_to_comparible_type(x):
     """Convert tensors to comparable types.
 
     Any string are converted to plain python types. Any jax or torch tensors
-    are converted to numpy.
+    are converted to numpy. Ragged tensors are converted to nested lists,
+    which is also how the Python preprocessing path represents them.
     """
-    if getattr(x, "dtype", None) == tf.string:
+    if tf is not None and isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+        if x.dtype == tf.string:
+            if isinstance(x, tf.RaggedTensor):
+                x = x.to_list()
+            else:
+                x = x.numpy() if x.shape.rank == 0 else x.numpy().tolist()
+            return tree.map_structure(lambda x: x.decode("utf-8"), x)
         if isinstance(x, tf.RaggedTensor):
-            x = x.to_list()
-        if isinstance(x, tf.Tensor):
-            x = x.numpy() if x.shape.rank == 0 else x.numpy().tolist()
-        return tree.map_structure(lambda x: x.decode("utf-8"), x)
-    if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
-        return x
+            return x.to_list()
+        return x.numpy()
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
 
 
+def _as_dense_array(x):
+    """Return `x` as a dense numpy array, or `None` if it is not dense.
+
+    A leaf is "not dense" if it is a dict, or a jagged sequence such as
+    `[[9, 10, 11, 12], [9, 12]]`, which `np.array` cannot represent. Those
+    have to be compared recursively, element by element.
+    """
+    if isinstance(x, dict):
+        return None
+    try:
+        x = np.asarray(x)
+    except ValueError:
+        # Jagged input, e.g. `np.array([[1, 2], [3]])`.
+        return None
+    if x.dtype.kind == "O":
+        return None
+    if x.dtype.kind == "S":
+        # Compare all strings as `str`, never as `bytes`. Bytes that are not
+        # valid UTF-8 still have to survive the round trip and compare equal.
+        flat = [
+            e.decode("utf-8", errors="surrogateescape")
+            for e in x.reshape(-1).tolist()
+        ]
+        return np.array(flat, dtype=str).reshape(x.shape)
+    return x
+
+
+def _compare_structures(x1, x2, compare_dense, msg, path):
+    """Recursively compare two structures, one dense leaf at a time.
+
+    `keras.src.testing.TestCase` compares with `np.array(x)`, which raises on
+    dicts and on the jagged output that Keras Hub preprocessing layers produce
+    constantly. This walks both structures instead, and only calls
+    `compare_dense` once it reaches a pair of dense, array-able leaves.
+    """
+    where = f" at {path}" if path else ""
+    detail = f"\n{msg}" if msg else ""
+
+    if (
+        tf is not None
+        and isinstance(x1, (tf.Tensor, tf.RaggedTensor))
+        and isinstance(x2, (tf.Tensor, tf.RaggedTensor))
+    ):
+        is_ragged_1 = isinstance(x1, tf.RaggedTensor)
+        is_ragged_2 = isinstance(x2, tf.RaggedTensor)
+        if is_ragged_1 != is_ragged_2:
+            raise AssertionError(
+                f"Structures differ{where}: ragged vs dense.{detail}"
+            )
+        if is_ragged_1 and x1.ragged_rank != x2.ragged_rank:
+            raise AssertionError(
+                f"ragged_rank differs{where}: {x1.ragged_rank} vs "
+                f"{x2.ragged_rank}.{detail}"
+            )
+
+    x1 = convert_to_comparible_type(x1)
+    x2 = convert_to_comparible_type(x2)
+
+    if x1 is None or x2 is None:
+        if x1 is not None or x2 is not None:
+            raise AssertionError(
+                f"Structures differ{where}: {x1} vs {x2}.{detail}"
+            )
+        return
+
+    if hasattr(x1, "_asdict"):
+        x1 = x1._asdict()
+    if hasattr(x2, "_asdict"):
+        x2 = x2._asdict()
+
+    if isinstance(x1, collections.abc.Mapping) or isinstance(
+        x2, collections.abc.Mapping
+    ):
+        if not isinstance(x1, collections.abc.Mapping) or not isinstance(
+            x2, collections.abc.Mapping
+        ):
+            raise AssertionError(
+                f"Structures differ{where}: {type(x1)} vs {type(x2)}.{detail}"
+            )
+        if x1.keys() != x2.keys():
+            raise AssertionError(
+                f"Dict keys differ{where}: {list(x1.keys())} vs "
+                f"{list(x2.keys())}.{detail}"
+            )
+        for key in x1:
+            _compare_structures(
+                x1[key], x2[key], compare_dense, msg, f"{path}[{key!r}]"
+            )
+        return
+    dense1, dense2 = _as_dense_array(x1), _as_dense_array(x2)
+    if dense1 is not None and dense2 is not None:
+        compare_dense(dense1, dense2, f"{msg or ''}{where}")
+        return
+
+    # At least one side is jagged or a leaf.
+    def is_leaf(x):
+        if isinstance(x, (str, bytes)):
+            return True
+        try:
+            if np.ndim(x) == 0:
+                return True
+        except ValueError:
+            pass
+        if not hasattr(x, "__len__"):
+            return True
+        return False
+
+    if is_leaf(x1) or is_leaf(x2):
+        try:
+            is_equal = bool(x1 == x2)
+        except (ValueError, TypeError):
+            is_equal = False
+        if not is_equal:
+            raise AssertionError(f"Values differ{where}: {x1} vs {x2}.{detail}")
+        return
+
+    if len(x1) != len(x2):
+        raise AssertionError(
+            f"Lengths differ{where}: {len(x1)} vs {len(x2)}.{detail}"
+        )
+    for i, (e1, e2) in enumerate(zip(x1, x2)):
+        _compare_structures(e1, e2, compare_dense, msg, f"{path}[{i}]")
+
+
+def _dense_allclose_fn(atol, rtol):
+    def compare(x1, x2, msg):
+        if x1.shape != x2.shape:
+            raise AssertionError(
+                f"Shapes differ: {x1.shape} vs {x2.shape}.\n{msg or ''}"
+            )
+        if atol is None and rtol is None:
+            np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
+        elif x1.dtype.kind == "U" or x2.dtype.kind == "U":
+            # Strings have no tolerance; compare them exactly.
+            np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
+        else:
+            np.testing.assert_allclose(
+                x1, x2, atol=atol, rtol=rtol, err_msg=msg or ""
+            )
+
+    return compare
+
+
 def _to_grain_leaf(x):
     """Convert a single data leaf to a Grain friendly Python/NumPy object."""
-    if isinstance(x, tf.RaggedTensor):
+    if tf is not None and isinstance(x, tf.RaggedTensor):
         x = x.to_list()
-    elif isinstance(x, tf.Tensor):
+    elif tf is not None and isinstance(x, tf.Tensor):
         x = x.numpy()
     elif not isinstance(x, (list, np.ndarray)) and ops.is_tensor(x):
         x = ops.convert_to_numpy(x)
@@ -144,19 +294,43 @@ def assert_grain_safe_types(x):
     tree.map_structure(check, x)
 
 
-class TestCase(tf.test.TestCase, parameterized.TestCase):
+class TestCase(KerasTestCase):
     """Base test case class for KerasHub."""
 
+    def setUp(self):
+        super().setUp()
+        try:
+            keras.utils.set_random_seed(87654321)
+        except AttributeError:
+            # A partly uninstalled TensorFlow makes Keras' `tf.available`
+            # true, so `set_random_seed` raises on `tf.random`.
+            #
+            # `tensor_utils.tf` is None in exactly that state, so anything
+            # else is a real `AttributeError` and must not be swallowed --
+            # the suite would otherwise run silently unseeded.
+            #
+            # This repairs `setUp` only. Other `tf.available` call sites in
+            # Keras Core still fail in that environment, notably
+            # `serialization_lib`, which `run_serialization_test` reaches.
+            # Tracked upstream as keras-team/keras#23709.
+            if tf is not None:
+                raise
+            random.seed(87654321)
+            np.random.seed(87654321)
+            if keras.config.backend() == "torch":
+                import torch
+
+                torch.manual_seed(87654321)
+
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
-        # This metric dict hack is only needed for tf.keras, and can be
-        # removed after we fully migrate to keras-core/Keras 3.
         if x1.__class__.__name__ == "_MetricDict":
             x1 = dict(x1)
         if x2.__class__.__name__ == "_MetricDict":
             x2 = dict(x2)
-        x1 = tree.map_structure(convert_to_comparible_type, x1)
-        x2 = tree.map_structure(convert_to_comparible_type, x2)
-        super().assertAllClose(x1, x2, atol=atol, rtol=rtol, msg=msg)
+        _compare_structures(x1, x2, _dense_allclose_fn(atol, rtol), msg, "")
+
+    def assertDictEqual(self, x1, x2, msg=None):
+        _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
 
     def assertEqual(self, x1, x2, msg=None):
         x1 = tree.map_structure(convert_to_comparible_type, x1)
@@ -164,9 +338,46 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         super().assertEqual(x1, x2, msg=msg)
 
     def assertAllEqual(self, x1, x2, msg=None):
-        x1 = tree.map_structure(convert_to_comparible_type, x1)
-        x2 = tree.map_structure(convert_to_comparible_type, x2)
-        super().assertAllEqual(x1, x2, msg=msg)
+        _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
+
+    def assertNotAllEqual(self, x1, x2, msg=None):
+        try:
+            self.assertAllEqual(x1, x2)
+        except AssertionError:
+            return
+        raise AssertionError(
+            f"The two values are equal at all elements.\n{msg or ''}"
+            f"\nValues: {x1}"
+        )
+
+    def assertAlmostEqual(self, x1, x2, *args, **kwargs):
+        # `tf.test.TestCase` inherited `unittest`'s signature, which takes
+        # `places=` and `delta=`. Keras replaces both with `decimal=`, so go
+        # straight to `unittest` and keep the existing call sites working.
+        return unittest.TestCase.assertAlmostEqual(
+            self, x1, x2, *args, **kwargs
+        )
+
+    def assertAllInRange(self, x, lower_bound, upper_bound, msg=None):
+        x = tree.map_structure(convert_to_comparible_type, x)
+        x = _as_dense_array(x)
+        self.assertIsNotNone(
+            x, "`assertAllInRange` requires dense, numeric input."
+        )
+        if not (np.all(x >= lower_bound) and np.all(x <= upper_bound)):
+            self.fail(
+                msg
+                or f"Values are not all in [{lower_bound}, {upper_bound}]. "
+                f"Range: [{np.min(x)}, {np.max(x)}]"
+            )
+
+    def get_temp_dir(self):
+        if getattr(self, "_keras_hub_temp_dir", None) is None:
+            self._keras_hub_temp_dir = tempfile.mkdtemp()
+            self.addCleanup(
+                shutil.rmtree, self._keras_hub_temp_dir, ignore_errors=True
+            )
+        return self._keras_hub_temp_dir
 
     def assertDTypeEqual(self, x, expected_dtype, msg=None):
         input_dtype = keras.backend.standardize_dtype(x.dtype)
@@ -311,8 +522,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(layer)
 
-        ds = tf.data.Dataset.from_tensor_slices(input_data)
-
         # Run with direct call.
         if isinstance(input_data, tuple):
             # Mimic tf.data unpacking behavior for preprocessing layers.
@@ -327,13 +536,16 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             detokenize_output = layer.detokenize(output)
             self.assertAllEqual(detokenize_output, expected_detokenize_output)
 
-        # Run with an unbatched dataset.
-        output_ds = ds.map(layer).ragged_batch(1_000)
-        self.assertAllClose(output, output_ds.get_single_element())
+        if tf is not None:
+            ds = tf.data.Dataset.from_tensor_slices(input_data)
 
-        # Run with a batched dataset.
-        output_ds = ds.batch(1_000).map(layer)
-        self.assertAllClose(output, output_ds.get_single_element())
+            # Run with an unbatched dataset.
+            output_ds = ds.map(layer).ragged_batch(1_000)
+            self.assertAllClose(output, output_ds.get_single_element())
+
+            # Run with a batched dataset.
+            output_ds = ds.batch(1_000).map(layer)
+            self.assertAllClose(output, output_ds.get_single_element())
 
         # Check Grain parity with the direct call and the tf.data path.
         self.run_grain_preprocessing_test(layer, input_data, output)
@@ -1090,11 +1302,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Check compiled predict function.
         backbone.predict(input_data)
-        # Convert to numpy first, torch GPU tensor -> tf.data will error.
-        numpy_data = tree.map_structure(ops.convert_to_numpy, input_data)
-        # Create a dataset.
-        input_dataset = tf.data.Dataset.from_tensor_slices(numpy_data).batch(2)
-        backbone.predict(input_dataset)
+        if tf is not None:
+            # Convert to numpy first, torch GPU tensor -> tf.data will error.
+            numpy_data = tree.map_structure(ops.convert_to_numpy, input_data)
+            # Create a dataset.
+            input_dataset = tf.data.Dataset.from_tensor_slices(
+                numpy_data
+            ).batch(2)
+            backbone.predict(input_dataset)
 
         # Check name maps to classname.
         name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
@@ -1252,8 +1467,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
+        # `tf.data` coverage is additive; the direct calls below run either way.
+        ds = None
+        if tf is not None:
+            ds = tf.data.Dataset.from_tensor_slices(train_data).batch(
+                batch_size
+            )
 
         # Test: the tree struct output by the
         # preprocessor must match what model expects.
@@ -1280,16 +1500,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
-        # With a dataset.
-        task.fit(ds)
-        # With split preprocessing.
-        task.preprocessor = None
-        task.fit(ds.map(preprocessor))
-        task.preprocessor = preprocessor
+        if ds is not None:
+            # With a dataset.
+            task.fit(ds)
+            # With split preprocessing.
+            task.preprocessor = None
+            task.fit(ds.map(preprocessor))
+            task.preprocessor = preprocessor
         # Turn off default compilation, should error during `fit()`.
         task = cls(**init_kwargs, compile=False)
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
-            task.fit(ds)
+            task.fit(x, y, sample_weight=sw)
 
     def run_preset_test(
         self,
