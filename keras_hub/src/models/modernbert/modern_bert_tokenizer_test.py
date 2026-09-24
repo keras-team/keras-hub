@@ -78,11 +78,53 @@ class ModernBertTokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        with self.assertRaises(ValueError):
+        # A `dict` vocabulary that is simply missing `[MASK]`. A `list`
+        # vocabulary would trip `BytePairTokenizer`'s type check first and
+        # never reach `_update_special_token_ids`, so the error raised would
+        # not be the one this test is named for.
+        vocabulary = {
+            token: index
+            for token, index in self.vocab.items()
+            if token != "[MASK]"
+        }
+
+        with self.assertRaisesRegex(ValueError, r"\[MASK\]"):
             ModernBertTokenizer(
-                vocabulary=["a", "b", "c"],
-                merges=[],
+                vocabulary=vocabulary,
+                merges=self.merges,
             )
+
+    def test_mask_token_absorbs_preceding_whitespace(self):
+        """HF marks `[MASK]` as `AddedToken(..., lstrip=True)`.
+
+        Whitespace immediately before the mask is part of the token, so it
+        must not survive as a separate `Ġ` id. Runs on CPU with a toy
+        vocabulary so the guard does not depend on network access, unlike
+        `test_tokenizer_matches_hf_autotokenizer`.
+        """
+        tokenizer = ModernBertTokenizer(**self.init_kwargs)
+
+        with_space = [int(i) for i in tokenizer(["airplane [MASK]"])[0]]
+        without_space = [int(i) for i in tokenizer(["airplane[MASK]"])[0]]
+
+        self.assertAllEqual(with_space, without_space)
+        self.assertIn(tokenizer.mask_token_id, with_space)
+
+        # Multiple spaces and a tab are all absorbed.
+        for text in ("airplane  [MASK]", "airplane\t[MASK]"):
+            self.assertAllEqual(
+                [int(i) for i in tokenizer([text])[0]],
+                without_space,
+            )
+
+    def test_mask_token_lstrip_leaves_other_tokens_alone(self):
+        """Only `[MASK]` is `lstrip=True`; `[CLS]` and `[SEP]` are not."""
+        tokenizer = ModernBertTokenizer(**self.init_kwargs)
+
+        with_space = [int(i) for i in tokenizer(["airplane [SEP]"])[0]]
+        without_space = [int(i) for i in tokenizer(["airplane[SEP]"])[0]]
+
+        self.assertNotEqual(with_space, without_space)
 
     def test_special_token_ids(self):
         tokenizer = ModernBertTokenizer(**self.init_kwargs)
@@ -107,63 +149,118 @@ class ModernBertTokenizerTest(TestCase):
 
     @pytest.mark.extra_large
     def test_tokenizer_matches_hf_autotokenizer(self):
-        """End-to-end parity check against HF's AutoTokenizer.
+        """Body-token parity against HF's AutoTokenizer.
 
-        Verifies ModernBertTokenizer produces identical ids to HF's
-        released tokenizer on the same strings, including the [CLS]/[SEP]
-        boundary ids , the numerical-verification path in
-        convert_modern_bert_checkpoints.py never exercises this tokenizer
-        class directly (it tokenizes with AutoTokenizer, and the
-        converter test only feeds random ids), so this is the only check
-        that would catch a special-token mismatch like this one.
+        `ModernBertTokenizer` deliberately does not add `[CLS]`/`[SEP]` --
+        in KerasHub that is `MultiSegmentPacker`'s job, inside the
+        preprocessor. So this compares the body ids and asserts the special
+        token ids resolve identically; the full packed sequence is covered
+        by `test_preprocessor_matches_hf_autotokenizer` below.
+
+        Neither `convert_modern_bert_checkpoints.py` (which tokenizes with
+        AutoTokenizer) nor the converter backbone test (which feeds random
+        ids) exercises this class, so these two tests are the only checks
+        that would catch a tokenization mismatch.
         """
         from transformers import AutoTokenizer
 
         hf_tokenizer = AutoTokenizer.from_pretrained(
             "answerdotai/ModernBERT-base"
         )
-        keras_tokenizer = ModernBertTokenizer.from_preset("modernbert_base_en")
+        keras_tokenizer = ModernBertTokenizer.from_preset(
+            "hf://answerdotai/ModernBERT-base"
+        )
+
+        self.assertEqual(
+            keras_tokenizer.cls_token_id,
+            hf_tokenizer.cls_token_id,
+        )
+        self.assertEqual(
+            keras_tokenizer.sep_token_id,
+            hf_tokenizer.sep_token_id,
+        )
+        self.assertEqual(
+            keras_tokenizer.pad_token_id,
+            hf_tokenizer.pad_token_id,
+        )
+        self.assertEqual(
+            keras_tokenizer.mask_token_id,
+            hf_tokenizer.mask_token_id,
+        )
 
         test_strings = [
             "The quick brown fox jumps over the lazy dog.",
             "ModernBERT uses local-global alternating attention.",
             "",
+            # `[MASK]` is the only added token with `lstrip=True`, so these
+            # cover the case the rest of the strings miss entirely.
+            "The capital of France is [MASK].",
+            "[MASK] is the capital of France.",
+            "Two masks: [MASK] and [MASK].",
         ]
 
         for text in test_strings:
             hf_ids = hf_tokenizer(text)["input_ids"]
             keras_ids = [int(i) for i in keras_tokenizer([text])[0]]
 
-            # keras_tokenizer does not add [CLS]/[SEP] itself (that's the
-            # preprocessor's job); compare the raw BPE ids, then check the
-            # special ids separately.
-            self.assertEqual(
-                keras_tokenizer.cls_token_id,
-                hf_tokenizer.cls_token_id,
-            )
-            self.assertEqual(
-                keras_tokenizer.sep_token_id,
-                hf_tokenizer.sep_token_id,
-            )
-            self.assertEqual(
-                keras_tokenizer.pad_token_id,
-                hf_tokenizer.pad_token_id,
-            )
-            self.assertEqual(
-                keras_tokenizer.mask_token_id,
-                hf_tokenizer.mask_token_id,
+            # Strip by position rather than by value, so a boundary id that
+            # legitimately appears inside the body is not discarded too.
+            self.assertEqual(hf_ids[0], hf_tokenizer.cls_token_id)
+            self.assertEqual(hf_ids[-1], hf_tokenizer.sep_token_id)
+
+            self.assertAllEqual(
+                keras_ids,
+                hf_ids[1:-1],
+                msg=f"Body tokenization diverged for {text!r}",
             )
 
-            hf_body_ids = [
-                i
-                for i in hf_ids
-                if i
-                not in (
-                    hf_tokenizer.cls_token_id,
-                    hf_tokenizer.sep_token_id,
-                )
-            ]
-            self.assertAllEqual(keras_ids, hf_body_ids)
+    @pytest.mark.extra_large
+    def test_preprocessor_matches_hf_autotokenizer(self):
+        """Full packed-sequence parity, including the `[CLS]`/`[SEP]` ids.
+
+        This is the comparison against HF's complete `input_ids`. It belongs
+        on the preprocessor because that is where KerasHub adds the boundary
+        tokens.
+        """
+        from transformers import AutoTokenizer
+
+        from keras_hub.src.models.modernbert.modern_bert_text_classifier_preprocessor import (  # noqa: E501
+            ModernBertTextClassifierPreprocessor,
+        )
+
+        sequence_length = 32
+
+        hf_tokenizer = AutoTokenizer.from_pretrained(
+            "answerdotai/ModernBERT-base"
+        )
+        preprocessor = ModernBertTextClassifierPreprocessor.from_preset(
+            "hf://answerdotai/ModernBERT-base",
+            sequence_length=sequence_length,
+        )
+        pad_token_id = preprocessor.tokenizer.pad_token_id
+
+        test_strings = [
+            "The quick brown fox jumps over the lazy dog.",
+            "The capital of France is [MASK].",
+            "[MASK] is the capital of France.",
+        ]
+
+        for text in test_strings:
+            hf_ids = hf_tokenizer(text)["input_ids"]
+
+            x = preprocessor([text])
+            keras_ids = [int(i) for i in x["token_ids"][0]]
+            unpadded_length = int(sum(int(m) for m in x["padding_mask"][0]))
+
+            self.assertAllEqual(
+                keras_ids[:unpadded_length],
+                hf_ids,
+                msg=f"Packed sequence diverged for {text!r}",
+            )
+            self.assertAllEqual(
+                keras_ids[unpadded_length:],
+                [pad_token_id] * (sequence_length - unpadded_length),
+            )
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):

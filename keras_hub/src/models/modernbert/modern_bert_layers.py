@@ -3,7 +3,6 @@ from keras import layers
 from keras import ops
 
 
-@keras.utils.register_keras_serializable(package="keras_hub")
 class ModernBertMLP(layers.Layer):
     """ModernBERT MLP block using Gated Linear Units (GeGLU).
 
@@ -46,21 +45,21 @@ class ModernBertMLP(layers.Layer):
         self.wi_0 = layers.Dense(
             intermediate_dim,
             use_bias=False,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="wi_0",
         )
 
         self.wi_1 = layers.Dense(
             intermediate_dim,
             use_bias=False,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="wi_1",
         )
 
         self.wo = layers.Dense(
             hidden_dim,
             use_bias=False,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="wo",
         )
 
@@ -100,7 +99,6 @@ class ModernBertMLP(layers.Layer):
         return config
 
 
-@keras.utils.register_keras_serializable(package="keras_hub")
 class ModernBertAttention(layers.Layer):
     """ModernBERT attention layer.
     This layer implements multi-head self-attention. It optionally supports
@@ -116,7 +114,6 @@ class ModernBertAttention(layers.Layer):
         local_attention_window: int. Window limit for local
         sliding-window attention.
             If `None`, global attention is executed. Defaults to `None`.
-        dropout: float. Attention dropout score probability. Defaults to `0.0`.
         dtype: string or `keras.DTypePolicy`. The precision policy used for the
             layer's computations and weights.
 
@@ -140,7 +137,6 @@ class ModernBertAttention(layers.Layer):
         num_heads,
         rotary_embedding=None,
         local_attention_window=None,
-        dropout=0.0,
         dtype=None,
         **kwargs,
     ):
@@ -157,7 +153,6 @@ class ModernBertAttention(layers.Layer):
         self.head_dim = hidden_dim // num_heads
         self.rotary_embedding = rotary_embedding
         self.local_attention_window = local_attention_window
-        self.dropout = dropout
 
         self.qkv = layers.Dense(
             3 * hidden_dim,
@@ -270,18 +265,6 @@ class ModernBertAttention(layers.Layer):
             q = ops.cast(self.rotary_embedding(q), self.compute_dtype)
             k = ops.cast(self.rotary_embedding(k), self.compute_dtype)
 
-        # `ops.dot_product_attention` doesn't expose an attention-dropout
-        # argument (mirroring `jax.nn.dot_product_attention`), so attention
-        # weight dropout isn't supported through this path. keras_hub's
-        # Gemma attention hits the same limitation and handles it the same
-        # way: fail loudly at train time instead of silently no-op'ing the
-        # dropout.
-        if training and self.dropout > 0.0:
-            raise ValueError(
-                "`ops.dot_product_attention` does not support attention "
-                "dropout. Please set `dropout` to 0.0."
-            )
-
         # Build a boolean attention mask broadcastable to (B, N, T, S),
         # where `True` marks positions that are allowed to attend.
         mask = None
@@ -336,7 +319,6 @@ class ModernBertAttention(layers.Layer):
                 "hidden_dim": self.hidden_dim,
                 "num_heads": self.num_heads,
                 "local_attention_window": (self.local_attention_window),
-                "dropout": self.dropout,
                 "rotary_embedding": (
                     keras.saving.serialize_keras_object(self.rotary_embedding)
                     if self.rotary_embedding is not None
@@ -382,8 +364,6 @@ class ModernBertEncoderLayer(layers.Layer):
         sliding-window attention. A token can attend to tokens within
         this many positions on either side.
             Defaults to `None`.
-        dropout: float. Attention map and feature output dropout probability.
-            Defaults to `0.0`.
         layer_norm_epsilon: float. Small value applied inside the
         `LayerNormalization` layers (bias-free, `center=False`) to avoid
         zero division.
@@ -414,7 +394,6 @@ class ModernBertEncoderLayer(layers.Layer):
         layer_idx,
         rotary_embedding=None,
         local_attention_window=None,
-        dropout=0.0,
         layer_norm_epsilon=1e-5,
         dtype=None,
         **kwargs,
@@ -427,21 +406,20 @@ class ModernBertEncoderLayer(layers.Layer):
         self.layer_idx = layer_idx
         self.rotary_embedding = rotary_embedding
         self.local_attention_window = local_attention_window
-        self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
 
         # ModernBERT layer 0 has no attention LayerNorm.
         if layer_idx == 0:
             self.attn_norm = layers.Identity(
                 name="attention_norm",
-                dtype=dtype,
+                dtype=self.dtype_policy,
             )
         else:
             self.attn_norm = layers.LayerNormalization(
                 epsilon=layer_norm_epsilon,
                 center=False,
                 scale=True,
-                dtype=dtype,
+                dtype=self.dtype_policy,
                 name="attention_norm",
             )
 
@@ -450,8 +428,7 @@ class ModernBertEncoderLayer(layers.Layer):
             num_heads=num_heads,
             rotary_embedding=rotary_embedding,
             local_attention_window=local_attention_window,
-            dropout=dropout,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="attention",
         )
 
@@ -459,25 +436,15 @@ class ModernBertEncoderLayer(layers.Layer):
             epsilon=layer_norm_epsilon,
             center=False,
             scale=True,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="mlp_norm",
         )
 
         self.mlp = ModernBertMLP(
             hidden_dim=hidden_dim,
             intermediate_dim=intermediate_dim,
-            dtype=dtype,
+            dtype=self.dtype_policy,
             name="mlp",
-        )
-
-        self.attn_dropout = layers.Dropout(
-            dropout,
-            dtype=dtype,
-        )
-
-        self.mlp_dropout = layers.Dropout(
-            dropout,
-            dtype=dtype,
         )
 
     def build(self, input_shape):
@@ -511,10 +478,6 @@ class ModernBertEncoderLayer(layers.Layer):
             padding_mask=padding_mask,
             training=training,
         )
-        x = self.attn_dropout(
-            x,
-            training=training,
-        )
 
         if residual.dtype != x.dtype:
             residual = ops.cast(residual, x.dtype)
@@ -526,10 +489,6 @@ class ModernBertEncoderLayer(layers.Layer):
 
         x = self.mlp_norm(x)
         x = self.mlp(x)
-        x = self.mlp_dropout(
-            x,
-            training=training,
-        )
 
         if residual.dtype != x.dtype:
             residual = ops.cast(residual, x.dtype)
@@ -548,7 +507,6 @@ class ModernBertEncoderLayer(layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
                 "layer_idx": self.layer_idx,
-                "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "local_attention_window": self.local_attention_window,
                 "rotary_embedding": (

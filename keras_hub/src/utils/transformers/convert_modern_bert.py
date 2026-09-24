@@ -1,4 +1,5 @@
 import numpy as np
+from keras import layers
 
 from keras_hub.src.models.modernbert.modern_bert_backbone import (
     ModernBertBackbone,
@@ -28,7 +29,6 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": transformers_config["intermediate_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_heads": transformers_config["num_attention_heads"],
-        "dropout": transformers_config["attention_dropout"],
         "local_attention_window": transformers_config["local_attention"],
         "global_attn_every_n_layers": transformers_config[
             "global_attn_every_n_layers"
@@ -46,8 +46,18 @@ def _split_wi(hf_tensor, keras_shape, index):
     """
     del keras_shape
 
-    assert hf_tensor.ndim == 2
-    assert hf_tensor.shape[0] % 2 == 0
+    # Shape checks on checkpoint data, so these must survive `python -O`.
+    if hf_tensor.ndim != 2:
+        raise ValueError(
+            "Expected the GeGLU input projection to be 2D, received shape "
+            f"{hf_tensor.shape}."
+        )
+    if hf_tensor.shape[0] % 2 != 0:
+        raise ValueError(
+            "Expected the GeGLU input projection's first dimension to be "
+            "even so it can be split into gate and value halves, received "
+            f"shape {hf_tensor.shape}."
+        )
 
     gate, value = np.split(hf_tensor, 2, axis=0)
 
@@ -63,12 +73,33 @@ def _split_bias(hf_tensor, keras_shape, index):
 
 
 def _get_norm_variable(norm_layer):
-    """Extract the scale variable from a normalization layer."""
-    if norm_layer is None:
+    """Extract the scale variable from a normalization layer.
+
+    Raises rather than returning `None` on failure. A silently skipped norm
+    produces a model that loads without error and computes wrong numbers,
+    which is a far worse failure than an explicit conversion error.
+
+    The one legitimate no-op is layer 0's `attn_norm`, which is
+    `keras.layers.Identity` because ModernBERT has no attention norm on the
+    first layer (HF uses `nn.Identity` and ships no
+    `layers.0.attn_norm.weight`). That case returns `None`.
+    """
+    if isinstance(norm_layer, layers.Identity):
         return None
-    if hasattr(norm_layer, "gamma") and norm_layer.gamma is not None:
-        return norm_layer.gamma
-    return None
+    if norm_layer is None:
+        raise ValueError(
+            "Expected a normalization layer to port weights into, received "
+            "`None`."
+        )
+    gamma = getattr(norm_layer, "gamma", None)
+    if gamma is None:
+        raise ValueError(
+            f"Normalization layer `{norm_layer.name}` has no `gamma` scale "
+            "variable to port weights into. ModernBERT's norms are "
+            "configured with `scale=True`, so this indicates the backbone "
+            "was built with an unexpected configuration."
+        )
+    return gamma
 
 
 def convert_weights(backbone, loader, _):
@@ -79,17 +110,12 @@ def convert_weights(backbone, loader, _):
         hf_weight_key="embeddings.tok_embeddings.weight",
     )
 
-    # Embedding Norm
-    if (
-        hasattr(backbone, "embedding_norm")
-        and backbone.embedding_norm is not None
-    ):
-        embedding_norm_var = _get_norm_variable(backbone.embedding_norm)
-        if embedding_norm_var is not None:
-            loader.port_weight(
-                keras_variable=embedding_norm_var,
-                hf_weight_key="embeddings.norm.weight",
-            )
+    # Embedding Norm. Always present on the backbone, so a failure to resolve
+    # the scale variable raises rather than silently skipping.
+    loader.port_weight(
+        keras_variable=_get_norm_variable(backbone.embedding_norm),
+        hf_weight_key="embeddings.norm.weight",
+    )
 
     # Transformer Encoder Layers
     for index in range(backbone.num_layers):
@@ -121,21 +147,26 @@ def convert_weights(backbone, loader, _):
                 hf_weight_key=f"layers.{index}.attn.Wo.bias",
             )
 
-        # Attention Norm
+        # Attention Norm. Layer 0 is `Identity` and HF ships no
+        # `layers.0.attn_norm.weight`, so there is nothing to port there.
         attn_norm_var = _get_norm_variable(keras_layer.attn_norm)
-        if attn_norm_var is not None:
+        if attn_norm_var is None:
+            if index != 0:
+                raise ValueError(
+                    f"Layer {index} has an `Identity` attention norm. Only "
+                    "layer 0 is expected to omit its attention norm."
+                )
+        else:
             loader.port_weight(
                 keras_variable=attn_norm_var,
                 hf_weight_key=f"layers.{index}.attn_norm.weight",
             )
 
-        # MLP Norm
-        mlp_norm_var = _get_norm_variable(keras_layer.mlp_norm)
-        if mlp_norm_var is not None:
-            loader.port_weight(
-                keras_variable=mlp_norm_var,
-                hf_weight_key=f"layers.{index}.mlp_norm.weight",
-            )
+        # MLP Norm. Present on every layer.
+        loader.port_weight(
+            keras_variable=_get_norm_variable(keras_layer.mlp_norm),
+            hf_weight_key=f"layers.{index}.mlp_norm.weight",
+        )
 
         # MLP Wi (GeGLU gate/input projection)
         loader.port_weight(
@@ -177,14 +208,11 @@ def convert_weights(backbone, loader, _):
                 hf_weight_key=f"layers.{index}.mlp.Wo.bias",
             )
 
-    # Final LayerNorm
-    if hasattr(backbone, "final_norm") and backbone.final_norm is not None:
-        final_norm_var = _get_norm_variable(backbone.final_norm)
-        if final_norm_var is not None:
-            loader.port_weight(
-                keras_variable=final_norm_var,
-                hf_weight_key="final_norm.weight",
-            )
+    # Final LayerNorm. Always present on the backbone.
+    loader.port_weight(
+        keras_variable=_get_norm_variable(backbone.final_norm),
+        hf_weight_key="final_norm.weight",
+    )
 
 
 def convert_head(task, loader, transformers_config):
@@ -222,18 +250,18 @@ def convert_tokenizer(cls, preset, **kwargs):
     vocab = dict(tokenizer_model["vocab"])
     merges = tokenizer_model["merges"]
 
-    special_tokens = set()
+    # Ordered rather than a `set`, so `unsplittable_tokens` (and therefore
+    # the serialized config) is stable across runs under hash randomization.
+    special_tokens = []
     for token in tokenizer_json.get("added_tokens", []):
         vocab[token["content"]] = token["id"]
-        special_tokens.add(token["content"])
+        if token["content"] not in special_tokens:
+            special_tokens.append(token["content"])
 
-    return cls(
-        vocabulary=vocab,
-        merges=merges,
-        unsplittable_tokens=list(special_tokens),
-        sequence_length=kwargs.pop("sequence_length", None),
-        add_prefix_space=tokenizer_json.get("pre_tokenizer", {}).get(
-            "add_prefix_space",
-            False,
-        ),
+    kwargs.setdefault("unsplittable_tokens", special_tokens)
+    kwargs.setdefault(
+        "add_prefix_space",
+        tokenizer_json.get("pre_tokenizer", {}).get("add_prefix_space", False),
     )
+
+    return cls(vocabulary=vocab, merges=merges, **kwargs)

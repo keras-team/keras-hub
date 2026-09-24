@@ -12,9 +12,10 @@ class ModernBertMaskedLMPreprocessorTest(TestCase):
 
     def setUp(self):
         self.vocab = [
-            "<|padding|>",
+            "[PAD]",
             "[MASK]",
-            "<|endoftext|>",
+            "[CLS]",
+            "[SEP]",
             "t",
             "h",
             "e",

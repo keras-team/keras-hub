@@ -80,7 +80,6 @@ class ModernBertTextClassifierTest(TestCase):
             num_heads=2,
             local_attention_window=8,
             global_attn_every_n_layers=2,
-            dropout=0.0,
             rotary_max_wavelength=10000,
             layer_norm_epsilon=1e-5,
         )

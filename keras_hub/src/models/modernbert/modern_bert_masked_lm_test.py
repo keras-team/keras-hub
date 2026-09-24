@@ -113,13 +113,14 @@ class ModernBertMaskedLMTest(TestCase):
             **self.init_kwargs,
         )
 
-    @pytest.mark.large
-    def test_fit(self):
+    def test_masked_lm_basics(self):
         """Validate training, output shape, and serialization."""
         self.run_task_test(
             cls=ModernBertMaskedLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
+            # (batch, mask_selection_length, vocabulary_size)
+            expected_output_shape=(2, 2, 33),
         )
 
     @pytest.mark.large

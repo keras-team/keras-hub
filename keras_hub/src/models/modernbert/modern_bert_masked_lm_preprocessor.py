@@ -30,6 +30,28 @@ class ModernBertMaskedLMPreprocessor(MaskedLMPreprocessor):
             with a randomly selected token.
         **kwargs: Additional keyword arguments passed to
             `MaskedLMPreprocessor`.
+
+    Examples:
+    ```python
+    import keras_hub
+
+    preprocessor = keras_hub.models.ModernBertMaskedLMPreprocessor.from_preset(
+        "modernbert_base_en"
+    )
+
+    # Tokenize and mask a single sentence.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and mask a batch of sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Use in a `tf.data.Dataset`.
+    import tensorflow as tf
+
+    features = ["The quick brown fox jumped.", "Call me Ishmael."]
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    ```
     """
 
     backbone_cls = ModernBertBackbone
@@ -50,7 +72,8 @@ class ModernBertMaskedLMPreprocessor(MaskedLMPreprocessor):
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
 
         # ModernBERT does not use segment IDs.
-        del x["segment_ids"]
+        if "segment_ids" in x:
+            del x["segment_ids"]
 
         return keras.utils.pack_x_y_sample_weight(
             x,

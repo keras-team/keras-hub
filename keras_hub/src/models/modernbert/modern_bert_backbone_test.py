@@ -20,7 +20,6 @@ class ModernBertBackboneTest(TestCase):
             "num_heads": 4,
             "local_attention_window": 128,
             "global_attn_every_n_layers": 2,
-            "dropout": 0.0,
         }
 
         self.input_data = {
@@ -80,7 +79,7 @@ class ModernBertBackboneTest(TestCase):
             model,
         )
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
             cls=ModernBertBackbone,
@@ -88,7 +87,7 @@ class ModernBertBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_mixed_precision(self):
         self.run_precision_test(
             cls=ModernBertBackbone,

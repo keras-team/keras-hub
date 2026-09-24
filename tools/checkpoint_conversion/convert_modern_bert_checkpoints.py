@@ -8,31 +8,21 @@ Weight conversion is intentionally not implemented here. Hugging Face weight
 porting is handled by `convert_modern_bert.py` through the standard
 `from_preset("hf://...")` loading path.
 
-To run:
+To run (from a checkout installed with `pip install -e .`):
 
     python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py \
         --preset modernbert_base_en
 """
 
 import argparse
-import os
-import sys
 
-# This must run before `keras_hub` is imported, otherwise running the
-# script directly (`python tools/checkpoint_conversion/...`) picks up an
-# installed `keras_hub` instead of this checkout.
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+import keras
+import numpy as np
+import torch
+from transformers import AutoModelForMaskedLM
+from transformers import AutoTokenizer
 
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
-
-import keras  # noqa: E402
-import numpy as np  # noqa: E402
-import torch  # noqa: E402
-from transformers import AutoModelForMaskedLM  # noqa: E402
-from transformers import AutoTokenizer  # noqa: E402
-
-from keras_hub.src.models.modernbert.modern_bert_masked_lm import (  # noqa: E402
+from keras_hub.src.models.modernbert.modern_bert_masked_lm import (
     ModernBertMaskedLM,
 )
 
@@ -74,8 +64,8 @@ def get_keras_model(preset):
     return keras_lm
 
 
-def tokenize(hf_tokenizer, text):
-    """Tokenize text for both Hugging Face and Keras."""
+def tokenize(hf_tokenizer, text, keras_tokenizer=None):
+    """Tokenize text independently for Hugging Face and KerasHub."""
     hf_inputs = hf_tokenizer(
         text,
         return_tensors="pt",
@@ -83,8 +73,25 @@ def tokenize(hf_tokenizer, text):
 
     hf_inputs.pop("token_type_ids", None)
 
-    input_ids = hf_inputs["input_ids"].cpu().numpy().astype("int32")
-    padding_mask = hf_inputs["attention_mask"].cpu().numpy().astype("int32")
+    hf_input_ids = hf_inputs["input_ids"].cpu().numpy().astype("int32")
+    if keras_tokenizer is not None:
+        keras_body_ids = [int(i) for i in keras_tokenizer([text])[0]]
+        keras_seq = (
+            [int(keras_tokenizer.cls_token_id)]
+            + keras_body_ids
+            + [int(keras_tokenizer.sep_token_id)]
+        )
+        input_ids = np.asarray([keras_seq], dtype="int32")
+        padding_mask = np.ones_like(input_ids, dtype="int32")
+        if not np.array_equal(input_ids, hf_input_ids):
+            raise ValueError(
+                f"Token IDs diverged between ModernBertTokenizer and "
+                f"AutoTokenizer for {text!r}: "
+                f"KerasHub={input_ids.tolist()}, HF={hf_input_ids.tolist()}."
+            )
+    else:
+        input_ids = hf_input_ids
+        padding_mask = hf_inputs["attention_mask"].cpu().numpy().astype("int32")
 
     return hf_inputs, input_ids, padding_mask
 
@@ -461,6 +468,9 @@ def verify_tokenizer(keras_lm, hf_tokenizer):
         "The quick brown fox jumps over the lazy dog.",
         "ModernBERT uses local-global alternating attention.",
         "Numbers like 1969 and punctuation -- all of it.",
+        "The capital of France is [MASK].",
+        "Hello, my name is [MASK] and I live in [MASK].",
+        "[MASK] is the capital of France.",
     ]
 
     for text in texts:
@@ -567,9 +577,15 @@ def verify_padded_batch(keras_lm, hf_model, hf_tokenizer, texts):
 def verify_text(keras_lm, hf_model, hf_tokenizer, text):
     """Run numerical verification for one input string."""
 
+    keras_tokenizer = (
+        keras_lm.preprocessor.tokenizer
+        if keras_lm.preprocessor is not None
+        else None
+    )
     hf_inputs, input_ids, padding_mask = tokenize(
         hf_tokenizer,
         text,
+        keras_tokenizer=keras_tokenizer,
     )
 
     seq_len = int(input_ids.shape[1])

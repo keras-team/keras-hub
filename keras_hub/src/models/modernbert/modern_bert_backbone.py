@@ -32,14 +32,13 @@ class ModernBertBackbone(Backbone):
             Defaults to `128`.
         global_attn_every_n_layers: int. Frequency of global attention layers.
             Defaults to `3`.
-        dropout: float. Dropout probability for the transformer layers.
-            Defaults to `0.0`.
         rotary_max_wavelength: int. Max wavelength for RoPE.
             Defaults to `160000`.
         local_rotary_max_wavelength: int or None. Max wavelength for local
-            RoPE. If `None`, uses `rotary_max_wavelength`.Defaults to `10000`.
-        layer_norm_epsilon: float. Epsilon used by the Layer
-        Normalization layers.Defaults to `1e-5.
+            RoPE. If `None`, uses `rotary_max_wavelength`. Defaults to
+            `10000`.
+        layer_norm_epsilon: float. Epsilon used by the Layer Normalization
+            layers. Defaults to `1e-5`.
         dtype: string or `keras.DTypePolicy`. The dtype of the layers.
             Defaults to `None`.
 
@@ -79,7 +78,6 @@ class ModernBertBackbone(Backbone):
         num_heads=12,
         local_attention_window=128,
         global_attn_every_n_layers=3,
-        dropout=0.0,
         rotary_max_wavelength=160000,
         local_rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
@@ -93,7 +91,6 @@ class ModernBertBackbone(Backbone):
         self.num_heads = num_heads
         self.local_attention_window = local_attention_window
         self.global_attn_every_n_layers = global_attn_every_n_layers
-        self.dropout = dropout
         self.rotary_max_wavelength = rotary_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
 
@@ -164,7 +161,6 @@ class ModernBertBackbone(Backbone):
                 layer_idx=i,
                 rotary_embedding=rotary_embedding,
                 local_attention_window=attn_window,
-                dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
                 dtype=layer_dtype_policy,
                 name=f"transformer_layer_{i}",
@@ -229,7 +225,6 @@ class ModernBertBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "local_attention_window": self.local_attention_window,
                 "global_attn_every_n_layers": self.global_attn_every_n_layers,
-                "dropout": self.dropout,
                 "rotary_max_wavelength": self.rotary_max_wavelength,
                 "local_rotary_max_wavelength": self.local_rotary_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,

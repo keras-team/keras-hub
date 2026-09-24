@@ -33,6 +33,26 @@ class ModernBertTextClassifier(TextClassifier):
             Defaults to the backbone hidden dimension.
         dropout: float. Dropout probability applied to the pooled
             representation and classifier output.
+
+    Examples:
+    ```python
+    import keras_hub
+    import numpy as np
+
+    # Fine-tune from a preset.
+    classifier = keras_hub.models.ModernBertTextClassifier.from_preset(
+        "modernbert_base_en",
+        num_classes=2,
+    )
+    classifier.fit(
+        x=["The quick brown fox jumped.", "Call me Ishmael."],
+        y=np.array([1, 0]),
+        batch_size=2,
+    )
+
+    # Predict on new text.
+    classifier.predict(["What an amazing movie!"])
+    ```
     """
 
     backbone_cls = ModernBertBackbone
