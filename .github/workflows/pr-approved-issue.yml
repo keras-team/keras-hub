@@ -13,6 +13,6 @@ permissions:
 
 jobs:
   approved-issue:
-    uses: keras-team/shared-workflows/.github/workflows/pr-approved-issue.yml@a101136e6efcc48ffe0152218822a305d52448b7
+    uses: keras-team/shared-workflows/.github/workflows/pr-approved-issue.yml@f89ada831b82a2399422326e37b3bf0ea402e146
     with:
-      ref: 'a101136e6efcc48ffe0152218822a305d52448b7'
+      ref: 'f89ada831b82a2399422326e37b3bf0ea402e146'
