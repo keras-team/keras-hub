@@ -30,6 +30,8 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+import tensorflow as tf
+
 
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
