@@ -151,3 +151,39 @@ class LlamaTest(TestCase):
                 )
             if "self_attention/value/lora_kernel_b" in w.path:
                 self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+
+    def test_distribution_with_dora(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, len(devices)),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = LlamaBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+        with distribution.scope():
+            model = LlamaBackbone(**self.init_kwargs)
+            model.enable_dora(rank=4)
+
+        for w in model.weights:
+            if "self_attention/query/dora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "self_attention/query/dora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+            if "self_attention/query/dora_magnitude" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ())
+            if "self_attention/value/dora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "self_attention/value/dora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+            if "self_attention/value/dora_magnitude" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ())
