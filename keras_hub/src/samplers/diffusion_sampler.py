@@ -1,3 +1,5 @@
+from keras import random
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.samplers.sampler import Sampler
 
@@ -17,6 +19,12 @@ class DiffusionSampler(Sampler):
     checks `isinstance(sampler, DiffusionSampler)` and raises a clear error
     if a standard `Sampler` is passed instead.
 
+    Subclasses use `self.seed_generator` for traceable random draws under
+    `jax.jit`.
+
+    Args:
+        seed: int or `None`. Seed for random draws. Defaults to `None`.
+
     Call arguments:
         next: Callable accepting `(canvas, prev_logits, step)` and returning
             logits for the current denoising step.
@@ -25,3 +33,13 @@ class DiffusionSampler(Sampler):
         max_steps: int. Maximum number of denoising steps.
         model: Optional Keras model, used by JAX stateless scopes.
     """
+
+    def __init__(self, seed=None, **kwargs):
+        super().__init__(**kwargs)
+        self.seed = seed
+        self.seed_generator = random.SeedGenerator(seed)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"seed": self.seed})
+        return config

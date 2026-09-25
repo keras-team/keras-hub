@@ -144,6 +144,159 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
     def test_serialization(self):
         self.run_serialization_test(self.layer)
 
+    def test_sliding_window_applies_in_both_modes(self):
+        """Apply the sliding window in both encoder and decoder modes."""
+        sliding_window_size = 6
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_sliding_window_attention=True,
+            sliding_window_size=sliding_window_size,
+            is_global_attention=False,
+        )
+        x = np.random.randn(1, 9, self.hidden_dim).astype("float32")
+
+        for is_encoder in (True, False):
+            mask = layer._compute_attention_mask(
+                x,
+                padding_mask=None,
+                cache=None,
+                cache_update_index=0,
+                is_encoder=is_encoder,
+            )
+            mask_np = ops.convert_to_numpy(mask)
+            # Every query attends to at most `sliding_window_size` keys,
+            # and always to itself — regardless of is_encoder.
+            for q in range(9):
+                row = mask_np[0, q]
+                self.assertTrue(row[q])
+                self.assertLessEqual(int(row.sum()), sliding_window_size)
+
+    def test_sliding_window_applies_to_all_queries(self):
+        """Apply the sliding window to every query in a multi-token block."""
+        sliding_window_size = 6
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_sliding_window_attention=True,
+            sliding_window_size=sliding_window_size,
+            is_global_attention=False,
+        )
+        # 5 positions of prefix (cache_update_index=5) + 4 query positions,
+        # matching _decode_canvas_step's saturated-prefix shape.
+        canvas_length = 4
+        cache_update_index = 5
+        total_length = cache_update_index + canvas_length
+        x = np.random.randn(1, canvas_length, self.hidden_dim).astype("float32")
+        cache = np.zeros(
+            (1, 2, total_length, self.num_key_value_heads, self.head_dim),
+            dtype="float32",
+        )
+        mask = layer._compute_attention_mask(
+            x,
+            padding_mask=None,
+            cache=ops.convert_to_tensor(cache),
+            cache_update_index=cache_update_index,
+            is_encoder=False,
+        )
+        mask_np = ops.convert_to_numpy(mask)
+        for row_index in range(canvas_length):
+            query_position = cache_update_index + row_index
+            row = mask_np[0, row_index]
+            # Attends only to [query_position - window + 1, query_position].
+            expected_start = query_position - sliding_window_size + 1
+            for key_position in range(total_length):
+                expected = expected_start <= key_position <= query_position
+                self.assertEqual(
+                    bool(row[key_position]),
+                    expected,
+                    f"row={row_index} key={key_position}",
+                )
+
+    def test_call_auto_slices_local_cache(self):
+        """Match internal cache slicing with manual cache slicing."""
+        sliding_window_size = 6
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_sliding_window_attention=True,
+            sliding_window_size=sliding_window_size,
+            is_global_attention=False,
+        )
+        canvas_length = 4
+        prompt_length = 3  # < sliding_window_size - 1 = 5.
+        total_length = prompt_length + canvas_length
+        x = ops.convert_to_tensor(
+            np.random.randn(1, canvas_length, self.hidden_dim).astype("float32")
+        )
+        cache = ops.convert_to_tensor(
+            np.random.randn(
+                1, 2, total_length, self.num_key_value_heads, self.head_dim
+            ).astype("float32")
+        )
+        padding_mask = ops.ones((1, total_length), dtype="bool")
+        canvas_mask = ops.ones((1, canvas_length), dtype="bool")
+        layer(x, cache=cache, cache_update_index=0)  # build
+
+        # Auto-sliced: full cache, true prompt_length, layer slices itself.
+        auto_out, _ = layer(
+            x,
+            cache=cache,
+            cache_update_index=prompt_length,
+            canvas_mask=canvas_mask,
+            padding_mask=padding_mask,
+            return_cache=False,
+        )
+
+        # Manually pre-sliced: mirrors the old _decode_canvas_step logic.
+        window_prefix = sliding_window_size - 1
+        prefix_length = min(prompt_length, window_prefix)
+        cache_start = prompt_length - prefix_length
+        local_cache_length = prefix_length + canvas_length
+        manual_cache = ops.slice(
+            cache,
+            (0, 0, cache_start, 0, 0),
+            (1, 2, local_cache_length, self.num_key_value_heads, self.head_dim),
+        )
+        manual_padding_mask = ops.slice(
+            padding_mask, (0, cache_start), (1, local_cache_length)
+        )
+        manual_positions = ops.broadcast_to(
+            ops.expand_dims(
+                ops.arange(
+                    prompt_length,
+                    prompt_length + canvas_length,
+                    dtype="int32",
+                ),
+                axis=0,
+            ),
+            (1, canvas_length),
+        )
+        manual_out, _ = layer(
+            x,
+            cache=manual_cache,
+            cache_update_index=prefix_length,
+            canvas_mask=canvas_mask,
+            padding_mask=manual_padding_mask,
+            positions=manual_positions,
+            return_cache=False,
+        )
+
+        self.assertAllClose(
+            ops.convert_to_numpy(auto_out),
+            ops.convert_to_numpy(manual_out),
+            atol=1e-5,
+        )
+
     def test_vision_bidirectional_mask_applies_only_during_encoder_pass(self):
         layer = DiffusionGemmaTransformerLayer(
             hidden_dim=self.hidden_dim,
@@ -183,7 +336,7 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
         # Decoder pass (is_encoder=False): stays purely causal.
         self.assertFalse(decoder_mask_np[0, 2, 4])
 
-    def test_vision_bidirectional_mask_skipped_for_global_layers(self):
+    def test_vision_bidirectional_mask_applies_to_global_layers(self):
         layer = DiffusionGemmaTransformerLayer(
             hidden_dim=self.hidden_dim,
             intermediate_dim=16,
@@ -206,7 +359,5 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
             vision_mask=vision_mask,
         )
         mask_np = ops.convert_to_numpy(mask)
-        # Global (full-attention) layers stay purely causal even during the
-        # encoder pass — HF applies the vision mask to sliding_attention
-        # layers only.
-        self.assertFalse(mask_np[0, 2, 4])
+        # Global layers also receive the vision-bidirectional mask.
+        self.assertTrue(mask_np[0, 2, 4])

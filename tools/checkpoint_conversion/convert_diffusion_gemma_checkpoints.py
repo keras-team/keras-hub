@@ -24,11 +24,13 @@ from keras import ops
 from PIL import Image
 from transformers import AutoProcessor
 from transformers import DiffusionGemmaForBlockDiffusion
+from transformers import DynamicCache
 
 import keras_hub
 
 GENERATION_SEED = 123
 CANVAS_SEED = 1234
+MAX_GENERATE_TOKENS = 32
 torch.manual_seed(GENERATION_SEED)
 
 device = torch.device("cpu")
@@ -73,6 +75,7 @@ def _precompute_hf_outputs(hf_repo_id):
         hf_repo_id,
         device_map="cpu",
         torch_dtype=torch.float32,
+        attn_implementation="eager",
     )
     hf_model.eval()
     processor = AutoProcessor.from_pretrained(hf_repo_id)
@@ -170,9 +173,72 @@ def _hf_forward(
         proc_kwargs["images"] = raw_image
     hf_inputs = processor(**proc_kwargs)
     hf_inputs = {k: v.cpu() for k, v in hf_inputs.items()}
+
+    # Ensure HF inputs start with BOS to match KerasHub behavior. KH's
+    # preprocessor adds a start token by default; PROMPT_TEXT/PROMPT_IMAGE
+    # carry no literal BOS marker, so without this the two sides compare
+    # different sequences.
+    bos_id = processor.tokenizer.bos_token_id
+    if bos_id is not None and hf_inputs["input_ids"][0, 0].item() != bos_id:
+        bos = torch.full(
+            (hf_inputs["input_ids"].shape[0], 1),
+            bos_id,
+            dtype=hf_inputs["input_ids"].dtype,
+            device=hf_inputs["input_ids"].device,
+        )
+        hf_inputs["input_ids"] = torch.cat([bos, hf_inputs["input_ids"]], dim=1)
+        if "attention_mask" in hf_inputs:
+            hf_inputs["attention_mask"] = torch.ones_like(
+                hf_inputs["input_ids"]
+            )
+
     forward_inputs = dict(hf_inputs)
     if decoder_input_ids is not None:
         forward_inputs["decoder_input_ids"] = decoder_input_ids.cpu()
+
+    # `DiffusionGemmaEncoderModel.forward()` silently discards its own
+    # computed attention mask whenever `attention_mask` isn't already a
+    # dict — it only uses the real mask (including vision-bidirectional
+    # attention for `use_bidirectional_attention: "vision"` checkpoints)
+    # when the caller pre-builds it, as `generate()`'s `_prepare_encoder_
+    # inputs` does. Do the same here so this forward-pass reference
+    # matches `generate()`'s behavior instead of `forward()`'s bug.
+    input_ids = forward_inputs["input_ids"]
+    attention_mask_tensor = forward_inputs.get(
+        "attention_mask", torch.ones_like(input_ids)
+    )
+    batch_size, seq_len = input_ids.shape
+    dummy_input_embeds = torch.empty(
+        (batch_size, seq_len, 0), dtype=hf_model.dtype, device=input_ids.device
+    )
+    encoder_position_ids = (
+        torch.arange(seq_len, device=input_ids.device)
+        .unsqueeze(0)
+        .expand(batch_size, -1)
+    )
+    # `generate()` never passes `past_key_values=None` here: before its
+    # loop starts, `_prepare_cache_for_generation` already built a real
+    # (empty) cache — a `DynamicCache` by default (`cache_implementation`
+    # defaults to `None`, which falls into the dynamic-cache branch),
+    # constructed exactly as `_prepare_cache_for_generation` does. Passing
+    # plain `None` instead relies on `_preprocess_mask_arguments`'s
+    # fallback path producing the same kv_length/kv_offset for an empty
+    # cache, which happens to hold here, but a real empty cache removes
+    # any doubt (e.g. the `hasattr(past_key_values, "is_sliding")` branch
+    # used for hybrid-cache layer sizing behaves differently for `None`).
+    encoder_cache = DynamicCache(
+        config=hf_model.config.get_text_config(decoder=True)
+    )
+    forward_inputs["attention_mask"] = (
+        hf_model.model.encoder.create_masks_for_generate(
+            config=hf_model.config,
+            inputs_embeds=dummy_input_embeds,
+            attention_mask=attention_mask_tensor,
+            past_key_values=encoder_cache,
+            position_ids=encoder_position_ids,
+            mm_token_type_ids=forward_inputs.get("mm_token_type_ids"),
+        )
+    )
 
     with _no_grad():
         hf_out = hf_model(**forward_inputs, output_hidden_states=False)
@@ -201,7 +267,9 @@ def _hf_forward(
     else:
         try:
             with _no_grad():
-                output = hf_model.generate(**hf_inputs)
+                output = hf_model.generate(
+                    **hf_inputs, max_new_tokens=MAX_GENERATE_TOKENS
+                )
             sequence = output[0]
             if sequence.ndim > 1:
                 sequence = sequence[0]
@@ -451,23 +519,7 @@ def _verify(diffusion_lm, hf_data):
     text_canvas_token_ids = hf_data["text_canvas_token_ids"]
     image_canvas_token_ids = hf_data["image_canvas_token_ids"]
 
-    # Patch preprocessor's num_vision_tokens_per_image if image data exists in
-    # HF output
     preprocessor = diffusion_lm.preprocessor
-    original_num_vision_tokens = None
-    if preprocessor is not None and hf_data["image"] is not None:
-        img = hf_data["image"]
-        image_placeholder_id = getattr(
-            preprocessor.tokenizer, "image_placeholder_id", None
-        )
-        if image_placeholder_id is not None:
-            actual_num_tokens = int(
-                np.sum(img["input_ids"][0] == image_placeholder_id)
-            )
-            original_num_vision_tokens = (
-                preprocessor.num_vision_tokens_per_image
-            )
-            preprocessor.num_vision_tokens_per_image = actual_num_tokens
 
     # --- Token ID Verification ---
     print("\n--- Token ID Verification ---")
@@ -563,6 +615,7 @@ def _verify(diffusion_lm, hf_data):
             diffusion_lm,
             PROMPT_TEXT,
             hf_data.get("text_generated_text"),
+            max_length=MAX_GENERATE_TOKENS,
         )
 
         if hf_data["image"] is not None:
@@ -575,10 +628,8 @@ def _verify(diffusion_lm, hf_data):
                     PROMPT_IMAGE,
                     img.get("generated_text"),
                     images=raw_image,
+                    max_length=MAX_GENERATE_TOKENS,
                 )
-
-    if original_num_vision_tokens is not None:
-        preprocessor.num_vision_tokens_per_image = original_num_vision_tokens
 
     print("-> HF verification complete.")
 

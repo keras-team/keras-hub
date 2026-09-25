@@ -235,6 +235,9 @@ from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm imp
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (
     DiffusionGemmaBlockDiffusionLMPreprocessor as DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_tokenizer import (
+    DiffusionGemmaTokenizer as DiffusionGemmaTokenizer,
+)
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )

@@ -1,6 +1,5 @@
 import keras
 from keras import ops
-from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
@@ -64,12 +63,10 @@ class EntropyBoundSampler(DiffusionSampler):
         seed=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(seed=seed, **kwargs)
         self.entropy_bound = entropy_bound
         self.confidence_threshold = confidence_threshold
         self.stability_threshold = stability_threshold
-        self.seed = seed
-        self.seed_generator = random.SeedGenerator(seed)
 
     def initialize_state(self, canvas):
         """Create tensor state for adaptive stopping."""

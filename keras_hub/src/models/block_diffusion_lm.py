@@ -121,10 +121,12 @@ class BlockDiffusionLM(Task):
         if keras.config.backend() == "openvino":
             from keras_hub.src.utils.openvino_utils import ov_infer
 
+            # OpenVINO ignores subclass-specific generation arguments.
             def wrapped_generate_function(
                 inputs,
                 max_length=None,
                 stop_token_ids=None,
+                **kwargs,
             ):
                 inputs = tree.map_structure(ops.convert_to_numpy, inputs)
                 return ov_infer(
@@ -147,12 +149,14 @@ class BlockDiffusionLM(Task):
                 inputs,
                 max_length=None,
                 stop_token_ids=None,
+                **kwargs,
             ):
                 with torch.no_grad():
                     return self.generate_step(
                         inputs,
                         max_length=max_length,
                         stop_token_ids=stop_token_ids,
+                        **kwargs,
                     )
 
             self.generate_function = wrapped_generate_function
@@ -167,7 +171,7 @@ class BlockDiffusionLM(Task):
             import jax
 
             def compiled_generate_function(
-                inputs, state, max_length, stop_token_ids
+                inputs, state, max_length, stop_token_ids, **kwargs
             ):
                 (
                     sampler_variables,
@@ -185,6 +189,7 @@ class BlockDiffusionLM(Task):
                         inputs,
                         max_length=max_length,
                         stop_token_ids=stop_token_ids,
+                        **kwargs,
                     )
 
                 sampler_variables = []
@@ -195,6 +200,7 @@ class BlockDiffusionLM(Task):
                     )
                 return outputs, sampler_variables
 
+            # Keep shape-affecting arguments static for JAX compilation.
             compiled_generate_function = jax.jit(
                 compiled_generate_function,
                 static_argnames=(
@@ -207,6 +213,7 @@ class BlockDiffusionLM(Task):
                 inputs,
                 max_length=None,
                 stop_token_ids=None,
+                **kwargs,
             ):
                 if isinstance(stop_token_ids, list):
                     stop_token_ids = tuple(stop_token_ids)
@@ -221,6 +228,7 @@ class BlockDiffusionLM(Task):
                     state,
                     max_length,
                     stop_token_ids,
+                    **kwargs,
                 )
                 for reference, variable in zip(
                     self.sampler.variables, sampler_variables
@@ -290,7 +298,14 @@ class BlockDiffusionLM(Task):
             return normalized
         return normalize(outputs)
 
-    def generate(self, inputs, max_length=None, stop_token_ids="auto"):
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+        sequence_length=None,
+        **generate_kwargs,
+    ):
         """Generate a denoised canvas given prompt inputs.
 
         Args:
@@ -305,6 +320,11 @@ class BlockDiffusionLM(Task):
                 Defaults to `"auto"`, which uses stop IDs configured on the
                 model or the preprocessor tokenizer's end token. `None`
                 generates until `max_length`.
+            sequence_length: Optional int. Overrides the preprocessor's
+                prompt packing length. Raises `ValueError` if the prompt does
+                not fit. Defaults to `None`.
+            **generate_kwargs: Additional keyword arguments passed to
+                `generate_step`.
 
         Returns:
             Decoded string(s) or integer token arrays, depending on whether
@@ -337,7 +357,9 @@ class BlockDiffusionLM(Task):
         generate_function = self.make_generate_function()
 
         def preprocess(x):
-            return self.preprocessor.generate_preprocess(x)
+            return self.preprocessor.generate_preprocess(
+                x, sequence_length=sequence_length
+            )
 
         def distribute(x):
             """Distribute tensors according to the distribution library."""
@@ -361,7 +383,10 @@ class BlockDiffusionLM(Task):
 
         def generate(x):
             return generate_function(
-                x, max_length=max_length, stop_token_ids=stop_token_ids
+                x,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+                **generate_kwargs,
             )
 
         def postprocess(x):

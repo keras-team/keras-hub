@@ -67,9 +67,14 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
         # === Vision-enabled model (image_converter + vision_encoder) ===
+        # max_soft_tokens=4, pooling_kernel_size=1 so a 16x16 square image
+        # resizes to exactly 4 real soft tokens, matching
+        # num_vision_tokens_per_image=4 below at that boundary.
         self.image_converter = Gemma4ImageConverter(
             image_size=(16, 16),
             patch_size=4,
+            max_soft_tokens=4,
+            pooling_kernel_size=1,
         )
         self.vision_preprocessor = DiffusionGemmaBlockDiffusionLMPreprocessor(
             tokenizer=self.tokenizer,
@@ -150,6 +155,37 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         output = model.generate("the quick brown fox")
         self.assertIsInstance(output, str)
 
+    def test_generate_syncs_explicit_stop_token_ids_to_preprocessor(self):
+        """Sync explicit stop token IDs with the preprocessor."""
+        model = DiffusionGemmaBlockDiffusionLM(
+            **self.init_kwargs, stop_token_ids=(5, 6)
+        )
+        model.compile(sampler=self.sampler)
+        model.generate("the quick brown fox")
+        self.assertEqual(model.preprocessor.stop_token_ids, (5, 6))
+
+    def test_generate_syncs_auto_stop_token_ids_to_preprocessor(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
+        model.compile(sampler=self.sampler)
+        model.generate("the quick brown fox")
+        expected = (
+            self.tokenizer.end_token_id,
+            self.tokenizer.token_to_id("<turn|>"),
+        )
+        self.assertEqual(model.preprocessor.stop_token_ids, expected)
+
+    def test_generate_raises_for_prompt_that_exceeds_sequence_length(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
+        model.compile(sampler=self.sampler)
+        with self.assertRaisesRegex(ValueError, "too long"):
+            model.generate("the quick brown fox", sequence_length=3)
+
+    def test_generate_accepts_sequence_length_override(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
+        model.compile(sampler=self.sampler)
+        output = model.generate("the quick brown fox", sequence_length=16)
+        self.assertIsInstance(output, str)
+
     def test_generate_batched_strings(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
         model.compile(sampler=self.sampler)
@@ -172,6 +208,18 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         )
         self.assertIsInstance(output, str)
 
+    def test_generate_with_unbatched_pixel_inputs(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.vision_init_kwargs)
+        model.compile(sampler=self.sampler)
+        output = model.generate(
+            {
+                "prompts": "the <|image|> fox",
+                "pixel_values": np.ones((1, 16, 3 * 4 * 4), dtype="float32"),
+                "pixel_position_ids": np.ones((1, 16, 2), dtype="int32"),
+            }
+        )
+        self.assertIsInstance(output, str)
+
     def test_generate_without_preprocessor(self):
         model = DiffusionGemmaBlockDiffusionLM(
             backbone=self.backbone,
@@ -186,7 +234,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "padding_mask": ops.expand_dims(processed["padding_mask"], axis=0),
         }
         output = model.generate(inputs, stop_token_ids=None)
-        canvas = np.array(output)
+        canvas = np.array(output["token_ids"])
         # Shape: (1, canvas_length) or (canvas_length,) after scalar squeeze.
         self.assertEqual(canvas.shape[-1], self.preprocessor.canvas_length)
 
@@ -208,7 +256,7 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             inputs, max_length=max_length, stop_token_ids=None
         )
 
-        self.assertEqual(np.array(output).shape, (1, max_length))
+        self.assertEqual(np.array(output["token_ids"]).shape, (1, max_length))
 
     def test_generate_rejects_non_positive_max_length(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
@@ -216,6 +264,10 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
 
         with self.assertRaisesRegex(ValueError, "positive integer"):
             model.generate("the quick brown fox", max_length=0)
+
+    def _dummy_kv_cache(self, seq_len):
+        """Create a dummy KV cache with the expected shape."""
+        return ops.zeros((2, 2, 2, seq_len, 1, 4), dtype="float32")
 
     def test_generate_step_stops_and_pads_each_sequence(self):
         model = DiffusionGemmaBlockDiffusionLM(
@@ -235,8 +287,16 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         ]
 
         with (
-            patch.object(model, "_encode_prompt", return_value=(None, 4)),
-            patch.object(model, "_encode_canvas_as_context", return_value=None),
+            patch.object(
+                model,
+                "_encode_prompt",
+                return_value=(self._dummy_kv_cache(4), 4),
+            ),
+            patch.object(
+                model,
+                "_encode_canvas_as_context",
+                return_value=self._dummy_kv_cache(8),
+            ),
             patch.object(EntropyBoundSampler, "__call__", side_effect=canvases),
         ):
             output = model.generate_step(
@@ -257,6 +317,139 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             ],
         )
 
+    def test_generate_step_allows_pad_token_override(self):
+        model = DiffusionGemmaBlockDiffusionLM(
+            backbone=self.backbone,
+            preprocessor=None,
+            canvas_length=4,
+            stop_token_ids=(1, 6),
+            pad_token_id=0,
+        )
+        inputs = {
+            "token_ids": ops.ones((2, 4), dtype="int32"),
+            "padding_mask": ops.ones((2, 4), dtype="bool"),
+        }
+        canvases = [
+            ops.array([[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"),
+            ops.array([[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"),
+        ]
+
+        with (
+            patch.object(
+                model,
+                "_encode_prompt",
+                return_value=(self._dummy_kv_cache(4), 4),
+            ),
+            patch.object(
+                model,
+                "_encode_canvas_as_context",
+                return_value=self._dummy_kv_cache(8),
+            ),
+            patch.object(EntropyBoundSampler, "__call__", side_effect=canvases),
+        ):
+            output = model.generate_step(
+                inputs,
+                max_length=8,
+                stop_token_ids=model.stop_token_ids,
+                pad_token_id=-1,
+            )
+
+        self.assertAllEqual(
+            output["token_ids"],
+            [[4, 6, 7, 8, 9, 10, 11, 12], [4, 5, 7, 8, 9, 1, 11, 12]],
+        )
+
+    def test_generate_step_uses_temperature_overrides(self):
+        model = DiffusionGemmaBlockDiffusionLM(
+            backbone=self.backbone,
+            preprocessor=None,
+            canvas_length=4,
+            t_min=0.4,
+            t_max=0.8,
+        )
+        inputs = {
+            "token_ids": ops.ones((2, 4), dtype="int32"),
+            "padding_mask": ops.ones((2, 4), dtype="bool"),
+        }
+
+        captured_temperatures = []
+
+        def fake_sampler_call(self, next, canvas, max_steps, model):
+            captured_temperatures.append(
+                ops.convert_to_numpy(
+                    next(canvas, None, ops.convert_to_tensor(0))
+                )
+            )
+            return canvas
+
+        with (
+            patch.object(
+                model,
+                "_encode_prompt",
+                return_value=(self._dummy_kv_cache(4), 4),
+            ),
+            patch.object(
+                model,
+                "_encode_canvas_as_context",
+                return_value=self._dummy_kv_cache(23),
+            ),
+            patch.object(EntropyBoundSampler, "__call__", fake_sampler_call),
+        ):
+            model.generate_step(inputs, max_length=4, t_min=0.1, t_max=0.2)
+            model.generate_step(inputs, max_length=4)
+
+        self.assertNotAllClose(
+            captured_temperatures[0], captured_temperatures[1]
+        )
+
+    def test_generate_step_stops_after_all_sequences_finish(self):
+        model = DiffusionGemmaBlockDiffusionLM(
+            backbone=self.backbone,
+            preprocessor=None,
+            canvas_length=4,
+            stop_token_ids=(1, 6),
+            pad_token_id=0,
+        )
+        model.compile(sampler=self.sampler, run_eagerly=True)
+        inputs = {
+            "token_ids": ops.ones((2, 4), dtype="int32"),
+            "padding_mask": ops.ones((2, 4), dtype="bool"),
+        }
+        # Both rows hit a stop token within the very first canvas.
+        first_canvas = ops.array([[4, 6, 7, 8], [4, 5, 6, 8]], dtype="int32")
+
+        with (
+            patch.object(
+                model,
+                "_encode_prompt",
+                return_value=(self._dummy_kv_cache(4), 4),
+            ),
+            patch.object(
+                model,
+                "_encode_canvas_as_context",
+                return_value=self._dummy_kv_cache(35),
+            ) as mock_extend_context,
+            patch.object(
+                EntropyBoundSampler, "__call__", return_value=first_canvas
+            ) as mock_sampler_call,
+        ):
+            output = model.generate_step(
+                inputs,
+                max_length=16,
+                stop_token_ids=model.stop_token_ids,
+            )
+
+        self.assertEqual(mock_extend_context.call_count, 1)
+        self.assertEqual(mock_sampler_call.call_count, 1)
+        self.assertEqual(tuple(output["token_ids"].shape), (2, 16))
+        self.assertAllEqual(
+            output["token_ids"],
+            [
+                [4, 6] + [0] * 14,
+                [4, 5, 6] + [0] * 13,
+            ],
+        )
+
     def test_generate_compilation_is_cached(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
         model.compile(sampler=self.sampler)
@@ -271,6 +464,23 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         model.compile(sampler=self.sampler)
         model.generate("the quick brown fox")
         model.compile(sampler=self.sampler)
+        self.assertIsNone(model.generate_function)
+
+    def test_shape_config_change_resets_generate_function(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
+        model.compile(sampler=self.sampler)
+        model.generate("the quick brown fox")
+        self.assertIsNotNone(model.generate_function)
+
+        model.max_denoising_steps = 8
+        self.assertEqual(model.max_denoising_steps, 8)
+        self.assertIsNone(model.generate_function)
+
+        model.generate("the quick brown fox")
+        self.assertIsNotNone(model.generate_function)
+
+        model.canvas_length = 12
+        self.assertEqual(model.canvas_length, 12)
         self.assertIsNone(model.generate_function)
 
     def test_default_sampler_resolves_by_name(self):

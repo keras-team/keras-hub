@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
     DiffusionGemmaBlockDiffusionLMPreprocessor,
@@ -25,10 +26,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
             **self.init_kwargs
         )
 
-        # Vision-enabled preprocessor (image_converter set).
+        # Vision-enabled preprocessor.
         self.image_converter = Gemma4ImageConverter(
             image_size=(16, 16),
             patch_size=4,
+            max_soft_tokens=4,
+            pooling_kernel_size=1,
         )
         self.vision_init_kwargs = {
             "tokenizer": self.tokenizer,
@@ -49,9 +52,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
             "padding_mask": [[0, 0, 0, 1, 1, 1, 1, 1]] * 2,
             "position_ids": [[0, 1, 2, 3, 4, 5, 6, 7]] * 2,
         }
-        # y is token_ids shifted left by one; sw is 1 for non-pad labels.
+        # Sample weights require real labels and real input tokens.
         expected_y = [[0, 0, 1, 9, 14, 10, 12, 2]] * 2
-        expected_sw = [[0, 0, 1, 1, 1, 1, 1, 1]] * 2
+        expected_sw = [[0, 0, 0, 1, 1, 1, 1, 1]] * 2
         self.run_preprocessor_test(
             cls=DiffusionGemmaBlockDiffusionLMPreprocessor,
             init_kwargs=self.init_kwargs,
@@ -95,6 +98,19 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         result = self.preprocessor.generate_postprocess(canvas)
         self.assertAllEqual(result, "the quick brown fox")
 
+    def test_generate_postprocess_strips_configured_stop_token_ids(self):
+        canvas = np.array([9, 14, 10, 12, 18], dtype="int32")
+
+        result = self.preprocessor.generate_postprocess(canvas)
+        self.assertIn("<turn|>", str(result))
+
+        preprocessor_with_stop = DiffusionGemmaBlockDiffusionLMPreprocessor(
+            **self.init_kwargs,
+            stop_token_ids=(18,),
+        )
+        result = preprocessor_with_stop.generate_postprocess(canvas)
+        self.assertNotIn("<turn|>", str(result))
+
     def test_generate_postprocess_batched(self):
         # canvas_length=4; each row is one generated canvas.
         canvas = np.array(
@@ -133,12 +149,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         # vision_mask marks image placeholder positions, used to build the
         # encoder's vision-bidirectional attention mask.
         self.assertEqual(x["vision_mask"].shape[-1], 24)
-        self.assertEqual(int(np.sum(x["vision_mask"][0])), 4)
+        self.assertEqual(int(ops.sum(x["vision_mask"][0])), 4)
 
     def test_vision_raw_images_input(self):
-        # Passing raw `images` (rather than precomputed pixel_values)
-        # exercises `_preprocess_images`, which patchifies via the
-        # image_converter instead of taking already-patchified input.
         images = np.ones((2, 16, 16, 3), dtype="float32")
         x, y, sw = self.vision_preprocessor(
             {
@@ -150,12 +163,58 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
                 "images": images,
             }
         )
-        # Actual patch count depends on Gemma4ImageConverter's aspect-ratio
-        # resizing policy, not simply image_size / patch_size, so only rank
-        # and patch_dim (= patch_size**2 * 3 = 48) are checked here.
         self.assertEqual(len(x["pixel_values"].shape), 4)
         self.assertEqual(x["pixel_values"].shape[-1], 48)
+        self.assertEqual(x["pixel_values"].shape[-2], 4)
         self.assertEqual(x["vision_indices"].shape[-1], 8)
+        self.assertEqual(int(ops.sum(x["vision_mask"][0])), 4)
+
+    def test_vision_different_aspect_ratios_get_different_counts(self):
+        """Different image aspect ratios produce different token counts."""
+        square_image = np.ones((16, 16, 3), dtype="float32")
+        wide_image = np.ones((16, 32, 3), dtype="float32")
+        images = [[square_image], [wide_image]]
+        x, y, sw = self.vision_preprocessor(
+            {
+                "prompts": ["the <|image|> fox", "the <|image|> fox"],
+                "responses": ["round", "round"],
+                "images": images,
+            }
+        )
+        self.assertEqual(int(ops.sum(x["vision_mask"][0])), 4)
+        self.assertEqual(int(ops.sum(x["vision_mask"][1])), 2)
+
+    def test_vision_two_images_same_prompt_different_counts(self):
+        """Each image uses its own real token count."""
+        square_image = np.ones((16, 16, 3), dtype="float32")
+        wide_image = np.ones((16, 32, 3), dtype="float32")
+        images = [[square_image, wide_image]]
+        x, y, sw = self.vision_preprocessor(
+            {
+                "prompts": ["<|image|> and <|image|>"],
+                "responses": ["round"],
+                "images": images,
+            }
+        )
+        self.assertEqual(int(ops.sum(x["vision_mask"][0])), 6)
+
+    def test_vision_no_responses_masks_placeholder_labels(self):
+        """Vision placeholder labels receive zero sample weight."""
+        pixel_values = np.ones([1, 1, 16, 3 * 4 * 4], dtype="float32")
+        pixel_position_ids = np.ones([1, 1, 16, 2], dtype="int32")
+        x, y, sw = self.vision_preprocessor(
+            {
+                "prompts": ["the <|image|> fox"],
+                "pixel_values": pixel_values,
+                "pixel_position_ids": pixel_position_ids,
+            }
+        )
+        y_np = ops.convert_to_numpy(y)
+        sw_np = ops.convert_to_numpy(sw)
+        is_placeholder_label = y_np == self.tokenizer.image_placeholder_id
+        self.assertTrue(np.any(is_placeholder_label))
+        self.assertTrue(np.all(sw_np[is_placeholder_label] == 0))
+        self.assertTrue(np.any(sw_np[~is_placeholder_label] == 1))
 
     def test_vision_text_only_prompt_dummy_pixel_values(self):
         # A vision-enabled preprocessor with no image in the prompt should

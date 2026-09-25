@@ -27,6 +27,8 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
        canvas query positions attend bidirectionally to all canvas key positions
        in the KV cache, overriding the causal mask.
 
+    During canvas decoding, each local layer slices its KV cache to its window.
+
     The layer acts as both the causal encoder (prompt → KV cache) and the
     bidirectional decoder (canvas denoising), hence "transformer layer" rather
     than "decoder block".
@@ -57,10 +59,10 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             (non-causal) attention. Defaults to `False`.
         use_vision_bidirectional_attention: bool. When `True`, image tokens
             within the same image attend to each other bidirectionally
-            during the causal encoder pass (`is_encoder=True`), on local
-            (sliding-window) layers only. Matches HF's `generate()` mask,
-            not `forward()`'s (see `use_bidirectional_attention: "vision"`
-            in the HF config). Defaults to `False`.
+            during the causal encoder pass (`is_encoder=True`), on every
+            layer. Matches HF's `generate()` mask, not `forward()`'s (see
+            `use_bidirectional_attention: "vision"` in the HF config).
+            Defaults to `False`.
         is_global_attention: bool. Whether this layer uses global (full-
             sequence) attention rather than sliding-window attention. Defaults
             to `False`.
@@ -358,27 +360,17 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             cache_index=cache_update_index,
         )
 
-        if (
-            self.use_sliding_window_attention
-            and not self.is_global_attention
-            and is_encoder
-        ):
+        if self.use_sliding_window_attention and not self.is_global_attention:
             causal_mask = self.attention._mask_sliding_window(
                 causal_mask,
                 cache_update_index=cache_update_index,
             )
 
-        # Image tokens attend bidirectionally within the same image, on
-        # local (sliding-window) layers only, during the causal encoder
-        # pass. Matches HF's `generate()` mask — see `use_bidirectional_
-        # attention: "vision"` in the HF config, applied via
-        # `create_masks_for_generate` in `_prepare_encoder_inputs` (not
-        # `forward()`, which discards it for a plain, non-dict attention
-        # mask).
+        # Image tokens attend within the same image during the encoder pass.
+        # Apply the mask on both global and local layers to match HF `generate`.
         if (
             vision_mask is not None
             and self.use_vision_bidirectional_attention
-            and not self.is_global_attention
             and is_encoder
         ):
             bidirectional_image_mask = (
@@ -439,11 +431,59 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         canvas_mask=None,
         is_encoder=False,
         vision_mask=None,
+        return_cache=True,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
         if is_float16:
             x = ops.clip(x, -65504, 65504)
+
+        # Slice local caches here so canvas decoding uses the current window.
+        if (
+            canvas_mask is not None
+            and cache is not None
+            and self.use_sliding_window_attention
+            and not self.is_global_attention
+        ):
+            canvas_length = ops.shape(x)[1]
+            window_prefix = self.sliding_window_size - 1
+            prefix_length = ops.minimum(cache_update_index, window_prefix)
+            cache_start = ops.maximum(cache_update_index - window_prefix, 0)
+            cache_shape = ops.shape(cache)
+            # Limit the slice to the cache's actual length.
+            local_cache_length = ops.minimum(
+                window_prefix + canvas_length, cache_shape[2] - cache_start
+            )
+            true_cache_update_index = cache_update_index
+            cache = ops.slice(
+                cache,
+                (0, 0, cache_start, 0, 0),
+                (
+                    cache_shape[0],
+                    cache_shape[1],
+                    local_cache_length,
+                    cache_shape[3],
+                    cache_shape[4],
+                ),
+            )
+            if padding_mask is not None:
+                padding_mask = ops.slice(
+                    padding_mask,
+                    (0, cache_start),
+                    (ops.shape(padding_mask)[0], local_cache_length),
+                )
+            cache_update_index = prefix_length
+            positions = ops.broadcast_to(
+                ops.expand_dims(
+                    ops.arange(
+                        true_cache_update_index,
+                        true_cache_update_index + canvas_length,
+                        dtype="int32",
+                    ),
+                    axis=0,
+                ),
+                (ops.shape(x)[0], canvas_length),
+            )
 
         # === Attention sub-block ===
         residual = x
@@ -478,6 +518,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 cache_update_index=cache_update_index,
                 cache_update_mask=cache_update_mask,
                 positions=positions,
+                return_cache=return_cache,
             )
         else:
             attention, new_cache = self.attention(

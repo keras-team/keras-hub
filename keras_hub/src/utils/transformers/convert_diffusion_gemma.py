@@ -31,6 +31,19 @@ def load_image_converter_config(preset, transformers_config):
 backbone_cls = DiffusionGemmaBackbone
 
 
+def _read_global_attention_config(text_cfg, key, per_layer_key):
+    """Read a global-attention value from a Transformers config.
+
+    Use the top-level value when present. Otherwise, read the value from the
+    first full-attention layer in `per_layer_config`.
+    """
+    if key in text_cfg:
+        return text_cfg[key]
+    layer_types = text_cfg["layer_types"]
+    global_idx = layer_types.index("full_attention")
+    return text_cfg["per_layer_config"][global_idx][per_layer_key]
+
+
 def convert_backbone_config(transformers_config):
     """Map a DiffusionGemma Transformers config → DiffusionGemmaBackbone
     kwargs."""
@@ -92,7 +105,9 @@ def convert_backbone_config(transformers_config):
         "hidden_dim": text_cfg["hidden_size"],
         "intermediate_dim": text_cfg["intermediate_size"],
         "head_dim": text_cfg["head_dim"],
-        "global_head_dim": text_cfg["global_head_dim"],
+        "global_head_dim": _read_global_attention_config(
+            text_cfg, "global_head_dim", "head_dim"
+        ),
         "attention_logit_soft_cap": text_cfg.get(
             "attn_logit_softcapping", None
         ),
@@ -103,7 +118,9 @@ def convert_backbone_config(transformers_config):
         "layer_norm_epsilon": text_cfg["rms_norm_eps"],
         "layer_types": text_cfg["layer_types"],
         "vision_encoder": vision_encoder,
-        "num_global_key_value_heads": text_cfg["num_global_key_value_heads"],
+        "num_global_key_value_heads": _read_global_attention_config(
+            text_cfg, "num_global_key_value_heads", "num_key_value_heads"
+        ),
         "global_rope_partial_rotary_factor": global_rope_partial_rotary_factor,
         "global_rope_wavelength": global_rope_theta,
         "local_rope_wavelength": local_rope_theta,
@@ -432,11 +449,3 @@ def load_task_config(preset, transformers_config):
     if "pad_token_id" in gen_cfg:
         kwargs["pad_token_id"] = gen_cfg["pad_token_id"]
     return kwargs
-
-
-def load_preprocessor_config(preset, transformers_config):
-    """Return extra DiffusionGemmaBlockDiffusionLMPreprocessor kwargs."""
-    return {
-        "add_start_token": False,
-        "add_end_token": False,
-    }

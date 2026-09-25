@@ -86,6 +86,47 @@ class ConvertDiffusionGemmaTest(TestCase):
         )
         self.assertFalse(kwargs["use_vision_bidirectional_attention"])
 
+    def test_convert_backbone_config_reads_global_head_dim_from_per_layer(
+        self,
+    ):
+        transformers_config = {
+            "model_type": "diffusion_gemma",
+            "text_config": {
+                "vocab_size": 256,
+                "num_hidden_layers": 4,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2,
+                "hidden_size": 64,
+                "intermediate_size": 128,
+                "head_dim": 16,
+                "attn_logit_softcapping": 50.0,
+                "final_logit_softcapping": None,
+                "sliding_window": 512,
+                "rms_norm_eps": 1e-6,
+                "rope_parameters": {
+                    "full_attention": {"rope_theta": 1000000.0},
+                    "sliding_attention": {"rope_theta": 10000.0},
+                },
+                "layer_types": [
+                    "sliding_attention",
+                    "full_attention",
+                    "sliding_attention",
+                    "full_attention",
+                ],
+                "per_layer_config": [
+                    {"head_dim": 16, "num_key_value_heads": 2},
+                    {"head_dim": 32, "num_key_value_heads": 1},
+                    {"head_dim": 16, "num_key_value_heads": 2},
+                    {"head_dim": 32, "num_key_value_heads": 1},
+                ],
+            },
+        }
+        kwargs = convert_diffusion_gemma.convert_backbone_config(
+            transformers_config
+        )
+        self.assertEqual(kwargs["global_head_dim"], 32)
+        self.assertEqual(kwargs["num_global_key_value_heads"], 1)
+
     def test_convert_task_config(self):
         transformers_config = {
             "canvas_length": 128,
@@ -96,12 +137,6 @@ class ConvertDiffusionGemmaTest(TestCase):
         )
         self.assertEqual(kwargs["canvas_length"], 128)
         self.assertEqual(kwargs["max_denoising_steps"], 10)
-
-    def test_load_preprocessor_config_defaults(self):
-        temp_dir = self.get_temp_dir()
-        kwargs = convert_diffusion_gemma.load_preprocessor_config(temp_dir, {})
-        self.assertFalse(kwargs["add_start_token"])
-        self.assertFalse(kwargs["add_end_token"])
 
     @pytest.mark.extra_large
     def test_backbone_from_hf_preset(self):
