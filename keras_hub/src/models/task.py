@@ -58,6 +58,9 @@ class Task(PipelineModel):
             # Default compilation.
             self.compile()
 
+    def build(self, input_shape=None):
+        self.built = True
+
     def preprocess_samples(self, x, y=None, sample_weight=None):
         # If `preprocessor` is `None`, return inputs unaltered.
         if self.preprocessor is None:

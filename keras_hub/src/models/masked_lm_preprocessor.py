@@ -9,7 +9,6 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
 )
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import compute_padding_mask
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -70,10 +69,7 @@ class MaskedLMPreprocessor(Preprocessor):
         random_token_rate=0.1,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.packer = None
         self.sequence_length = sequence_length
@@ -141,7 +137,7 @@ class MaskedLMPreprocessor(Preprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, x, y=None, sample_weight=None):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(x, y, sample_weight)
         else:
             return self._call_python(x, y, sample_weight)
