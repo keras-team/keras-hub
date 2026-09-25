@@ -13,8 +13,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class Gemma4AssistantTest(TestCase, parameterized.TestCase):
-    def setUp(self):
-        self.backbone = Gemma4Backbone(
+    def _create_assistant(self):
+        backbone = Gemma4Backbone(
             vocabulary_size=256,
             num_layers=4,
             num_query_heads=4,
@@ -32,14 +32,31 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
             ],
         )
         # backbone_hidden_size=16 matches the target hidden_dim used in tests.
-        self.model = Gemma4AssistantCausalLM(
+        return Gemma4AssistantCausalLM(
             preprocessor=None,
-            backbone=self.backbone,
+            backbone=backbone,
             backbone_hidden_size=16,
             num_centroids=4,
             centroid_intermediate_top_k=2,
             use_ordered_embeddings=True,
         )
+
+    def _make_inputs(self, token_ids_raw):
+        batch_size = token_ids_raw.shape[0]
+        seq_len = token_ids_raw.shape[1]
+        max_length = 20
+        token_ids = np.zeros((batch_size, max_length), dtype="int32")
+        token_ids[:, :seq_len] = token_ids_raw
+        padding_mask = np.zeros((batch_size, max_length), dtype="bool")
+        padding_mask[:, :seq_len] = True
+        return {
+            "token_ids": ops.convert_to_tensor(token_ids),
+            "padding_mask": ops.convert_to_tensor(padding_mask),
+        }
+
+    def setUp(self):
+        self.model = self._create_assistant()
+        self.backbone = self.model.backbone
 
     def test_call_with_cache(self):
         batch_size = 2
@@ -78,7 +95,7 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         self.assertEqual(ops.shape(logits), (batch_size, 1, 256))
         self.assertEqual(ops.shape(next_hidden), (batch_size, 1, 16))
 
-    def test_speculative_generate(self):
+    def _create_target_model(self):
         target_backbone = Gemma4Backbone(
             vocabulary_size=256,
             num_layers=6,
@@ -97,31 +114,115 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
                 "full_attention",
             ],
         )
-        target_model = Gemma4CausalLM(
+        return Gemma4CausalLM(
             preprocessor=None,
             backbone=target_backbone,
         )
 
+    def test_speculative_generate(self):
+        target_model = self._create_target_model()
+
         batch_size = 1
-        max_length = 20
         seq_len = 5
         token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
-        token_ids = np.zeros((batch_size, max_length), dtype="int32")
-        token_ids[:, :seq_len] = token_ids_raw
-        padding_mask = np.zeros((batch_size, max_length), dtype="bool")
-        padding_mask[:, :seq_len] = True
-        token_ids = ops.convert_to_tensor(token_ids)
-        padding_mask = ops.convert_to_tensor(padding_mask)
+        inputs = self._make_inputs(token_ids_raw)
 
         output = target_model.generate(
-            {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            },
+            inputs,
             assistant_model=self.model,
             stop_token_ids=None,
         )
         self.assertIsNotNone(output)
+
+    def test_assistant_weights_not_tracked(self):
+        target_model = self._create_target_model()
+
+        batch_size = 1
+        seq_len = 5
+        token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
+        inputs = self._make_inputs(token_ids_raw)
+
+        initial_weights_len = len(target_model.weights)
+        initial_trainable_len = len(target_model.trainable_weights)
+        initial_count_params = target_model.count_params()
+
+        target_model.generate(
+            inputs,
+            assistant_model=self.model,
+            stop_token_ids=None,
+        )
+
+        self.assertEqual(len(target_model.weights), initial_weights_len)
+        self.assertEqual(
+            len(target_model.trainable_weights), initial_trainable_len
+        )
+        self.assertEqual(target_model.count_params(), initial_count_params)
+
+        target_weight_ids = {id(w) for w in target_model.weights}
+        for w in self.model.weights:
+            self.assertNotIn(id(w), target_weight_ids)
+
+    def test_generate_keeps_user_attached_assistant(self):
+        target_model = self._create_target_model()
+        assistant = self._create_assistant()
+
+        # User deliberately attaches the assistant beforehand.
+        target_model.user_draft = assistant
+
+        batch_size = 1
+        seq_len = 5
+        token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
+        inputs = self._make_inputs(token_ids_raw)
+
+        initial_weights_len = len(target_model.weights)
+
+        target_model.generate(
+            inputs,
+            assistant_model=assistant,
+            stop_token_ids=None,
+        )
+
+        self.assertEqual(len(target_model.weights), initial_weights_len)
+        target_weight_ids = {id(w) for w in target_model.weights}
+        for w in assistant.weights:
+            self.assertIn(id(w), target_weight_ids)
+
+    def test_new_assistant_rebuilds_speculative_graph(self):
+        target_model = self._create_target_model()
+
+        token_ids_raw = np.array([[10, 20, 30, 40, 50]], dtype="int32")
+        inputs = self._make_inputs(token_ids_raw)
+
+        assistant1 = self._create_assistant()
+        assistant2 = self._create_assistant()
+
+        target_model.generate(
+            inputs,
+            assistant_model=assistant1,
+            stop_token_ids=None,
+        )
+
+        # Set up a spy on assistant2 to verify its Python method is invoked.
+        # Without the cache-key fix, TF (tf.function reuse) and JAX (jit cache
+        # hit) reuse the old compiled graph and never re-trace, so the spy
+        # count stays 0 (red on TF/JAX). Torch is eager and will pass either
+        # way.
+        spy_call_count = [0]
+        original_call_with_cache = assistant2.call_with_cache
+
+        def spy_call(*args, **kwargs):
+            spy_call_count[0] += 1
+            return original_call_with_cache(*args, **kwargs)
+
+        object.__setattr__(assistant2, "call_with_cache", spy_call)
+
+        target_model.generate(
+            inputs,
+            assistant_model=assistant2,
+            stop_token_ids=None,
+        )
+
+        self.assertGreater(spy_call_count[0], 0)
 
     def test_model_saving(self):
         import keras

@@ -783,6 +783,8 @@ class Gemma4CausalLM(CausalLM):
                 cached_spec_sampler is not None
                 and cached_spec_sampler.num_speculative_tokens == num_spec
                 and cached_spec_sampler.base_sampler is spec_base_sampler
+                and getattr(self, "_cached_spec_assistant", None)
+                is assistant_model
             ):
                 # Reuse compiled speculative graph.
                 self.sampler = cached_spec_sampler
@@ -796,6 +798,9 @@ class Gemma4CausalLM(CausalLM):
                 )
                 self.generate_function = None  # force recompile
 
+            assistant_was_tracked = self._tracker.is_in_store(
+                "layers", assistant_model
+            )
             self._assistant_model = assistant_model
 
         try:
@@ -812,7 +817,13 @@ class Gemma4CausalLM(CausalLM):
                 # Restore the original sampler and compiled graph.
                 # Do not set generate_function = None — that would discard
                 # the baseline compiled graph and force a recompile.
+                self._cached_spec_assistant = assistant_model
                 self._assistant_model = None
+                if not assistant_was_tracked:
+                    self._tracker.untrack(assistant_model)
+                # TODO: Replace with `del self._assistant_model` once the
+                # minimum Keras version untracks layers on delete
+                # (keras-team/keras#23761).
                 self.sampler = original_sampler
                 self.generate_function = original_generate_function
 
