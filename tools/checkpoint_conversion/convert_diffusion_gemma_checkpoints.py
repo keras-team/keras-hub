@@ -6,7 +6,6 @@ Usage:
         --save_dtype bfloat16
 """
 
-import contextlib
 import gc
 import os
 
@@ -150,12 +149,6 @@ def _load_test_image():
     return image
 
 
-@contextlib.contextmanager
-def _no_grad():
-    with torch.no_grad():
-        yield
-
-
 def _hf_forward(
     hf_model,
     processor,
@@ -190,6 +183,18 @@ def _hf_forward(
         if "attention_mask" in hf_inputs:
             hf_inputs["attention_mask"] = torch.ones_like(
                 hf_inputs["input_ids"]
+            )
+        # `mm_token_type_ids` is per-token; shift it with the BOS prepend
+        # above or the vision-bidirectional mask gets built against
+        # off-by-one-shifted token identities.
+        if "mm_token_type_ids" in hf_inputs:
+            text_type = torch.zeros(
+                (hf_inputs["mm_token_type_ids"].shape[0], 1),
+                dtype=hf_inputs["mm_token_type_ids"].dtype,
+                device=hf_inputs["mm_token_type_ids"].device,
+            )
+            hf_inputs["mm_token_type_ids"] = torch.cat(
+                [text_type, hf_inputs["mm_token_type_ids"]], dim=1
             )
 
     forward_inputs = dict(hf_inputs)
@@ -240,7 +245,7 @@ def _hf_forward(
         )
     )
 
-    with _no_grad():
+    with torch.no_grad():
         hf_out = hf_model(**forward_inputs, output_hidden_states=False)
 
     logits = hf_out.logits.detach().cpu().float().numpy()
@@ -266,7 +271,7 @@ def _hf_forward(
         generated_text = "(skipped)"
     else:
         try:
-            with _no_grad():
+            with torch.no_grad():
                 output = hf_model.generate(
                     **hf_inputs, max_new_tokens=MAX_GENERATE_TOKENS
                 )
@@ -274,8 +279,11 @@ def _hf_forward(
             if sequence.ndim > 1:
                 sequence = sequence[0]
             prompt_length = hf_inputs["input_ids"].shape[-1]
+            # HF returns the whole last canvas, not `max_new_tokens` tokens;
+            # slice to match KH's exact-length output for a fair comparison.
             generated_text = processor.decode(
-                sequence[prompt_length:], skip_special_tokens=True
+                sequence[prompt_length : prompt_length + MAX_GENERATE_TOKENS],
+                skip_special_tokens=True,
             )
         except Exception as e:
             print(f"⚠️  HF .generate() failed ({e}).")
