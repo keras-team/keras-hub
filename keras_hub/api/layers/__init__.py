@@ -96,6 +96,9 @@ from keras_hub.src.models.densenet.densenet_image_converter import (
 from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
     DepthAnythingImageConverter as DepthAnythingImageConverter,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_image_converter import (
+    DiffusionGemmaImageConverter as DiffusionGemmaImageConverter,
+)
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
 )
