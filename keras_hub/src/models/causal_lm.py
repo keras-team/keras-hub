@@ -140,7 +140,10 @@ class CausalLM(Task):
                 # Convert to numpy for OpenVINO backend
                 inputs = tree.map_structure(ops.convert_to_numpy, inputs)
                 return ov_infer(
-                    self, inputs, stop_token_ids, self.generate_step
+                    self,
+                    inputs,
+                    self.generate_step,
+                    static_args=(stop_token_ids,),
                 )
 
             self.generate_function = wrapped_generate_function
