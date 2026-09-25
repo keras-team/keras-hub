@@ -7,6 +7,9 @@ from absl.testing import parameterized
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
     DiffusionGemmaBackbone,
 )
+from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
+    Gemma4VisionEncoder,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -51,6 +54,51 @@ class DiffusionGemmaBackboneTest(TestCase, parameterized.TestCase):
                 (self.batch_size, 1),
             ),
         }
+
+        # === Vision + Text Backbone ===
+        # (image_size / patch_size)^2 / pool_size^2 = (16/4)^2 / 2^2 = 4
+        # vision tokens per image.
+        self.image_size = 16
+        self.max_images_per_prompt = 2
+        self.num_vision_tokens_per_image = 4
+        vision_encoder = Gemma4VisionEncoder(
+            image_size=self.image_size,
+            patch_size=4,
+            pool_size=2,
+            num_layers=1,
+            num_heads=2,
+            head_dim=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            output_dim=self.init_kwargs["hidden_dim"],
+        )
+        self.vision_init_kwargs = copy.deepcopy(self.init_kwargs)
+        self.vision_init_kwargs["image_size"] = self.image_size
+        self.vision_init_kwargs["vision_encoder"] = vision_encoder
+
+        num_patches = int((self.image_size / 4) ** 2)
+        patch_dim = 3 * 4 * 4
+        total_vision_tokens = (
+            self.max_images_per_prompt * self.num_vision_tokens_per_image
+        )
+        self.vision_input_data = dict(self.input_data)
+        self.vision_input_data["pixel_values"] = np.random.rand(
+            self.batch_size,
+            self.max_images_per_prompt,
+            num_patches,
+            patch_dim,
+        ).astype("float32")
+        self.vision_input_data["pixel_position_ids"] = np.ones(
+            (self.batch_size, self.max_images_per_prompt, num_patches, 2),
+            dtype="int32",
+        )
+        # Index 0 is reserved (never overwritten), so vision tokens start
+        # at position 1.
+        self.vision_input_data["vision_indices"] = np.tile(
+            np.arange(1, total_vision_tokens + 1, dtype="int32")[np.newaxis, :],
+            (self.batch_size, 1),
+        )
 
     def test_backbone_basics(self):
         self.run_backbone_test(
@@ -156,5 +204,5 @@ class DiffusionGemmaBackboneTest(TestCase, parameterized.TestCase):
             self.run_preset_test(
                 cls=DiffusionGemmaBackbone,
                 preset=preset,
-                input_data=self.input_data,
+                input_data=self.vision_input_data,
             )

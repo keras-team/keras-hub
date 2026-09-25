@@ -672,5 +672,5 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             self.run_preset_test(
                 cls=DiffusionGemmaBlockDiffusionLM,
                 preset=preset,
-                input_data=self.input_data,
+                input_data=self.vision_input_data,
             )

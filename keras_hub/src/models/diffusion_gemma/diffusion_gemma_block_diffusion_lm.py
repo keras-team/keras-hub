@@ -278,7 +278,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             shape=(batch_size, self.canvas_length),
             minval=0,
             maxval=vocab_size,
-            seed=getattr(self.sampler, "seed_generator", None),
+            seed=self.sampler.seed_generator,
             dtype="int32",
         )
 
