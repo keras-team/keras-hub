@@ -194,7 +194,8 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 images = convert_to_numpy(images)
             if not batched:
                 rows = [images]
-            elif images and isinstance(images[0], np.ndarray):
+            elif images and not isinstance(images[0], (list, tuple)):
+                # One image per prompt, not a list of images per prompt.
                 rows = [[image] for image in images]
             else:
                 rows = images
@@ -214,6 +215,11 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             row_pixel_position_ids = []
             row_real_counts = []
             for image in row[: self.max_images_per_prompt]:
+                if not isinstance(image, np.ndarray) and not ops.is_tensor(
+                    image
+                ):
+                    # e.g. a PIL image.
+                    image = np.array(image)
                 image = ops.convert_to_tensor(image)
                 output = self.image_converter(ops.expand_dims(image, axis=0))
                 pixel_values = output["pixel_values"][0]

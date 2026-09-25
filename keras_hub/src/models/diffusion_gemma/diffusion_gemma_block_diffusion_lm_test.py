@@ -265,9 +265,32 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         with self.assertRaisesRegex(ValueError, "positive integer"):
             model.generate("the quick brown fox", max_length=0)
 
-    def _dummy_kv_cache(self, seq_len):
-        """Create a dummy KV cache with the expected shape."""
-        return ops.zeros((2, 2, 2, seq_len, 1, 4), dtype="float32")
+    def _fake_forward_step_by_context_length(self, first_canvas, second_canvas):
+        """A `_forward_step` stand-in returning one-hot logits for one of
+        two canvases, chosen by `context_length` (the real per-outer-canvas
+        loop counter). `EntropyBoundSampler.__call__`'s own per-call
+        `side_effect` can't vary per outer canvas index, since
+        `ops.while_loop` traces its body once regardless of iteration
+        count; `context_length` is real loop-carried state, so branching
+        on it works.
+        """
+        vocab_size = self.tokenizer.vocabulary_size()
+
+        def fake_forward_step(
+            canvas,
+            encoder_cache,
+            context_length,
+            prev_logits,
+            temperature,
+            prompt_padding_mask=None,
+            skip_auto_pad=False,
+        ):
+            target = ops.where(
+                ops.equal(context_length, 4), first_canvas, second_canvas
+            )
+            return ops.one_hot(target, vocab_size)
+
+        return fake_forward_step
 
     def test_generate_step_stops_and_pads_each_sequence(self):
         model = DiffusionGemmaBlockDiffusionLM(
@@ -281,23 +304,38 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "token_ids": ops.ones((2, 4), dtype="int32"),
             "padding_mask": ops.ones((2, 4), dtype="bool"),
         }
-        canvases = [
-            ops.array([[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"),
-            ops.array([[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"),
-        ]
+        first_canvas = ops.convert_to_tensor(
+            [[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"
+        )
+        second_canvas = ops.convert_to_tensor(
+            [[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"
+        )
 
         with (
             patch.object(
                 model,
                 "_encode_prompt",
-                return_value=(self._dummy_kv_cache(4), 4),
+                return_value=(
+                    ops.zeros((2, 2, 2, 4, 1, 4), dtype="float32"),
+                    4,
+                ),
             ),
             patch.object(
                 model,
                 "_encode_canvas_as_context",
-                return_value=self._dummy_kv_cache(8),
+                # A passthrough keeps the cache's shape fixed, as
+                # `ops.while_loop` requires.
+                side_effect=lambda canvas, cache, ctx_len, padding_mask=None: (
+                    cache
+                ),
             ),
-            patch.object(EntropyBoundSampler, "__call__", side_effect=canvases),
+            patch.object(
+                model,
+                "_forward_step",
+                side_effect=self._fake_forward_step_by_context_length(
+                    first_canvas, second_canvas
+                ),
+            ),
         ):
             output = model.generate_step(
                 inputs,
@@ -329,23 +367,38 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             "token_ids": ops.ones((2, 4), dtype="int32"),
             "padding_mask": ops.ones((2, 4), dtype="bool"),
         }
-        canvases = [
-            ops.array([[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"),
-            ops.array([[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"),
-        ]
+        first_canvas = ops.convert_to_tensor(
+            [[4, 6, 7, 8], [4, 5, 7, 8]], dtype="int32"
+        )
+        second_canvas = ops.convert_to_tensor(
+            [[9, 10, 11, 12], [9, 1, 11, 12]], dtype="int32"
+        )
 
         with (
             patch.object(
                 model,
                 "_encode_prompt",
-                return_value=(self._dummy_kv_cache(4), 4),
+                return_value=(
+                    ops.zeros((2, 2, 2, 4, 1, 4), dtype="float32"),
+                    4,
+                ),
             ),
             patch.object(
                 model,
                 "_encode_canvas_as_context",
-                return_value=self._dummy_kv_cache(8),
+                # See test_generate_step_stops_and_pads_each_sequence: a
+                # passthrough keeps the loop-carried cache shape fixed.
+                side_effect=lambda canvas, cache, ctx_len, padding_mask=None: (
+                    cache
+                ),
             ),
-            patch.object(EntropyBoundSampler, "__call__", side_effect=canvases),
+            patch.object(
+                model,
+                "_forward_step",
+                side_effect=self._fake_forward_step_by_context_length(
+                    first_canvas, second_canvas
+                ),
+            ),
         ):
             output = model.generate_step(
                 inputs,
@@ -359,48 +412,39 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             [[4, 6, 7, 8, 9, 10, 11, 12], [4, 5, 7, 8, 9, 1, 11, 12]],
         )
 
-    def test_generate_step_uses_temperature_overrides(self):
+    def test_forward_step_scales_logits_by_temperature(self):
+        # `generate_step`'s per-step temperature is computed inside the
+        # `ops.while_loop`-traced denoising loop, so it can't be captured
+        # by a mock and inspected afterwards (a value from a closed trace
+        # is a leaked, unusable tracer). `_forward_step` divides its
+        # logits by `temperature` directly, so call it standalone —
+        # outside any loop — to check that division's effect.
         model = DiffusionGemmaBlockDiffusionLM(
             backbone=self.backbone,
             preprocessor=None,
             canvas_length=4,
-            t_min=0.4,
-            t_max=0.8,
         )
-        inputs = {
-            "token_ids": ops.ones((2, 4), dtype="int32"),
-            "padding_mask": ops.ones((2, 4), dtype="bool"),
-        }
+        canvas = ops.zeros((2, 4), dtype="int32")
+        encoder_cache = ops.zeros((2, 2, 2, 4, 1, 4), dtype="float32")
+        padding_mask = ops.ones((2, 4), dtype="bool")
 
-        captured_temperatures = []
-
-        def fake_sampler_call(self, next, canvas, max_steps, model):
-            captured_temperatures.append(
-                ops.convert_to_numpy(
-                    next(canvas, None, ops.convert_to_tensor(0))
-                )
-            )
-            return canvas
-
-        with (
-            patch.object(
-                model,
-                "_encode_prompt",
-                return_value=(self._dummy_kv_cache(4), 4),
-            ),
-            patch.object(
-                model,
-                "_encode_canvas_as_context",
-                return_value=self._dummy_kv_cache(23),
-            ),
-            patch.object(EntropyBoundSampler, "__call__", fake_sampler_call),
-        ):
-            model.generate_step(inputs, max_length=4, t_min=0.1, t_max=0.2)
-            model.generate_step(inputs, max_length=4)
-
-        self.assertNotAllClose(
-            captured_temperatures[0], captured_temperatures[1]
+        logits_low_temp = model._forward_step(
+            canvas,
+            encoder_cache,
+            4,
+            None,
+            ops.convert_to_tensor(0.2, dtype="float32"),
+            prompt_padding_mask=padding_mask,
         )
+        logits_high_temp = model._forward_step(
+            canvas,
+            encoder_cache,
+            4,
+            None,
+            ops.convert_to_tensor(0.8, dtype="float32"),
+            prompt_padding_mask=padding_mask,
+        )
+        self.assertNotAllClose(logits_low_temp, logits_high_temp)
 
     def test_generate_step_stops_after_all_sequences_finish(self):
         model = DiffusionGemmaBlockDiffusionLM(
@@ -422,12 +466,15 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
             patch.object(
                 model,
                 "_encode_prompt",
-                return_value=(self._dummy_kv_cache(4), 4),
+                return_value=(
+                    ops.zeros((2, 2, 2, 4, 1, 4), dtype="float32"),
+                    4,
+                ),
             ),
             patch.object(
                 model,
                 "_encode_canvas_as_context",
-                return_value=self._dummy_kv_cache(35),
+                return_value=ops.zeros((2, 2, 2, 35, 1, 4), dtype="float32"),
             ) as mock_extend_context,
             patch.object(
                 EntropyBoundSampler, "__call__", return_value=first_canvas

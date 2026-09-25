@@ -447,12 +447,16 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         ):
             canvas_length = ops.shape(x)[1]
             window_prefix = self.sliding_window_size - 1
-            prefix_length = ops.minimum(cache_update_index, window_prefix)
-            cache_start = ops.maximum(cache_update_index - window_prefix, 0)
             cache_shape = ops.shape(cache)
-            # Limit the slice to the cache's actual length.
-            local_cache_length = ops.minimum(
-                window_prefix + canvas_length, cache_shape[2] - cache_start
+            # `ops.slice`'s output shape must be static under JIT tracing,
+            # so this is plain Python arithmetic, not `cache_update_index`
+            # (the loop's dynamic step counter). `cache_start` is clamped
+            # to keep the slice in bounds for every `cache_update_index`.
+            window_length = min(window_prefix + canvas_length, cache_shape[2])
+            max_cache_start = cache_shape[2] - window_length
+            cache_start = ops.minimum(
+                ops.maximum(cache_update_index - window_prefix, 0),
+                max_cache_start,
             )
             true_cache_update_index = cache_update_index
             cache = ops.slice(
@@ -461,7 +465,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 (
                     cache_shape[0],
                     cache_shape[1],
-                    local_cache_length,
+                    window_length,
                     cache_shape[3],
                     cache_shape[4],
                 ),
@@ -470,16 +474,15 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 padding_mask = ops.slice(
                     padding_mask,
                     (0, cache_start),
-                    (ops.shape(padding_mask)[0], local_cache_length),
+                    (ops.shape(padding_mask)[0], window_length),
                 )
-            cache_update_index = prefix_length
+            cache_update_index = true_cache_update_index - cache_start
+            # `ops.arange` also needs a static size, so the dynamic
+            # offset is added rather than used as an arange bound.
             positions = ops.broadcast_to(
                 ops.expand_dims(
-                    ops.arange(
-                        true_cache_update_index,
-                        true_cache_update_index + canvas_length,
-                        dtype="int32",
-                    ),
+                    true_cache_update_index
+                    + ops.arange(canvas_length, dtype="int32"),
                     axis=0,
                 ),
                 (ops.shape(x)[0], canvas_length),
