@@ -2,7 +2,6 @@ import keras
 import numpy as np
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -94,6 +93,16 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="self_attention_dropout",
+        )
+        self._feedforward_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="feedforward_dropout",
+        )
         self.supports_masking = True
 
     def build(self, inputs_shape=None):
@@ -110,7 +119,7 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
         )
         self.built = True
 
-    def call(self, inputs, mask=None):
+    def call(self, inputs, mask=None, training=None):
         x = inputs
         residual = x
         x = self._self_attention_layer_norm(x)
@@ -156,12 +165,14 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
         )
 
         x = self.out_proj(attn_output)
+        x = self._self_attention_dropout(x, training=training)
         x = x + residual
 
         residual = x
         x = self._feedforward_layer_norm(x)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
+        x = self._feedforward_dropout(x, training=training)
         x = x + residual
         return x
 
@@ -183,7 +194,6 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
         return config
 
 
-@keras_hub_export("keras_hub.models.Qwen3ASRAudioEncoder")
 class Qwen3ASRAudioEncoder(keras.layers.Layer):
     """Qwen3 ASR Audio Encoder."""
 
@@ -212,6 +222,9 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         self.n_window_infer = n_window_infer
         self.downsample_hidden_size = downsample_hidden_size
         self.max_position_embeddings = max_position_embeddings
+        self.pos_emb_const = compute_sinusoidal_positional_embedding(
+            self.max_position_embeddings, self.d_model
+        ).astype("float32")
 
         self.chunk_len = n_window * 2
 
@@ -278,14 +291,6 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
             freq_bins = (freq_bins + 2 - 3) // 2 + 1
         conv_out_dim = self.downsample_hidden_size * freq_bins
 
-        # Positional embedding as constant for exact parameter parity
-        self.pos_emb_const = ops.convert_to_tensor(
-            compute_sinusoidal_positional_embedding(
-                self.max_position_embeddings, self.d_model
-            ),
-            dtype="float32",
-        )
-
         self.conv2d1.build((None, None, None, 1))
         self.conv2d2.build((None, None, None, self.downsample_hidden_size))
         self.conv2d3.build((None, None, None, self.downsample_hidden_size))
@@ -351,7 +356,9 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         )
         conv_out = self.conv_out(conv_out)
 
-        pos_emb = ops.cast(self.pos_emb_const, self.compute_dtype)
+        pos_emb = ops.convert_to_tensor(
+            self.pos_emb_const, dtype=self.compute_dtype
+        )
         # Add positional embedding to each chunk (broadcast over B*num_chunks)
         conv_out = conv_out + ops.reshape(
             pos_emb[:time_steps, :], (1, time_steps, self.d_model)
@@ -457,14 +464,16 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         return config
 
 
-@keras_hub_export("keras_hub.models.Qwen3ASRMultiModalProjector")
 class Qwen3ASRMultiModalProjector(keras.layers.Layer):
-    def __init__(self, output_dim, activation="gelu", **kwargs):
+    def __init__(self, d_model, output_dim, activation="gelu", **kwargs):
         super().__init__(**kwargs)
+        self.d_model = d_model
         self.output_dim = output_dim
         self.activation = activation
 
-        self.linear_1 = None
+        self.linear_1 = keras.layers.Dense(
+            self.d_model, dtype=self.dtype_policy, name="linear_1"
+        )
         self.act = keras.layers.Activation(
             self.activation, dtype=self.dtype_policy, name="act"
         )
@@ -476,15 +485,8 @@ class Qwen3ASRMultiModalProjector(keras.layers.Layer):
     def build(self, input_shape=None, **kwargs):
         if input_shape is None:
             return
-        d_model = input_shape[-1]
-        self.linear_1 = keras.layers.Dense(
-            d_model, dtype=self.dtype_policy, name="linear_1"
-        )
         self.linear_1.build(input_shape)
-        # We must call build on linear_2 again because input shape might
-        # have changed
-        # due to linear_1 and activation.
-        self.linear_2.build((None, None, d_model))
+        self.linear_2.build((None, None, self.d_model))
         self.built = True
 
     def call(self, audio_features):
@@ -493,6 +495,10 @@ class Qwen3ASRMultiModalProjector(keras.layers.Layer):
     def get_config(self):
         config = super().get_config()
         config.update(
-            {"output_dim": self.output_dim, "activation": self.activation}
+            {
+                "d_model": self.d_model,
+                "output_dim": self.output_dim,
+                "activation": self.activation,
+            }
         )
         return config

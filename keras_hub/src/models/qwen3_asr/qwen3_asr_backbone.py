@@ -170,6 +170,7 @@ class Qwen3ASRBackbone(Backbone):
         )
 
         self.projector = Qwen3ASRMultiModalProjector(
+            d_model=audio_d_model,
             output_dim=hidden_dim,
             dtype=dtype,
             name="projector",

@@ -21,8 +21,16 @@ except ImportError:
     tf = None
 
 
+def _get_audio_chunk_token_length(n_window):
+    chunk_token_length = n_window * 2
+    for _ in range(3):
+        chunk_token_length = (chunk_token_length - 1) // 2 + 1
+    return chunk_token_length
+
+
 def _get_audio_token_length(audio_lengths, n_window=50):
     chunk_len = n_window * 2
+    chunk_token_length = _get_audio_chunk_token_length(n_window)
     remainder = audio_lengths % chunk_len
     # We use numpy/python math here as it is used in preprocessor
     feat_lengths = np.where(remainder > 0, (remainder - 1) // 2 + 1, 0)
@@ -30,20 +38,25 @@ def _get_audio_token_length(audio_lengths, n_window=50):
         feat_lengths > 0, (feat_lengths - 1) // 2 + 1, 0
     )
     token_lengths = (
-        (per_chunk_tokens - 1) // 2 + 1 + (audio_lengths // chunk_len) * 13
+        (per_chunk_tokens - 1) // 2
+        + 1
+        + (audio_lengths // chunk_len) * chunk_token_length
     )
     return token_lengths
 
 
 def _get_audio_token_length_tf(audio_lengths, n_window=50):
     chunk_len = n_window * 2
+    chunk_token_length = _get_audio_chunk_token_length(n_window)
     remainder = audio_lengths % chunk_len
     feat_lengths = tf.where(remainder > 0, (remainder - 1) // 2 + 1, 0)
     per_chunk_tokens = tf.where(
         feat_lengths > 0, (feat_lengths - 1) // 2 + 1, 0
     )
     token_lengths = (
-        (per_chunk_tokens - 1) // 2 + 1 + (audio_lengths // chunk_len) * 13
+        (per_chunk_tokens - 1) // 2
+        + 1
+        + (audio_lengths // chunk_len) * chunk_token_length
     )
     return token_lengths
 
@@ -138,12 +151,6 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                     tf.cast(raw_lengths, tf.int32)
                     // self.audio_converter.stride
                 )
-                max_mel_len = (
-                    self.audio_converter.num_samples
-                    // self.audio_converter.stride
-                )
-                mel_lengths = tf.minimum(mel_lengths, max_mel_len)
-
                 max_len = tf.shape(audio_mel)[1]
                 audio_mask = tf.sequence_mask(
                     mel_lengths, maxlen=max_len, dtype=tf.int32
@@ -158,12 +165,6 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                     l // self.audio_converter.stride for l in raw_lengths
                 ]
                 mel_lengths = np.array(mel_lengths, dtype=np.int32)
-
-                max_mel_len = (
-                    self.audio_converter.num_samples
-                    // self.audio_converter.stride
-                )
-                mel_lengths = np.minimum(mel_lengths, max_mel_len)
 
                 max_len = audio_mel.shape[1]
                 audio_mask = np.zeros(

@@ -1,16 +1,24 @@
 import numpy as np
 
-from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
     Qwen3ASRPreprocessor,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
+    _get_audio_token_length,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
 class Qwen3ASRPreprocessorTest(TestCase):
+    def test_audio_token_length_uses_window_size(self):
+        token_length = _get_audio_token_length(np.array([50]), n_window=25)
+
+        self.assertEqual(token_length.tolist(), [7])
+
     def setUp(self):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.vocab = []
@@ -22,10 +30,14 @@ class Qwen3ASRPreprocessorTest(TestCase):
             "<|audio_info|>",
             "<|im_end|>",
             "<|endoftext|>",
+            "<|im_start|>",
+            "<|audio_start|>",
+            "<|audio_end|>",
+            "<asr_text>",
         ]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.tokenizer = Qwen3Tokenizer(
+        self.tokenizer = Qwen3ASRTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
         )
