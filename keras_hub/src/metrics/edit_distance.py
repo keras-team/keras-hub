@@ -1,14 +1,63 @@
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
-from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_float_dtype
+from keras_hub.src.utils.tensor_utils import tf
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+
+def _to_nested_list(inputs):
+    """Convert `inputs` to nested Python lists of tokens.
+
+    Tensors are unwrapped at any depth, so a list of per-sample tensors works
+    as well as a single batched one, and `bytes` are decoded to `str`.
+    """
+    if isinstance(inputs, bytes):
+        return inputs.decode("utf-8", errors="ignore")
+    if isinstance(inputs, (str, int, float, bool)):
+        return inputs
+    if tf is not None and isinstance(inputs, tf.RaggedTensor):
+        inputs = inputs.to_list()
+    elif tf is not None and isinstance(inputs, tf.Tensor):
+        inputs = inputs.numpy().tolist()
+    elif isinstance(inputs, np.ndarray):
+        inputs = inputs.tolist()
+    elif keras.ops.is_tensor(inputs):
+        inputs = keras.ops.convert_to_numpy(inputs).tolist()
+    if isinstance(inputs, (list, tuple)):
+        return [_to_nested_list(x) for x in inputs]
+    return inputs
+
+
+def _nested_rank(inputs):
+    rank = 0
+    while isinstance(inputs, list):
+        rank += 1
+        if not inputs:
+            break
+        inputs = inputs[0]
+    return rank
+
+
+def _levenshtein(reference, hypothesis):
+    """Count the edits that turn `hypothesis` into `reference`.
+
+    An edit is a substitution, a deletion or an insertion of a single token.
+    """
+    # Only the previous row of the distance matrix is ever read, so the
+    # quadratic table collapses to two rows of `len(hypothesis) + 1` entries.
+    previous = list(range(len(hypothesis) + 1))
+    for i, reference_token in enumerate(reference, start=1):
+        current = [i]
+        for j, hypothesis_token in enumerate(hypothesis, start=1):
+            substitution = previous[j - 1] + (
+                reference_token != hypothesis_token
+            )
+            current.append(
+                min(previous[j] + 1, current[j - 1] + 1, substitution)
+            )
+        previous = current
+    return previous[-1]
 
 
 @keras_hub_export("keras_hub.metrics.EditDistance")
@@ -28,8 +77,9 @@ class EditDistance(keras.metrics.Metric):
     `normalize` to True.
 
     Note on input shapes:
-    `y_true` and `y_pred` can either be tensors of rank 1 or ragged tensors of
-    rank 2. These tensors contain tokenized text.
+    `y_true` and `y_pred` hold tokenized text, as nested Python lists, NumPy
+    arrays, backend tensors, or `tf.Tensor`/`tf.RaggedTensor`. They are either
+    a single sequence of tokens (rank 1) or a batch of them (rank 2).
 
     Args:
         normalize: bool. If True, the computed number of operations
@@ -77,7 +127,6 @@ class EditDistance(keras.metrics.Metric):
         name="edit_distance",
         **kwargs,
     ):
-        assert_tf_installed(self.__class__.__name__)
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_float_dtype(dtype):
@@ -111,65 +160,43 @@ class EditDistance(keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         def validate_and_fix_rank(inputs, tensor_name):
-            if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-                inputs = tf.ragged.constant(inputs)
-
-            if inputs.shape.rank == 1:
-                return tf.RaggedTensor.from_tensor(inputs[tf.newaxis])
-            elif inputs.shape.rank == 2:
+            inputs = _to_nested_list(inputs)
+            rank = _nested_rank(inputs)
+            if rank == 1:
+                return [inputs]
+            elif rank == 2:
                 return inputs
             else:
                 raise ValueError(
-                    f"{tensor_name} must be of rank 1 or 2. "
-                    f"Found rank: {inputs.shape.rank}"
+                    f"{tensor_name} must be of rank 1 or 2. Found rank: {rank}"
                 )
 
         y_true = validate_and_fix_rank(y_true, "y_true")
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
 
+        if len(y_true) != len(y_pred):
+            raise ValueError(
+                "y_true and y_pred must have the same number of samples. "
+                f"Received: len(y_true)={len(y_true)}, "
+                f"len(y_pred)={len(y_pred)}"
+            )
+
         if self.normalize:
-            reference_values = (
-                y_true.flat_values
-                if isinstance(y_true, tf.RaggedTensor)
-                else y_true
-            )
+            reference_length = sum(len(reference) for reference in y_true)
             self._aggregate_reference_length.assign_add(
-                convert_to_numpy(
-                    tf.cast(tf.size(reference_values), dtype=self.dtype)
-                )
+                np.array(reference_length, dtype=self.dtype)
             )
 
-        def calculate_edit_distance(args):
-            reference, hypothesis = args
-
-            reference = tf.sparse.from_dense([reference])
-            hypothesis = tf.sparse.from_dense([hypothesis])
-
-            return tf.squeeze(
-                tf.edit_distance(
-                    hypothesis=hypothesis,
-                    truth=reference,
-                    normalize=False,
-                )
-            )
-
-        # `tf.map_fn` traces its body into a graph, so the aggregation has to
-        # happen outside of it: the state variables belong to the Keras backend,
-        # which is not necessarily TensorFlow.
-        edit_distances = tf.map_fn(
-            fn=calculate_edit_distance,
-            elems=(y_true, y_pred),
-            fn_output_signature=self.dtype,
+        edit_distance = sum(
+            _levenshtein(reference, hypothesis)
+            for reference, hypothesis in zip(y_true, y_pred)
         )
-
         self._aggregate_unnormalized_edit_distance.assign_add(
-            convert_to_numpy(tf.reduce_sum(edit_distances))
+            np.array(edit_distance, dtype=self.dtype)
         )
         if not self.normalize:
             self._number_of_samples.assign_add(
-                convert_to_numpy(
-                    tf.cast(tf.shape(edit_distances)[0], dtype=self.dtype)
-                )
+                np.array(len(y_true), dtype=self.dtype)
             )
 
     def result(self):
