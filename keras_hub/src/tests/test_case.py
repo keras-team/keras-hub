@@ -384,13 +384,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_detokenize_output=None,
         token_id_key="token_ids",
     ):
-        """Run basic tests for a Model Preprocessor layer."""
-        self.run_preprocessing_layer_test(
+        """Run basic tests for a Model Preprocessor layer.
+
+        Returns the output of calling the preprocessor directly on
+        `input_data`, for any additional assertions a test wants to make.
+        """
+        direct_output = self.run_preprocessing_layer_test(
             cls,
             init_kwargs,
             input_data,
             expected_output=expected_output,
             expected_detokenize_output=expected_detokenize_output,
+            return_output=True,
         )
 
         layer = cls(**self.init_kwargs)
@@ -425,6 +430,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         assert_grain_safe_types(grain_output)
         grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(grain_output)
         self.assertEqual(np.shape(grain_output[token_id_key])[-1], 17)
+        return direct_output
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
@@ -1236,6 +1242,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape=None,
         batch_size=2,
         compile_kwargs=None,
+        atol=1e-6,
+        rtol=1e-6,
     ):
         """Run basic tests for a backbone, including compilation."""
         task = cls(**init_kwargs)
@@ -1263,12 +1271,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
+        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split)
+        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)

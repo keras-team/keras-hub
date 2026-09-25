@@ -6,6 +6,7 @@ import keras
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
@@ -122,7 +123,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         self._add_special_token("[B]", "start_token")
         self._add_special_token("[E]", "end_token")
         self._add_special_token("[P]", "pad_token")
-        # Create lookup tables.
+        # Create lookup tables. This tokenizer has no pure Python path, so
+        # TensorFlow is required as soon as a vocabulary is set.
+        assert_tf_libs_installed(self.__class__.__name__)
         self.char_to_id = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
                 keys=list(self._stoi.keys()),

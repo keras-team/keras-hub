@@ -19,7 +19,7 @@ class SegFormerImageSegmenter(ImageSegmenter):
     (https://github.com/DavidLandup0/deepvision/tree/main/deepvision/models/segmentation/segformer).
 
     SegFormers are meant to be used with the MixTransformer (MiT) encoder
-    family, and and use a very lightweight all-MLP decoder head.
+    family, and use a very lightweight all-MLP decoder head.
 
     The MiT encoder uses a hierarchical transformer which outputs features at
     multiple scales, similar to that of the hierarchical outputs typically

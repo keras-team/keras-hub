@@ -125,10 +125,7 @@ class ImageConverter(PreprocessingLayer):
             scale = [scale / s for s in std]
             offset = [-m / s for m, s in zip(kwargs.pop("mean"), std)]
 
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
 
         if crop_to_aspect_ratio and pad_to_aspect_ratio:
             raise ValueError(
@@ -236,7 +233,7 @@ class ImageConverter(PreprocessingLayer):
         return self._call_python(inputs)
 
     def call(self, inputs):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(inputs)
         else:
             return self._call_python(inputs)

@@ -148,6 +148,48 @@ class FalconCausalLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
+    def test_cached_decoding_matches_full_forward(self):
+        # The ALiBi bias must span the cache, not just the query window.
+        # Building it from the query length breaks cached decoding two ways:
+        # it fails to broadcast when more than one token is passed, and it
+        # collapses to all zeros for a single token, silently disabling ALiBi.
+        causal_lm = FalconCausalLM(**self.init_kwargs)
+        token_ids = self.input_data["token_ids"]
+        batch_size, seq_length = token_ids.shape
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_attention_heads
+        head_dim = self.backbone.hidden_dim // num_heads
+        cache_shape = [
+            batch_size,
+            num_layers,
+            2,
+            seq_length,
+            num_heads,
+            head_dim,
+        ]
+        dtype = causal_lm.compute_dtype
+
+        # One pass over the whole sequence, seeding an empty cache.
+        full_logits, _, _ = causal_lm.call_with_cache(
+            token_ids, ops.zeros(cache_shape, dtype=dtype), 0
+        )
+
+        # Prefill half the sequence, then decode a token at a time.
+        cache = ops.zeros(cache_shape, dtype=dtype)
+        prefill = seq_length // 2
+        logits, _, cache = causal_lm.call_with_cache(
+            token_ids[:, :prefill], cache, 0
+        )
+        pieces = [logits]
+        for i in range(prefill, seq_length):
+            logits, _, cache = causal_lm.call_with_cache(
+                token_ids[:, i : i + 1], cache, i
+            )
+            pieces.append(logits)
+        stepwise_logits = ops.concatenate(pieces, axis=1)
+
+        self.assertAllClose(stepwise_logits, full_logits, atol=1e-5, rtol=1e-5)
+
     def test_generate_compilation(self):
         causal_lm = FalconCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
