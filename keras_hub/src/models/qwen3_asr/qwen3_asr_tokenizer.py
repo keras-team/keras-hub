@@ -1,3 +1,4 @@
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -53,11 +54,15 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
             "<asr_text>",
         ]
         if "unsplittable_tokens" in kwargs:
-            kwargs["unsplittable_tokens"] = sorted(
-                list(set(kwargs["unsplittable_tokens"]) | set(required_tokens))
+            special_tokens = set(kwargs["unsplittable_tokens"]) | set(
+                required_tokens
             )
+            special_tokens.discard("<asr_text>")
+            kwargs["unsplittable_tokens"] = sorted(special_tokens)
         else:
-            kwargs["unsplittable_tokens"] = sorted(required_tokens)
+            kwargs["unsplittable_tokens"] = sorted(
+                set(required_tokens) - {"<asr_text>"}
+            )
 
         self.start_token_id = None
         self.start_token = None
@@ -72,18 +77,34 @@ class Qwen3ASRTokenizer(BytePairTokenizer):
         """Convert a list of integer ids to a string."""
         if skip_special_tokens:
             self._maybe_initialized_tokenizers()
-            # Defensive conversion to list/numpy for Python execution path
-            inputs = ops.convert_to_numpy(inputs)
-            # Tokenizers library decode supports skipping special tokens.
-            # Handle both single sequence and batch
-            if len(inputs.shape) == 1:
-                res = self._tokenizer.decode(
-                    inputs.tolist(), skip_special_tokens=True
-                )
-                return res
-            else:
-                res = self._tokenizer.decode_batch(
-                    inputs.tolist(), skip_special_tokens=True
-                )
-                return res
+
+            def _decode_seq(seq):
+                seq = list(seq)
+                return self._tokenizer.decode(seq, skip_special_tokens=True)
+
+            if isinstance(inputs, (list, tuple)):
+                if inputs and isinstance(inputs[0], (list, tuple, np.ndarray)):
+                    return [_decode_seq(seq) for seq in inputs]
+                return _decode_seq(inputs)
+
+            if isinstance(inputs, np.ndarray):
+                if inputs.ndim == 0:
+                    return _decode_seq([int(inputs.item())])
+                if inputs.ndim == 1:
+                    return _decode_seq(inputs.tolist())
+                if inputs.ndim == 2:
+                    return [_decode_seq(seq) for seq in inputs.tolist()]
+
+            if ops.is_tensor(inputs):
+                inputs = ops.convert_to_numpy(inputs)
+                if inputs.ndim == 0:
+                    return _decode_seq([int(inputs.item())])
+                if inputs.ndim == 1:
+                    return _decode_seq(inputs.tolist())
+                if inputs.ndim == 2:
+                    return [_decode_seq(seq) for seq in inputs.tolist()]
+
+            return self._tokenizer.decode(
+                inputs.tolist(), skip_special_tokens=True
+            )
         return super().detokenize(inputs)

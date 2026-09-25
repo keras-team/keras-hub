@@ -1,4 +1,3 @@
-import numpy as np
 from keras import ops
 
 try:
@@ -98,13 +97,11 @@ class Qwen3ASRCausalLM(CausalLM):
 
         if input_is_scalar and "audio" in inputs:
             x = inputs["audio"]
-            if isinstance(x, np.ndarray) and len(x.shape) == 1:
-                inputs["audio"] = [x]
-            elif tf and isinstance(x, tf.Tensor) and x.shape.rank == 1:
-                inputs["audio"] = x[tf.newaxis]
-            elif isinstance(x, list):
+            if isinstance(x, list):
                 if len(x) > 0 and isinstance(x[0], (int, float)):
                     inputs["audio"] = [x]
+            elif hasattr(x, "shape") and len(x.shape) == 1:
+                inputs["audio"] = ops.expand_dims(x, axis=0)
 
         return [inputs], input_is_scalar
 

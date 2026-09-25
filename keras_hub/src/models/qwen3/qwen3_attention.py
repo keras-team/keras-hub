@@ -203,14 +203,12 @@ class Qwen3Attention(keras.layers.Layer):
         query = self._query_dense_layer_norm(query)
 
         # Compute RoPE for queries
-        if self.rope_max_wavelength is not None:
-            query = self.rotary_embedding_layer(query, start_index=start_index)
+        query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
             key = self._key_dense(x)
             key = self._key_dense_layer_norm(key)
-            if self.rope_max_wavelength is not None:
-                key = self.rotary_embedding_layer(key, start_index=start_index)
+            key = self.rotary_embedding_layer(key, start_index=start_index)
 
             value = self._value_dense(x)
 

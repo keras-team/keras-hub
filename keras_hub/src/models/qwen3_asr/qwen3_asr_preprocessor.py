@@ -12,6 +12,9 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -21,8 +24,16 @@ except ImportError:
     tf = None
 
 
+def _get_audio_chunk_token_length(n_window):
+    chunk_token_length = n_window * 2
+    for _ in range(3):
+        chunk_token_length = (chunk_token_length - 1) // 2 + 1
+    return chunk_token_length
+
+
 def _get_audio_token_length(audio_lengths, n_window=50):
     chunk_len = n_window * 2
+    chunk_token_length = _get_audio_chunk_token_length(n_window)
     remainder = audio_lengths % chunk_len
     # We use numpy/python math here as it is used in preprocessor
     feat_lengths = np.where(remainder > 0, (remainder - 1) // 2 + 1, 0)
@@ -30,26 +41,60 @@ def _get_audio_token_length(audio_lengths, n_window=50):
         feat_lengths > 0, (feat_lengths - 1) // 2 + 1, 0
     )
     token_lengths = (
-        (per_chunk_tokens - 1) // 2 + 1 + (audio_lengths // chunk_len) * 13
+        (per_chunk_tokens - 1) // 2
+        + 1
+        + (audio_lengths // chunk_len) * chunk_token_length
     )
     return token_lengths
 
 
 def _get_audio_token_length_tf(audio_lengths, n_window=50):
     chunk_len = n_window * 2
+    chunk_token_length = _get_audio_chunk_token_length(n_window)
     remainder = audio_lengths % chunk_len
     feat_lengths = tf.where(remainder > 0, (remainder - 1) // 2 + 1, 0)
     per_chunk_tokens = tf.where(
         feat_lengths > 0, (feat_lengths - 1) // 2 + 1, 0
     )
     token_lengths = (
-        (per_chunk_tokens - 1) // 2 + 1 + (audio_lengths // chunk_len) * 13
+        (per_chunk_tokens - 1) // 2
+        + 1
+        + (audio_lengths // chunk_len) * chunk_token_length
     )
     return token_lengths
 
 
-@keras_hub_export("keras_hub.models.Qwen3ASRPreprocessor")
-class Qwen3ASRPreprocessor(CausalLMPreprocessor):
+@keras_hub_export("keras_hub.models.Qwen3ASRCausalLMPreprocessor")
+class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
+    """Preprocess Qwen3-ASR audio-text inputs for causal LM generation.
+
+    The preprocessor turns raw audio and prompt text into the token IDs,
+    attention masks, and audio features expected by the ASR backbone. Audio
+    is converted to mel features, the prompt is augmented with the audio
+    placeholder tokens, and optional responses are packed into a training
+    sequence.
+
+    Args:
+        tokenizer: A Qwen3-ASR tokenizer.
+        audio_converter: Optional audio converter used to compute mel features.
+        sequence_length: Maximum length of packed token sequences.
+        add_start_token: Whether to prepend the tokenizer start token.
+        add_end_token: Whether to append the tokenizer end token.
+
+    Example:
+        ```python
+        preprocessor = keras_hub.models.Qwen3ASRCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            audio_converter=Qwen3ASRAudioConverter(),
+        )
+        x = {
+            "audio": np.ones((16000,), dtype="float32"),
+            "prompts": " airplane",
+        }
+        preprocessor(x)
+        ```
+    """
+
     backbone_cls = Qwen3ASRBackbone
     tokenizer_cls = Qwen3ASRTokenizer
     audio_converter_cls = Qwen3ASRAudioConverter
@@ -133,17 +178,14 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                     raw_lengths = tf.fill(
                         (tf.shape(audios)[0],), tf.shape(audios)[1]
                     )
+                raw_lengths = tf.maximum(
+                    raw_lengths, self.audio_converter.min_length
+                )
 
                 mel_lengths = (
                     tf.cast(raw_lengths, tf.int32)
                     // self.audio_converter.stride
                 )
-                max_mel_len = (
-                    self.audio_converter.num_samples
-                    // self.audio_converter.stride
-                )
-                mel_lengths = tf.minimum(mel_lengths, max_mel_len)
-
                 max_len = tf.shape(audio_mel)[1]
                 audio_mask = tf.sequence_mask(
                     mel_lengths, maxlen=max_len, dtype=tf.int32
@@ -153,17 +195,13 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                     mel_lengths, self.audio_converter.n_window
                 )
             else:
-                raw_lengths = [len(a) for a in audios]
+                raw_lengths = [
+                    max(len(a), self.audio_converter.min_length) for a in audios
+                ]
                 mel_lengths = [
                     l // self.audio_converter.stride for l in raw_lengths
                 ]
                 mel_lengths = np.array(mel_lengths, dtype=np.int32)
-
-                max_mel_len = (
-                    self.audio_converter.num_samples
-                    // self.audio_converter.stride
-                )
-                mel_lengths = np.minimum(mel_lengths, max_mel_len)
 
                 max_len = audio_mel.shape[1]
                 audio_mask = np.zeros(
@@ -171,6 +209,7 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
                 )
                 for i, l in enumerate(mel_lengths):
                     audio_mask[i, :l] = 1
+                audio_mask = convert_preprocessing_outputs_python(audio_mask)
 
                 num_audio_tokens = _get_audio_token_length(
                     mel_lengths, self.audio_converter.n_window
@@ -361,3 +400,6 @@ class Qwen3ASRPreprocessor(CausalLMPreprocessor):
             return self._generate_preprocess_tf(x, sequence_length)
         else:
             return self._generate_preprocess_python(x, sequence_length)
+
+
+Qwen3ASRPreprocessor = Qwen3ASRCausalLMPreprocessor

@@ -689,12 +689,6 @@ from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
 from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_video_converter import (
     Qwen3_5MoeVideoConverter as Qwen3_5MoeVideoConverter,
 )
-from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
-    Qwen3ASRAudioEncoder as Qwen3ASRAudioEncoder,
-)
-from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
-    Qwen3ASRMultiModalProjector as Qwen3ASRMultiModalProjector,
-)
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import (
     Qwen3ASRBackbone as Qwen3ASRBackbone,
 )
@@ -702,7 +696,7 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import (
     Qwen3ASRCausalLM as Qwen3ASRCausalLM,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
-    Qwen3ASRPreprocessor as Qwen3ASRPreprocessor,
+    Qwen3ASRCausalLMPreprocessor as Qwen3ASRCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
     Qwen3ASRTokenizer as Qwen3ASRTokenizer,

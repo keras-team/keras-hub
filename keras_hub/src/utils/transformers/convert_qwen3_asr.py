@@ -7,10 +7,15 @@ backbone_cls = Qwen3ASRBackbone
 
 
 def load_audio_converter_config(preset, transformers_config):
-    audio_config = transformers_config.get("audio_config", {})
+    processor_config = load_json(preset, "processor_config.json")
+    feature_extractor = processor_config["feature_extractor"]
     return {
-        "num_mels": audio_config.get("num_mel_bins", 128),
-        "n_window": audio_config.get("n_window", 50),
+        "num_mels": feature_extractor["feature_size"],
+        "num_fft_bins": feature_extractor["n_fft"],
+        "stride": feature_extractor["hop_length"],
+        "sampling_rate": feature_extractor["sampling_rate"],
+        "min_length": feature_extractor["min_length"],
+        "n_window": feature_extractor["n_window"],
     }
 
 
@@ -98,15 +103,6 @@ def convert_weights(backbone, loader, transformers_config):
 
     def transpose_and_reshape(x, shape):
         return np.reshape(np.transpose(x), shape)
-
-    def reshape_bias(x, shape):
-        return np.reshape(x, shape)
-
-    def transpose_output_kernel(x, shape):
-        return np.transpose(
-            np.reshape(x, (shape[2], shape[0], shape[1])),
-            axes=(1, 2, 0),
-        )
 
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")

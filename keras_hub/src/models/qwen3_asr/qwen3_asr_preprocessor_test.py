@@ -1,16 +1,25 @@
 import numpy as np
+from keras import ops
 
-from keras_hub.src.models.qwen3.qwen3_tokenizer import Qwen3Tokenizer
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
     Qwen3ASRPreprocessor,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
+    _get_audio_token_length,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
 class Qwen3ASRPreprocessorTest(TestCase):
+    def test_audio_token_length_uses_window_size(self):
+        token_length = _get_audio_token_length(np.array([50]), n_window=25)
+
+        self.assertEqual(token_length.tolist(), [7])
+
     def setUp(self):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.vocab = []
@@ -22,10 +31,14 @@ class Qwen3ASRPreprocessorTest(TestCase):
             "<|audio_info|>",
             "<|im_end|>",
             "<|endoftext|>",
+            "<|im_start|>",
+            "<|audio_start|>",
+            "<|audio_end|>",
+            "<asr_text>",
         ]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.tokenizer = Qwen3Tokenizer(
+        self.tokenizer = Qwen3ASRTokenizer(
             vocabulary=self.vocab,
             merges=self.merges,
         )
@@ -109,6 +122,35 @@ class Qwen3ASRPreprocessorTest(TestCase):
         self.assertEqual(len(output["audio_mel"].shape), 2)
         self.assertEqual(output["audio_mel"].shape[1], 128)
         self.assertEqual(len(output["audio_mask"].shape), 1)
+
+    def test_short_audio_uses_padded_audio_token_count(self):
+        preprocessor = Qwen3ASRPreprocessor(**self.init_kwargs)
+        output = preprocessor(
+            {"prompts": [""], "audio": [np.ones(4800, dtype="float32")]}
+        )
+        token_ids = ops.convert_to_numpy(output["token_ids"])
+
+        self.assertEqual(
+            np.count_nonzero(token_ids == self.vocab["<|audio_pad|>"]), 7
+        )
+
+    def test_long_audio_uses_full_audio_token_count(self):
+        preprocessor = Qwen3ASRPreprocessor(
+            tokenizer=self.tokenizer,
+            audio_converter=Qwen3ASRAudioConverter(max_audio_length=30),
+            sequence_length=600,
+        )
+        output = preprocessor(
+            {
+                "prompts": [""],
+                "audio": [np.zeros(41 * 16000, dtype="float32")],
+            }
+        )
+        token_ids = ops.convert_to_numpy(output["token_ids"])
+
+        self.assertEqual(
+            np.count_nonzero(token_ids == self.vocab["<|audio_pad|>"]), 533
+        )
 
     def test_generate_postprocess(self):
         input_data = {

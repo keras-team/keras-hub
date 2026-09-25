@@ -10,6 +10,9 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import Qwen3ASRCausalLM
 from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
+    Qwen3ASRCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
     Qwen3ASRPreprocessor,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_presets import backbone_presets

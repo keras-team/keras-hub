@@ -6,10 +6,26 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
     Qwen3ASRMultiModalProjector,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_encoder import (
+    Qwen3AudioEncoderTransformerLayer,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
 class Qwen3ASRAudioEncoderTest(TestCase):
+    def test_transformer_layer_dropout(self):
+        layer = Qwen3AudioEncoderTransformerLayer(
+            hidden_dim=8,
+            intermediate_dim=16,
+            num_heads=2,
+            dropout=1.0,
+        )
+        inputs = np.random.uniform(size=(2, 4, 8)).astype("float32")
+
+        outputs = layer(inputs, training=True)
+
+        self.assertAllClose(outputs, inputs)
+
     def test_encoder_call(self):
         batch_size = 2
         num_mel_bins = 128
@@ -48,6 +64,7 @@ class Qwen3ASRAudioEncoderTest(TestCase):
         self.run_layer_test(
             cls=Qwen3ASRMultiModalProjector,
             init_kwargs={
+                "d_model": d_model,
                 "output_dim": output_dim,
                 "activation": "gelu",
             },

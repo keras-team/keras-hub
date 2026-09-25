@@ -19,6 +19,7 @@ class Qwen3ASRTokenizerTest(TestCase):
             "<|endoftext|>",
             "<|audio_bos|>",
             "<|audio_eos|>",
+            "<asr_text>",
         ]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
 
@@ -44,6 +45,42 @@ class Qwen3ASRTokenizerTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    def test_detokenize_skip_special_tokens_keeps_asr_text(self):
+        tokenizer = Qwen3ASRTokenizer(
+            vocabulary=self.vocab,
+            merges=self.merges,
+            unsplittable_tokens=[
+                "<|im_end|>",
+                "<|endoftext|>",
+                "<|audio_bos|>",
+                "<|audio_eos|>",
+                "<|audio_pad|>",
+            ],
+        )
+        token_id = [self.vocab["<asr_text>"]]
+        decoded = tokenizer.detokenize(token_id, skip_special_tokens=True)
+        self.assertEqual(decoded, "<asr_text>")
+
+    def test_detokenize_skip_special_tokens_ragged_batch(self):
+        tokenizer = Qwen3ASRTokenizer(
+            vocabulary=self.vocab,
+            merges=self.merges,
+            unsplittable_tokens=[
+                "<|im_end|>",
+                "<|endoftext|>",
+                "<|audio_bos|>",
+                "<|audio_eos|>",
+                "<|audio_pad|>",
+            ],
+        )
+        batch = [
+            tokenizer.tokenize(" airplane"),
+            tokenizer.tokenize(" airplane at"),
+        ]
+        decoded = tokenizer.detokenize(batch, skip_special_tokens=True)
+        self.assertEqual(len(decoded), 2)
+        self.assertTrue(all(isinstance(part, str) for part in decoded))
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):

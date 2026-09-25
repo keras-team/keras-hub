@@ -75,11 +75,15 @@ class PaliGemmaCausalLMTest(TestCase):
         }
 
     def test_causal_lm_basics(self):
+        # The eager and `tf.data` predict paths drift by ~1.4e-6 on GPU,
+        # which trips the 1e-6 default. Too small to be a regression.
         self.run_task_test(
             cls=PaliGemmaCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 16, 11),
+            atol=1e-5,
+            rtol=1e-5,
         )
 
     @pytest.mark.large

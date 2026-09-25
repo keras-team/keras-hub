@@ -1242,6 +1242,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape=None,
         batch_size=2,
         compile_kwargs=None,
+        atol=1e-6,
+        rtol=1e-6,
     ):
         """Run basic tests for a backbone, including compilation."""
         task = cls(**init_kwargs)
@@ -1269,12 +1271,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
+        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split)
+        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)

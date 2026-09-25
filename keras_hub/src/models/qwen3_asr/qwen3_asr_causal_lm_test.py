@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
@@ -120,11 +121,24 @@ class Qwen3ASRCausalLMTest(TestCase):
         output = causal_lm.generate(inputs)
         self.assertIsInstance(output, str)
 
+        tensor_output = causal_lm.generate(
+            {
+                "prompts": " airplane",
+                "audio": ops.convert_to_tensor(audio_input),
+            }
+        )
+        self.assertIsInstance(tensor_output, str)
+
         # Test batch generate
         batch_inputs = {
             "prompts": [" airplane", " airplane"],
-            "audio": np.random.uniform(size=(2, 16000)),
+            "audio": [
+                np.random.uniform(size=(16000,)),
+                np.random.uniform(size=(8000,)),
+            ],
         }
+        preprocessed_batch = self.preprocessor(batch_inputs)
+        self.assertEqual(preprocessed_batch["audio_mel"].shape[0], 2)
         batch_output = causal_lm.generate(batch_inputs)
         self.assertEqual(len(batch_output), 2)
         self.assertIsInstance(batch_output[0], str)
