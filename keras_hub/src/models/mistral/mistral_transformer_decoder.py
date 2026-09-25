@@ -10,9 +10,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.models.mistral.mistral_attention import (
     CachedMistralAttention,
 )
-from keras_hub.src.models.mistral.mistral_layer_norm import (
-    MistralLayerNormalization,
-)
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -71,7 +68,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = MistralLayerNormalization(
+        self._self_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -116,7 +113,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = MistralLayerNormalization(
+        self._feedforward_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",

@@ -2,7 +2,6 @@ import keras
 from keras import layers
 from keras import ops
 
-from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
@@ -100,8 +99,8 @@ class QKNorm(keras.layers.Layer):
 
     def __init__(self, input_dim):
         super().__init__()
-        self.query_norm = RMSNormalization(input_dim)
-        self.key_norm = RMSNormalization(input_dim)
+        self.query_norm = keras.layers.RMSNormalization()
+        self.key_norm = keras.layers.RMSNormalization()
 
     def build(self, input_shape):
         self.query_norm.build(input_shape)
