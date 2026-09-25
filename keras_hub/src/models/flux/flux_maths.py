@@ -20,20 +20,32 @@ class TimestepEmbedding(keras.layers.Layer):
         dimension `dim`.
     """
 
-    def call(self, t, dim, max_period=10000, time_factor=1000.0):
-        t = time_factor * t
+    def call(self, t, dim=256, max_period=10000, time_factor=1000.0):
+        # Cast before scaling so that low-precision global policies (e.g.
+        # bfloat16) do not lose resolution on the `time_factor` multiply.
+        # `floatx()` rather than a hardcoded "float32": under a bfloat16
+        # policy floatx is still float32, but this avoids silently
+        # downcasting when the model is genuinely run in float64.
+        compute_dtype = keras.backend.floatx()
+        t = ops.cast(t, compute_dtype) * time_factor
         half_dim = dim // 2
+
         freqs = ops.exp(
-            ops.cast(-ops.log(max_period), dtype=t.dtype)
-            * ops.arange(half_dim, dtype=t.dtype)
-            / half_dim
+            -ops.log(ops.cast(max_period, compute_dtype))
+            * ops.arange(half_dim, dtype=compute_dtype)
+            / ops.cast(half_dim, compute_dtype)
         )
-        args = t[:, None] * freqs[None]
+
+        args = t[..., None] * freqs[None, ...]
+        # NOTE: cos comes first. This matches the reference implementation at
+        # https://github.com/black-forest-labs/flux, and the pretrained
+        # `time_in` weights are ordered to match. Swapping these silently
+        # permutes the input features of the following MLP.
         embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
 
         if dim % 2 != 0:
             embedding = ops.concatenate(
-                [embedding, ops.zeros_like(embedding[:, :1])], axis=-1
+                [embedding, ops.zeros_like(embedding[..., :1])], axis=-1
             )
 
         return embedding
@@ -173,11 +185,15 @@ def scaled_dot_product_attention(
     Returns:
         KerasTensor: The output tensor from the attention mechanism.
     """
-    L, S = ops.shape(query)[-2], ops.shape(key)[-2]
+    q_shape = query.shape
+    k_shape = key.shape
+
+    L = q_shape[-2] if q_shape[-2] is not None else ops.shape(query)[-2]
+    S = k_shape[-2] if k_shape[-2] is not None else ops.shape(key)[-2]
+    D = q_shape[-1] if q_shape[-1] is not None else ops.shape(query)[-1]
+
     scale_factor = (
-        1 / ops.sqrt(ops.cast(ops.shape(query)[-1], dtype=query.dtype))
-        if scale is None
-        else scale
+        1 / ops.sqrt(ops.cast(D, dtype=query.dtype)) if scale is None else scale
     )
     attn_bias = ops.zeros((L, S), dtype=query.dtype)
 
@@ -188,7 +204,7 @@ def scaled_dot_product_attention(
         attn_bias = ops.where(temp_mask, attn_bias, float("-inf"))
 
     if attn_mask is not None:
-        if ops.shape(attn_mask)[-1] == 1:  # If the mask is 3D
+        if ops.shape(attn_mask)[-1] == 1:
             attn_bias += attn_mask
         else:
             attn_bias = ops.where(attn_mask, attn_bias, float("-inf"))
@@ -209,31 +225,35 @@ def scaled_dot_product_attention(
 
 
 def rearrange_symbolic_tensors(qkv, K, H):
-    """
-    Splits the qkv tensor into query (q), key (k), and value (v) components.
+    """Splits the qkv tensor into query (q), key (k), and value (v) components.
 
-    Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=num_heads),
-    for graph-mode TensorFlow support when doing functional subclassing
-    models.
+    Mimics rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=num_heads).
 
     Arguments:
-        qkv: np.ndarray. Input tensor of shape (B, L, K*H*D).
-        K: int. Number of components (q, k, v).
+        qkv: Keras tensor of shape (B, L, K*H*D).
+        K: int. Number of components (3 for q, k, v).
         H: int. Number of attention heads.
 
     Returns:
         tuple: q, k, v tensors of shape (B, H, L, D).
     """
-    # Get the shape of qkv and calculate L and D
-    B, L, dim = ops.shape(qkv)
-    D = dim // (K * H)
+    # Fetch dimension sizes safely (prefer static shape; fall back to ops.shape)
+    static_shape = qkv.shape
 
-    # Reshape and transpose the qkv tensor
-    qkv_reshaped = ops.reshape(qkv, (B, L, K, H, D))
+    b = static_shape[0] if static_shape[0] is not None else ops.shape(qkv)[0]
+    l = static_shape[1] if static_shape[1] is not None else ops.shape(qkv)[1]
+    dim = static_shape[2] if static_shape[2] is not None else ops.shape(qkv)[2]
+
+    # Compute head dimension D
+    d = dim // (K * H)
+
+    # Reshape and transpose: (B, L, K, H, D) -> (K, B, H, L, D)
+    qkv_reshaped = ops.reshape(qkv, (b, l, K, H, d))
     qkv_transposed = ops.transpose(qkv_reshaped, (2, 0, 3, 1, 4))
 
-    # Split q, k, v along the first dimension (K)
-    qkv_splits = ops.split(qkv_transposed, K, axis=0)
-    q, k, v = [ops.squeeze(split, 0) for split in qkv_splits]
+    # Unstack along axis 0 to extract q, k, v
+    q = qkv_transposed[0]
+    k = qkv_transposed[1]
+    v = qkv_transposed[2]
 
     return q, k, v

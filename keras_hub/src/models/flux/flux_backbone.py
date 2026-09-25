@@ -7,6 +7,7 @@ from keras_hub.src.models.flux.flux_layers import EmbedND
 from keras_hub.src.models.flux.flux_layers import LastLayer
 from keras_hub.src.models.flux.flux_layers import MLPEmbedder
 from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
+from keras_hub.src.models.flux.flux_layers import StripTextTokens
 from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 
 
@@ -67,12 +68,13 @@ class FluxBackbone(Backbone):
         theta,
         use_bias,
         guidance_embed=False,
-        # These will be inferred from the CLIP/T5 encoders later
-        image_shape=(None, 768, 3072),
-        text_shape=(None, 768, 3072),
-        image_ids_shape=(None, 768, 3072),
-        text_ids_shape=(None, 768, 3072),
-        y_shape=(None, 128),
+        # Defaults match FLUX.1: 64-channel packed latents, 4096-dim T5
+        # context, and a 768-dim pooled CLIP vector.
+        image_shape=(None, 64),
+        text_shape=(None, 4096),
+        image_ids_shape=(None, 3),
+        text_ids_shape=(None, 3),
+        y_shape=(768,),
         **kwargs,
     ):
         # === Layers ===
@@ -105,6 +107,7 @@ class FluxBackbone(Backbone):
         ]
 
         self.final_layer = LastLayer(hidden_size, 1, input_channels)
+        self.strip_text_tokens = StripTextTokens()
         self.timestep_embedding = TimestepEmbedding()
         self.guidance_embed = guidance_embed
 
@@ -115,7 +118,15 @@ class FluxBackbone(Backbone):
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
         y = keras.Input(shape=y_shape, name="y")
         timesteps_input = keras.Input(shape=(), name="timesteps")
-        guidance_input = keras.Input(shape=(), name="guidance")
+
+        # Only create guidance input when the model actually uses it.
+        if self.guidance_embed:
+            guidance_input = keras.Input(
+                shape=(),
+                name="guidance",
+            )
+        else:
+            guidance_input = None
 
         # running on sequences image
         image = self.image_input_embedder(image_input)
@@ -155,22 +166,26 @@ class FluxBackbone(Backbone):
                 modulation_encoding=modulation_encoding,
                 positional_encoding=positional_encoding,
             )
-        image = image[:, text.shape[1] :, ...]
+        image = self.strip_text_tokens(image, text)
 
         image = self.final_layer(
             image, modulation_encoding
         )  # (N, T, patch_size ** 2 * output_channels)
 
+        model_inputs = {
+            "image": image_input,
+            "image_ids": image_ids,
+            "text": text_input,
+            "text_ids": text_ids,
+            "y": y,
+            "timesteps": timesteps_input,
+        }
+
+        if guidance_input is not None:
+            model_inputs["guidance"] = guidance_input
+
         super().__init__(
-            inputs={
-                "image": image_input,
-                "image_ids": image_ids,
-                "text": text_input,
-                "text_ids": text_ids,
-                "y": y,
-                "timesteps": timesteps_input,
-                "guidance": guidance_input,
-            },
+            inputs=model_inputs,
             outputs=image,
             **kwargs,
         )
