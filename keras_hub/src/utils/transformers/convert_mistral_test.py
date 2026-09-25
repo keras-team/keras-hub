@@ -180,6 +180,39 @@ class TestTask(TestCase):
         )
         self.assertEqual(keras_config["rope_max_wavelength"], 20000.0)
 
+    def test_convert_backbone_config_yarn_rope(self):
+        # Newer checkpoints (e.g. Ministral 3) scale rotary embeddings with
+        # YaRN; the extra YaRN parameters should carry through only then.
+        transformers_config = {
+            "vocab_size": 100,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 4,
+            "hidden_size": 32,
+            "intermediate_size": 48,
+            "num_key_value_heads": 2,
+            "rope_parameters": {
+                "rope_theta": 1_000_000.0,
+                "rope_type": "yarn",
+                "factor": 16.0,
+                "beta_fast": 32.0,
+                "beta_slow": 1.0,
+                "original_max_position_embeddings": 16384,
+            },
+            "rms_norm_eps": 1e-5,
+            "sliding_window": None,
+        }
+        keras_config = convert_mistral.convert_backbone_config(
+            transformers_config
+        )
+        self.assertEqual(keras_config["rope_max_wavelength"], 1_000_000.0)
+        self.assertEqual(keras_config["rope_type"], "yarn")
+        self.assertEqual(keras_config["rope_scaling_factor"], 16.0)
+        self.assertEqual(keras_config["beta_fast"], 32.0)
+        self.assertEqual(keras_config["beta_slow"], 1.0)
+        self.assertEqual(
+            keras_config["original_max_position_embeddings"], 16384
+        )
+
     def test_convert_tekken_tokenizer(self):
         pytest.importorskip("mistral_common")
         with tempfile.TemporaryDirectory() as dir_path:
