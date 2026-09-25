@@ -194,7 +194,7 @@ class BLIP2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         images, encoder_text, decoder_text = self._parse_inputs(x)
         if decoder_text is None:
             # Initialize an empty prompt for the decoder.
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            decoder_text = self._empty_decoder_text(encoder_text)
 
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
             self.tokenizer(encoder_text),

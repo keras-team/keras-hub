@@ -3,7 +3,6 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
@@ -68,10 +67,7 @@ class CausalLMPreprocessor(Preprocessor):
         add_end_token=True,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.packer = None
         self.sequence_length = sequence_length
@@ -116,7 +112,7 @@ class CausalLMPreprocessor(Preprocessor):
         )
 
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(
                 x,
                 y=y,
@@ -162,7 +158,7 @@ class CausalLMPreprocessor(Preprocessor):
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_preprocess_tf(
                 x, sequence_length=sequence_length
             )
@@ -200,7 +196,7 @@ class CausalLMPreprocessor(Preprocessor):
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_postprocess_tf(x)
         else:
             return self._generate_postprocess_python(x)

@@ -1,3 +1,5 @@
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.xlm_roberta.xlm_roberta_backbone import (
     XLMRobertaBackbone,
@@ -179,7 +181,11 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
             ]
 
-        if tokens and isinstance(tokens[0], list):
+        if isinstance(tokens, np.ndarray):
+            return np.array(process(tokens.tolist()), dtype=tokens.dtype)
+        elif (
+            isinstance(tokens, list) and tokens and isinstance(tokens[0], list)
+        ):
             return [process(ids) for ids in tokens]
         else:
             return process(tokens)

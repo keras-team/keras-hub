@@ -8,6 +8,7 @@ from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
     T5Gemma2ImageConverter,
 )
 from keras_hub.src.models.t5gemma2.t5gemma2_tokenizer import T5Gemma2Tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -64,6 +65,9 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
         add_end_token=True,
         **kwargs,
     ):
+        # `call` and `generate_preprocess` are implemented with TensorFlow ops
+        # only.
+        assert_tf_installed("T5Gemma2Seq2SeqLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             encoder_sequence_length=encoder_sequence_length,
@@ -243,7 +247,7 @@ class T5Gemma2Seq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             images = x.get("images", None)
         else:
             encoder_text = x
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            decoder_text = self._empty_decoder_text(encoder_text)
             images = None
 
         if encoder_sequence_length is None:

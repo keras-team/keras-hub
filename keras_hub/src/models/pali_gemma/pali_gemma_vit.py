@@ -423,7 +423,7 @@ class PaliGemmaVit(keras.Model):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for transformer.
         num_classes: int. The number of output classes. If this model is used
-            as a image classifier, this value would correspond to the number of
+            as an image classifier, this value would correspond to the number of
             output classes.
         pooling: string. The encoded vision embeddings are pooled using the
             specified pooling setting. The accepted values are `"map"`, `"gap"`,
