@@ -31,6 +31,8 @@ class SmolVLM2TokenizerTest(TestCase):
         self.vocab += ["<|im_end|>"]
         self.vocab += ["<fake_token_around_image>"]
         self.vocab += ["<global-img>"]
+        # A crop tag, as emitted for split images.
+        self.vocab += ["<row_1_col_1>"]
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {
             "vocabulary": self.vocab,
@@ -73,6 +75,39 @@ class SmolVLM2TokenizerTest(TestCase):
     def test_pad_token(self):
         tokenizer = SmolVLM2Tokenizer(**self.init_kwargs)
         self.assertEqual(tokenizer.pad_token_id, 0)
+
+    def test_row_col_tags_are_special_token_ids(self):
+        """Crop tags are stripped on decode like the other special tokens."""
+        tokenizer = SmolVLM2Tokenizer(**self.init_kwargs)
+        tag_id = self.vocab["<row_1_col_1>"]
+        self.assertIn(tag_id, tokenizer.special_token_ids)
+        self.assertEqual(tokenizer.row_col_token_ids, {"<row_1_col_1>": tag_id})
+
+    def test_row_col_tags_survive_asset_reload(self):
+        """The tag map is rebuilt when the vocabulary comes from assets."""
+        tokenizer = SmolVLM2Tokenizer(**self.init_kwargs)
+        tag_id = self.vocab["<row_1_col_1>"]
+        restored = SmolVLM2Tokenizer.from_config(tokenizer.get_config())
+        asset_dir = self.get_temp_dir()
+        tokenizer.save_assets(asset_dir)
+        restored.load_assets(asset_dir)
+        self.assertIn(tag_id, restored.special_token_ids)
+
+    def test_pretokenizes_like_smollm2(self):
+        """Blank lines and digits split like HF's SmolLM2 tokenizer."""
+        vocab = dict(self.vocab)
+        for token in ["Ċ", "ĊĊ", "1", "2", "12"]:
+            vocab[token] = len(vocab)
+        tokenizer = SmolVLM2Tokenizer(
+            vocabulary=vocab, merges=self.merges + ["Ċ Ċ", "1 2"]
+        )
+        # "\n\n" before a word is two newline tokens, and digits never
+        # merge, even though both merges exist.
+        expected = ["air", "Ċ", "Ċ", "air", "Ġ", "1", "2"]
+        self.assertEqual(
+            [int(i) for i in tokenizer("air\n\nair 12")],
+            [vocab[token] for token in expected],
+        )
 
     @pytest.mark.extra_large
     def test_all_presets(self):

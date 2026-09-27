@@ -112,3 +112,23 @@ class SmolVLM2VisionEncoderTest(TestCase):
         """Encoder should have a non-trivial number of parameters."""
         encoder = _make_encoder()
         self.assertGreater(encoder.count_params(), 0)
+
+    def test_patch_embedding_matches_conv2d(self):
+        """The padded patch conv equals a plain `Conv2D` + position add."""
+        encoder = _make_encoder()
+        embedding = encoder.vision_embeddings
+        conv = embedding.patch_embedding
+        rng = np.random.default_rng(0)
+        conv.kernel.assign(
+            rng.standard_normal(tuple(conv.kernel.shape)).astype("float32")
+        )
+        conv.bias.assign(
+            rng.standard_normal(tuple(conv.bias.shape)).astype("float32")
+        )
+        pixel_values = rng.random((3, 32, 32, 3)).astype("float32")
+        expected = ops.reshape(conv(pixel_values), (3, 4, 64))
+        positions = embedding.position_embedding(ops.arange(4, dtype="int32"))
+        expected = expected + ops.expand_dims(positions, 0)
+        self.assertAllClose(
+            embedding(pixel_values), expected, atol=1e-5, rtol=1e-5
+        )

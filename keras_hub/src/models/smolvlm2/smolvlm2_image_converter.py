@@ -1,10 +1,13 @@
 import math
 
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
+from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -77,9 +80,21 @@ class SmolVLM2ImageConverter(ImageConverter):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self._check_image_size_unset()
         self.max_image_size = max_image_size
         self.size = size
         self.do_image_splitting = do_image_splitting
+
+    def _check_image_size_unset(self):
+        # The crops are sized by `size` and `max_image_size`; the base
+        # resize to `image_size` would distort them. The base class lets
+        # `image_size` be set after construction, so this also runs per call.
+        if self.image_size is not None:
+            raise ValueError(
+                "`SmolVLM2ImageConverter` does not support `image_size`. Use "
+                "`size` and `max_image_size` instead. "
+                f"Received: image_size={self.image_size}"
+            )
 
     def _static_hw(self, image):
         """Return the static `(height, width)` of an unbatched image."""
@@ -94,8 +109,45 @@ class SmolVLM2ImageConverter(ImageConverter):
             )
         return int(shape[0]), int(shape[1])
 
+    def _call_python(self, inputs):
+        outputs = None
+        if isinstance(inputs, (list, tuple)):
+            try:
+                inputs = np.array(inputs)
+            except ValueError:
+                # Images of different sizes: convert them one at a time.
+                outputs = self._convert_ragged(inputs)
+        if outputs is None:
+            outputs = self._convert_image(inputs)
+        if in_grain_data_pipeline():
+            # Grain pickles outputs across worker processes, so return NumPy
+            # arrays rather than backend tensors.
+            return convert_preprocessing_outputs_grain(outputs)
+        return outputs
+
     @preprocessing_function
-    def call(self, inputs):
+    def _call_tf(self, inputs):
+        return self._call_python(inputs)
+
+    def _convert_ragged(self, images):
+        """Convert images of different sizes one at a time.
+
+        With splitting, each image yields its own number of crops, so a list
+        of dicts is returned. Without it every image becomes one crop, so
+        the crops are stacked into one dict, as for a rank-4 batch.
+        """
+        outputs = [self._convert_image(image) for image in images]
+        if self.do_image_splitting:
+            return outputs
+        return {
+            "pixel_values": ops.concatenate(
+                [output["pixel_values"] for output in outputs], axis=0
+            ),
+            "rows": outputs[0]["rows"],
+            "cols": outputs[0]["cols"],
+        }
+
+    def _convert_image(self, inputs):
         """Process an image into sub-image crops.
 
         Args:
@@ -234,16 +286,14 @@ class SmolVLM2ImageConverter(ImageConverter):
         }
 
     def _rescale_and_normalize(self, pixel_values):
-        """Apply the HF `rescale_factor` and mean/std normalization."""
-        if self.scale is not None:
-            scale = ops.convert_to_tensor(self.scale, dtype="float32")
-            scale = ops.reshape(scale, (1, 1, 1, -1))
-            pixel_values = pixel_values * scale
-        if self.offset is not None:
-            offset = ops.convert_to_tensor(self.offset, dtype="float32")
-            offset = ops.reshape(offset, (1, 1, 1, -1))
-            pixel_values = pixel_values + offset
-        return pixel_values
+        """Apply the HF `rescale_factor` and mean/std normalization.
+
+        With `image_size` unset, the base `_call_python` skips resizing and
+        only applies `scale` and `offset`, in the compute dtype and on the
+        image's device. Inside a Grain pipeline the base returns NumPy.
+        """
+        self._check_image_size_unset()
+        return super()._call_python(pixel_values)
 
     def _resize_batch(self, images):
         """Resize a batch of images to `(max_image_size, max_image_size)`.

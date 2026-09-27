@@ -85,24 +85,27 @@ class SmolVLM2VisionEmbedding(layers.Layer):
                     "Resize the images with `SmolVLM2ImageConverter` first."
                 )
 
-        batch_size = ops.shape(pixel_values)[0]
-
-        # Extract patches: (batch, H', W', hidden_dim)
-        patch_embeds = self.patch_embedding(pixel_values)
-        # Flatten spatial dims: (batch, H'*W', hidden_dim)
-        ph = ops.shape(patch_embeds)[1]
-        pw = ops.shape(patch_embeds)[2]
+        # On TensorFlow a convolution over a zero-image batch returns its
+        # input unchanged, so `Conv2D`'s bias add fails with `Incompatible
+        # shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`. Append one blank
+        # image so the conv batch is never empty, then drop its output. This
+        # runs on every backend and costs one extra image through the conv.
+        blank = ops.zeros(
+            (1, self.image_size, self.image_size, self.num_channels),
+            dtype=pixel_values.dtype,
+        )
+        patch_embeds = self.patch_embedding(
+            ops.concatenate([pixel_values, blank], axis=0)
+        )[:-1]
         embeddings = ops.reshape(
-            patch_embeds, (batch_size, ph * pw, self.hidden_dim)
+            patch_embeds, (-1, self.num_patches, self.hidden_dim)
         )
 
-        # One position id per patch, in raster order.
-        position_ids = ops.broadcast_to(
-            ops.arange(self.num_patches, dtype="int32")[None, :],
-            (batch_size, self.num_patches),
+        # One position id per patch, in raster order, broadcast over batch.
+        position_ids = ops.arange(self.num_patches, dtype="int32")
+        embeddings = embeddings + ops.expand_dims(
+            self.position_embedding(position_ids), 0
         )
-
-        embeddings = embeddings + self.position_embedding(position_ids)
         return embeddings
 
     def get_config(self):
@@ -187,7 +190,7 @@ class SmolVLM2VisionAttention(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, hidden_states, attention_mask=None, training=None):
+    def call(self, hidden_states, training=None):
         batch_size = ops.shape(hidden_states)[0]
         seq_len = ops.shape(hidden_states)[1]
 
@@ -211,9 +214,6 @@ class SmolVLM2VisionAttention(layers.Layer):
 
         attn_weights = ops.matmul(queries, ops.transpose(keys, (0, 1, 3, 2)))
         attn_weights = attn_weights * ops.cast(self.scale, self.compute_dtype)
-
-        if attention_mask is not None:
-            attn_weights = attn_weights + attention_mask
 
         attn_weights = self._softmax(attn_weights)
         attn_weights = ops.cast(attn_weights, self.compute_dtype)
@@ -365,12 +365,10 @@ class SmolVLM2VisionEncoderBlock(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, hidden_states, attention_mask=None, training=None):
+    def call(self, hidden_states, training=None):
         residual = hidden_states
         hidden_states = self.layer_norm1(hidden_states)
-        hidden_states = self.self_attn(
-            hidden_states, attention_mask=attention_mask, training=training
-        )
+        hidden_states = self.self_attn(hidden_states, training=training)
         hidden_states = residual + hidden_states
 
         residual = hidden_states

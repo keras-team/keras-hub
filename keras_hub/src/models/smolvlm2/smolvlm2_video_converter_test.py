@@ -72,12 +72,31 @@ class SmolVLM2VideoConverterTest(TestCase):
         result = converter(_make_video(num_frames=8))
         self.assertEqual(int(result["num_frames"]), 4)
 
-    def test_batched_video_raises(self):
-        """A 5-D batch of videos is not supported and must raise."""
+    def test_batched_video(self):
+        """A 5-D batch returns one dict stacked along the batch axis."""
+        converter = _make_converter(num_frames=3)
+        videos = np.stack([_make_video(num_frames=6)] * 2, axis=0)
+        result = converter(videos)
+        self.assertEqual(result["pixel_values"].shape, (2, 3, 32, 32, 3))
+        self.assertAllEqual(result["num_frames"], [3, 3])
+        self.assertAllEqual(result["frames_indices"], [[0, 2, 5]] * 2)
+
+    def test_list_of_videos(self):
+        """A list of videos of different lengths returns a list of dicts."""
+        converter = _make_converter(num_frames=3)
+        result = converter(
+            [_make_video(num_frames=6), _make_video(num_frames=2)]
+        )
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["pixel_values"].shape, (3, 32, 32, 3))
+        self.assertEqual(result[1]["pixel_values"].shape, (2, 32, 32, 3))
+        self.assertAllEqual(result[1]["frames_indices"], [0, 1])
+
+    def test_invalid_rank_raises(self):
+        """Inputs that are not a video or a batch of videos must raise."""
         converter = _make_converter()
-        videos = np.stack([_make_video(num_frames=4)] * 2, axis=0)
-        with self.assertRaisesRegex(ValueError, "single video"):
-            converter(videos)
+        with self.assertRaisesRegex(ValueError, "num_frames, height"):
+            converter(np.zeros((32, 32, 3), dtype="uint8"))
 
     def test_config_roundtrip(self):
         """get_config should return all constructor arguments."""

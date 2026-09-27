@@ -15,6 +15,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import ROW_COL_PATTERN
 from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
 from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
     SmolVLM2VideoConverter,
@@ -30,8 +31,36 @@ DEFAULT_VIDEO_INTRO = (
 )
 DEFAULT_MEDIA_OUTTRO = "\n\n"
 FRAME_TIMESTAMP_MESSAGE = "\nFrame from {timestamp}:"
-# `<row_R_col_C>` tags marking each crop of a split image.
-ROW_COL_PATTERN = re.compile(r"<row_\d+_col_\d+>")
+# HF assumes this frame rate when a video comes without `fps` metadata.
+DEFAULT_VIDEO_FPS = 24
+
+_ONES = (
+    "zero one two three four five six seven eight nine ten eleven twelve "
+    "thirteen fourteen fifteen sixteen seventeen eighteen nineteen"
+).split()
+_TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def _number_to_words(number):
+    """Spell out `number` in English words, the way `num2words` does.
+
+    HF writes the frame count of a video prompt with `num2words`. Covering
+    `0 <= number < 1000` is enough for any frame count and avoids the extra
+    dependency.
+    """
+    if not 0 <= number < 1000:
+        raise ValueError(
+            "Only numbers in `[0, 1000)` can be spelled out. "
+            f"Received: number={number}"
+        )
+    if number < 20:
+        return _ONES[number]
+    if number < 100:
+        tens, ones = divmod(number, 10)
+        return _TENS[tens] + (f"-{_ONES[ones]}" if ones else "")
+    hundreds, rest = divmod(number, 100)
+    words = f"{_ONES[hundreds]} hundred"
+    return words + (f" and {_number_to_words(rest)}" if rest else "")
 
 
 def _get_image_prompt_string(
@@ -159,9 +188,6 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         # "duration" and "frames_indices". Set before calling
         # generate_preprocess for accurate timestamps.
         self.video_metadata = None
-        # Lazily filled `{"<row_R_col_C>": id}` cache, so the vocabulary is
-        # only materialized once per preprocessor.
-        self._row_col_token_ids = {}
 
     def build(self, input_shape):
         # Let parent create self.packer = StartEndPacker (used by
@@ -176,6 +202,21 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             sep_value=[],
             sequence_length=self.sequence_length,
         )
+
+    def _generate_preprocess_python(self, x, sequence_length=None):
+        # Pass `add_start_value` explicitly. The base class omits it, and
+        # `StartEndPacker` then adds the start token even when
+        # `add_start_token=False`.
+        if not self.built:
+            self.build(None)
+        x = self.tokenizer(x)
+        token_ids, padding_mask = self.packer(
+            x,
+            sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
+            add_end_value=False,
+        )
+        return {"token_ids": token_ids, "padding_mask": padding_mask}
 
     # ------------------------------------------------------------------
     # Special-token-aware tokenization
@@ -196,25 +237,6 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             if tok_str is not None and tok_id is not None:
                 special_map[tok_str] = tok_id
         return special_map
-
-    def _row_col_token_id(self, token):
-        """Return the vocabulary id of a `<row_R_col_C>` tag, or `None`.
-
-        `get_vocabulary()` materializes the whole vocabulary, so the
-        lookups are cached on the layer instead of being redone for every
-        prompt that contains a split image.
-        """
-        if token in self._row_col_token_ids:
-            return self._row_col_token_ids[token]
-        vocab = self.tokenizer.get_vocabulary()
-        if not isinstance(vocab, dict):
-            vocab = {t: i for i, t in enumerate(vocab)}
-        # Cache every row/col tag in one pass over the vocabulary.
-        for vocab_token, token_id in vocab.items():
-            if ROW_COL_PATTERN.fullmatch(vocab_token):
-                self._row_col_token_ids[vocab_token] = token_id
-        self._row_col_token_ids.setdefault(token, None)
-        return self._row_col_token_ids[token]
 
     def _tokenize_with_special_tokens(self, text, special_map=None):
         """Tokenize text while preserving special tokens as single IDs.
@@ -238,13 +260,11 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         if special_map is None:
             special_map = self._build_special_token_map()
 
+        row_col_token_ids = getattr(self.tokenizer, "row_col_token_ids", {})
         for match in ROW_COL_PATTERN.finditer(text):
             token = match.group()
-            if token in special_map:
-                continue
-            token_id = self._row_col_token_id(token)
-            if token_id is not None:
-                special_map[token] = token_id
+            if token not in special_map and token in row_col_token_ids:
+                special_map[token] = row_col_token_ids[token]
 
         # Build regex for splitting.
         escaped = [re.escape(t) for t in special_map]
@@ -435,6 +455,9 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 ),
             )
 
+        # Plain `tokenizer()` is enough here: image splitting is rejected
+        # above, so no `<row_R_col_C>` tag can reach this point. The generate
+        # path handles those tags in `_tokenize_with_special_tokens`.
         prompts = self.tokenizer(prompts)
         responses = self.tokenizer(responses)
 
@@ -566,39 +589,53 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         Args:
             video: A single 4-D `(T, H, W, 3)` video.
         Returns:
-            dict with ``pixel_values`` (num_frames, ms, ms, 3) and
-            ``num_frames`` int.
+            dict with ``pixel_values`` (num_frames, ms, ms, 3),
+            ``num_frames`` int, and ``frames_indices``, the index of every
+            sampled frame within ``video``.
         """
         if self.video_converter is not None:
             result = self.video_converter(video)
             pixel_values = result["pixel_values"]
             num_frames = int(result["num_frames"])
+            frames_indices = convert_to_numpy(result["frames_indices"])
         else:
             # Fallback: treat each frame as an unsplit image.
             pixel_values = video
             num_frames = int(ops.shape(video)[0])
+            frames_indices = np.arange(num_frames)
 
         if not isinstance(pixel_values, np.ndarray):
             pixel_values = ops.convert_to_numpy(pixel_values)
 
-        return {"pixel_values": pixel_values, "num_frames": num_frames}
+        return {
+            "pixel_values": pixel_values,
+            "num_frames": num_frames,
+            "frames_indices": frames_indices.tolist(),
+        }
 
     def _get_video_prompt_string(
         self,
         num_frames,
         metadata=None,
+        frames_indices=None,
     ):
         """Build the expanded video prompt string.
 
-        Replicates HF's ``expand_text_with_video_tokens``.
+        Replicates HF's ``SmolVLMProcessor.replace_video_token``.
 
         Each frame is wrapped with a timestamp and uses the same
-        single-image prompt as an unsplit image.
+        single-image prompt as an unsplit image. As in HF, a timestamp is
+        the frame's index in the source video divided by the source
+        ``fps``, and the frame rate defaults to 24 when it is unknown.
 
         Args:
             num_frames: int. Number of frames.
-            metadata: dict or None. If provided, should contain
-                ``"fps"`` and optionally ``"duration"``.
+            metadata: dict or None. May contain ``"fps"``, the source frame
+                rate, ``"duration"`` in seconds, and ``"frames_indices"``,
+                the source index of every frame passed to the converter.
+            frames_indices: list of int or None. Position of each sampled
+                frame among the frames passed to the converter. Defaults to
+                ``range(num_frames)``.
         Returns:
             str. The expanded prompt fragment.
         """
@@ -615,18 +652,24 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
         )
 
         # Determine per-frame timestamps.
-        fps = 1.0
-        if metadata is not None and "fps" in metadata:
-            fps = metadata["fps"]
-
-        if metadata is not None and "frames_indices" in metadata and fps > 0:
-            timestamps_secs = [idx / fps for idx in metadata["frames_indices"]]
-        else:
-            # Default: sequential frames at given fps.
-            timestamps_secs = [i / fps for i in range(num_frames)]
+        metadata = metadata or {}
+        fps = metadata.get("fps") or DEFAULT_VIDEO_FPS
+        if frames_indices is None:
+            frames_indices = list(range(num_frames))
+        if "frames_indices" in metadata:
+            # Map positions among the input frames to source video indices.
+            source_indices = list(metadata["frames_indices"])
+            if max(frames_indices, default=-1) >= len(source_indices):
+                raise ValueError(
+                    "`video_metadata['frames_indices']` must have one entry "
+                    f"per input frame. Received {len(source_indices)} "
+                    f"entries for frame positions {list(frames_indices)}."
+                )
+            frames_indices = [source_indices[i] for i in frames_indices]
+        timestamps_secs = [idx / fps for idx in frames_indices]
 
         # Duration.
-        if metadata is not None and "duration" in metadata:
+        if metadata.get("duration") is not None:
             duration_secs = int(metadata["duration"])
         elif timestamps_secs:
             duration_secs = int(timestamps_secs[-1])
@@ -637,7 +680,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
 
         # Build prompt.
         prompt = DEFAULT_VIDEO_INTRO.format(
-            frame_count=str(num_frames),
+            frame_count=_number_to_words(num_frames),
             video_duration=str(duration_td),
         )
 
@@ -752,6 +795,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 video_prompt = self._get_video_prompt_string(
                     num_frames=video_output["num_frames"],
                     metadata=metadata,
+                    frames_indices=video_output["frames_indices"],
                 )
                 expanded_prompts.append(
                     prompt.replace(video_token_str, video_prompt, 1)

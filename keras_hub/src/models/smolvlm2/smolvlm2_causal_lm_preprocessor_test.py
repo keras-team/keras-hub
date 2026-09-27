@@ -1,5 +1,7 @@
 """Tests for SmolVLM2CausalLMPreprocessor."""
 
+import re
+
 import numpy as np
 from keras import ops
 
@@ -8,6 +10,9 @@ from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
     _get_image_prompt_string,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
+    _number_to_words,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
@@ -135,9 +140,9 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         self.assertEqual(pixel_values.shape[2], 32)
         self.assertEqual(pixel_values.shape[3], 3)
 
-        # vision_indices should contain positions where <image> tokens are.
+        # One row per prompt, with `image_seq_len=4` slots for the crop.
         vision_indices = ops.convert_to_numpy(x["vision_indices"])
-        self.assertGreater(len(vision_indices), 0)
+        self.assertEqual(vision_indices.shape, (1, 4))
 
     def test_prompt_expansion_unsplit(self):
         """Unsplit image produces <fake><global-img><image>×N<fake> format."""
@@ -230,9 +235,9 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         self.assertEqual(pixel_values.shape[2], 32)
         self.assertEqual(pixel_values.shape[3], 3)
 
-        # vision_indices should contain <image> token positions.
+        # One row per prompt: 3 frames x `image_seq_len=4` slots.
         vision_indices = ops.convert_to_numpy(x["vision_indices"])
-        self.assertGreater(len(vision_indices), 0)
+        self.assertEqual(vision_indices.shape, (1, 12))
 
     def test_video_prompt_expansion(self):
         """Video prompt string has per-frame timestamps."""
@@ -250,7 +255,7 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         )
 
         # Should contain video intro.
-        self.assertIn("3 frames", prompt)
+        self.assertIn("three frames", prompt)
         self.assertIn("[H:MM:SS]", prompt)
 
         # Should have per-frame timestamps.
@@ -422,3 +427,139 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
                     "videos": video,
                 }
             )
+
+    def test_generate_preprocess_text_only_respects_add_start_token(self):
+        """Text-only generation honours `add_start_token` like other paths."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(**self.init_kwargs)
+        x = preprocessor.generate_preprocess(" airplane at airport")
+        # The default `add_start_token=False` adds no `<|im_start|>` (34).
+        self.assertAllEqual(x["token_ids"], [23, 14, 24, 23, 16, 0, 0, 0])
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=True
+        )
+        x = preprocessor.generate_preprocess(" airplane at airport")
+        self.assertAllEqual(x["token_ids"], [34, 23, 14, 24, 23, 16, 0, 0])
+
+    def _row_col_preprocessor(self):
+        vocab = dict(self.vocab)
+        vocab["<row_1_col_1>"] = len(vocab)
+        tokenizer = SmolVLM2Tokenizer(vocabulary=vocab, merges=self.merges)
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=tokenizer, sequence_length=8
+        )
+        return preprocessor, vocab["<row_1_col_1>"]
+
+    def test_generate_postprocess_strips_row_col_tags(self):
+        """Crop tags from split images do not leak into decoded text."""
+        preprocessor, tag_id = self._row_col_preprocessor()
+        x = preprocessor.generate_postprocess(
+            {
+                "token_ids": [tag_id, 23, 14, 0, 0, 0, 0, 0],
+                "padding_mask": [1, 1, 1, 0, 0, 0, 0, 0],
+            }
+        )
+        self.assertAllEqual(x, " airplane")
+
+    def test_row_col_tags_tokenize_to_single_ids(self):
+        """Prompts map crop tags to the tokenizer's tag ids."""
+        preprocessor, tag_id = self._row_col_preprocessor()
+        ids = preprocessor._tokenize_with_special_tokens("<row_1_col_1> air")
+        self.assertEqual([int(i) for i in ids], [tag_id, 23])
+
+    def test_number_to_words_matches_num2words(self):
+        """The frame count is spelled out like HF's `num2words`."""
+        # Expected strings are `num2words(n)` outputs, measured on the VM.
+        for number, words in [
+            (1, "one"),
+            (8, "eight"),
+            (20, "twenty"),
+            (21, "twenty-one"),
+            (32, "thirty-two"),
+            (45, "forty-five"),
+            (64, "sixty-four"),
+            (100, "one hundred"),
+            (101, "one hundred and one"),
+            (999, "nine hundred and ninety-nine"),
+        ]:
+            self.assertEqual(_number_to_words(number), words)
+
+    def test_number_to_words_rejects_out_of_range(self):
+        """Only `[0, 1000)` is supported; anything else raises."""
+        for number in (-1, 1000):
+            with self.assertRaisesRegex(ValueError, "number="):
+                _number_to_words(number)
+
+    def test_video_timestamps_follow_sampled_indices(self):
+        """Timestamps use each sampled frame's source index, as in HF."""
+        video_converter = SmolVLM2VideoConverter(
+            max_image_size=32,
+            size=64,
+            num_frames=4,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=video_converter,
+            image_seq_len=2,
+        )
+        video = np.zeros((128, 8, 8, 3), dtype="uint8")
+        video_output = preprocessor._preprocess_video(video)
+        self.assertEqual(video_output["frames_indices"], [0, 42, 84, 127])
+        prompt = preprocessor._get_video_prompt_string(
+            num_frames=video_output["num_frames"],
+            metadata={"fps": 8},
+            frames_indices=video_output["frames_indices"],
+        )
+        # `index / fps` is 0, 5.25, 10.5 and 15.875 seconds.
+        self.assertEqual(
+            re.findall(r"Frame from (\d\d:\d\d):", prompt),
+            ["00:00", "00:05", "00:10", "00:15"],
+        )
+        self.assertIn("series of four frames from a 0:00:15 [H:MM:SS]", prompt)
+
+    def test_video_prompt_defaults_to_fps_24(self):
+        """Without `fps` metadata, HF assumes 24 fps for the timestamps."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer, image_seq_len=2
+        )
+        prompt = preprocessor._get_video_prompt_string(num_frames=30)
+        self.assertEqual(
+            re.findall(r"Frame from (\d\d:\d\d):", prompt),
+            ["00:00"] * 24 + ["00:01"] * 6,
+        )
+        # The duration is `int(29 / 24)` seconds.
+        self.assertIn(
+            "series of thirty frames from a 0:00:01 [H:MM:SS]", prompt
+        )
+
+    def test_video_metadata_frames_indices_map_sampled_frames(self):
+        """`video_metadata["frames_indices"]` maps input frames to source."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer, image_seq_len=2
+        )
+        prompt = preprocessor._get_video_prompt_string(
+            num_frames=2,
+            metadata={"fps": 2, "frames_indices": [0, 4, 8]},
+            frames_indices=[0, 2],
+        )
+        self.assertEqual(
+            re.findall(r"Frame from (\d\d:\d\d):", prompt), ["00:00", "00:04"]
+        )
+        with self.assertRaisesRegex(ValueError, "one entry per input frame"):
+            preprocessor._get_video_prompt_string(
+                num_frames=2,
+                metadata={"frames_indices": [0]},
+                frames_indices=[0, 2],
+            )
+
+    def test_video_prompt_uses_metadata_duration(self):
+        """`video_metadata["duration"]` sets the duration, as in HF."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer, image_seq_len=2
+        )
+        prompt = preprocessor._get_video_prompt_string(
+            num_frames=4, metadata={"fps": 8, "duration": 20}
+        )
+        # Without it the duration would be `int(3 / 8)`, i.e. 0:00:00.
+        self.assertIn("four frames from a 0:00:20 [H:MM:SS]", prompt)

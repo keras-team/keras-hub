@@ -20,10 +20,17 @@ class SmolVLM2VideoConverter(VideoConverter):
     Each frame is resized to ``(max_image_size, max_image_size)``,
     rescaled, and normalized — identical to an unsplit single image.
 
-    The output is a dict with:
+    For a single video, the output is a dict with:
     - ``"pixel_values"``: float32 tensor of shape
       ``(num_frames, max_image_size, max_image_size, 3)``.
     - ``"num_frames"``: int32 scalar. Number of sampled frames.
+    - ``"frames_indices"``: int32 tensor of shape ``(num_frames,)``. Index
+      of each sampled frame in the input video.
+
+    A batch of videos ``(batch, T, H, W, 3)`` returns the same dict with a
+    leading batch axis on every entry, and a list of videos returns a list
+    of dicts. Videos in a list may differ in shape. Pixel values are uint8
+    or float32 in ``[0, 255]``.
 
     Args:
         max_image_size: int. Side length of each frame after resizing.
@@ -33,10 +40,11 @@ class SmolVLM2VideoConverter(VideoConverter):
         num_frames: int. Maximum number of frames to sample. Frames are
             sampled uniformly over the clip. Default 64 (from HF's
             `video_sampling.max_frames`).
-        fps: int or float. Frame rate the sampled frames are assumed to
-            have. Only used to build per-frame timestamps in
-            `SmolVLM2CausalLMPreprocessor`; it does not affect sampling
-            here. Default 1 (from HF's `video_sampling.fps`).
+        fps: int or float. HF's `video_sampling.fps`, kept so the config
+            round-trips. It does not affect sampling or timestamps:
+            `SmolVLM2CausalLMPreprocessor` computes timestamps from the
+            source frame rate in `video_metadata`, and falls back to 24 fps
+            like HF. Default 1.
     """
 
     backbone_cls = SmolVLM2Backbone
@@ -78,24 +86,31 @@ class SmolVLM2VideoConverter(VideoConverter):
         """The `SmolVLM2ImageConverter` applied to each sampled frame."""
         return self.image_converter
 
-    @preprocessing_function
     def call(self, inputs):
-        """Process a video into per-frame pixel values.
-
-        Args:
-            inputs: uint8 or float32 tensor `(T, H, W, 3)` with pixel
-                values in `[0, 255]`.
-
-        Returns:
-            dict with `"pixel_values"` `(num_sampled, max_image_size,
-            max_image_size, 3)` and `"num_frames"` int32 scalar.
-        """
-        if len(inputs.shape) != 4:
+        if isinstance(inputs, (list, tuple)):
+            return [self._convert_video(video) for video in inputs]
+        rank = len(inputs.shape)
+        if rank == 5:
+            outputs = [
+                self._convert_video(inputs[i]) for i in range(inputs.shape[0])
+            ]
+            return {
+                key: ops.stack([output[key] for output in outputs])
+                for key in outputs[0]
+            }
+        if rank != 4:
             raise ValueError(
-                "`SmolVLM2VideoConverter` expects a single video of shape "
-                "`(num_frames, height, width, channels)`. Received inputs "
-                f"with shape {tuple(inputs.shape)}."
+                "`SmolVLM2VideoConverter` expects a video of shape "
+                "`(num_frames, height, width, channels)`, a batch of shape "
+                "`(batch_size, num_frames, height, width, channels)`, or a "
+                "list of videos. Received inputs with shape "
+                f"{tuple(inputs.shape)}."
             )
+        return self._convert_video(inputs)
+
+    @preprocessing_function
+    def _convert_video(self, inputs):
+        """Sample and convert the frames of a single `(T, H, W, 3)` video."""
         video = ops.cast(inputs, "float32")
         total_frames = video.shape[0]
         if total_frames is None:
@@ -107,6 +122,7 @@ class SmolVLM2VideoConverter(VideoConverter):
 
         # Uniform frame sampling.
         sample_count = min(total_frames, self.num_frames)
+        indices = ops.arange(total_frames, dtype="int32")
         if sample_count < total_frames:
             indices = ops.cast(
                 ops.linspace(0, total_frames - 1, sample_count), "int32"
@@ -120,6 +136,7 @@ class SmolVLM2VideoConverter(VideoConverter):
         return {
             "pixel_values": pixel_values,
             "num_frames": ops.convert_to_tensor(sample_count, dtype="int32"),
+            "frames_indices": indices,
         }
 
     def get_config(self):

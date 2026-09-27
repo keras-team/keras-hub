@@ -1,8 +1,15 @@
 """Tokenizer for SmolVLM2 models."""
 
+import re
+
+from tokenizers import pre_tokenizers
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+
+# `<row_R_col_C>` tags marking each crop of a split image.
+ROW_COL_PATTERN = re.compile(r"<row_\d+_col_\d+>")
 
 
 @keras_hub_export(
@@ -78,3 +85,40 @@ class SmolVLM2Tokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
+
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
+        # Rebuilt on every vocabulary change, including `load_assets()`. The
+        # parent constructor calls this method, so the map always exists.
+        self._row_col_token_ids = {
+            token: token_id
+            for token, token_id in (self.vocabulary or {}).items()
+            if ROW_COL_PATTERN.fullmatch(token)
+        }
+
+    def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
+        super()._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
+        # SmolLM2 pre-tokenizes with isolated digits and the GPT-2 byte-level
+        # regex, as HF does. The base class's Llama3 split keeps "\n\n" before
+        # a word as one piece, one token fewer per blank line than HF.
+        self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
+            [
+                pre_tokenizers.Digits(individual_digits=True),
+                pre_tokenizers.ByteLevel(
+                    add_prefix_space=self.add_prefix_space, use_regex=True
+                ),
+            ]
+        )
+
+    @property
+    def row_col_token_ids(self):
+        """`{"<row_R_col_C>": id}` for every crop tag in the vocabulary."""
+        return dict(self._row_col_token_ids)
+
+    @property
+    def special_token_ids(self):
+        # The crop tags are not registered as special tokens, since a
+        # vocabulary without them would then fail to load. They still have
+        # to be stripped from generated text.
+        ids = super().special_token_ids
+        return ids + list(self._row_col_token_ids.values())

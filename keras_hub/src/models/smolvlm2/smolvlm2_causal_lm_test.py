@@ -225,3 +225,18 @@ class SmolVLM2CausalLMTest(TestCase):
         )
 
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_text_only_fit_eager(self):
+        """Text-only `fit()` with `jit_compile=False`.
+
+        `run_task_test` leaves `jit_compile` at the Keras default. This pins
+        the non-XLA path explicitly, which on TensorFlow is where the
+        zero-image patch embedding used to fail with `Incompatible shapes`.
+        """
+        causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
+        causal_lm.compile(jit_compile=False)
+        x = {
+            "prompts": [" airplane", " airport"],
+            "responses": [" at airport", " at airport"],
+        }
+        causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)

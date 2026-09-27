@@ -1,3 +1,4 @@
+import grain
 import numpy as np
 from keras import ops
 
@@ -154,3 +155,80 @@ class SmolVLM2ImageConverterTest(TestCase):
         images = np.random.randint(0, 256, size=(2, 20, 24, 3)).astype("uint8")
         with self.assertRaisesRegex(ValueError, "do_image_splitting"):
             converter(images)
+
+    def test_grain_pipeline_returns_numpy(self):
+        """Inside Grain every output, including `rows`/`cols`, is NumPy."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=True,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = [
+            np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8")
+            for _ in range(2)
+        ]
+        for output in grain.MapDataset.source(images).map(converter):
+            self.assertIsInstance(output["pixel_values"], np.ndarray)
+            # On TF, `.numpy()` of a 0-d tensor gives a NumPy scalar
+            # (`np.int32`) rather than a 0-d array. Both pickle fine.
+            for key in ("rows", "cols"):
+                self.assertIsInstance(output[key], (np.ndarray, np.generic))
+
+    def test_ragged_list_without_splitting_stacks(self):
+        """Different-size images give one dict when each is one crop."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = [
+            np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8"),
+            np.random.randint(0, 256, size=(30, 12, 3)).astype("uint8"),
+        ]
+        result = converter(images)
+        self.assertIsInstance(result, dict)
+        expected = np.concatenate(
+            [
+                ops.convert_to_numpy(converter(image)["pixel_values"])
+                for image in images
+            ]
+        )
+        self.assertAllClose(
+            ops.convert_to_numpy(result["pixel_values"]), expected
+        )
+        self.assertEqual(int(result["rows"]), 0)
+        self.assertEqual(int(result["cols"]), 0)
+
+    def test_ragged_list_with_splitting_stays_a_list(self):
+        """With splitting, crop counts differ, so one dict per image."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=True,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = [
+            np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8"),
+            np.random.randint(0, 256, size=(30, 12, 3)).astype("uint8"),
+        ]
+        result = converter(images)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+
+    def test_image_size_is_rejected(self):
+        """The base resize to `image_size` would distort the crops."""
+        with self.assertRaisesRegex(ValueError, "image_size"):
+            SmolVLM2ImageConverter(image_size=(16, 16))
+
+    def test_image_size_set_after_init_is_rejected(self):
+        """Setting `image_size` later must not resize the crops."""
+        converter = SmolVLM2ImageConverter(max_image_size=16, size=32)
+        converter.image_size = (8, 8)
+        image = np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "image_size"):
+            converter(image)
