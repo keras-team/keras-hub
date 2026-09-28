@@ -164,6 +164,15 @@ def build_multimodal_inputs(hf_preset, hf_config, image):
             messages, add_generation_prompt=True
         )
         inputs = hf_processor(text=prompt, images=image, return_tensors="np")
+        # Mistral's chat template renders `bos_token` as literal text, so
+        # `prompt` starts with `"<s>"`. `hf_processor` recognizes that text
+        # and folds it into a single BOS id, but KerasHub's preprocessor
+        # always prepends its own BOS via `add_start_token`; passing the
+        # literal `"<s>"` through would double it. Strip it so `prompt`
+        # matches the `except` branch's convention below (no literal BOS).
+        bos_token = hf_processor.tokenizer.bos_token
+        if bos_token and prompt.startswith(bos_token):
+            prompt = prompt[len(bos_token) :]
         token_ids = inputs["input_ids"].astype("int32")
         padding_mask = inputs["attention_mask"].astype("int32")
         pixel_values = inputs["pixel_values"].astype("float32")
@@ -360,6 +369,13 @@ def validate_output(keras_model, hf_results, skip_generate=False):
     image_results = hf_results["image"]
 
     test_token_ids("text", preprocessor, TEXT_PROMPT, text_results["token_ids"])
+    test_token_ids(
+        "image",
+        preprocessor,
+        image_results["prompt"],
+        image_results["token_ids"],
+        image=image_results["image"],
+    )
 
     # The backbone always declares `pixel_values`/`image_sizes`/
     # `placeholder_indices` as graph inputs, so a text-only forward pass
@@ -382,14 +398,6 @@ def validate_output(keras_model, hf_results, skip_generate=False):
     }
     keras_logits = run_kh_forward(backbone, backbone_inputs)
     test_numerics("text", keras_logits, text_results["logits"])
-
-    test_token_ids(
-        "image",
-        preprocessor,
-        image_results["prompt"],
-        image_results["token_ids"],
-        image=image_results["image"],
-    )
 
     # Feed HF's preprocessed `pixel_values` directly, rather than re-running
     # the Keras preprocessor, to avoid PIL vs `ops.image.resize` divergence.

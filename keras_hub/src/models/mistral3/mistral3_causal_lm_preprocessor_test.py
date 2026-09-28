@@ -1,7 +1,12 @@
+from unittest import mock
+
 import numpy as np
 import pytest
 from keras import ops
 
+from keras_hub.src.models.mistral3 import (
+    mistral3_causal_lm_preprocessor as preprocessor_module,
+)
 from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
     Mistral3CausalLMPreprocessor,
 )
@@ -13,6 +18,8 @@ from keras_hub.src.models.mistral3.mistral3_tokenizer import (
 )
 from keras_hub.src.models.mistral3.mistral3_tokenizer import Mistral3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def _bytes_to_unicode():
@@ -103,6 +110,85 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
             )
         )
         self.assertEqual(num_placeholders, 4)
+
+    def test_generate_preprocess_with_images_when_tf_handle_is_none(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        x = {"prompts": "the [IMG] quick", "images": [image]}
+
+        with (
+            mock.patch.object(preprocessor_module, "tf", None),
+            mock.patch.object(tensor_utils, "tf", None),
+        ):
+            outputs = preprocessor.generate_preprocess(x)
+
+        self.assertIn("pixel_values", outputs)
+        self.assertIn("image_sizes", outputs)
+        self.assertIn("placeholder_indices", outputs)
+        self.assertAllEqual(outputs["image_sizes"], [[8, 8]])
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_generate_preprocess_with_images_in_tf_function(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+
+        @tf.function
+        def preprocess(prompts, images):
+            return preprocessor.generate_preprocess(
+                {"prompts": prompts, "images": images}
+            )
+
+        outputs = preprocess(
+            tf.constant(["the [IMG] quick"]),
+            tf.constant(np.zeros((1, 8, 8, 3), dtype="float32")),
+        )
+        token_ids = np.array(outputs["token_ids"])
+        num_placeholders = int(
+            np.sum(
+                token_ids == preprocessor.tokenizer.image_placeholder_token_id
+            )
+        )
+
+        self.assertEqual(num_placeholders, 4)
+        self.assertAllEqual(outputs["image_sizes"], [[8, 8]])
+
+    def test_call_with_images_when_tf_handle_is_none(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        x = {"prompts": ["the [IMG] quick"], "images": [image]}
+
+        with (
+            mock.patch.object(preprocessor_module, "tf", None),
+            mock.patch.object(tensor_utils, "tf", None),
+        ):
+            x_out, y, sample_weight = preprocessor(x)
+
+        self.assertEqual(ops.shape(x_out["token_ids"]), (1, 32))
+        self.assertEqual(ops.shape(y), (1, 32))
+        self.assertEqual(ops.shape(sample_weight), (1, 32))
+        self.assertAllEqual(x_out["image_sizes"], [[8, 8]])
+        token_ids = np.array(x_out["token_ids"])[0]
+        expected_indices = np.nonzero(
+            token_ids == preprocessor.tokenizer.image_placeholder_token_id
+        )[0]
+        self.assertEqual(len(expected_indices), 4)
+        self.assertAllEqual(x_out["placeholder_indices"], [expected_indices])
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_call_with_images_in_tf_data_matches_python(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        prompts = ["the [IMG] quick"]
+        images = np.zeros((1, 8, 8, 3), dtype="float32")
+        expected = preprocessor({"prompts": prompts, "images": images})
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            {"prompts": prompts, "images": images}
+        ).batch(1)
+        outputs = next(iter(ds.map(preprocessor)))
+
+        for output, expected_output in zip(
+            tf.nest.flatten(outputs), tf.nest.flatten(expected)
+        ):
+            self.assertAllClose(output, expected_output)
 
     def test_generate_preprocess_text_only(self):
         preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
