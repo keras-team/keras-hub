@@ -41,6 +41,32 @@ PRESET_MAP = {
     "mistral_small_3.2_24b_instruct_2506_en": (
         "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
     ),
+    "ministral_3_3b_base_2512_en": "mistralai/Ministral-3-3B-Base-2512",
+    "ministral_3_3b_instruct_2512_en": (
+        "mistralai/Ministral-3-3B-Instruct-2512"
+    ),
+    "ministral_3_3b_reasoning_2512_en": (
+        "mistralai/Ministral-3-3B-Reasoning-2512"
+    ),
+    "ministral_3_8b_base_2512_en": "mistralai/Ministral-3-8B-Base-2512",
+    "ministral_3_8b_instruct_2512_en": (
+        "mistralai/Ministral-3-8B-Instruct-2512"
+    ),
+    "ministral_3_8b_reasoning_2512_en": (
+        "mistralai/Ministral-3-8B-Reasoning-2512"
+    ),
+    "ministral_3_14b_base_2512_en": "mistralai/Ministral-3-14B-Base-2512",
+    "ministral_3_14b_instruct_2512_en": (
+        "mistralai/Ministral-3-14B-Instruct-2512"
+    ),
+    "ministral_3_14b_reasoning_2512_en": (
+        "mistralai/Ministral-3-14B-Reasoning-2512"
+    ),
+    "shieldstral_1.0_3b_en": "mistralai/Shieldstral-1.0-3B",
+    "magistral_small_2509_en": "mistralai/Magistral-Small-2509",
+    "devstral_small_2_24b_instruct_2512_en": (
+        "mistralai/Devstral-Small-2-24B-Instruct-2512"
+    ),
 }
 
 MAX_NEW_TOKENS = 64
@@ -337,8 +363,10 @@ def validate_output(keras_model, hf_results, skip_generate=False):
 
     # The backbone always declares `pixel_values`/`image_sizes`/
     # `placeholder_indices` as graph inputs, so a text-only forward pass
-    # feeds it empty-batched image tensors rather than omitting them —
-    # this is a no-op through the image-merge layer.
+    # feeds it zero-length image tensors rather than omitting them.
+    # `Mistral3ImageFeatureExtractor` short-circuits on a zero-length image
+    # batch, so this is a genuine no-op through the vision encoder and
+    # image-merge layer.
     vision_encoder = backbone.vision_encoder
     patch_size = vision_encoder.patch_size
     token_ids = ops.convert_to_tensor(text_results["token_ids"].astype("int32"))

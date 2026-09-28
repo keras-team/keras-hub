@@ -44,6 +44,21 @@ class MistralBackbone(Backbone):
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor (float, optional): The scaling factor for
             calculation of roatary embedding. Defaults to `1.0`.
+        rope_type: str, optional. The type of RoPE scaling to apply.
+            Supports `"linear"` and `"yarn"`. Defaults to `"linear"`.
+        beta_fast: float, optional. The YaRN beta fast parameter. Only used
+            when `rope_type="yarn"`. Defaults to `32.0`.
+        beta_slow: float, optional. The YaRN beta slow parameter. Only used
+            when `rope_type="yarn"`. Defaults to `1.0`.
+        original_max_position_embeddings: int, optional. The pretraining
+            context length before YaRN scaling. Only used when
+            `rope_type="yarn"`. Defaults to `4096`.
+        attention_factor: float, optional. The YaRN temperature scale
+            applied to the rotary cos/sin embeddings. Only used when
+            `rope_type="yarn"`. Defaults to `None`, which derives the scale
+            as `0.1 * log(rope_scaling_factor) + 1.0` (the standard YaRN
+            default). Pass an explicit value for checkpoints that compute a
+            different scale from `mscale`/`mscale_all_dim`.
         layer_norm_epsilon (float, optional): Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window (int, optional): The sliding window for the mistral
@@ -57,6 +72,11 @@ class MistralBackbone(Backbone):
             Set explicitly when the model's head size is not equal to
             `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
+        llama_4_scaling_beta: float, optional. When set, scales query
+            magnitude by absolute position with a Llama4-style
+            `attn_temperature_tuning`: `query *= 1 + llama_4_scaling_beta *
+            log(1 + floor(pos / original_max_position_embeddings))`.
+            Defaults to `None` (no scaling).
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -100,10 +120,16 @@ class MistralBackbone(Backbone):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
+        attention_factor=None,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         head_dim=None,
         dropout=0,
+        llama_4_scaling_beta=None,
         dtype=None,
         **kwargs,
     ):
@@ -124,12 +150,20 @@ class MistralBackbone(Backbone):
                 num_key_value_heads=num_key_value_heads,
                 rope_max_wavelength=rope_max_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
+                rope_type=rope_type,
+                beta_fast=beta_fast,
+                beta_slow=beta_slow,
+                original_max_position_embeddings=(
+                    original_max_position_embeddings
+                ),
+                attention_factor=attention_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
                 head_dim=head_dim,
                 dropout=dropout,
+                llama_4_scaling_beta=llama_4_scaling_beta,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -170,10 +204,16 @@ class MistralBackbone(Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.attention_factor = attention_factor
         self.sliding_window = sliding_window
         self.head_dim = head_dim
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
+        self.llama_4_scaling_beta = llama_4_scaling_beta
 
     def get_config(self):
         config = super().get_config()
@@ -186,11 +226,19 @@ class MistralBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
+                "attention_factor": self.attention_factor,
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "llama_4_scaling_beta": self.llama_4_scaling_beta,
             }
         )
         return config
