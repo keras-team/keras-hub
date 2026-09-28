@@ -228,6 +228,9 @@ def precompute_hf_outputs(hf_preset, hf_config, skip_generate=False):
     hf_model = Mistral3ForConditionalGeneration.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
+    # FP8 checkpoints (e.g. Ministral 3, Devstral Small 2) dequantize to
+    # bfloat16 regardless of `torch_dtype`. Cast them to match the rest.
+    hf_model = hf_model.float()
     hf_model.eval()
 
     text_results = run_hf_text_forward(

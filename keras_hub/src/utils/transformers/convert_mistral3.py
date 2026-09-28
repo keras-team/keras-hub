@@ -177,7 +177,33 @@ def convert_backbone_config(transformers_config):
     return backbone_config
 
 
+def _is_fp8_quantized(transformers_config):
+    quantization_config = transformers_config.get("quantization_config")
+    if quantization_config is None:
+        return False
+    # Official FP8 checkpoints (e.g. Ministral 3, Devstral Small 2) quantize
+    # only the text dense layers, with one scale per tensor.
+    if (
+        quantization_config.get("quant_method") != "fp8"
+        or quantization_config.get("weight_block_size") is not None
+    ):
+        raise ValueError(
+            "Mistral3 checkpoint conversion only supports per-tensor FP8 "
+            f"quantization. Received: quantization_config={quantization_config}"
+        )
+    return True
+
+
 def convert_weights(backbone, loader, transformers_config):
+    fp8_quantized = _is_fp8_quantized(transformers_config)
+
+    def port_dense_weight(keras_variable, hf_weight_key, hook_fn):
+        hf_tensor = loader.get_tensor(hf_weight_key).astype(np.float32)
+        if fp8_quantized:
+            scale = loader.get_tensor(f"{hf_weight_key}_scale_inv")
+            hf_tensor = hf_tensor * scale.astype(np.float32)
+        keras_variable.assign(hook_fn(hf_tensor, list(keras_variable.shape)))
+
     # === Text ===
     # Embeddings
     loader.port_weight(
@@ -217,28 +243,28 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
         # Attention layers
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.q_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
                 np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.k_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
                 np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.v_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
                 np.transpose(hf_tensor.astype(np.float32)), keras_shape
             ),
         )
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.self_attn.o_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.reshape(
@@ -247,21 +273,21 @@ def convert_weights(backbone, loader, transformers_config):
         )
 
         # MLP layers
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.mlp.gate_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
                 hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.mlp.up_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(
                 hf_tensor.astype(np.float32), axes=(1, 0)
             ),
         )
-        loader.port_weight(
+        port_dense_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
             hf_weight_key=f"language_model.model.layers.{index}.mlp.down_proj.weight",
             hook_fn=lambda hf_tensor, _: np.transpose(

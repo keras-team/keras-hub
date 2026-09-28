@@ -113,6 +113,96 @@ class TestTask(TestCase):
         # text-only converter test.
         self.assertAllClose(keras_out, hf_out, atol=1e-2)
 
+    @pytest.mark.large
+    def test_convert_fp8_quantized_preset(self):
+        # Official Ministral 3 and Devstral Small 2 checkpoints store the
+        # text dense layers in FP8 with a per-tensor `weight_scale_inv`.
+        # Check that the FP8 checkpoint loads to the same backbone as a
+        # checkpoint with the dequantized weights.
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        safetensors_torch = pytest.importorskip("safetensors.torch")
+
+        text_config = transformers.MistralConfig(
+            vocab_size=100,
+            hidden_size=16,
+            intermediate_size=24,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            num_key_value_heads=1,
+            head_dim=8,
+            sliding_window=None,
+            rms_norm_eps=1e-5,
+        )
+        vision_config = transformers.PixtralVisionConfig(
+            hidden_size=8,
+            intermediate_size=16,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+            image_size=16,
+            patch_size=4,
+        )
+        config = transformers.Mistral3Config(
+            text_config=text_config,
+            vision_config=vision_config,
+            image_token_index=10,
+            spatial_merge_size=2,
+        )
+        torch.manual_seed(0)
+        hf_model = transformers.Mistral3ForConditionalGeneration(config)
+
+        dense_names = ("q_proj", "k_proj", "v_proj", "o_proj")
+        dense_names += ("gate_proj", "up_proj", "down_proj")
+        backbones = []
+        with tempfile.TemporaryDirectory() as preset_dir:
+            hf_model.save_pretrained(preset_dir)
+            weights_path = os.path.join(preset_dir, "model.safetensors")
+            weights = safetensors_torch.load_file(weights_path)
+            weights["language_model.lm_head.weight"] = (
+                hf_model.lm_head.weight.detach().clone()
+            )
+            fp8_weights = dict(weights)
+            for key in list(weights):
+                is_text_dense = key.startswith("language_model.") and any(
+                    f"{name}.weight" in key for name in dense_names
+                )
+                if not is_text_dense:
+                    continue
+                scale = weights[key].abs().max() / 448.0
+                quantized = (weights[key] / scale).to(torch.float8_e4m3fn)
+                fp8_weights[key] = quantized
+                fp8_weights[f"{key}_scale_inv"] = scale.to(torch.bfloat16)
+                weights[key] = quantized.float() * scale.to(torch.bfloat16)
+
+            safetensors_torch.save_file(weights, weights_path)
+            backbones.append(Mistral3Backbone.from_preset(preset_dir))
+
+            safetensors_torch.save_file(fp8_weights, weights_path)
+            config_path = os.path.join(preset_dir, "config.json")
+            with open(config_path) as f:
+                config_dict = json.load(f)
+            config_dict["quantization_config"] = {
+                "quant_method": "fp8",
+                "activation_scheme": "static",
+                "weight_block_size": None,
+            }
+            with open(config_path, "w") as f:
+                json.dump(config_dict, f)
+            backbones.append(Mistral3Backbone.from_preset(preset_dir))
+
+        for expected, actual in zip(*[b.weights for b in backbones]):
+            self.assertAllClose(expected, actual)
+
+    def test_convert_weights_rejects_unsupported_quantization(self):
+        transformers_config = {
+            "quantization_config": {
+                "quant_method": "fp8",
+                "weight_block_size": [128, 128],
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "per-tensor FP8"):
+            convert_mistral3.convert_weights(None, None, transformers_config)
+
     def test_convert_backbone_config_detects_mistral3(self):
         transformers_config = {
             "text_config": {
