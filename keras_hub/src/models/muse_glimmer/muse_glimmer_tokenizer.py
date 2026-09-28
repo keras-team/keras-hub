@@ -27,6 +27,8 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         bos_token: str. Beginning-of-sequence token.
         eos_token: str. End-of-sequence token.
         pad_token: str. Padding token.
+        eot_token: str or `None`. End-of-turn token. `generate()` stops at
+            this token and at `eos_token`. Defaults to `"<|eot|>"`.
         image_token_id: int. Placeholder token id expanded to per-patch
             image embeddings by the preprocessor. Defaults to `200092`.
         video_token_id: int. Placeholder token id expanded to per-frame
@@ -42,6 +44,7 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         bos_token="<|begin_of_text|>",
         eos_token="<|end_of_text|>",
         pad_token="<|finetune_right_pad|>",
+        eot_token="<|eot|>",
         image_token_id=200092,
         video_token_id=200091,
         **kwargs,
@@ -49,6 +52,9 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         self._add_special_token(bos_token, "start_token")
         self._add_special_token(eos_token, "end_token")
         self._add_special_token(pad_token, "pad_token")
+        self.eot_token = eot_token
+        if eot_token is not None:
+            self._add_special_token(eot_token, "end_token2")
         self.image_token_id = image_token_id
         self.video_token_id = video_token_id
 
@@ -58,6 +64,7 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         config = super().get_config()
         config.update(
             {
+                "eot_token": self.eot_token,
                 "image_token_id": self.image_token_id,
                 "video_token_id": self.video_token_id,
             }

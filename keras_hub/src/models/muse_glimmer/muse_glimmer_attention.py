@@ -321,9 +321,6 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
             # assumes. Applying it here would double-mask incorrectly.
             skip_sliding_window_mask=is_context_cache,
         )
-        attention_output = self._dropout_layer(
-            attention_output, training=training
-        )
 
         if self.enable_qk_scale_and_gate:
             attention_output = attention_output * ops.sigmoid(

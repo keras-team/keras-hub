@@ -69,7 +69,7 @@ def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
     )
 
     lower_grid = tf.floor(ideal_grid)
-    upper_grid = tf.ceil(ideal_grid)
+    upper_grid = tf.math.ceil(ideal_grid)
     candidates = tf.stack(
         [
             tf.stack([lower_grid[0], lower_grid[1]]),
@@ -93,6 +93,110 @@ def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
     selected = tf.where(tf.reduce_any(valid), selected, fallback)
     selected = tf.cast(selected * resize_patch_size, "int32")
     return selected[0], selected[1]
+
+
+def _resize(images, orig_h, orig_w, target_h, target_w, method, antialias):
+    """Resize a `(..., height, width, 3)` image or video with Keras ops."""
+    rank = len(ops.shape(images))
+    # The PyTorch backend does not support Lanczos interpolation in
+    # `ops.image.resize`. Fall back to `scale_and_translate`, the
+    # primitive `resize` itself uses on other backends for this case.
+    if keras.backend.backend() == "torch" and method in (
+        "lanczos3",
+        "lanczos5",
+    ):
+        leading_dims = tuple(int(d) for d in ops.shape(images)[:-3])
+        scale = ops.array(
+            [target_h / orig_h, target_w / orig_w], dtype="float32"
+        )
+        return ops.image.scale_and_translate(
+            images,
+            leading_dims + (target_h, target_w, 3),
+            scale=scale,
+            translation=ops.zeros((2,), dtype="float32"),
+            spatial_dims=(rank - 3, rank - 2),
+            method=method,
+            antialias=antialias,
+        )
+    if rank == 3:
+        images = ops.expand_dims(images, 0)
+    images = ops.image.resize(
+        images,
+        size=(target_h, target_w),
+        interpolation=method,
+        antialias=antialias,
+    )
+    return images[0] if rank == 3 else images
+
+
+def _resize_pixels(
+    images, orig_h, orig_w, target_h, target_w, method, antialias
+):
+    """Resize images with Keras ops to float32 values in `[0, 255]`."""
+    if keras.backend.is_int_dtype(images.dtype):
+        # Matches torchvision's separable uint8 resize: width pass,
+        # round to uint8 range, then height pass, round again.
+        images = _resize(
+            images, orig_h, orig_w, orig_h, target_w, method, antialias
+        )
+        # The TF backend's `ops.image.resize` preserves integer
+        # dtypes, so clip/round need a float cast first.
+        images = ops.cast(images, "float32")
+        images = ops.round(ops.clip(images, 0.0, 255.0))
+        images = _resize(
+            images, orig_h, target_w, target_h, target_w, method, antialias
+        )
+        images = ops.round(ops.clip(images, 0.0, 255.0))
+    else:
+        images = _resize(
+            images, orig_h, orig_w, target_h, target_w, method, antialias
+        )
+    images = ops.cast(images, "float32")
+    return ops.clip(images, 0.0, 255.0)
+
+
+def _resize_pixels_tf(
+    images, input_is_integer, orig_h, target_h, target_w, method, antialias
+):
+    """Resize float32 images in a TF graph to values in `[0, 255]`."""
+    unbatched = images.shape.rank == 3
+    if unbatched:
+        images = images[tf.newaxis]
+    if input_is_integer:
+        # Matches torchvision's separable uint8 resize: width pass,
+        # round to uint8 range, then height pass, round again.
+        images = tf.image.resize(
+            images, (orig_h, target_w), method=method, antialias=antialias
+        )
+        images = tf.round(tf.clip_by_value(images, 0.0, 255.0))
+        images = tf.image.resize(
+            images, (target_h, target_w), method=method, antialias=antialias
+        )
+        images = tf.round(tf.clip_by_value(images, 0.0, 255.0))
+    else:
+        images = tf.image.resize(
+            images, (target_h, target_w), method=method, antialias=antialias
+        )
+    if unbatched:
+        images = images[0]
+    return tf.clip_by_value(images, 0.0, 255.0)
+
+
+def _normalize(images, image_converter, scale, offset, compute_dtype):
+    """Apply `scale` and `offset` with the helpers of `image_converter`."""
+    if scale is not None:
+        scale = image_converter._expand_non_channel_dims(scale, images)
+        images, scale = image_converter._convert_types(
+            images, scale, compute_dtype
+        )
+        images = images * scale
+    if offset is not None:
+        offset = image_converter._expand_non_channel_dims(offset, images)
+        images, offset = image_converter._convert_types(
+            images, offset, images.dtype
+        )
+        images = images + offset
+    return images
 
 
 @keras_hub_export("keras_hub.layers.MuseGlimmerImageConverter")
@@ -142,17 +246,6 @@ class MuseGlimmerImageConverter(ImageConverter):
             return self._call_tf(inputs)
         return self._call_ops(inputs)
 
-    def _normalize(self, image):
-        if self.scale is not None:
-            scale = self._expand_non_channel_dims(self.scale, image)
-            image, scale = self._convert_types(image, scale, self.compute_dtype)
-            image = image * scale
-        if self.offset is not None:
-            offset = self._expand_non_channel_dims(self.offset, image)
-            image, offset = self._convert_types(image, offset, image.dtype)
-            image = image + offset
-        return image
-
     def _call_tf(self, inputs):
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         image = tf.cast(inputs, "float32")
@@ -164,32 +257,18 @@ class MuseGlimmerImageConverter(ImageConverter):
             self.merge_size,
             self.max_image_tokens,
         )
-        if input_is_integer:
-            # Matches torchvision's separable uint8 resize: width pass,
-            # round to uint8 range, then height pass, round again.
-            image = tf.image.resize(
-                image[tf.newaxis],
-                (orig_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )[0]
-            image = tf.round(tf.clip_by_value(image, 0.0, 255.0))
-            image = tf.image.resize(
-                image[tf.newaxis],
-                (target_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )[0]
-            image = tf.round(tf.clip_by_value(image, 0.0, 255.0))
-        else:
-            image = tf.image.resize(
-                image[tf.newaxis],
-                (target_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )[0]
-        image = tf.clip_by_value(image, 0.0, 255.0)
-        image = self._normalize(image)
+        image = _resize_pixels_tf(
+            image,
+            input_is_integer,
+            orig_h,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        image = _normalize(
+            image, self, self.scale, self.offset, self.compute_dtype
+        )
 
         grid_h, grid_w = (
             target_h // self.patch_size,
@@ -214,35 +293,7 @@ class MuseGlimmerImageConverter(ImageConverter):
         grid_thw = tf.stack([tf.constant(1, dtype="int32"), grid_h, grid_w])
         return {"patches": image, "grid_thw": grid_thw}
 
-    def _resize(self, image, orig_h, orig_w, target_h, target_w):
-        # The PyTorch backend does not support Lanczos interpolation in
-        # `ops.image.resize`. Fall back to `scale_and_translate`, the
-        # primitive `resize` itself uses on other backends for this case.
-        if keras.backend.backend() == "torch" and self.interpolation in (
-            "lanczos3",
-            "lanczos5",
-        ):
-            scale = ops.array(
-                [target_h / orig_h, target_w / orig_w], dtype="float32"
-            )
-            return ops.image.scale_and_translate(
-                image,
-                (target_h, target_w, 3),
-                scale=scale,
-                translation=ops.zeros((2,), dtype="float32"),
-                spatial_dims=(0, 1),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )
-        return ops.image.resize(
-            ops.expand_dims(image, 0),
-            size=(target_h, target_w),
-            interpolation=self.interpolation,
-            antialias=self.antialias,
-        )[0]
-
     def _call_ops(self, inputs):
-        input_is_integer = keras.backend.is_int_dtype(inputs.dtype)
         image = inputs
         orig_h, orig_w = int(ops.shape(image)[0]), int(ops.shape(image)[1])
         target_h, target_w = _smart_resize(
@@ -252,21 +303,18 @@ class MuseGlimmerImageConverter(ImageConverter):
             self.merge_size,
             self.max_image_tokens,
         )
-        if input_is_integer:
-            # Matches torchvision's separable uint8 resize: width pass,
-            # round to uint8 range, then height pass, round again.
-            image = self._resize(image, orig_h, orig_w, orig_h, target_w)
-            # The TF backend's `ops.image.resize` preserves integer
-            # dtypes, so clip/round need a float cast first.
-            image = ops.cast(image, "float32")
-            image = ops.round(ops.clip(image, 0.0, 255.0))
-            image = self._resize(image, orig_h, target_w, target_h, target_w)
-            image = ops.round(ops.clip(image, 0.0, 255.0))
-        else:
-            image = self._resize(image, orig_h, orig_w, target_h, target_w)
-        image = ops.cast(image, "float32")
-        image = ops.clip(image, 0.0, 255.0)
-        image = self._normalize(image)
+        image = _resize_pixels(
+            image,
+            orig_h,
+            orig_w,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        image = _normalize(
+            image, self, self.scale, self.offset, self.compute_dtype
+        )
 
         grid_h, grid_w = (
             target_h // self.patch_size,

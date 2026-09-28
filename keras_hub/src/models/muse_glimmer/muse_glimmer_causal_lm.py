@@ -1,4 +1,10 @@
+import itertools
+from functools import partial
+from types import SimpleNamespace
+
+import keras
 from keras import ops
+from keras import tree
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
@@ -8,30 +14,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor import (  # noqa: E501
     MuseGlimmerCausalLMPreprocessor,
 )
+from keras_hub.src.samplers.greedy_sampler import GreedySampler
+from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.utils.tensor_utils import any_equal
-
-
-def _set_vision_encoder_padding_caps(backbone, preprocessor):
-    """Set vision encoder padding caps from processor limits."""
-    vision_encoder = backbone.vision_encoder
-    if vision_encoder is None or preprocessor is None:
-        return
-    window_patches = max(
-        vision_encoder.window_size // vision_encoder.patch_size, 1
-    )
-    image_converter = preprocessor.image_converter
-    if image_converter is not None:
-        # Derive the window cap from the image token budget.
-        raw_side = image_converter.max_image_tokens * image_converter.merge_size
-        vision_encoder.max_num_windows = -(-raw_side // window_patches)
-    video_converter = preprocessor.video_converter
-    if video_converter is not None:
-        vision_encoder.max_num_frames = video_converter.num_frames
-        # Derive the frame patch cap from the video token budget.
-        vision_encoder.max_frame_size = (
-            video_converter.max_video_frame_tokens
-            * video_converter.merge_size**2
-        )
 
 
 @keras_hub_export("keras_hub.models.MuseGlimmerCausalLM")
@@ -48,6 +33,30 @@ class MuseGlimmerCausalLM(CausalLM):
         backbone: A `keras_hub.models.MuseGlimmerBackbone` instance.
         preprocessor: A `keras_hub.models.MuseGlimmerCausalLMPreprocessor`
             or `None`.
+
+    Example:
+    ```python
+    muse_glimmer_lm = keras_hub.models.MuseGlimmerCausalLM.from_preset(
+        "muse_glimmer_30b"
+    )
+
+    # Generate text.
+    muse_glimmer_lm.generate("What is Keras?", max_length=64)
+
+    # Generate with a different sampler.
+    muse_glimmer_lm.compile(sampler="top_k")
+    muse_glimmer_lm.generate("What is Keras?", max_length=64)
+
+    # Speculative decoding with the DFlash assistant. The output matches
+    # plain greedy decoding when the sampler is greedy.
+    assistant = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
+        "muse_glimmer_30b_assistant"
+    )
+    muse_glimmer_lm.compile(sampler="greedy")
+    muse_glimmer_lm.generate(
+        "What is Keras?", max_length=64, assistant_model=assistant
+    )
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -57,7 +66,6 @@ class MuseGlimmerCausalLM(CausalLM):
         # === Layers ===
         self.backbone = backbone
         self.preprocessor = preprocessor
-        _set_vision_encoder_padding_caps(backbone, preprocessor)
 
         # === Functional Model ===
         inputs = backbone.input
@@ -187,7 +195,83 @@ class MuseGlimmerCausalLM(CausalLM):
         _, hidden_states, cache = outputs
         return hidden_states, cache
 
-    def generate_step(self, inputs, stop_token_ids=None):
+    def _write_assistant_context(
+        self, assistant_model, context_hidden_states, assistant_cache, start
+    ):
+        """Write target context into the assistant cache at `start`.
+
+        The call runs the drafter on a one-token dummy block to keep the
+        cost low. The block output is discarded.
+        """
+        batch_size = ops.shape(context_hidden_states)[0]
+        dummy_block = ops.zeros(
+            (batch_size, 1, self.backbone.hidden_dim), dtype=self.compute_dtype
+        )
+        _, assistant_cache = assistant_model.call_with_cache(
+            noise_embeds=dummy_block,
+            context_hidden_states=context_hidden_states,
+            cache=assistant_cache,
+            cache_update_index=start,
+            padding_mask=ops.ones((batch_size, 1), dtype="int32"),
+        )
+        return assistant_cache
+
+    def _draft_block(
+        self, assistant_model, prompt, anchor, last_context, assistant_cache
+    ):
+        """Draft the candidate logits for the positions after `anchor`.
+
+        The assistant cache must already hold the target context for every
+        position below `anchor - 1`. `last_context` is the target context
+        at `anchor - 1`. The call rewrites that slot, so the valid context
+        is `[0, anchor)` and the block starts at `anchor`. This matches
+        the HF DFlash layout.
+        """
+        batch_size = ops.shape(prompt)[0]
+        num_candidates = assistant_model.block_size - 1
+        anchor_token = ops.slice(prompt, [0, anchor], [batch_size, 1])
+        noise_ids = ops.concatenate(
+            [
+                anchor_token,
+                ops.full(
+                    (batch_size, num_candidates),
+                    assistant_model.mask_token_id,
+                    dtype=prompt.dtype,
+                ),
+            ],
+            axis=1,
+        )
+        noise_embeds = self.backbone.token_embedding(noise_ids)
+        # A prompt of length one has no context. Slot 0 then holds the
+        # anchor context, and the block starts one position late.
+        context_position = ops.maximum(anchor - 1, 0)
+        block_hidden, assistant_cache = assistant_model.call_with_cache(
+            noise_embeds=noise_embeds,
+            context_hidden_states=last_context,
+            cache=assistant_cache,
+            cache_update_index=context_position,
+            padding_mask=ops.ones(
+                (batch_size, num_candidates + 1), dtype="int32"
+            ),
+        )
+        logits = self.backbone.token_embedding(
+            block_hidden[:, 1:, :], reverse=True
+        )
+        return self._apply_logit_softcap(logits), assistant_cache
+
+    def generate_step(self, inputs, stop_token_ids=None, assistant_model=None):
+        """Run one compiled generation pass.
+
+        Args:
+            inputs: dict. The preprocessed generation inputs.
+            stop_token_ids: optional tuple of int. Token ids that end
+                generation.
+            assistant_model: optional
+                `keras_hub.models.MuseGlimmerAssistantCausalLM`. When set,
+                the pass uses DFlash speculative decoding. `generate()`
+                binds this argument. The model never stores the
+                assistant on `self`.
+        """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
 
         pixel_values = inputs.get("pixel_values", None)
@@ -201,10 +285,9 @@ class MuseGlimmerCausalLM(CausalLM):
         ):
             img_embeddings = self._encode_vision(pixel_values, image_grid_thw)
 
-        _assistant = getattr(self, "_assistant_model", None)
         target_layer_ids = (
-            _assistant.backbone.context_projection_layer_ids
-            if _assistant is not None
+            assistant_model.backbone.context_projection_layer_ids
+            if assistant_model is not None
             else None
         )
 
@@ -238,152 +321,166 @@ class MuseGlimmerCausalLM(CausalLM):
         draft_next = None
         draft_cache = None
         verify_next = None
+        sampler_model = self
 
-        # DFlash block-diffusion speculative decoding: build draft_next and
-        # verify_next when an assistant model is attached via generate().
-        # Unlike a single-token autoregressive drafter, the DFlash
-        # assistant produces its whole candidate block from ONE forward
-        # pass. `SpeculativeSampler` still calls `draft_next` once per
-        # candidate position, so `draft_next` computes that one-shot
-        # block on its first call each cycle and caches the result (a
-        # plain Python-level memo — safe because `SpeculativeSampler`'s
-        # per-cycle draft loop is an ordinary unrolled Python `for` loop
-        # traced once per compiled generate graph, not a symbolic loop),
-        # returning a different position's slice on each subsequent call
-        # instead of recomputing the block.
+        # DFlash block-diffusion speculative decoding. The assistant drafts
+        # the whole candidate block in one forward pass. `SpeculativeSampler`
+        # calls `draft_next` once per candidate, so the first call of each
+        # cycle computes the block. Later calls return one slice of it.
         #
-        # `draft_cache`'s 4th element is the assistant's own persistent
-        # context-cache (see `MuseGlimmerTextAttention`'s docstring): one
-        # real target position's key/value cached per cycle, growing
-        # across the whole generation, so later cycles reuse earlier
-        # context K/V instead of recomputing it from scratch every time
-        # (the actual DFlash caching benefit) — only the noise block is
-        # ever recomputed fresh.
-        if _assistant is not None:
-            num_candidates = _assistant.block_size - 1
-            mask_token_id = _assistant.mask_token_id
-            hidden_dim = self.backbone.hidden_dim
-            assistant_backbone = _assistant.backbone
+        # `draft_cache` is `(packed_window, target_cache, anchor, state)`.
+        # `packed_window` holds the target context of the last verify
+        # window, flattened to one row. `state` is
+        # `(assistant_cache, window_start)`. The assistant cache persists
+        # the context key/value across cycles. The noise block is never
+        # cached.
+        if assistant_model is not None:
+            num_candidates = assistant_model.block_size - 1
+            window_length = num_candidates + 1
+            assistant_backbone = assistant_model.backbone
+            batch_size = ops.shape(token_ids)[0]
+            max_length = ops.shape(token_ids)[1]
+            context_dim = len(target_layer_ids) * self.backbone.hidden_dim
 
-            batch_size_ = ops.shape(token_ids)[0]
-            max_length_ = ops.shape(token_ids)[1]
-            anchor_pos = ops.cast(index - 1, "int32")
-            context_dim = len(target_layer_ids) * hidden_dim
-            init_context = ops.slice(
-                target_hidden_states,
-                [0, anchor_pos, 0],
-                [batch_size_, 1, context_dim],
-            )
-            # Persistent context-cache for the assistant's own attention
-            # layers (see `MuseGlimmerTextAttention`'s docstring): holds
-            # one real target position's key/value per drafting cycle,
-            # growing across the whole generation, so later cycles reuse
-            # earlier context K/V instead of recomputing it. The noise
-            # block itself is never cached (always fresh, discarded each
-            # cycle) — see `MuseGlimmerAssistantCausalLM.call_with_cache`.
+            def get_window_start(anchor):
+                # First position of the verify window for `anchor`.
+                return ops.clip(anchor, 0, max_length - window_length)
+
+            def pack_window(window):
+                return ops.reshape(
+                    window, (batch_size, 1, window_length * context_dim)
+                )
+
+            # Seed the full prompt context before the first cycle, as HF
+            # DFlash does. Slots at or after the anchor hold unverified
+            # context. Later cycles overwrite them before they become valid.
             assistant_cache = ops.zeros(
                 [
-                    batch_size_,
+                    batch_size,
                     assistant_backbone.num_layers,
                     2,
-                    max_length_,
+                    max_length,
                     assistant_backbone.num_key_value_heads,
                     assistant_backbone.head_dim,
                 ],
                 dtype=self.compute_dtype,
             )
-            draft_cache = (init_context, cache, anchor_pos, assistant_cache)
+            assistant_cache = self._write_assistant_context(
+                assistant_model, target_hidden_states, assistant_cache, 0
+            )
+            anchor = ops.cast(index - 1, "int32")
+            window_start = ops.clip(anchor - 1, 0, max_length - window_length)
+            window = ops.slice(
+                target_hidden_states,
+                [0, window_start, 0],
+                [batch_size, window_length, context_dim],
+            )
+            draft_cache = (
+                pack_window(window),
+                cache,
+                anchor,
+                (assistant_cache, window_start),
+            )
 
-            _block_logits_memo = {}
+            # `SpeculativeSampler` calls `draft_next` exactly
+            # `num_candidates` times per cycle. Recompute the block on the
+            # first call of each cycle, so eager backends (torch) do not
+            # reuse a stale block from an earlier cycle.
+            _block_logits_memo = {"num_calls": 0}
 
             def draft_next(prompt, draft_state, call_index):
-                context_seed, _, cycle_anchor_pos, assistant_cache_state = (
+                packed_window, target_cache, anchor, assistant_state = (
                     draft_state
                 )
-                if "logits" not in _block_logits_memo:
-                    batch = ops.shape(prompt)[0]
-                    last_token_id = ops.slice(
-                        prompt, [0, cycle_anchor_pos], [batch, 1]
+                is_first_call = _block_logits_memo["num_calls"] == 0
+                _block_logits_memo["num_calls"] = (
+                    _block_logits_memo["num_calls"] + 1
+                ) % num_candidates
+                if is_first_call:
+                    assistant_cache, window_start = assistant_state
+                    window = ops.reshape(
+                        packed_window, (batch_size, window_length, context_dim)
                     )
-                    noise_ids = ops.concatenate(
-                        [
-                            last_token_id,
-                            ops.full(
-                                (batch, num_candidates),
-                                mask_token_id,
-                                dtype=prompt.dtype,
-                            ),
-                        ],
-                        axis=1,
+                    # Write every position of the last verify window. This
+                    # covers the old anchor and all accepted candidates.
+                    # Rejected positions lie at or after the new anchor.
+                    assistant_cache = self._write_assistant_context(
+                        assistant_model, window, assistant_cache, window_start
                     )
-                    noise_embeds = self.backbone.token_embedding(noise_ids)
-                    block_padding_mask = ops.ones(
-                        (batch, num_candidates + 1), dtype="int32"
+                    offset = ops.clip(
+                        ops.maximum(anchor - 1, 0) - window_start,
+                        0,
+                        window_length - 1,
                     )
-                    block_hidden, updated_assistant_cache = (
-                        _assistant.call_with_cache(
-                            noise_embeds=noise_embeds,
-                            context_hidden_states=context_seed,
-                            cache=assistant_cache_state,
-                            cache_update_index=cycle_anchor_pos,
-                            padding_mask=block_padding_mask,
-                        )
+                    last_context = ops.slice(
+                        window, [0, offset, 0], [batch_size, 1, context_dim]
                     )
-                    _block_logits_memo["assistant_cache"] = (
-                        updated_assistant_cache
+                    logits, assistant_cache = self._draft_block(
+                        assistant_model,
+                        prompt,
+                        anchor,
+                        last_context,
+                        assistant_cache,
                     )
-                    candidate_hidden = block_hidden[:, 1:, :]
-                    candidate_logits = self.backbone.token_embedding(
-                        candidate_hidden, reverse=True
+                    _block_logits_memo["logits"] = logits
+                    _block_logits_memo["state"] = (
+                        assistant_cache,
+                        get_window_start(anchor),
                     )
-                    candidate_logits = self._apply_logit_softcap(
-                        candidate_logits
-                    )
-                    _block_logits_memo["logits"] = candidate_logits
-                candidate_logits = _block_logits_memo["logits"]
                 position = ops.clip(
-                    ops.cast(call_index - cycle_anchor_pos - 1, "int32"),
+                    ops.cast(call_index - anchor - 1, "int32"),
                     0,
                     num_candidates - 1,
                 )
-                logits_i = ops.take(candidate_logits, position, axis=1)
-                dummy_hidden = ops.zeros((ops.shape(prompt)[0], 1))
+                logits_i = ops.take(_block_logits_memo["logits"], position, 1)
+                dummy_hidden = ops.zeros((batch_size, 1))
                 new_draft_state = (
-                    context_seed,
-                    draft_state[1],
-                    cycle_anchor_pos,
-                    _block_logits_memo["assistant_cache"],
+                    packed_window,
+                    target_cache,
+                    anchor,
+                    _block_logits_memo["state"],
                 )
                 return logits_i, dummy_hidden, new_draft_state
 
             def verify_next(prompt, target_cache, call_index, k):
-                batch = ops.shape(prompt)[0]
-                max_len = ops.shape(prompt)[1]
-                safe_start = ops.maximum(
-                    ops.cast(0, "int32"),
-                    ops.minimum(
-                        ops.cast(call_index - 1, "int32"),
-                        ops.cast(max_len - k - 1, "int32"),
-                    ),
-                )
+                start = get_window_start(ops.cast(call_index - 1, "int32"))
                 prompt_slice = ops.slice(
-                    prompt, [0, safe_start], [batch, k + 1]
+                    prompt, [0, start], [batch_size, k + 1]
                 )
                 logits, _, updated_cache, context_hidden = self.call_with_cache(
                     prompt_slice,
                     target_cache,
-                    safe_start,
+                    start,
                     padding_mask=None,
                     target_layer_ids=target_layer_ids,
                 )
-                start_offset = ops.cast(call_index - 1, "int32") - safe_start
+                start_offset = ops.cast(call_index - 1, "int32") - start
                 indices = ops.arange(k + 1, dtype="int32")
                 indices = ops.minimum(
                     indices + start_offset, ops.cast(k, "int32")
                 )
                 logits = ops.take(logits, indices, axis=1)
-                context_hidden = ops.take(context_hidden, indices, axis=1)
-                return logits, context_hidden, updated_cache
+                # The sampler passes one row of these hidden states to the
+                # next cycle. Every row holds the whole verify window, so
+                # the drafter can write all accepted positions.
+                packed_window = ops.broadcast_to(
+                    pack_window(context_hidden),
+                    (batch_size, k + 1, window_length * context_dim),
+                )
+                return logits, packed_window, updated_cache
+
+            # The sampler loop reads variables through `model`. Expose the
+            # assistant variables without tracking the assistant on `self`.
+            sampler_model = SimpleNamespace(
+                trainable_variables=(
+                    self.trainable_variables
+                    + assistant_model.trainable_variables
+                ),
+                non_trainable_variables=(
+                    self.non_trainable_variables
+                    + assistant_model.non_trainable_variables
+                ),
+            )
 
         token_ids = self.sampler(
             next=next,
@@ -393,7 +490,7 @@ class MuseGlimmerCausalLM(CausalLM):
             mask=padding_mask,
             stop_token_ids=stop_token_ids,
             hidden_states=hidden_states,
-            model=self,
+            model=sampler_model,
             draft_next=draft_next,
             draft_cache=draft_cache,
             verify_next=verify_next,
@@ -410,6 +507,111 @@ class MuseGlimmerCausalLM(CausalLM):
         else:
             padding_mask = ops.ones_like(token_ids, dtype="bool")
         return {"token_ids": token_ids, "padding_mask": padding_mask}
+
+    def _make_assisted_generate_function(self, assistant_model, sampler):
+        """Build the generate function for one assistant.
+
+        The function passes the assistant to `generate_step()` as an
+        argument. On JAX, the assistant variables go into the compiled
+        function as explicit state, like the target variables.
+        """
+        generate_step = partial(
+            self.generate_step, assistant_model=assistant_model
+        )
+        backend = keras.config.backend()
+        if backend == "torch":
+            import torch
+
+            def torch_generate_function(inputs, stop_token_ids=None):
+                with torch.no_grad():
+                    return generate_step(inputs, stop_token_ids)
+
+            return torch_generate_function
+        if backend == "tensorflow" and not self.run_eagerly:
+            import tensorflow as tf
+
+            jit_compile = getattr(self, "jit_compile", True)
+            return tf.function(generate_step, jit_compile=jit_compile)
+        if backend == "jax" and not self.run_eagerly:
+            import jax
+
+            def get_model_variables():
+                return (
+                    self.trainable_variables
+                    + self.non_trainable_variables
+                    + assistant_model.trainable_variables
+                    + assistant_model.non_trainable_variables
+                )
+
+            @partial(jax.jit, static_argnames=["stop_token_ids"])
+            def compiled_generate_function(inputs, stop_token_ids, state):
+                sampler_values, model_values = state
+                mapping = itertools.chain(
+                    zip(sampler.variables, sampler_values),
+                    zip(get_model_variables(), model_values),
+                )
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    outputs = generate_step(inputs, stop_token_ids)
+                sampler_values = []
+                for v in sampler.variables:
+                    new_v = scope.get_current_value(v)
+                    sampler_values.append(new_v if new_v is not None else v)
+                return outputs, sampler_values
+
+            def jax_generate_function(inputs, stop_token_ids=None):
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
+                state = (
+                    [v.value for v in sampler.variables],
+                    [v.value for v in get_model_variables()],
+                )
+                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
+                outputs, sampler_values = compiled_generate_function(
+                    inputs, stop_token_ids, state
+                )
+                for ref_v, v in zip(sampler.variables, sampler_values):
+                    ref_v.assign(v)
+                return outputs
+
+            return jax_generate_function
+        return generate_step
+
+    def _get_assisted_generate_function(self, assistant_model):
+        """Return a cached `(sampler, generate_function)` pair.
+
+        A greedy target keeps greedy acceptance. Any other compiled
+        sampler becomes the `base_sampler`, so acceptance and the bonus
+        token use stochastic rejection sampling. The cache key holds the
+        assistant identity, the block size, and the base sampler. The
+        cached function keeps both objects alive, so their ids stay
+        unique.
+        """
+        base_sampler = self.sampler
+        if isinstance(base_sampler, GreedySampler):
+            base_sampler = None
+        key = (
+            id(assistant_model),
+            assistant_model.block_size,
+            id(base_sampler),
+        )
+        cached = getattr(self, "_assisted_generate_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1], cached[2]
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=assistant_model.block_size - 1,
+            base_sampler=base_sampler,
+            temperature=getattr(self.sampler, "temperature", 1.0),
+        )
+        generate_function = self._make_assisted_generate_function(
+            assistant_model, sampler
+        )
+        self._assisted_generate_cache = (key, sampler, generate_function)
+        return sampler, generate_function
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # The cached assisted function holds the old target variables.
+        self._assisted_generate_cache = None
 
     def generate(
         self,
@@ -429,34 +631,36 @@ class MuseGlimmerCausalLM(CausalLM):
                 this (target) model verifies it in one parallel forward
                 pass via `keras_hub.samplers.SpeculativeSampler`. The
                 assistant's own `block_size - 1` becomes the sampler's
-                `num_speculative_tokens`. Defaults to `None` (plain
-                autoregressive decoding with the compiled `sampler`).
+                `num_speculative_tokens`. A greedy compiled `sampler`
+                gives greedy acceptance. Any other compiled `sampler`
+                becomes the `base_sampler` for rejection sampling. The
+                model caches the compiled function per assistant and does
+                not track the assistant weights. Defaults to `None`
+                (plain autoregressive decoding with the compiled
+                `sampler`).
         """
-        if assistant_model is not None:
-            from keras_hub.src.samplers.speculative_sampler import (
-                SpeculativeSampler,
+        if assistant_model is None:
+            return super().generate(
+                inputs,
+                max_length=max_length,
+                stop_token_ids=stop_token_ids,
+                strip_prompt=strip_prompt,
             )
 
-            original_sampler = self.sampler
-            original_generate_function = self.generate_function
-            self.sampler = SpeculativeSampler(
-                num_speculative_tokens=assistant_model.block_size - 1,
-                temperature=getattr(original_sampler, "temperature", 1.0),
-            )
-            self.generate_function = None  # Force recompile.
-            self._assistant_model = assistant_model
-
+        speculative_sampler, generate_function = (
+            self._get_assisted_generate_function(assistant_model)
+        )
+        original_sampler = self.sampler
+        original_generate_function = self.generate_function
+        self.sampler = speculative_sampler
+        self.generate_function = generate_function
         try:
-            outputs = super().generate(
+            return super().generate(
                 inputs,
                 max_length=max_length,
                 stop_token_ids=stop_token_ids,
                 strip_prompt=strip_prompt,
             )
         finally:
-            if assistant_model is not None:
-                self._assistant_model = None
-                self.sampler = original_sampler
-                self.generate_function = original_generate_function
-
-        return outputs
+            self.sampler = original_sampler
+            self.generate_function = original_generate_function

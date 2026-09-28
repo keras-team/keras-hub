@@ -59,7 +59,6 @@ def load_video_converter_config(preset, transformers_config):
         "patch_size": processor_config["patch_size"],
         "patch_temporal": processor_config["temporal_patch_size"],
         "merge_size": processor_config["merge_size"],
-        "fps": processor_config["fps"],
         "num_frames": processor_config["num_frames"],
         "max_video_frame_tokens": processor_config["max_video_frame_tokens"],
         "scale": scale,

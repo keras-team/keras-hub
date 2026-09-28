@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -38,7 +39,7 @@ class MuseGlimmerCausalLMTest(TestCase):
             a, b = merge.split(" ")
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<|end_of_text|>", "<|begin_of_text|>"]
-        self.vocab += ["<|finetune_right_pad|>"]
+        self.vocab += ["<|finetune_right_pad|>", "<|eot|>"]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = MuseGlimmerCausalLMPreprocessor(
@@ -68,6 +69,32 @@ class MuseGlimmerCausalLMTest(TestCase):
         self.causal_lm = MuseGlimmerCausalLM(**self.init_kwargs)
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
+
+    def _make_assistant(self, block_size):
+        # A tiny DFlash assistant. It reuses the target hidden_dim, because
+        # noise_embeds come from the target token_embedding.
+        # target_layer_ids=[1, 2] is valid for the target num_layers=4.
+        assistant_backbone = MuseGlimmerBackbone(
+            vocabulary_size=1,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            sliding_window_size=None,
+            layer_types=["full_attention", "full_attention"],
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=[1, 2],
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            use_sandwich_norm=False,
+        )
+        return MuseGlimmerAssistantCausalLM(
+            backbone=assistant_backbone,
+            block_size=block_size,
+            mask_token_id=0,
+        )
 
     def test_causal_lm_basics(self):
         self.run_task_test(
@@ -189,32 +216,7 @@ class MuseGlimmerCausalLMTest(TestCase):
             self.assertEqual(prompt, output)
 
     def test_generate_with_assistant(self):
-        # DFlash speculative decoding: a tiny assistant backbone reusing
-        # the target's hidden_dim (noise_embeds come from the target's own
-        # token_embedding) and target_layer_ids=[1, 2] (valid against the
-        # target's num_layers=4).
-        target_layer_ids = [1, 2]
-        assistant_backbone = MuseGlimmerBackbone(
-            vocabulary_size=1,
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=4,
-            sliding_window_size=None,
-            layer_types=["full_attention", "full_attention"],
-            use_bidirectional_attention=True,
-            context_projection_layer_ids=target_layer_ids,
-            use_external_embeddings=True,
-            enable_qk_scale_and_gate=False,
-            use_sandwich_norm=False,
-        )
-        assistant = MuseGlimmerAssistantCausalLM(
-            backbone=assistant_backbone,
-            block_size=3,
-            mask_token_id=0,
-        )
+        assistant = self._make_assistant(block_size=3)
         # Greedy on both sides: speculative decoding's accept/reject step
         # is only guaranteed to reproduce the target model's own output
         # exactly under matching (here, greedy) acceptance semantics.
@@ -241,34 +243,160 @@ class MuseGlimmerCausalLMTest(TestCase):
         )
         # Assistant wiring must not leak into the model's state afterward.
         self.assertIsNone(getattr(self.causal_lm, "_assistant_model", None))
+        # A greedy target keeps greedy acceptance.
+        speculative_sampler = self.causal_lm._assisted_generate_cache[1]
+        self.assertIsNone(speculative_sampler.base_sampler)
+
+    def test_generate_with_assistant_non_greedy(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="top_p")
+        target_sampler = self.causal_lm.sampler
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        # The target sampler drives stochastic acceptance.
+        speculative_sampler = self.causal_lm._assisted_generate_cache[1]
+        self.assertIs(speculative_sampler.base_sampler, target_sampler)
+        self.assertIs(self.causal_lm.sampler, target_sampler)
+        num_prompt_tokens = int(ops.sum(prompt_ids["padding_mask"]))
+        self.assertAllEqual(
+            output["token_ids"][:, :num_prompt_tokens],
+            prompt_ids["token_ids"][:, :num_prompt_tokens],
+        )
+        self.assertEqual(
+            tuple(ops.shape(output["token_ids"])),
+            tuple(ops.shape(prompt_ids["token_ids"])),
+        )
+
+    def test_generate_with_assistant_reuses_compiled_function(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(prompt_ids, stop_token_ids=None)
+        plain_function = self.causal_lm.generate_function
+
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        assisted_function = self.causal_lm._assisted_generate_cache[2]
+        # Count drafter calls. A compiled backend reuses its traced graph
+        # and does not call the drafter from Python again.
+        with patch.object(
+            assistant, "call_with_cache", wraps=assistant.call_with_cache
+        ) as draft_mock:
+            self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
+        self.assertIs(
+            self.causal_lm._assisted_generate_cache[2], assisted_function
+        )
+        if keras.config.backend() in ("jax", "tensorflow"):
+            self.assertEqual(draft_mock.call_count, 0)
+        self.assertIs(self.causal_lm.generate_function, plain_function)
+
+        # A different assistant compiles a new function.
+        other_assistant = self._make_assistant(block_size=3)
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=other_assistant
+        )
+        self.assertIsNot(
+            self.causal_lm._assisted_generate_cache[2], assisted_function
+        )
+
+    def test_generate_with_assistant_does_not_track_assistant(self):
+        assistant = self._make_assistant(block_size=3)
+        num_weights = len(self.causal_lm.weights)
+        num_trainable_weights = len(self.causal_lm.trainable_weights)
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertEqual(len(self.causal_lm.weights), num_weights)
+        self.assertEqual(
+            len(self.causal_lm.trainable_weights), num_trainable_weights
+        )
+
+    def test_draft_block_matches_full_context(self):
+        # The drafter must see the target context for every position
+        # before the anchor. Compare the seeded cache against one call
+        # that writes exactly that context.
+        assistant = self._make_assistant(block_size=3)
+        vocab_size = self.preprocessor.tokenizer.vocabulary_size()
+        seq_len, anchor = 8, 5
+        rng = np.random.default_rng(0)
+        token_ids = ops.convert_to_tensor(
+            rng.integers(0, vocab_size, size=(1, seq_len)).astype("int32")
+        )
+        padding_mask = ops.ones((1, seq_len), dtype="int32")
+        _, _, context = self.causal_lm._build_cache(
+            token_ids, padding_mask, target_layer_ids=[1, 2]
+        )
+        assistant_backbone = assistant.backbone
+        empty_cache = ops.zeros(
+            (
+                1,
+                assistant_backbone.num_layers,
+                2,
+                seq_len,
+                assistant_backbone.num_key_value_heads,
+                assistant_backbone.head_dim,
+            )
+        )
+        last_context = context[:, anchor - 1 : anchor, :]
+
+        # `generate()` seeds every slot, also the slots after the anchor.
+        seeded_cache = self.causal_lm._write_assistant_context(
+            assistant, context, empty_cache, 0
+        )
+        logits, _ = self.causal_lm._draft_block(
+            assistant, token_ids, anchor, last_context, seeded_cache
+        )
+
+        noise_ids = ops.concatenate(
+            [
+                token_ids[:, anchor : anchor + 1],
+                ops.zeros((1, 2), dtype="int32"),
+            ],
+            axis=1,
+        )
+        reference_hidden, _ = assistant.call_with_cache(
+            noise_embeds=self.backbone.token_embedding(noise_ids),
+            context_hidden_states=context[:, :anchor, :],
+            cache=empty_cache,
+            cache_update_index=0,
+        )
+        reference_logits = self.causal_lm._apply_logit_softcap(
+            self.backbone.token_embedding(
+                reference_hidden[:, 1:, :], reverse=True
+            )
+        )
+        self.assertAllClose(logits, reference_logits, atol=1e-5, rtol=1e-5)
+
+        # Without the seed, the drafter attends to zero key/value.
+        unseeded_logits, _ = self.causal_lm._draft_block(
+            assistant, token_ids, anchor, last_context, empty_cache
+        )
+        self.assertNotAllClose(
+            ops.convert_to_numpy(unseeded_logits),
+            ops.convert_to_numpy(reference_logits),
+        )
 
     def test_generate_with_assistant_multi_cycle(self):
         # block_size=2 (1 candidate per cycle) over a long sequence forces
         # several drafting cycles, exercising the assistant's persistent
         # context cache actually growing across cycles (not just a single
         # write) — see MuseGlimmerTextAttention's docstring.
-        target_layer_ids = [1, 2]
-        assistant_backbone = MuseGlimmerBackbone(
-            vocabulary_size=1,
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            head_dim=4,
-            sliding_window_size=None,
-            layer_types=["full_attention", "full_attention"],
-            use_bidirectional_attention=True,
-            context_projection_layer_ids=target_layer_ids,
-            use_external_embeddings=True,
-            enable_qk_scale_and_gate=False,
-            use_sandwich_norm=False,
-        )
-        assistant = MuseGlimmerAssistantCausalLM(
-            backbone=assistant_backbone,
-            block_size=2,
-            mask_token_id=0,
-        )
+        assistant = self._make_assistant(block_size=2)
         self.causal_lm.compile(sampler="greedy")
         self.causal_lm.preprocessor = None
 
@@ -288,13 +416,45 @@ class MuseGlimmerCausalLMTest(TestCase):
         reference_output = self.causal_lm.generate(
             prompt_ids, stop_token_ids=None
         )
-        output = self.causal_lm.generate(
-            prompt_ids, stop_token_ids=None, assistant_model=assistant
-        )
+        target_call_with_cache = self.causal_lm.call_with_cache
+        num_verify_calls = [0]
+
+        def count_verify_calls(*args, **kwargs):
+            # Only `_build_cache` and `verify_next` pass `target_layer_ids`.
+            if kwargs.get("target_layer_ids") is not None:
+                num_verify_calls[0] += 1
+            return target_call_with_cache(*args, **kwargs)
+
+        with (
+            patch.object(
+                assistant,
+                "call_with_cache",
+                wraps=assistant.call_with_cache,
+            ) as draft_mock,
+            patch.object(
+                self.causal_lm,
+                "call_with_cache",
+                wraps=count_verify_calls,
+            ),
+        ):
+            output = self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
         self.assertAllEqual(output["token_ids"], reference_output["token_ids"])
         self.assertAllEqual(
             output["padding_mask"], reference_output["padding_mask"]
         )
+        # One seed call, then two drafter calls per verify cycle: one
+        # context write and one block draft. Traced backends trace the
+        # cycle once; eager backends run it once per cycle.
+        num_cycles = num_verify_calls[0] - 1
+        self.assertEqual(draft_mock.call_count, 1 + 2 * num_cycles)
+        # The seed call writes the context for every position.
+        seed_context = draft_mock.call_args_list[0].kwargs[
+            "context_hidden_states"
+        ]
+        # Read the static shape. A traced tensor is out of scope here.
+        self.assertEqual(seed_context.shape[1], seq_len)
 
     @pytest.mark.large
     def test_saved_model(self):

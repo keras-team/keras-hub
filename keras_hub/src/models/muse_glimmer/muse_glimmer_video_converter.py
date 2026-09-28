@@ -1,10 +1,18 @@
-import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.video_converter import VideoConverter
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _normalize,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _resize_pixels,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _resize_pixels_tf,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
     _smart_resize,
@@ -21,18 +29,19 @@ from keras_hub.src.utils.tensor_utils import tf
 class MuseGlimmerVideoConverter(VideoConverter):
     """Video preprocessor for MuseGlimmer.
 
-    Per the model card, video is not handled by a distinct encoder — frames
-    are sampled at `fps` (up to `num_frames`) and each sampled frame is
-    processed through the same patch/merge pipeline as a still image (see
+    Per the model card, video is not handled by a distinct encoder. Each
+    frame goes through the same patch/merge pipeline as a still image (see
     HF's `get_video_features` == `get_image_features` pass-through).
+
+    The converter does not resample frames. Pre-sample the video to the
+    target frame rate before you call the converter. The converter keeps
+    at most `num_frames` frames.
 
     Args:
         patch_size: int. Spatial patch size in pixels. Defaults to `14`.
         patch_temporal: int. Temporal patch size (frames grouped per
             temporal patch). Defaults to `2`.
         merge_size: int. Spatial merge factor. Defaults to `2`.
-        fps: float. Target sampling rate for `do_sample_frames`. Defaults
-            to `2.0`.
         num_frames: int. Maximum number of sampled frames. Defaults to
             `96`.
         max_video_frame_tokens: int. Maximum merged vision tokens per
@@ -46,7 +55,6 @@ class MuseGlimmerVideoConverter(VideoConverter):
         patch_size=14,
         patch_temporal=2,
         merge_size=2,
-        fps=2.0,
         num_frames=96,
         max_video_frame_tokens=144,
         interpolation="bilinear",
@@ -57,7 +65,6 @@ class MuseGlimmerVideoConverter(VideoConverter):
         self.patch_size = patch_size
         self.patch_temporal = patch_temporal
         self.merge_size = merge_size
-        self.fps = fps
         self.num_frames = num_frames
         self.max_video_frame_tokens = max_video_frame_tokens
         # `VideoConverter` (unlike `ImageConverter`) doesn't expose these
@@ -71,54 +78,15 @@ class MuseGlimmerVideoConverter(VideoConverter):
         self.max_pixels = max_video_frame_tokens * (self._patch_stride**2)
         self.min_pixels = self._patch_stride**2
 
-    def _normalize(self, video):
-        # `VideoConverter` (unlike `ImageConverter`) doesn't define
-        # `_expand_non_channel_dims`/`_convert_types` itself — reuse them
-        # from the composed `self.image_converter`, which shares the same
-        # `scale`/`offset`/`data_format`.
-        if self.scale is not None:
-            scale = self.image_converter._expand_non_channel_dims(
-                self.scale, video
-            )
-            video, scale = self.image_converter._convert_types(
-                video, scale, self.compute_dtype
-            )
-            video = video * scale
-        if self.offset is not None:
-            offset = self.image_converter._expand_non_channel_dims(
-                self.offset, video
-            )
-            video, offset = self.image_converter._convert_types(
-                video, offset, video.dtype
-            )
-            video = video + offset
-        return video
-
     @preprocessing_function
     def call(self, inputs):
         if in_tf_function():
             return self._call_tf(inputs)
         return self._call_ops(inputs)
 
-    def _sample_frame_indices_tf(self, frame_count, source_fps):
-        stride = tf.maximum(
-            tf.cast(tf.round(source_fps / self.fps), "int32"), 1
-        )
-        indices = tf.range(0, frame_count, stride)
-        indices = indices[: self.num_frames]
-        return indices
-
     def _call_tf(self, inputs):
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
-        video = tf.cast(inputs, "float32")
-        frame_count = tf.shape(video)[0]
-        # Assume the source is already at `self.fps`-equivalent sampling
-        # when no metadata is available; callers that need exact-fps
-        # subsampling should pre-sample before calling this converter.
-        indices = self._sample_frame_indices_tf(
-            frame_count, tf.cast(self.fps, "float32")
-        )
-        video = tf.gather(video, indices, axis=0)
+        video = tf.cast(inputs, "float32")[: self.num_frames]
 
         orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
         target_h, target_w = _smart_resize_tf(
@@ -128,32 +96,25 @@ class MuseGlimmerVideoConverter(VideoConverter):
             self.merge_size,
             self.max_video_frame_tokens,
         )
-        if input_is_integer:
-            # Matches torchvision's separable uint8 resize: width pass,
-            # round to uint8 range, then height pass, round again.
-            video = tf.image.resize(
-                video,
-                (orig_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )
-            video = tf.round(tf.clip_by_value(video, 0.0, 255.0))
-            video = tf.image.resize(
-                video,
-                (target_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )
-            video = tf.round(tf.clip_by_value(video, 0.0, 255.0))
-        else:
-            video = tf.image.resize(
-                video,
-                (target_h, target_w),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )
-        video = tf.clip_by_value(video, 0.0, 255.0)
-        video = self._normalize(video)
+        video = _resize_pixels_tf(
+            video,
+            input_is_integer,
+            orig_h,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        # `VideoConverter` does not define `_expand_non_channel_dims` or
+        # `_convert_types`. The composed `self.image_converter` defines
+        # them and shares the same `data_format`.
+        video = _normalize(
+            video,
+            self.image_converter,
+            self.scale,
+            self.offset,
+            self.compute_dtype,
+        )
 
         new_frame_count = tf.shape(video)[0]
         remainder = new_frame_count % self.patch_temporal
@@ -195,42 +156,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
         grid_thw = tf.stack([grid_t, grid_h, grid_w])
         return {"patches": patches, "grid_thw": grid_thw}
 
-    def _resize(self, video, orig_h, orig_w, target_h, target_w):
-        # The PyTorch backend does not support Lanczos interpolation in
-        # `ops.image.resize`. Fall back to `scale_and_translate`, the
-        # primitive `resize` itself uses on other backends for this case.
-        if keras.backend.backend() == "torch" and self.interpolation in (
-            "lanczos3",
-            "lanczos5",
-        ):
-            frame_count = int(ops.shape(video)[0])
-            scale = ops.array(
-                [target_h / orig_h, target_w / orig_w], dtype="float32"
-            )
-            return ops.image.scale_and_translate(
-                video,
-                (frame_count, target_h, target_w, 3),
-                scale=scale,
-                translation=ops.zeros((2,), dtype="float32"),
-                spatial_dims=(1, 2),
-                method=self.interpolation,
-                antialias=self.antialias,
-            )
-        return ops.image.resize(
-            video,
-            size=(target_h, target_w),
-            interpolation=self.interpolation,
-            antialias=self.antialias,
-        )
-
     def _call_ops(self, inputs):
-        input_is_integer = keras.backend.is_int_dtype(inputs.dtype)
-        video = inputs
-        frame_count = int(ops.shape(video)[0])
-        # Assumes a same-rate source (see `_call_tf` docstring note on
-        # pre-sampling); simply caps the frame count at `num_frames`.
-        indices = list(range(0, frame_count))[: self.num_frames]
-        video = ops.take(video, indices, axis=0)
+        video = inputs[: self.num_frames]
 
         orig_h, orig_w = int(ops.shape(video)[1]), int(ops.shape(video)[2])
         target_h, target_w = _smart_resize(
@@ -240,21 +167,22 @@ class MuseGlimmerVideoConverter(VideoConverter):
             self.merge_size,
             self.max_video_frame_tokens,
         )
-        if input_is_integer:
-            # Matches torchvision's separable uint8 resize: width pass,
-            # round to uint8 range, then height pass, round again.
-            video = self._resize(video, orig_h, orig_w, orig_h, target_w)
-            # The TF backend's `ops.image.resize` preserves integer
-            # dtypes, so clip/round need a float cast first.
-            video = ops.cast(video, "float32")
-            video = ops.round(ops.clip(video, 0.0, 255.0))
-            video = self._resize(video, orig_h, target_w, target_h, target_w)
-            video = ops.round(ops.clip(video, 0.0, 255.0))
-        else:
-            video = self._resize(video, orig_h, orig_w, target_h, target_w)
-        video = ops.cast(video, "float32")
-        video = ops.clip(video, 0.0, 255.0)
-        video = self._normalize(video)
+        video = _resize_pixels(
+            video,
+            orig_h,
+            orig_w,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        video = _normalize(
+            video,
+            self.image_converter,
+            self.scale,
+            self.offset,
+            self.compute_dtype,
+        )
 
         new_frame_count = int(ops.shape(video)[0])
         remainder = new_frame_count % self.patch_temporal
@@ -306,7 +234,6 @@ class MuseGlimmerVideoConverter(VideoConverter):
                 "patch_size": self.patch_size,
                 "patch_temporal": self.patch_temporal,
                 "merge_size": self.merge_size,
-                "fps": self.fps,
                 "num_frames": self.num_frames,
                 "max_video_frame_tokens": self.max_video_frame_tokens,
                 "interpolation": self.interpolation,

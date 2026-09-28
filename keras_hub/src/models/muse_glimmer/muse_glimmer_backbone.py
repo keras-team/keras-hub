@@ -119,6 +119,32 @@ class MuseGlimmerBackbone(Backbone):
             configuration sets this to `False`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to
             use for model computations and weights.
+
+    Example:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1] * 10 + [0] * 2], dtype="int32"),
+    }
+
+    # Pretrained MuseGlimmer decoder.
+    model = keras_hub.models.MuseGlimmerBackbone.from_preset(
+        "muse_glimmer_30b"
+    )
+    model(input_data)
+
+    # Randomly initialized text-only MuseGlimmer decoder.
+    model = keras_hub.models.MuseGlimmerBackbone(
+        vocabulary_size=1000,
+        num_layers=4,
+        num_query_heads=4,
+        num_key_value_heads=2,
+        hidden_dim=64,
+        intermediate_dim=128,
+        head_dim=16,
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(

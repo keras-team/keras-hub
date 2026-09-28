@@ -599,6 +599,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor impor
 from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
     MuseGlimmerTokenizer as MuseGlimmerTokenizer,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoder as MuseGlimmerVisionEncoder,
+)
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
 )
