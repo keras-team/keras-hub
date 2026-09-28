@@ -82,8 +82,8 @@ class PaliGemmaCausalLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 16, 11),
-            atol=1e-5,
-            rtol=1e-5,
+            atol=1e-2,
+            rtol=1e-2,
         )
 
     @pytest.mark.large

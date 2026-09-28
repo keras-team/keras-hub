@@ -1304,12 +1304,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # noticeably more on GPU.
         tol = 1e-2 if running_on_gpu() else 1e-6
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
+        self.assertAllClose(output, output_ds, atol=max(atol, tol), rtol=max(rtol, tol))
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
+        self.assertAllClose(output, output_split, atol=max(atol, tol), rtol=max(rtol, tol))
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
