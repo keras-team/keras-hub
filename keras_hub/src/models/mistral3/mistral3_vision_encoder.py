@@ -56,6 +56,15 @@ class Mistral3ImageFeatureExtractor(keras.layers.Layer):
         self.built = True
 
     def call(self, pixel_values, image_sizes, training=None):
+        # A zero-length image batch (no images in this forward pass) skips
+        # the vision encoder entirely. Some backends' `Conv2D` cannot handle
+        # a batch size of `0` (the patch convolution's bias-add shape
+        # inference breaks), so this must short-circuit before calling it.
+        if pixel_values.shape[0] == 0:
+            return ops.zeros(
+                (0, self.multimodal_projector.text_hidden_dim),
+                dtype=self.compute_dtype,
+            )
         image_features = self.vision_encoder(
             pixel_values,
             image_sizes=image_sizes,

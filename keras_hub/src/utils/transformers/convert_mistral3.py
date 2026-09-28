@@ -158,37 +158,45 @@ def convert_backbone_config(transformers_config):
 
     image_token_index = transformers_config["image_token_index"]
 
+    # `tie_word_embeddings` is a text-model property; some checkpoints
+    # (e.g. Ministral 3, Shieldstral) set it only in `text_config`, not at
+    # the top level.
+    tie_word_embeddings = text_config.get(
+        "tie_word_embeddings",
+        transformers_config.get("tie_word_embeddings", False),
+    )
+
     backbone_config.update(
         {
             "vision_encoder": vision_encoder,
             "multimodal_projector": multimodal_projector,
             "image_token_index": image_token_index,
+            "tie_word_embeddings": tie_word_embeddings,
         }
     )
     return backbone_config
 
 
-def _port_text_weights(backbone, loader, tie_word_embeddings):
+def convert_weights(backbone, loader, transformers_config):
+    # === Text ===
     # Embeddings
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="language_model.model.embed_tokens.weight",
         hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
-    # When embeddings are tied, `lm_head.weight` is not saved as a separate
-    # tensor in the checkpoint; reuse the embedding weights instead.
-    lm_head_key = (
-        "language_model.model.embed_tokens.weight"
-        if tie_word_embeddings
-        else "language_model.lm_head.weight"
-    )
-    loader.port_weight(
-        keras_variable=backbone.token_embedding.reverse_embeddings,
-        hf_weight_key=lm_head_key,
-        hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float32), axes=(1, 0)
-        ),
-    )
+    # When embeddings are tied, `ReversibleEmbedding` has no separate
+    # `reverse_embeddings` weight at all — it reuses `embeddings` for the
+    # reverse projection — and the checkpoint has no separate
+    # `lm_head.weight` tensor to port either.
+    if not backbone.tie_word_embeddings:
+        loader.port_weight(
+            keras_variable=backbone.token_embedding.reverse_embeddings,
+            hf_weight_key="language_model.lm_head.weight",
+            hook_fn=lambda hf_tensor, _: np.transpose(
+                hf_tensor.astype(np.float32), axes=(1, 0)
+            ),
+        )
 
     # Attention blocks
     for index in range(backbone.num_layers):
@@ -268,8 +276,7 @@ def _port_text_weights(backbone, loader, tie_word_embeddings):
         hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
     )
 
-
-def _port_vision_weights(backbone, loader):
+    # === Vision ===
     vision_encoder = backbone.vision_encoder
     projector = backbone.multimodal_projector
 
@@ -390,22 +397,6 @@ def _port_vision_weights(backbone, loader):
             hf_weight_key="multi_modal_projector.linear_2.bias",
             hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float32),
         )
-
-
-def convert_weights(backbone, loader, transformers_config):
-    # `tie_word_embeddings` is a text-model property; some checkpoints (e.g.
-    # Ministral 3) set it only in `text_config`, not at the top level.
-    text_config = transformers_config.get("text_config", {})
-    tie_word_embeddings = text_config.get(
-        "tie_word_embeddings",
-        transformers_config.get("tie_word_embeddings", False),
-    )
-    _port_text_weights(
-        backbone,
-        loader,
-        tie_word_embeddings=tie_word_embeddings,
-    )
-    _port_vision_weights(backbone, loader)
 
 
 def convert_tokenizer(cls, preset, **kwargs):

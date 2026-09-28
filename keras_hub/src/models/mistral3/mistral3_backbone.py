@@ -46,8 +46,12 @@ class Mistral3Backbone(Backbone):
             in a three-layer feedforward network for each transformer.
         num_key_value_heads: int. The number of key and value attention heads
             for each transformer.
-        vision_encoder: A `keras_hub.models.Mistral3VisionEncoder` instance.
-        multimodal_projector: A `Mistral3MultiModalProjector` instance.
+        vision_encoder: A `keras_hub.models.Mistral3VisionEncoder` instance,
+            or `None`. When `None`, the backbone is text-only and does not
+            declare `pixel_values`, `image_sizes`, or `placeholder_indices`
+            inputs.
+        multimodal_projector: A `Mistral3MultiModalProjector` instance, or
+            `None`. Required when `vision_encoder` is not `None`.
         rope_max_wavelength: int, optional. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor: float, optional. The scaling factor for
@@ -63,14 +67,20 @@ class Mistral3Backbone(Backbone):
         original_max_position_embeddings: int, optional. The pretraining
             context length before YaRN scaling. Only used when
             `rope_type="yarn"`. Defaults to `4096`.
+        attention_factor: float, optional. The YaRN temperature scale
+            applied to the rotary cos/sin embeddings. Only used when
+            `rope_type="yarn"`. Defaults to `None`, which derives the scale
+            as `0.1 * log(rope_scaling_factor) + 1.0` (the standard YaRN
+            default). Pass an explicit value for checkpoints that compute a
+            different scale from `mscale`/`mscale_all_dim` — e.g. Ministral 3
+            and Shieldstral set both to `1.0`, giving `attention_factor=1.0`.
         layer_norm_epsilon: float, optional. Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window: int, optional. The sliding window for the mistral
             attention layers. This controls the maximum cache size for the
             attention layers in each transformer decoder. Only `sliding_window`
             number of tokens are saved in the cache and used to generate the
-            next token. Defaults to `512`. Pass `None` to disable sliding
-            window attention entirely (e.g. Magistral).
+            next token. Defaults to `None`.
         head_dim: int, optional. The size of each attention head. When
             `None` (the default), falls back to `hidden_dim // num_query_heads`.
             Set explicitly when the model's head size is not equal to
@@ -78,6 +88,14 @@ class Mistral3Backbone(Backbone):
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
         image_token_index: int, optional. The token ID in `token_ids` that
             marks image placeholder positions. Defaults to `10`.
+        tie_word_embeddings: bool, optional. Whether to tie the input token
+            embedding and the output (LM head) projection to the same
+            weights. Defaults to `False`.
+        llama_4_scaling_beta: float, optional. When set, scales query
+            magnitude by absolute position with a Llama4-style
+            `attn_temperature_tuning`: `query *= 1 + llama_4_scaling_beta *
+            log(1 + floor(pos / original_max_position_embeddings))`.
+            Defaults to `None` (no scaling).
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -110,8 +128,8 @@ class Mistral3Backbone(Backbone):
         hidden_dim,
         intermediate_dim,
         num_key_value_heads,
-        vision_encoder,
-        multimodal_projector,
+        vision_encoder=None,
+        multimodal_projector=None,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
         rope_type="linear",
@@ -119,10 +137,13 @@ class Mistral3Backbone(Backbone):
         beta_slow=1.0,
         original_max_position_embeddings=4096,
         layer_norm_epsilon=1e-6,
-        sliding_window=512,
+        sliding_window=None,
         head_dim=None,
         dropout=0,
         image_token_index=10,
+        tie_word_embeddings=False,
+        llama_4_scaling_beta=None,
+        attention_factor=None,
         dtype=None,
         **kwargs,
     ):
@@ -130,7 +151,7 @@ class Mistral3Backbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            tie_weights=False,
+            tie_weights=tie_word_embeddings,
             embeddings_initializer=_mistral_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -155,6 +176,8 @@ class Mistral3Backbone(Backbone):
                 sliding_window=sliding_window,
                 head_dim=head_dim,
                 dropout=dropout,
+                llama_4_scaling_beta=llama_4_scaling_beta,
+                attention_factor=attention_factor,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -164,18 +187,20 @@ class Mistral3Backbone(Backbone):
             dtype=dtype,
             name="sequence_output_layernorm",
         )
+        text_only_model = vision_encoder is None
         self.vision_encoder = vision_encoder
         self.multimodal_projector = multimodal_projector
         self.image_text_embedding_merger = Mistral3ImageTextEmbeddingMerger(
             dtype=dtype,
             name="image_text_embedding_merger",
         )
-        self.image_feature_extractor = Mistral3ImageFeatureExtractor(
-            vision_encoder,
-            multimodal_projector,
-            dtype=dtype,
-            name="image_feature_extractor",
-        )
+        if not text_only_model:
+            self.image_feature_extractor = Mistral3ImageFeatureExtractor(
+                vision_encoder,
+                multimodal_projector,
+                dtype=dtype,
+                name="image_feature_extractor",
+            )
 
         # === Functional Model ===
         token_id_input = keras.Input(
@@ -184,47 +209,56 @@ class Mistral3Backbone(Backbone):
         padding_mask_input = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        # `None` spatial dims: HF's `PixtralImageProcessor` pads each batch
-        # to its own largest image, not to a fixed canvas, so the input
-        # canvas size varies per call. `image_sizes` carries each image's
-        # true (unpadded) `(height, width)` for cropping.
-        pixel_values_input = keras.Input(
-            shape=(vision_encoder.num_channels, None, None),
-            name="pixel_values",
-        )
-        image_sizes_input = keras.Input(
-            shape=(2,), dtype="int32", name="image_sizes"
-        )
-        # Each example's own local image placeholder token positions,
-        # `-1`-padded to the batch's max count; see
-        # `compute_image_placeholder_indices`.
-        placeholder_indices_input = keras.Input(
-            shape=(None,),
-            dtype="int32",
-            name="placeholder_indices",
-        )
+        if not text_only_model:
+            # `None` spatial dims: HF's `PixtralImageProcessor` pads each
+            # batch to its own largest image, not to a fixed canvas, so the
+            # input canvas size varies per call. `image_sizes` carries each
+            # image's true (unpadded) `(height, width)` for cropping.
+            pixel_values_input = keras.Input(
+                shape=(vision_encoder.num_channels, None, None),
+                name="pixel_values",
+            )
+            image_sizes_input = keras.Input(
+                shape=(2,), dtype="int32", name="image_sizes"
+            )
+            # Each example's own local image placeholder token positions,
+            # `-1`-padded to the batch's max count; see
+            # `compute_image_placeholder_indices`.
+            placeholder_indices_input = keras.Input(
+                shape=(None,),
+                dtype="int32",
+                name="placeholder_indices",
+            )
 
         x = self.token_embedding(token_id_input)
-        image_features = self.image_feature_extractor(
-            pixel_values_input,
-            image_sizes_input,
-        )
-        x = self.image_text_embedding_merger(
-            x, image_features, placeholder_indices_input
-        )
+        if not text_only_model:
+            image_features = self.image_feature_extractor(
+                pixel_values_input,
+                image_sizes_input,
+            )
+            x = self.image_text_embedding_merger(
+                x, image_features, placeholder_indices_input
+            )
 
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
 
+        inputs = {
+            "token_ids": token_id_input,
+            "padding_mask": padding_mask_input,
+        }
+        if not text_only_model:
+            inputs.update(
+                {
+                    "pixel_values": pixel_values_input,
+                    "image_sizes": image_sizes_input,
+                    "placeholder_indices": placeholder_indices_input,
+                }
+            )
+
         super().__init__(
-            inputs={
-                "token_ids": token_id_input,
-                "padding_mask": padding_mask_input,
-                "pixel_values": pixel_values_input,
-                "image_sizes": image_sizes_input,
-                "placeholder_indices": placeholder_indices_input,
-            },
+            inputs=inputs,
             outputs=sequence_output,
             dtype=dtype,
             **kwargs,
@@ -248,6 +282,10 @@ class Mistral3Backbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.image_token_index = image_token_index
+        self.tie_word_embeddings = tie_word_embeddings
+        self.llama_4_scaling_beta = llama_4_scaling_beta
+        self.attention_factor = attention_factor
+        self.text_only_model = text_only_model
 
     def get_config(self):
         config = super().get_config()
@@ -272,9 +310,18 @@ class Mistral3Backbone(Backbone):
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "image_token_index": self.image_token_index,
-                "vision_encoder": keras.layers.serialize(self.vision_encoder),
-                "multimodal_projector": keras.layers.serialize(
-                    self.multimodal_projector
+                "tie_word_embeddings": self.tie_word_embeddings,
+                "llama_4_scaling_beta": self.llama_4_scaling_beta,
+                "attention_factor": self.attention_factor,
+                "vision_encoder": (
+                    keras.layers.serialize(self.vision_encoder)
+                    if self.vision_encoder is not None
+                    else None
+                ),
+                "multimodal_projector": (
+                    keras.layers.serialize(self.multimodal_projector)
+                    if self.multimodal_projector is not None
+                    else None
                 ),
             }
         )
@@ -285,11 +332,15 @@ class Mistral3Backbone(Backbone):
         config = dict(config)
         config.update(
             {
-                "vision_encoder": keras.layers.deserialize(
-                    config["vision_encoder"]
+                "vision_encoder": (
+                    keras.layers.deserialize(config["vision_encoder"])
+                    if config.get("vision_encoder") is not None
+                    else None
                 ),
-                "multimodal_projector": keras.layers.deserialize(
-                    config["multimodal_projector"]
+                "multimodal_projector": (
+                    keras.layers.deserialize(config["multimodal_projector"])
+                    if config.get("multimodal_projector") is not None
+                    else None
                 ),
             }
         )

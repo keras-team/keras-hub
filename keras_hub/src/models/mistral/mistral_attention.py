@@ -34,6 +34,8 @@ class CachedMistralAttention(keras.layers.Layer):
         sliding_window=512,
         dropout=0,
         head_dim=None,
+        llama_4_scaling_beta=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -57,6 +59,8 @@ class CachedMistralAttention(keras.layers.Layer):
         self._original_max_position_embeddings = (
             original_max_position_embeddings
         )
+        self._llama_4_scaling_beta = llama_4_scaling_beta
+        self._attention_factor = attention_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -138,6 +142,7 @@ class CachedMistralAttention(keras.layers.Layer):
             original_max_position_embeddings=(
                 self._original_max_position_embeddings
             ),
+            attention_factor=self._attention_factor,
             dtype=self.dtype_policy,
         )
 
@@ -173,6 +178,8 @@ class CachedMistralAttention(keras.layers.Layer):
 
         # Compute RoPE for queries
         query = self.rotary_embedding_layer(query, start_index=start_index)
+        if self._llama_4_scaling_beta is not None:
+            query = self._apply_llama_4_scaling(query, start_index=start_index)
 
         def _compute_key_value(x):
             key, value = self._key_dense(x), self._value_dense(x)
@@ -251,6 +258,25 @@ class CachedMistralAttention(keras.layers.Layer):
             return attention_output, cache
         return attention_output
 
+    def _apply_llama_4_scaling(self, query, start_index=0):
+        """Scale query magnitude by absolute position.
+
+        Matches HF's Llama4-style `attn_temperature_tuning`: `query *= 1 +
+        llama_4_scaling_beta * log(1 + floor(pos /
+        original_max_position_embeddings))`.
+        """
+        seq_len = ops.shape(query)[1]
+        positions = ops.arange(seq_len, dtype="float32") + ops.cast(
+            start_index, "float32"
+        )
+        floor_scale = ops.cast(
+            self._original_max_position_embeddings, "float32"
+        )
+        attn_scales = ops.log(ops.floor(positions / floor_scale) + 1.0)
+        attn_scales = attn_scales * self._llama_4_scaling_beta + 1.0
+        attn_scales = ops.reshape(attn_scales, (1, -1, 1, 1))
+        return ops.multiply(query, ops.cast(attn_scales, query.dtype))
+
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:
             return self._softmax(
@@ -309,6 +335,8 @@ class CachedMistralAttention(keras.layers.Layer):
                 "sliding_window": self._sliding_window,
                 "dropout": self._dropout,
                 "head_dim": self._head_dim,
+                "llama_4_scaling_beta": self._llama_4_scaling_beta,
+                "attention_factor": self._attention_factor,
             }
         )
         return config

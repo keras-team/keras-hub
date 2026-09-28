@@ -34,6 +34,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
         sliding_window=512,
         dropout=0,
         head_dim=None,
+        llama_4_scaling_beta=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -47,6 +49,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
         self.beta_fast = beta_fast
         self.beta_slow = beta_slow
         self.original_max_position_embeddings = original_max_position_embeddings
+        self.llama_4_scaling_beta = llama_4_scaling_beta
+        self.attention_factor = attention_factor
 
         self.dropout = dropout
 
@@ -76,6 +80,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
             ),
             sliding_window=self.sliding_window,
             head_dim=self.head_dim,
+            llama_4_scaling_beta=self.llama_4_scaling_beta,
+            attention_factor=self.attention_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -264,6 +270,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "head_dim": self.head_dim,
+                "llama_4_scaling_beta": self.llama_4_scaling_beta,
+                "attention_factor": self.attention_factor,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(

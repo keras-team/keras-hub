@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
@@ -8,6 +10,38 @@ from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
+
+
+def _get_mscale(scale, mscale=1.0):
+    """HF's YaRN `get_mscale`: the temperature scale for one mscale value."""
+    if scale <= 1:
+        return 1.0
+    return 0.1 * mscale * math.log(scale) + 1.0
+
+
+def _compute_yarn_parameters(rope_parameters):
+    factor = rope_parameters.get("factor", 1.0)
+    yarn_config = {
+        "rope_type": "yarn",
+        "rope_scaling_factor": factor,
+        "beta_fast": rope_parameters.get("beta_fast", 32.0),
+        "beta_slow": rope_parameters.get("beta_slow", 1.0),
+    }
+    # An explicit `attention_factor` takes precedence; otherwise HF derives
+    # it from `mscale`/`mscale_all_dim` when both are set (e.g. Ministral 3
+    # and Shieldstral set both to `1.0`, which yields `attention_factor=1.0`
+    # — not the unconditional `0.1*log(factor)+1` default).
+    attention_factor = rope_parameters.get("attention_factor")
+    if attention_factor is None:
+        mscale = rope_parameters.get("mscale")
+        mscale_all_dim = rope_parameters.get("mscale_all_dim")
+        if mscale is not None and mscale_all_dim is not None:
+            attention_factor = _get_mscale(factor, mscale) / _get_mscale(
+                factor, mscale_all_dim
+            )
+    if attention_factor is not None:
+        yarn_config["attention_factor"] = attention_factor
+    return yarn_config
 
 
 def convert_backbone_config(transformers_config):
@@ -27,21 +61,26 @@ def convert_backbone_config(transformers_config):
         "sliding_window": transformers_config.get("sliding_window"),
         "head_dim": transformers_config.get("head_dim"),
     }
+    # `original_max_position_embeddings` supports YaRN correction and Llama4
+    # query scaling. Read it when either feature is enabled to avoid the
+    # 4096 default.
+    llama_4_scaling_beta = rope_parameters.get("llama_4_scaling_beta")
+    if (
+        rope_parameters.get("rope_type") == "yarn"
+        or llama_4_scaling_beta is not None
+    ):
+        backbone_config["original_max_position_embeddings"] = (
+            rope_parameters.get("original_max_position_embeddings", 4096)
+        )
     # Newer Mistral checkpoints (e.g. Ministral 3) scale rotary embeddings
     # with YaRN instead of a plain rotary base; forward its extra
     # parameters only when the checkpoint actually uses YaRN.
     if rope_parameters.get("rope_type") == "yarn":
-        backbone_config.update(
-            {
-                "rope_type": "yarn",
-                "rope_scaling_factor": rope_parameters.get("factor", 1.0),
-                "beta_fast": rope_parameters.get("beta_fast", 32.0),
-                "beta_slow": rope_parameters.get("beta_slow", 1.0),
-                "original_max_position_embeddings": rope_parameters.get(
-                    "original_max_position_embeddings", 4096
-                ),
-            }
-        )
+        backbone_config.update(_compute_yarn_parameters(rope_parameters))
+    # Ministral 3 and Shieldstral scale query magnitude by position with a
+    # Llama4-style `attn_temperature_tuning`.
+    if llama_4_scaling_beta is not None:
+        backbone_config["llama_4_scaling_beta"] = llama_4_scaling_beta
     return backbone_config
 
 
