@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -13,8 +14,10 @@ from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_image_placeholder_indices,
 )
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -49,7 +52,7 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
     Args:
         tokenizer: A `keras_hub.models.Mistral3Tokenizer` instance.
         image_converter: A `keras_hub.layers.Mistral3ImageConverter`
-            instance.
+            instance or `None`.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence. Default is `True`.
@@ -75,7 +78,7 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
     def __init__(
         self,
         tokenizer,
-        image_converter,
+        image_converter=None,
         sequence_length=1024,
         add_start_token=True,
         add_end_token=True,
@@ -210,55 +213,6 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             return None, None
         return self.image_converter(flat_images)
 
-    def _build_multimodal_inputs(self, prompts, flat_images):
-        """Tokenizes prompts and produces vision model inputs.
-
-        Images are matched to prompts by consuming `flat_images`
-        left-to-right as placeholder tokens are encountered, not by any
-        caller-supplied grouping. Tokenization runs inside `tf.py_function`
-        since it needs concrete Python values, which `prompts` may not be
-        (e.g. inside `tf.data.Dataset.map`).
-
-        Args:
-            prompts: list of str, or a `tf.Tensor` of str. The raw prompts.
-            flat_images: list of raw images, or a `tf.Tensor` stacking
-                them on its leading axis, in placeholder-occurrence order
-                across `prompts`.
-
-        Returns:
-            `(tokenized, pixel_values, image_sizes)`. For an image-free
-            batch, `tokenized` is `prompts` unchanged and
-            `pixel_values`/`image_sizes` are `None`. Otherwise `tokenized`
-            is a ragged int32 tensor of token ids.
-        """
-        pixel_values, image_sizes = self._convert_images(flat_images)
-        if pixel_values is None:
-            return prompts, None, None
-
-        def _encode(prompts_tensor, image_sizes_tensor):
-            prompts_list = [p.decode("utf-8") for p in prompts_tensor.numpy()]
-            image_sizes_list = [
-                tuple(size) for size in image_sizes_tensor.numpy().tolist()
-            ]
-            tokenized = self._tokenize_multimodal_prompts(
-                prompts_list, image_sizes_list
-            )
-            return tf.ragged.constant(tokenized, dtype="int32")
-
-        prompts_tensor = (
-            prompts
-            if isinstance(prompts, tf.Tensor)
-            else tf.constant(prompts, dtype=tf.string)
-        )
-        tokenized = tf.py_function(
-            _encode,
-            [prompts_tensor, image_sizes],
-            Tout=tf.RaggedTensorSpec(
-                shape=[None, None], dtype="int32", ragged_rank=1
-            ),
-        )
-        return tokenized, pixel_values, image_sizes
-
     def _flatten_images(self, images):
         """Flattens `images` so all images sit on one leading axis.
 
@@ -286,97 +240,9 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             flat_images.extend(self._flatten_images(item))
         return flat_images
 
-    def _build_multimodal_outputs(self, prompts, image_sizes, sequence_length):
-        """Builds `_call_multimodal_python`'s per-example outputs.
-
-        Tokenization, packing, and placeholder-index computation each
-        depend on the previous step's concrete output, so they run
-        together in one `tf.py_function`.
-
-        Args:
-            prompts: list of str, or a `tf.Tensor` of str.
-            image_sizes: int tensor `(num_images, 2)`, from
-                `self.image_converter`.
-            sequence_length: int.
-
-        Returns:
-            `(model_token_ids, model_padding_mask, y, sample_weight,
-            placeholder_indices)`.
-        """
-
-        def _build(prompts_tensor, image_sizes_tensor):
-            prompts_list = [p.decode("utf-8") for p in prompts_tensor.numpy()]
-            image_sizes_list = [
-                tuple(size) for size in image_sizes_tensor.numpy().tolist()
-            ]
-            tokenized = self._tokenize_multimodal_prompts(
-                prompts_list, image_sizes_list
-            )
-            tokenized = tf.ragged.constant(tokenized, dtype="int32")
-            # Pad with one extra token to account for the truncation below.
-            token_ids, padding_mask = self.packer(
-                tokenized,
-                sequence_length=sequence_length + 1,
-                add_start_value=self.add_start_token,
-                add_end_value=self.add_end_token,
-            )
-            model_token_ids = token_ids[..., :-1]
-            model_padding_mask = padding_mask[..., :-1]
-            y = token_ids[..., 1:]
-            sample_weight = padding_mask[..., 1:]
-            placeholder_indices = compute_image_placeholder_indices(
-                convert_to_numpy(model_token_ids),
-                self.tokenizer.image_placeholder_token_id,
-            )
-            return (
-                model_token_ids,
-                model_padding_mask,
-                y,
-                sample_weight,
-                placeholder_indices,
-            )
-
-        prompts_tensor = (
-            prompts
-            if isinstance(prompts, tf.Tensor)
-            else tf.constant(prompts, dtype=tf.string)
-        )
-        (
-            model_token_ids,
-            model_padding_mask,
-            y,
-            sample_weight,
-            placeholder_indices,
-        ) = tf.py_function(
-            _build,
-            [prompts_tensor, image_sizes],
-            Tout=[tf.int32, tf.bool, tf.int32, tf.bool, tf.int32],
-        )
-        # `tf.py_function` outputs have unknown rank unless set explicitly,
-        # which breaks the model's shape inference. `placeholder_indices`'
-        # last dim is data-dependent, so only its rank is fixed.
-        model_token_ids.set_shape([None, sequence_length])
-        model_padding_mask.set_shape([None, sequence_length])
-        y.set_shape([None, sequence_length])
-        sample_weight.set_shape([None, sequence_length])
-        placeholder_indices.set_shape([None, None])
-        return (
-            model_token_ids,
-            model_padding_mask,
-            y,
-            sample_weight,
-            placeholder_indices,
-        )
-
     def _extract_multimodal_inputs(self, x):
         """Normalizes `x` into `(prompts, flat_images, batched)`."""
-        if isinstance(x, dict):
-            prompts = x["prompts"]
-            images = x.get("images", None)
-        else:
-            prompts = x
-            images = None
-
+        prompts = x["prompts"]
         batched = True
         if isinstance(prompts, str):
             batched = False
@@ -387,12 +253,114 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
                 prompts = tf.expand_dims(prompts, 0)
         else:
             prompts = list(prompts)
+        return prompts, self._flatten_images(x["images"]), batched
 
-        return prompts, self._flatten_images(images), batched
-
-    def _call_multimodal_python(
-        self, x, y=None, sample_weight=None, sequence_length=None
+    def _tokenize_and_pack_python(
+        self, prompts, image_sizes, sequence_length, add_labels
     ):
+        """Tokenizes and packs multimodal prompts with Python and NumPy.
+
+        Args:
+            prompts: list of str, or an array of str or bytes.
+            image_sizes: int array `(num_images, 2)`, from
+                `self.image_converter`.
+            sequence_length: int. The packed sequence length.
+            add_labels: bool. If `True`, the method also returns the
+                shifted labels and sample weights for `call()`.
+
+        Returns:
+            list of NumPy arrays. The list is `[token_ids, padding_mask,
+            y, sample_weight, placeholder_indices]` if `add_labels` is
+            `True`, else `[token_ids, padding_mask, placeholder_indices]`.
+        """
+        prompts = [
+            prompt.decode("utf-8") if isinstance(prompt, bytes) else prompt
+            for prompt in convert_to_numpy(prompts).tolist()
+        ]
+        image_sizes = [
+            tuple(size) for size in convert_to_numpy(image_sizes).tolist()
+        ]
+        tokenized = self._tokenize_multimodal_prompts(prompts, image_sizes)
+        if add_labels:
+            # Pad with one extra token to account for the truncation below.
+            token_ids, padding_mask = self.packer(
+                tokenized,
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+            )
+        else:
+            token_ids, padding_mask = self.packer(
+                tokenized,
+                sequence_length=sequence_length,
+                add_end_value=False,
+            )
+        token_ids = convert_to_numpy(token_ids).astype("int32")
+        padding_mask = convert_to_numpy(padding_mask).astype("bool")
+        if add_labels:
+            outputs = [
+                token_ids[..., :-1],
+                padding_mask[..., :-1],
+                token_ids[..., 1:],
+                padding_mask[..., 1:],
+            ]
+        else:
+            outputs = [token_ids, padding_mask]
+        placeholder_indices = compute_image_placeholder_indices(
+            outputs[0], self.tokenizer.image_placeholder_token_id
+        )
+        return outputs + [placeholder_indices]
+
+    def _tokenize_and_pack_tf(
+        self, prompts, image_sizes, sequence_length, add_labels
+    ):
+        """Runs `_tokenize_and_pack_python` inside `tf.py_function`.
+
+        Tokenization needs concrete Python values. Inside `tf.function` or
+        `tf.data.Dataset.map`, `prompts` and `image_sizes` are symbolic.
+        """
+        if not isinstance(prompts, tf.Tensor):
+            prompts = tf.constant(prompts, dtype=tf.string)
+        num_pairs = 2 if add_labels else 1
+        outputs = tf.py_function(
+            lambda p, s: self._tokenize_and_pack_python(
+                p, s, sequence_length, add_labels
+            ),
+            [prompts, image_sizes],
+            Tout=[tf.int32, tf.bool] * num_pairs + [tf.int32],
+        )
+        # `tf.py_function` outputs have unknown rank. The last dim of
+        # `placeholder_indices` is data dependent.
+        for output in outputs[:-1]:
+            output.set_shape([None, sequence_length])
+        outputs[-1].set_shape([None, None])
+        return outputs
+
+    def _squeeze_batch(self, tensors):
+        """Removes the leading batch axis from each tensor in `tensors`.
+
+        The Python path gives NumPy arrays. The TensorFlow path gives
+        `tf.Tensor`s, which can be symbolic inside a graph.
+        """
+        return [
+            tf.squeeze(t, axis=0)
+            if tf is not None and isinstance(t, tf.Tensor)
+            else np.squeeze(t, axis=0)
+            for t in tensors
+        ]
+
+    def _call_multimodal(self, x, sequence_length, tokenize_and_pack):
+        """Builds `call()` outputs for inputs with an `"images"` key.
+
+        Args:
+            x: dict with `"prompts"` and `"images"` keys.
+            sequence_length: int or `None`.
+            tokenize_and_pack: `_tokenize_and_pack_python` or
+                `_tokenize_and_pack_tf`.
+
+        Returns:
+            `(x, y, sample_weight)`.
+        """
         sequence_length = sequence_length or self.sequence_length
         prompts, flat_images, batched = self._extract_multimodal_inputs(x)
         pixel_values, image_sizes = self._convert_images(flat_images)
@@ -401,133 +369,116 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
                 'Mistral3\'s preprocessor was passed an `"images"` key but '
                 "found zero images across the batch."
             )
-
-        (
-            model_token_ids,
-            model_padding_mask,
-            y,
-            sample_weight,
-            placeholder_indices,
-        ) = self._build_multimodal_outputs(
-            prompts, image_sizes, sequence_length
+        token_ids, padding_mask, y, sample_weight, placeholder_indices = (
+            tokenize_and_pack(
+                prompts, image_sizes, sequence_length, add_labels=True
+            )
         )
-
+        if not batched:
+            token_ids, padding_mask, y, sample_weight = self._squeeze_batch(
+                [token_ids, padding_mask, y, sample_weight]
+            )
         out_x = {
-            "token_ids": model_token_ids,
-            "padding_mask": model_padding_mask,
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
             "pixel_values": pixel_values,
             "image_sizes": image_sizes,
             "placeholder_indices": placeholder_indices,
         }
-
-        if not batched:
-            out_x["token_ids"] = keras.ops.squeeze(out_x["token_ids"], axis=0)
-            out_x["padding_mask"] = keras.ops.squeeze(
-                out_x["padding_mask"], axis=0
-            )
-            y = keras.ops.squeeze(y, axis=0)
-            sample_weight = keras.ops.squeeze(sample_weight, axis=0)
-
         return keras.utils.pack_x_y_sample_weight(out_x, y, sample_weight)
 
-    @preprocessing_function
-    def _call_multimodal_tf(
-        self, x, y=None, sample_weight=None, sequence_length=None
-    ):
-        return self._call_multimodal_python(
-            x,
-            y=y,
-            sample_weight=sample_weight,
-            sequence_length=sequence_length,
-        )
-
-    def call(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
-        images = x.get("images") if isinstance(x, dict) else None
-        if images is None:
+    def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
+        if not isinstance(x, dict) or x.get("images") is None:
             # Mistral3 (like the HF model it wraps) supports plain text-only
             # calls: no image inputs are added to the output in that case.
             prompts = x["prompts"] if isinstance(x, dict) else x
-            return super().call(
+            return super()._call_python(
                 prompts,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
             )
+        outputs = self._call_multimodal(
+            x, sequence_length, self._tokenize_and_pack_python
+        )
+        return convert_preprocessing_outputs_python(outputs)
 
-        if not self._allow_python_workflow or in_tf_function():
-            return self._call_multimodal_tf(
-                x,
+    @preprocessing_function
+    def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
+        if not isinstance(x, dict) or x.get("images") is None:
+            prompts = x["prompts"] if isinstance(x, dict) else x
+            return super()._call_python(
+                prompts,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
             )
-        return self._call_multimodal_python(
-            x,
-            y=y,
-            sample_weight=sample_weight,
-            sequence_length=sequence_length,
+        return self._call_multimodal(
+            x, sequence_length, self._tokenize_and_pack_tf
         )
 
-    @preprocessing_function
-    def generate_preprocess(
-        self,
-        x,
-        sequence_length=None,
+    def _generate_preprocess_multimodal(
+        self, x, sequence_length, tokenize_and_pack
     ):
-        """Convert prompts (and optional images) to model inputs for generation.
+        """Builds `generate_preprocess()` outputs for inputs with images.
 
-        `x` may be a string, list of strings, or a dict with a `"prompts"`
-        key and an `"images"` key. Returns a dict with `token_ids` and
-        `padding_mask`, plus `pixel_values`, `image_sizes`, and
-        `placeholder_indices` when images are present.
+        Args:
+            x: dict with `"prompts"` and `"images"` keys.
+            sequence_length: int or `None`.
+            tokenize_and_pack: `_tokenize_and_pack_python` or
+                `_tokenize_and_pack_tf`.
+
+        Returns:
+            A dict of model inputs. An image-free batch gives only
+            `token_ids` and `padding_mask`.
         """
-        images = x.get("images") if isinstance(x, dict) else None
-        if images is None:
-            # Mistral3 (like the HF model it wraps) supports plain text-only
-            # generation: no image inputs are added to the output in that
-            # case.
-            prompts = x["prompts"] if isinstance(x, dict) else x
-            return super().generate_preprocess(
-                prompts, sequence_length=sequence_length
-            )
-
         if not self.built:
             self.build(None)
-
+        sequence_length = sequence_length or self.sequence_length
         prompts, flat_images, batched = self._extract_multimodal_inputs(x)
-        tokenized, pixel_values, image_sizes = self._build_multimodal_inputs(
-            prompts, flat_images
-        )
+        pixel_values, image_sizes = self._convert_images(flat_images)
         if pixel_values is None:
-            tokenized = self.tokenizer(tokenized)
-        token_ids, padding_mask = self.packer(
-            tokenized, sequence_length=sequence_length, add_end_value=False
+            return super()._generate_preprocess_python(
+                x["prompts"], sequence_length=sequence_length
+            )
+        token_ids, padding_mask, placeholder_indices = tokenize_and_pack(
+            prompts, image_sizes, sequence_length, add_labels=False
         )
-
-        out_x = {
+        if not batched:
+            token_ids, padding_mask = self._squeeze_batch(
+                [token_ids, padding_mask]
+            )
+        return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
+            "pixel_values": pixel_values,
+            "image_sizes": image_sizes,
+            "placeholder_indices": placeholder_indices,
         }
-        if pixel_values is not None:
-            placeholder_indices = compute_image_placeholder_indices(
-                keras.ops.convert_to_numpy(token_ids),
-                self.tokenizer.image_placeholder_token_id,
+
+    def _generate_preprocess_python(self, x, sequence_length=None):
+        if not isinstance(x, dict) or x.get("images") is None:
+            # Mistral3 supports plain text-only generation: no image inputs
+            # are added to the output in that case.
+            prompts = x["prompts"] if isinstance(x, dict) else x
+            return super()._generate_preprocess_python(
+                prompts, sequence_length=sequence_length
             )
-            out_x["pixel_values"] = pixel_values
-            out_x["image_sizes"] = image_sizes
-            out_x["placeholder_indices"] = placeholder_indices
-        if not batched:
-            out_x["token_ids"] = keras.ops.squeeze(out_x["token_ids"], axis=0)
-            out_x["padding_mask"] = keras.ops.squeeze(
-                out_x["padding_mask"], axis=0
+        outputs = self._generate_preprocess_multimodal(
+            x, sequence_length, self._tokenize_and_pack_python
+        )
+        return convert_preprocessing_outputs_python(outputs)
+
+    @preprocessing_function
+    def _generate_preprocess_tf(self, x, sequence_length=None):
+        if not isinstance(x, dict) or x.get("images") is None:
+            prompts = x["prompts"] if isinstance(x, dict) else x
+            return super()._generate_preprocess_python(
+                prompts, sequence_length=sequence_length
             )
-        return out_x
+        return self._generate_preprocess_multimodal(
+            x, sequence_length, self._tokenize_and_pack_tf
+        )
 
     def get_config(self):
         config = super().get_config()

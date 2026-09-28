@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
@@ -15,7 +16,7 @@ from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-class Mistral3BackboneTest(TestCase):
+class Mistral3BackboneTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.text_init_kwargs = {
             "vocabulary_size": 10,
@@ -74,34 +75,64 @@ class Mistral3BackboneTest(TestCase):
             "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
         }
 
-    def test_backbone_basics(self):
+        self.text_only_init_kwargs = {
+            key: value
+            for key, value in self.init_kwargs.items()
+            if key not in ("vision_encoder", "multimodal_projector")
+        }
+        self.text_only_input_data = {
+            "token_ids": ops.array([[3, 4, 5], [6, 7, 8]], dtype="int32"),
+            "padding_mask": ops.ones((2, 3), dtype="int32"),
+        }
+
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_backbone_basics(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        else:
+            init_kwargs = self.text_only_init_kwargs
+            input_data = self.text_only_input_data
+
         self.run_backbone_test(
             cls=Mistral3Backbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
             expected_output_shape=(
                 2,
-                5,
+                ops.shape(input_data["token_ids"])[1],
                 self.text_init_kwargs["hidden_dim"],
             ),
-            # Image inputs have no sequence axis to slice, so skip the
-            # default variable-length sweep.
-            variable_length_data=[self.input_data],
+            variable_length_data=(
+                [input_data] if modality_type == "text_and_vision" else None
+            ),
             # `run_quantization_test` rebuilds `vision_encoder`/
             # `multimodal_projector` as standalone objects to apply a
             # path-keyed `DTypePolicyMap`, but their sublayer paths change
             # once they're no longer nested under the backbone -- the same
             # structural mismatch `gemma3_backbone_test.py` works around for
             # its own vision-encoder-bearing backbone.
-            run_quantization_check=False,
+            run_quantization_check=(modality_type == "text_only"),
         )
 
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
     @pytest.mark.large
-    def test_saved_model(self):
+    def test_saved_model(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        else:
+            init_kwargs = self.text_only_init_kwargs
+            input_data = self.text_only_input_data
+
         self.run_model_saving_test(
             cls=Mistral3Backbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
         )
 
     def test_variable_images_per_prompt(self):

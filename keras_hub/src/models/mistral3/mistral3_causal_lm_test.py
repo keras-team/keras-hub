@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from absl.testing import parameterized
 from keras import ops
 from keras import tree
 
@@ -75,9 +76,40 @@ def _tekken_vision_init_kwargs():
     }
 
 
-class Mistral3CausalLMTest(TestCase):
+class Mistral3CausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.tokenizer = Mistral3Tokenizer(**_tekken_vision_init_kwargs())
+
+        self.text_preprocessor = Mistral3CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=None,
+            sequence_length=16,
+            spatial_merge_size=1,
+        )
+        self.text_backbone = Mistral3Backbone(
+            vocabulary_size=self.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=8,
+            num_key_value_heads=4,
+            hidden_dim=16,
+            intermediate_dim=8,
+            sliding_window=2,
+        )
+        self.text_init_kwargs = {
+            "backbone": self.text_backbone,
+            "preprocessor": self.text_preprocessor,
+        }
+        self.text_train_data = (
+            {
+                "prompts": ["the tin", "in the"],
+                "responses": ["the tin", "in the"],
+            },
+        )
+        self.text_input_data = tree.map_structure(
+            ops.convert_to_tensor,
+            self.text_preprocessor(*self.text_train_data)[0],
+        )
+
         self.image_converter = Mistral3ImageConverter(
             longest_edge=8, patch_size=4, spatial_merge_size=1
         )
@@ -132,11 +164,21 @@ class Mistral3CausalLMTest(TestCase):
             ops.convert_to_tensor, self.preprocessor(*self.train_data)[0]
         )
 
-    def test_causal_lm_basics(self):
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_causal_lm_basics(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            train_data = self.train_data
+        else:
+            init_kwargs = self.text_init_kwargs
+            train_data = self.text_train_data
+
         self.run_task_test(
             cls=Mistral3CausalLM,
-            init_kwargs=self.init_kwargs,
-            train_data=self.train_data,
+            init_kwargs=init_kwargs,
+            train_data=train_data,
             expected_output_shape=(2, 16, self.tokenizer.vocabulary_size()),
         )
 
@@ -206,16 +248,26 @@ class Mistral3CausalLMTest(TestCase):
         self.assertEqual(ops.shape(output["token_ids"]), (2, 7))
         self.assertEqual(ops.shape(output["padding_mask"]), (2, 7))
 
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
     @pytest.mark.large
-    def test_saved_model(self):
+    def test_saved_model(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        else:
+            init_kwargs = self.text_init_kwargs
+            input_data = self.text_input_data
+
         self.run_model_saving_test(
             cls=Mistral3CausalLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
         )
 
     def test_generate(self):
-        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
         prompt = "the tin"
         output = causal_lm.generate(prompt)
         self.assertTrue(prompt in output)
@@ -223,7 +275,7 @@ class Mistral3CausalLMTest(TestCase):
         outputs = causal_lm.generate(prompts)
         for prompt, output in zip(prompts, outputs):
             self.assertTrue(prompt in output)
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
+        prompt_ids = self.text_preprocessor.generate_preprocess([prompt])
         causal_lm.preprocessor = None
         outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
         self.assertAllEqual(
@@ -234,13 +286,13 @@ class Mistral3CausalLMTest(TestCase):
         )
 
     def test_early_stopping(self):
-        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
         call_with_cache = causal_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.tokenizer.end_token_id
+            index = self.text_preprocessor.tokenizer.end_token_id
             update = ops.ones_like(logits)[:, :, index] * 1.0e9
             update = ops.expand_dims(update, axis=-1)
             logits = ops.slice_update(logits, (0, 0, index), update)
@@ -252,7 +304,7 @@ class Mistral3CausalLMTest(TestCase):
             self.assertEqual(prompt, output)
 
     def test_generate_compilation(self):
-        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
         causal_lm.generate("the tin")
         first_fn = causal_lm.generate_function
         causal_lm.generate("the tin")
