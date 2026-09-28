@@ -14,7 +14,7 @@ class MuseGlimmerTokenizerTest(TestCase):
             a, b = merge.split(" ")
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<|end_of_text|>", "<|begin_of_text|>"]
-        self.vocab += ["<|finetune_right_pad|>"]
+        self.vocab += ["<|finetune_right_pad|>", "<|eot|>"]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
@@ -34,6 +34,10 @@ class MuseGlimmerTokenizerTest(TestCase):
         tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
         self.assertEqual(tokenizer.image_token_id, 200092)
         self.assertEqual(tokenizer.video_token_id, 200091)
+
+    def test_eot_token_is_second_end_token(self):
+        tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
+        self.assertEqual(tokenizer.end_token2_id, self.vocab["<|eot|>"])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):

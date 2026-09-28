@@ -1,6 +1,11 @@
+from unittest.mock import patch
+
 import numpy as np
 from keras import ops
 
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionAttention,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionEncoder,
 )
@@ -192,6 +197,79 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllEqual(
             window_segment_id, np.repeat([0, 1, 2, 3], [12, 3, 12, 3])
         )
+
+    def _capped_encoder(self, **caps):
+        encoder = MuseGlimmerVisionEncoder(**self.init_kwargs, **caps)
+        encoder.build()
+        self.encoder.build()
+        encoder.set_weights(self.encoder.get_weights())
+        return encoder
+
+    def test_padding_caps_match_masked_attention(self):
+        # Eager calls size the caps from the input. Explicit caps pad
+        # further. Both must match one masked attention over the full
+        # sequence, which traced calls use when the caps are `None`.
+        capped = self._capped_encoder(
+            max_num_windows=16, max_num_frames=4, max_frame_size=64
+        )
+        patch_dim = 2 * 3 * 2 * 2
+        # An image with ragged windows, and a two-frame video.
+        for grid in ([[1, 6, 10]], [[2, 4, 6]], [[1, 6, 10], [2, 4, 6]]):
+            grid_thw = np.array(grid, dtype="int32")
+            num_patches = int(np.prod(grid_thw, axis=-1).sum())
+            pixel_values = np.random.randn(num_patches, patch_dim).astype(
+                "float32"
+            )
+            with patch.object(
+                MuseGlimmerVisionEncoder,
+                "_resolve_padding_caps",
+                return_value=(None, None, None),
+            ):
+                masked_output = self.encoder(pixel_values, grid_thw)
+            auto_output = self.encoder(pixel_values, grid_thw)
+            capped_output = capped(pixel_values, grid_thw)
+            self.assertAllClose(
+                auto_output, masked_output, atol=1e-5, rtol=1e-5
+            )
+            self.assertAllClose(
+                capped_output, masked_output, atol=1e-5, rtol=1e-5
+            )
+
+    def test_eager_call_sizes_caps_from_input(self):
+        patch_dim = 2 * 3 * 2 * 2
+        grid_thw = np.array([[1, 6, 10], [2, 4, 6]], dtype="int32")
+        pixel_values = np.random.randn(108, patch_dim).astype("float32")
+        window_patches = max(
+            self.encoder.window_size // self.encoder.patch_size, 1
+        )
+        caps = self.encoder._resolve_padding_caps(grid_thw, window_patches)
+        num_windows = sum(
+            t * -(-h // window_patches) * -(-w // window_patches)
+            for t, h, w in grid_thw.tolist()
+        )
+        self.assertEqual(caps, (num_windows, 3, 60))
+        with patch.object(
+            MuseGlimmerVisionAttention,
+            "_masked_full_attention",
+            side_effect=AssertionError("The masked path must not run."),
+        ):
+            self.encoder(pixel_values, grid_thw)
+
+    def test_padding_caps_too_small_raise(self):
+        patch_dim = 2 * 3 * 2 * 2
+        grid_thw = np.array([[2, 4, 6]], dtype="int32")
+        pixel_values = np.random.randn(48, patch_dim).astype("float32")
+        for caps in (
+            {"max_num_windows": 3},
+            {"max_num_frames": 1, "max_frame_size": 24},
+            {"max_num_frames": 2, "max_frame_size": 16},
+        ):
+            with self.assertRaises(ValueError):
+                self._capped_encoder(**caps)(pixel_values, grid_thw)
+
+    def test_frame_caps_must_be_set_together(self):
+        with self.assertRaises(ValueError):
+            MuseGlimmerVisionEncoder(**self.init_kwargs, max_num_frames=2)
 
     def test_serialization(self):
         self.run_serialization_test(self.encoder)

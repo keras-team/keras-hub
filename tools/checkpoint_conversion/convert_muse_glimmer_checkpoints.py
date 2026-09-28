@@ -361,6 +361,7 @@ def _report_numerics(label, keras_logits, hf_logits):
             f"[{label}] logits differ beyond tolerance — "
             f"matching={pct:.2f}% ({total - mismatched}/{total})."
         )
+        raise
 
 
 def test_numerics(keras_model, hf_results, label):
@@ -604,11 +605,6 @@ def test_assistant_generation(target_preset, kh_assistant, hf_gen_data):
     kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
         f"hf://{target_preset}", dtype="float32"
     )
-    # The auto-configured caps can OOM, so shrink them for validation.
-    if kh_target.backbone.vision_encoder is not None:
-        kh_target.backbone.vision_encoder.max_num_windows = 6
-        kh_target.backbone.vision_encoder.max_num_frames = 1
-        kh_target.backbone.vision_encoder.max_frame_size = 1600
     kh_target.compile(sampler="greedy")
     print("\n--- Section 3: Speculative generation ---")
     for label, data in hf_gen_data.items():
@@ -766,12 +762,6 @@ def main(_):
         f"hf://{hf_preset}", dtype="float32"
     )
     print("   KerasHub model loaded!")
-
-    # The auto-configured caps can OOM, so shrink them for validation.
-    if keras_model.backbone.vision_encoder is not None:
-        keras_model.backbone.vision_encoder.max_num_windows = 6
-        keras_model.backbone.vision_encoder.max_num_frames = 1
-        keras_model.backbone.vision_encoder.max_frame_size = 1600
 
     validate_output(keras_model, hf_results)
 

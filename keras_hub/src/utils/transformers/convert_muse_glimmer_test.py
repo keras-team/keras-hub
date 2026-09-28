@@ -205,7 +205,6 @@ class TestMuseGlimmerConverter(TestCase):
         self.assertEqual(config["patch_size"], 14)
         self.assertEqual(config["patch_temporal"], 2)
         self.assertEqual(config["merge_size"], 2)
-        self.assertEqual(config["fps"], 2.0)
         self.assertEqual(config["num_frames"], 96)
         self.assertEqual(config["max_video_frame_tokens"], 144)
         self.assertEqual(config["interpolation"], "lanczos3")

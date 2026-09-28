@@ -75,7 +75,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             `pre_feedforward_layernorm` as plain RMSNorm instead of the
             centered `(1 + weight)` variant. Defaults to `True`.
         kernel_initializer: initializer for the dense projections.
-        dropout: float. Dropout rate.
+        dropout: float. Dropout rate for the attention probabilities and
+            for each residual branch.
     """
 
     def __init__(
@@ -380,6 +381,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             x, self_attention_cache = x
         if self.use_sandwich_norm:
             x = self._post_attention_layernorm(x)
+        x = self._dropout_layer(x, training=training)
         x = residual + x
 
         residual = x
@@ -392,6 +394,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
         x = self._feedforward_down_dense(gate_output * up_output)
         if self.use_sandwich_norm:
             x = self._post_feedforward_layernorm(x)
+        x = self._dropout_layer(x, training=training)
         decoder_output = residual + x
 
         if self_attention_cache is not None:

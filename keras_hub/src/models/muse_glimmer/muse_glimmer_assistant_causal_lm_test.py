@@ -155,8 +155,15 @@ class MuseGlimmerAssistantCausalLMTest(TestCase):
         batch_size = 1
         block_size = 5
         max_length = 4
-        noise_embeds = np.zeros((batch_size, block_size, 16), dtype="float32")
-        context_hidden_states = np.zeros((batch_size, 1, 32), dtype="float32")
+        # All-zero inputs give an all-zero output for any weights, so use
+        # random inputs to detect a bad save/load.
+        rng = np.random.default_rng(0)
+        noise_embeds = rng.standard_normal((batch_size, block_size, 16)).astype(
+            "float32"
+        )
+        context_hidden_states = rng.standard_normal((batch_size, 1, 32)).astype(
+            "float32"
+        )
         cache = ops.zeros((batch_size, 2, 2, max_length, 2, 4))
         output_orig, _ = self.model.call_with_cache(
             noise_embeds=noise_embeds,
@@ -170,4 +177,5 @@ class MuseGlimmerAssistantCausalLMTest(TestCase):
             cache=cache,
             cache_update_index=0,
         )
+        self.assertGreater(float(ops.max(ops.abs(output_orig))), 0.0)
         self.assertAllClose(output_orig, output_loaded)

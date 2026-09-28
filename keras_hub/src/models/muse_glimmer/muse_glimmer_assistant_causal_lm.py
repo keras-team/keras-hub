@@ -45,6 +45,20 @@ class MuseGlimmerAssistantCausalLM(CausalLM):
             copies of this id, before embedding via the target model's own
             token embedding table. Required for speculative decoding via
             `MuseGlimmerCausalLM.generate(assistant_model=...)`.
+
+    Example:
+    ```python
+    target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
+        "muse_glimmer_30b"
+    )
+    assistant = keras_hub.models.MuseGlimmerAssistantCausalLM.from_preset(
+        "muse_glimmer_30b_assistant"
+    )
+    # The assistant drafts each block. The target verifies the block.
+    target.generate(
+        "What is Keras?", max_length=64, assistant_model=assistant
+    )
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -101,8 +115,8 @@ class MuseGlimmerAssistantCausalLM(CausalLM):
         see `MuseGlimmerTextAttention`'s docstring — so later cycles
         reuse previously-computed context key/value instead of
         recomputing them every time. This is DFlash's real caching
-        benefit: only the context stream (one new real target position
-        per cycle) is cached; the noise block is always freshly
+        benefit: only the context stream (the newly verified target
+        positions of each cycle) is cached; the noise block is always freshly
         computed, since it's discarded/replaced every cycle regardless
         of accept/reject. Used by `MuseGlimmerCausalLM.generate_step()`'s
         speculative-decoding path.
@@ -111,9 +125,10 @@ class MuseGlimmerAssistantCausalLM(CausalLM):
             noise_embeds: float tensor `(batch, block_size, hidden_dim)`.
                 The noise-embedding window for the block being drafted.
             context_hidden_states: float tensor
-                `(batch, 1, len(target_layer_ids) * target_hidden_dim)`.
-                The single new target position to write into the cache
-                this cycle.
+                `(batch, context_length, len(target_layer_ids) *
+                target_hidden_dim)`. The target positions to write into
+                the cache at `cache_update_index`. The valid context ends
+                after the last written position.
             cache: float tensor
                 `(batch, num_layers, 2, max_length, num_key_value_heads,
                 head_dim)`. Persistent per-layer context key/value cache.

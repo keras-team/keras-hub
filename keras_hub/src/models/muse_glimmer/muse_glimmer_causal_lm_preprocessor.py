@@ -15,9 +15,42 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
     MuseGlimmerVideoConverter,
 )
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
-from keras_hub.src.utils.tensor_utils import preprocessing_function
-from keras_hub.src.utils.tensor_utils import tf
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
+from keras_hub.src.utils.tensor_utils import in_tf_function
+
+
+def _rank(x):
+    if hasattr(x, "shape"):
+        return len(x.shape)
+    return np.ndim(x)
+
+
+def _split_media(media, item_rank, media_name):
+    """Split raw media input into a list of single items.
+
+    `media` is one item of rank `item_rank`, a batch of rank
+    `item_rank + 1`, or a list of items. Items in a list can have
+    different sizes.
+    """
+    if isinstance(media, (list, tuple)):
+        if not media:
+            return []
+        if all(_rank(item) == item_rank for item in media):
+            return list(media)
+    rank = _rank(media)
+    if rank == item_rank:
+        return [media]
+    if rank == item_rank + 1:
+        return [media[i] for i in range(len(media))]
+    raise ValueError(
+        f"`{media_name}` must be one {media_name[:-1]} of rank {item_rank}, "
+        f"a batch of rank {item_rank + 1}, or a list of "
+        f"{media_name}. Received rank {rank}."
+    )
 
 
 @keras_hub_export("keras_hub.models.MuseGlimmerCausalLMPreprocessor")
@@ -71,38 +104,53 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         self.video_converter = video_converter
 
     def _compute_vision_indices(self, token_ids):
-        token_ids_np = np.asarray(token_ids)
-        img_mask = (token_ids_np == self.tokenizer.image_token_id).reshape(-1)
-        vid_mask = (token_ids_np == self.tokenizer.video_token_id).reshape(-1)
-        img_indices = np.where(img_mask)[0].astype(np.int32)
-        vid_indices = np.where(vid_mask)[0].astype(np.int32)
-        return tf.constant(np.concatenate([img_indices, vid_indices], axis=0))
+        token_ids = convert_to_numpy(token_ids).reshape(-1)
+        img_indices = np.flatnonzero(token_ids == self.tokenizer.image_token_id)
+        vid_indices = np.flatnonzero(token_ids == self.tokenizer.video_token_id)
+        return np.concatenate([img_indices, vid_indices]).astype("int32")
 
     def _expand_vision_placeholders(
-        self, ids, num_image_tokens, num_video_tokens
+        self, sequences, num_image_tokens, num_video_tokens
     ):
-        expanded = []
-        img_idx, vid_idx = 0, 0
-        for tok in ids:
-            if tok == self.tokenizer.image_token_id:
-                n = (
-                    num_image_tokens[img_idx]
-                    if img_idx < len(num_image_tokens)
-                    else 1
+        """Expand placeholders in a batch of token id lists.
+
+        Media items map to placeholders in order across the whole batch.
+        The i-th image placeholder takes `num_image_tokens[i]` tokens.
+        """
+        image_token_id = self.tokenizer.image_token_id
+        video_token_id = self.tokenizer.video_token_id
+        counts = {
+            image_token_id: ("image", num_image_tokens),
+            video_token_id: ("video", num_video_tokens),
+        }
+        next_index = {image_token_id: 0, video_token_id: 0}
+        expanded_sequences = []
+        for ids in sequences:
+            expanded = []
+            for tok in ids:
+                if tok not in counts:
+                    expanded.append(tok)
+                    continue
+                media_name, media_counts = counts[tok]
+                i = next_index[tok]
+                if i >= len(media_counts):
+                    raise ValueError(
+                        f"The prompts contain more {media_name} "
+                        f"placeholders than the {len(media_counts)} "
+                        f"{media_name}(s) given."
+                    )
+                expanded.extend([tok] * media_counts[i])
+                next_index[tok] = i + 1
+            expanded_sequences.append(expanded)
+        for tok, (media_name, media_counts) in counts.items():
+            if next_index[tok] != len(media_counts):
+                raise ValueError(
+                    f"{len(media_counts)} {media_name}(s) were given, but "
+                    f"the prompts contain {next_index[tok]} {media_name} "
+                    "placeholder(s). Add one placeholder per "
+                    f"{media_name}."
                 )
-                expanded.extend([self.tokenizer.image_token_id] * n)
-                img_idx += 1
-            elif tok == self.tokenizer.video_token_id:
-                n = (
-                    num_video_tokens[vid_idx]
-                    if vid_idx < len(num_video_tokens)
-                    else 1
-                )
-                expanded.extend([self.tokenizer.video_token_id] * n)
-                vid_idx += 1
-            else:
-                expanded.append(tok)
-        return expanded
+        return expanded_sequences
 
     def _num_merged_tokens(self, grid_thw, merge_size):
         counts = []
@@ -110,128 +158,122 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             counts.append(t * (h // merge_size) * (w // merge_size))
         return counts
 
-    @preprocessing_function
+    def _convert_media(self, media, converter, item_rank, media_name):
+        """Run `converter` on each media item separately.
+
+        Returns the per-item patches, the per-item `grid_thw` and the
+        per-item count of merged vision tokens.
+        """
+        if converter is None:
+            raise ValueError(
+                f"`{media_name}` were given, but this preprocessor has no "
+                f"`{media_name[:-1]}_converter`."
+            )
+        patches, grids = [], []
+        for item in _split_media(media, item_rank, media_name):
+            item = keras.ops.convert_to_tensor(convert_to_numpy(item))
+            result = converter(item)
+            patches.append(convert_to_numpy(result["patches"]))
+            grids.append(convert_to_numpy(result["grid_thw"]).astype("int32"))
+        num_tokens = self._num_merged_tokens(
+            [grid.tolist() for grid in grids], converter.merge_size
+        )
+        return patches, grids, num_tokens
+
     def generate_preprocess(self, x, sequence_length=None):
+        """Convert prompts and optional media to generation inputs.
+
+        `x` is a prompt, a list of prompts, or a dict with a `"prompts"`
+        key and optional `"images"` and `"videos"` keys. Each media value
+        is one item, a batch of same-size items, or a list of items. Items
+        in a list can have different sizes. The media path runs eagerly
+        with NumPy and `keras.ops`, so it does not need TensorFlow.
+        """
         images, videos = None, None
         if isinstance(x, dict):
             images = x.get("images", None)
             videos = x.get("videos", None)
+            if images is None and videos is None:
+                x = x["prompts"]
 
         if images is None and videos is None:
             return super().generate_preprocess(
                 x, sequence_length=sequence_length
             )
 
-        assert_tf_installed(
-            "MuseGlimmerCausalLMPreprocessor with images or videos"
-        )
+        if in_tf_function():
+            raise ValueError(
+                "Image and video inputs need eager execution. Do not call "
+                "`generate_preprocess()` with media inside `tf.data` or "
+                "`tf.function`."
+            )
         if not self.built:
             self.build(None)
 
         sequence_length = sequence_length or self.sequence_length
-        prompts = x["prompts"]
-        batched = True
-        if isinstance(prompts, str):
-            batched = False
-            prompts = [prompts]
-
-        pixel_values_list, grid_list = [], []
-        num_image_tokens, num_video_tokens = [], []
-
-        if images is not None and self.image_converter is not None:
-            # `convert_preprocessing_inputs` (run by `@preprocessing_function`
-            # before this method's body) stacks a Python list of images into
-            # one dense tensor, so a list no longer looks like a
-            # `list`/`tuple` by the time it gets here. Un-stack it back into
-            # per-image entries by rank instead (single image is rank 3).
-            if isinstance(images, (list, tuple)):
-                flat_images = list(images)
-            else:
-                images = tf.convert_to_tensor(images)
-                flat_images = (
-                    tf.unstack(images, axis=0)
-                    if images.shape.rank == 4
-                    else [images]
-                )
-            for img in flat_images:
-                result = self.image_converter(img)
-                pixel_values_list.append(tf.constant(result["patches"]))
-                grid_list.append(tf.constant(result["grid_thw"]))
-            image_grids = [
-                [int(val) for val in np.asarray(g)]
-                for g in grid_list[: len(flat_images)]
-            ]
-            num_image_tokens = self._num_merged_tokens(
-                image_grids, self.image_converter.merge_size
-            )
-
-        if videos is not None and self.video_converter is not None:
-            # Same stacking issue as `images` above; a single video is
-            # rank 4 (frames, height, width, channels).
-            if isinstance(videos, (list, tuple)):
-                flat_videos = list(videos)
-            else:
-                videos = tf.convert_to_tensor(videos)
-                flat_videos = (
-                    tf.unstack(videos, axis=0)
-                    if videos.shape.rank == 5
-                    else [videos]
-                )
-            video_grid_start = len(grid_list)
-            for vid in flat_videos:
-                result = self.video_converter(vid)
-                pixel_values_list.append(tf.constant(result["patches"]))
-                grid_list.append(tf.constant(result["grid_thw"]))
-            video_grids = [
-                [int(val) for val in np.asarray(g)]
-                for g in grid_list[video_grid_start:]
-            ]
-            num_video_tokens = self._num_merged_tokens(
-                video_grids, self.video_converter.merge_size
-            )
-
-        prompts_list = (
-            [
-                p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
-                for p in prompts
-            ]
-            if isinstance(prompts, (tf.Tensor, list, tuple))
-            else [str(prompts)]
+        prompts, batched, outer_shape = canonicalize_python_string_inputs(
+            x["prompts"]
         )
-
-        expanded_sequences = []
-        for prompt_str in prompts_list:
-            ids = self.tokenizer(prompt_str)
-            ids = ids.numpy().tolist() if hasattr(ids, "numpy") else list(ids)
-            ids = self._expand_vision_placeholders(
-                ids, num_image_tokens, num_video_tokens
+        if outer_shape is not None:
+            raise ValueError(
+                "`prompts` must be a string or a list of strings. "
+                f"Received: {x['prompts']}"
             )
-            expanded_sequences.append(ids)
 
-        token_ids_ragged = tf.ragged.constant(expanded_sequences, dtype="int32")
+        pixel_values, grid_thw = [], []
+        num_image_tokens, num_video_tokens = [], []
+        if images is not None:
+            patches, grids, num_image_tokens = self._convert_media(
+                images, self.image_converter, 3, "images"
+            )
+            pixel_values.extend(patches)
+            grid_thw.extend(grids)
+        if videos is not None:
+            patches, grids, num_video_tokens = self._convert_media(
+                videos, self.video_converter, 4, "videos"
+            )
+            pixel_values.extend(patches)
+            grid_thw.extend(grids)
+
+        tokenized = [
+            convert_to_numpy(self.tokenizer(prompt)).tolist()
+            for prompt in prompts
+        ]
+        expanded_sequences = self._expand_vision_placeholders(
+            tokenized, num_image_tokens, num_video_tokens
+        )
         token_ids, padding_mask = self.packer(
-            token_ids_ragged,
+            expanded_sequences if batched else expanded_sequences[0],
             sequence_length=sequence_length,
             add_end_value=False,
         )
 
         vision_indices = self._compute_vision_indices(token_ids)
-        if pixel_values_list:
-            combined_pixel_values = tf.concat(pixel_values_list, axis=0)
-            combined_grid_thw = tf.stack(grid_list, axis=0)
+        num_vision_tokens = sum(num_image_tokens) + sum(num_video_tokens)
+        if vision_indices.shape[0] != num_vision_tokens:
+            raise ValueError(
+                f"`sequence_length={sequence_length}` truncates the "
+                f"expanded image/video tokens. The media need "
+                f"{num_vision_tokens} tokens, but only "
+                f"{vision_indices.shape[0]} fit. Increase "
+                "`sequence_length`."
+            )
+        if pixel_values:
+            pixel_values = np.concatenate(pixel_values, axis=0)
+            grid_thw = np.stack(grid_thw, axis=0)
         else:
-            combined_pixel_values = tf.zeros((0, 0), dtype="float32")
-            combined_grid_thw = tf.zeros((0, 3), dtype="int32")
+            pixel_values = np.zeros((0, 0), dtype="float32")
+            grid_thw = np.zeros((0, 3), dtype="int32")
 
-        return {
-            "token_ids": token_ids if batched else tf.squeeze(token_ids, 0),
-            "padding_mask": padding_mask
-            if batched
-            else tf.squeeze(padding_mask, 0),
-            "pixel_values": combined_pixel_values,
-            "image_grid_thw": combined_grid_thw,
-            "vision_indices": vision_indices,
-        }
+        return convert_preprocessing_outputs_python(
+            {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "pixel_values": pixel_values,
+                "image_grid_thw": grid_thw,
+                "vision_indices": vision_indices,
+            }
+        )
 
     def get_config(self):
         config = super().get_config()

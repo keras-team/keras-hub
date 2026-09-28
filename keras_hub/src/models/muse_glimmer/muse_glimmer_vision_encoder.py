@@ -4,6 +4,8 @@ import keras
 import numpy as np
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
+
 
 def _per_patch_coordinates(grid_thw, num_patches):
     """Per-patch `(row, col, height, width, frame_id, frame_start)` via
@@ -575,6 +577,7 @@ def _shuffle_index_positions(grid_thw, num_patches, merge_size):
     return frame_start + source_within_frame
 
 
+@keras_hub_export("keras_hub.models.MuseGlimmerVisionEncoder")
 class MuseGlimmerVisionEncoder(keras.Model):
     """MuseGlimmer's ViT-style perception encoder.
 
@@ -582,6 +585,19 @@ class MuseGlimmerVisionEncoder(keras.Model):
     embedding + bilinear position embeddings, alternating window/full
     attention (via index permutation, not a windowed attention mask), axial
     2D RoPE, and pixel-shuffle patch merging.
+
+    Attention runs per window and per frame in padded slot buffers. The
+    caps (`max_num_windows`, `max_num_frames`, `max_frame_size`) set the
+    buffer sizes. With eager inputs, a cap that is `None` takes the exact
+    size of the input, so memory follows the input size. A set cap must
+    fit the input, or the encoder raises a `ValueError`.
+
+    Traced inputs (for example under `jax.jit`) have no concrete grid
+    values. There, a cap that is `None` falls back to one masked
+    attention over the full sequence, which costs memory quadratic in
+    the patch count. Set the caps to get static shapes under tracing.
+    Each call then reserves memory for the full caps. Traced inputs skip
+    the fit check, so a cap that is too small gives incorrect output.
 
     Args:
         num_layers: int. Number of transformer blocks.
@@ -601,22 +617,23 @@ class MuseGlimmerVisionEncoder(keras.Model):
             last) being full attention.
         out_hidden_size: int or `None`. Output dim after pixel-shuffle
             merge; defaults to `hidden_size * merge_size ** 2`.
-        max_num_windows: int or `None`. When set, window-attention layers
-            batch each window into a fixed `(max_num_windows, window_
-            patches ** 2)` buffer for one matmul+softmax per window slot,
-            instead of one sequence-wide masked matmul — closer to plain
-            per-window attention numerically. Must be at least the real
-            number of windows in any call (across all images/frames);
-            exceeding it produces incorrect (out-of-bounds) results.
-            Defaults to `None` (the sequence-wide masked path, no cap).
-        max_num_frames: int or `None`. Same idea as `max_num_windows`,
-            for full-attention layers: batches each frame into a fixed
-            `(max_num_frames, max_frame_size)` buffer. Requires
-            `max_frame_size` too. Must be at least the real number of
-            frames (across all images/videos) in any call.
-        max_frame_size: int or `None`. The per-slot size for
-            `max_num_frames` — must be at least the largest real
-            per-frame patch count (`height * width`) in any call.
+        max_num_windows: int or `None`. Optional opt-in cap. When set,
+            window-attention layers put each window into a fixed
+            `(max_num_windows, window_patches ** 2)` buffer. The value
+            must be at least the total number of windows in one call.
+            Defaults to `None`, which sizes the buffer from each eager
+            input.
+        max_num_frames: int or `None`. Optional opt-in cap for
+            full-attention layers. Full-attention layers put each frame
+            into a fixed `(max_num_frames, max_frame_size)` buffer. The
+            value must be at least the total number of frames in one
+            call. Set `max_frame_size` together with this argument.
+            Defaults to `None`, which sizes the buffer from each eager
+            input.
+        max_frame_size: int or `None`. The slot size for
+            `max_num_frames`. The value must be at least the largest
+            per-frame patch count (`height * width`) in one call.
+            Defaults to `None`.
     """
 
     def __init__(
@@ -665,6 +682,12 @@ class MuseGlimmerVisionEncoder(keras.Model):
         self.max_num_windows = max_num_windows
         self.max_num_frames = max_num_frames
         self.max_frame_size = max_frame_size
+        if (max_num_frames is None) != (max_frame_size is None):
+            raise ValueError(
+                "`max_num_frames` and `max_frame_size` must both be set or "
+                f"both be `None`. Received: max_num_frames={max_num_frames}, "
+                f"max_frame_size={max_frame_size}"
+            )
         self.window_size = pos_emb_height * patch_size
 
         head_dim = hidden_size // num_heads
@@ -730,6 +753,51 @@ class MuseGlimmerVisionEncoder(keras.Model):
         sin = self.rotary_pos_emb.recomposition_frequencies(ops.sin(freqs))
         return cos, sin
 
+    def _resolve_padding_caps(self, grid_thw, window_patches):
+        """Return the `(num_windows, num_frames, frame_size)` caps to use.
+
+        With eager inputs, a cap that is `None` takes the exact size of
+        the input, and a set cap must fit the input. Traced inputs have
+        no concrete values, so the set caps are used as they are.
+        """
+        caps = (self.max_num_windows, self.max_num_frames, self.max_frame_size)
+        try:
+            grid = ops.convert_to_numpy(grid_thw)
+        except Exception:
+            return caps
+        grid = np.reshape(grid, (-1, 3)).astype("int64")
+        t, h, w = grid[:, 0], grid[:, 1], grid[:, 2]
+        num_windows = int(
+            np.sum(t * (-(-h // window_patches)) * (-(-w // window_patches)))
+        )
+        num_frames = int(np.sum(t))
+        frame_size = int(np.max(h * w))
+        if self.max_num_windows is None:
+            max_num_windows = num_windows
+        elif num_windows > self.max_num_windows:
+            raise ValueError(
+                f"The input has {num_windows} attention windows, but "
+                f"`max_num_windows` is {self.max_num_windows}. Increase "
+                "`max_num_windows` or set it to `None`."
+            )
+        else:
+            max_num_windows = self.max_num_windows
+        if self.max_num_frames is None:
+            return max_num_windows, num_frames, frame_size
+        if num_frames > self.max_num_frames:
+            raise ValueError(
+                f"The input has {num_frames} frames, but "
+                f"`max_num_frames` is {self.max_num_frames}. Increase "
+                "`max_num_frames` or set it to `None`."
+            )
+        if frame_size > self.max_frame_size:
+            raise ValueError(
+                f"The largest frame has {frame_size} patches, but "
+                f"`max_frame_size` is {self.max_frame_size}. Increase "
+                "`max_frame_size` or set it to `None`."
+            )
+        return max_num_windows, self.max_num_frames, self.max_frame_size
+
     def call(self, pixel_values, grid_thw):
         batched = len(ops.shape(pixel_values)) == 3
         if batched:
@@ -746,13 +814,16 @@ class MuseGlimmerVisionEncoder(keras.Model):
         hidden_states = self.ln_pre(hidden_states)
 
         window_patches = max(self.window_size // self.patch_size, 1)
+        max_num_windows, max_num_frames, max_frame_size = (
+            self._resolve_padding_caps(grid_thw, window_patches)
+        )
         window_index, reverse_indices, window_segment_id = _window_layout(
             grid_thw, num_patches, window_patches
         )
         hidden_states = ops.take(hidden_states, window_index, axis=0)
 
         window_padded_index, window_size_val = None, None
-        if self.max_num_windows is not None:
+        if max_num_windows is not None:
             window_size_val = window_patches * window_patches
             positions = ops.arange(num_patches, dtype="int32")
             # `window_segment_id` is non-decreasing (windows are already
@@ -773,10 +844,10 @@ class MuseGlimmerVisionEncoder(keras.Model):
             grid_thw, num_patches
         )
         frame_padded_index = None
-        if self.max_num_frames is not None and self.max_frame_size is not None:
+        if max_num_frames is not None:
             offset_in_frame = row * w_per_patch + col
             frame_padded_index = (
-                full_segment_id * self.max_frame_size + offset_in_frame
+                full_segment_id * max_frame_size + offset_in_frame
             )
 
         shuffle_index = _shuffle_index_positions(
@@ -791,11 +862,11 @@ class MuseGlimmerVisionEncoder(keras.Model):
             if layer_type == "full_attention":
                 segment_id = full_segment_id
                 layer_padded_index = frame_padded_index
-                num_slots, slot_size = self.max_num_frames, self.max_frame_size
+                num_slots, slot_size = max_num_frames, max_frame_size
             else:
                 segment_id = window_segment_id
                 layer_padded_index = window_padded_index
-                num_slots, slot_size = self.max_num_windows, window_size_val
+                num_slots, slot_size = max_num_windows, window_size_val
             if layer_padded_index is None:
                 num_slots, slot_size = None, None
             hidden_states = layer(
