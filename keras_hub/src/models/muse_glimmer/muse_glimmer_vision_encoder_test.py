@@ -205,10 +205,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         encoder.set_weights(self.encoder.get_weights())
         return encoder
 
-    def test_padding_caps_match_masked_attention(self):
-        # Eager calls size the caps from the input. Explicit caps pad
-        # further. Both must match one masked attention over the full
-        # sequence, which traced calls use when the caps are `None`.
+    def test_traced_paths_match_eager_attention(self):
+        # Eager calls batch exact-length segments. Traced calls use the
+        # padded buffers when the caps are set, or one masked attention
+        # when the caps are `None`. All three paths must match.
         capped = self._capped_encoder(
             max_num_windows=16, max_num_frames=4, max_frame_size=64
         )
@@ -220,38 +220,49 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             pixel_values = np.random.randn(num_patches, patch_dim).astype(
                 "float32"
             )
+            eager_output = self.encoder(pixel_values, grid_thw)
             with patch.object(
                 MuseGlimmerVisionEncoder,
-                "_resolve_padding_caps",
-                return_value=(None, None, None),
+                "_eager_segment_groups",
+                return_value=None,
             ):
                 masked_output = self.encoder(pixel_values, grid_thw)
-            auto_output = self.encoder(pixel_values, grid_thw)
-            capped_output = capped(pixel_values, grid_thw)
+                capped_output = capped(pixel_values, grid_thw)
             self.assertAllClose(
-                auto_output, masked_output, atol=1e-5, rtol=1e-5
+                masked_output, eager_output, atol=1e-5, rtol=1e-5
             )
             self.assertAllClose(
-                capped_output, masked_output, atol=1e-5, rtol=1e-5
+                capped_output, eager_output, atol=1e-5, rtol=1e-5
             )
 
-    def test_eager_call_sizes_caps_from_input(self):
+    def test_eager_call_groups_segments_by_length(self):
         patch_dim = 2 * 3 * 2 * 2
         grid_thw = np.array([[1, 6, 10], [2, 4, 6]], dtype="int32")
         pixel_values = np.random.randn(108, patch_dim).astype("float32")
         window_patches = max(
             self.encoder.window_size // self.encoder.patch_size, 1
         )
-        caps = self.encoder._resolve_padding_caps(grid_thw, window_patches)
-        num_windows = sum(
+        window_groups, frame_groups = self.encoder._eager_segment_groups(
+            grid_thw, window_patches
+        )
+        self.assertEqual(frame_groups[1], ((2, 24), (1, 60)))
+        num_windows = sum(count for count, _ in window_groups[1])
+        expected_num_windows = sum(
             t * -(-h // window_patches) * -(-w // window_patches)
             for t, h, w in grid_thw.tolist()
         )
-        self.assertEqual(caps, (num_windows, 3, 60))
-        with patch.object(
-            MuseGlimmerVisionAttention,
-            "_masked_full_attention",
-            side_effect=AssertionError("The masked path must not run."),
+        self.assertEqual(num_windows, expected_num_windows)
+        with (
+            patch.object(
+                MuseGlimmerVisionAttention,
+                "_masked_full_attention",
+                side_effect=AssertionError("The masked path must not run."),
+            ),
+            patch.object(
+                MuseGlimmerVisionAttention,
+                "_padded_segment_attention",
+                side_effect=AssertionError("The padded path must not run."),
+            ),
         ):
             self.encoder(pixel_values, grid_thw)
 
