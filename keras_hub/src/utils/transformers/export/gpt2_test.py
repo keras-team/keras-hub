@@ -14,6 +14,7 @@ from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.transformers.export.hf_exporter import (
     export_to_safetensors,
 )
@@ -120,4 +121,11 @@ class TestGPT2Export(TestCase):
         keras_logits_np = ops.convert_to_numpy(keras_logits)
         hf_logits_np = hf_logits.detach().cpu().numpy()
 
-        self.assertAllClose(keras_logits_np, hf_logits_np, atol=1e-4, rtol=3e-4)
+        # On GPU the Keras model runs matmuls in TF32 while HF runs in full
+        # fp32 on CPU, leaving logits ~2e-4 apart. Keep the strict check on
+        # CPU.
+        if running_on_gpu():
+            atol, rtol = 1e-4, 3e-4
+        else:
+            atol, rtol = 1e-5, 1e-5
+        self.assertAllClose(keras_logits_np, hf_logits_np, atol=atol, rtol=rtol)

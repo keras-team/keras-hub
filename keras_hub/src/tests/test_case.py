@@ -40,24 +40,16 @@ def convert_to_comparible_type(x):
 
 
 def _to_host_leaf(x):
-    """Bring a single data leaf back to host memory.
+    """Move a backend tensor leaf (e.g. a torch CUDA tensor) to NumPy.
 
-    `tf.data` cannot build a `TypeSpec` for a tensor that lives on an
-    accelerator (e.g. a torch CUDA tensor), so such leaves are converted
-    before they are handed to `tf.data`. Everything else, including plain
-    lists of labels, is passed through unchanged.
-
-    Native `tf` objects are deliberately left alone rather than routed
-    through `_to_grain_leaf`, which calls `RaggedTensor.to_list()`. A ragged
-    leaf such as the `images` entry in `Gemma3CausalLMTest.train_data`
-    becomes a non-rectangular list of lists, which
-    `from_tensor_slices` rejects.
+    `tf.data` cannot consume tensors that live on an accelerator. Native `tf`
+    tensors are left as is (unlike `_to_grain_leaf`), since converting a
+    `tf.RaggedTensor` yields a non-rectangular list that `from_tensor_slices`
+    rejects. Other leaves are passed through unchanged.
     """
     if isinstance(x, list):
         return [_to_host_leaf(e) for e in x]
-    if isinstance(x, (tf.Tensor, tf.RaggedTensor, np.ndarray)):
-        return x
-    if ops.is_tensor(x):
+    if ops.is_tensor(x) and not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
         return ops.convert_to_numpy(x)
     return x
 
@@ -1302,14 +1294,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # invariant. Preprocessing such as image resizing runs with different
         # kernels in the `tf.data` path than in the backend, which diverges
         # noticeably more on GPU.
-        tol = 1e-2 if running_on_gpu() else 1e-6
+        tol = 1e-4 if running_on_gpu() else 1e-6
+        atol, rtol = max(atol, tol), max(rtol, tol)
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds, atol=max(atol, tol), rtol=max(rtol, tol))
+        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split, atol=max(atol, tol), rtol=max(rtol, tol))
+        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)

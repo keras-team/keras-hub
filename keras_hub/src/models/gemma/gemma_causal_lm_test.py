@@ -16,6 +16,7 @@ from keras_hub.src.tests.mocks.mock_attention import patch_dot_product_attention
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class GemmaCausalLMTest(TestCase):
@@ -77,7 +78,9 @@ class GemmaCausalLMTest(TestCase):
             logits, _, cache = causal_lm.call_with_cache(sliced, cache, i)
             cached_logits.append(logits)
         cached_logits = ops.concatenate(cached_logits, 1)
-        self.assertAllClose(full_logits, cached_logits, atol=0.005)
+        # Cached and full-sequence attention use different kernels on GPU.
+        atol = 0.005 if running_on_gpu() else 0.002
+        self.assertAllClose(full_logits, cached_logits, atol=atol)
 
     def test_generate(self):
         causal_lm = GemmaCausalLM(**self.init_kwargs)

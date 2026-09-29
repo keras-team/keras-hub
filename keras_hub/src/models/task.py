@@ -1,4 +1,5 @@
 import keras
+from keras.src.quantizers.utils import should_quantize_layer
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -100,6 +101,33 @@ class Task(PipelineModel):
     @preprocessor.setter
     def preprocessor(self, value):
         self._preprocessor = value
+
+    def quantize(self, mode=None, config=None, filters=None, **kwargs):
+        """Quantize the task, skipping all preprocessing layers.
+
+        Preprocessing layers (tokenizers, packers, converters) hold no
+        quantizable weights and are usually not built until they are first
+        called, which makes `keras.Model.quantize` raise
+        `"Cannot quantize a layer that isn't yet built"`. They are excluded
+        here; `filters` is still applied to all remaining layers.
+        """
+        preprocessor_layer_ids = set()
+        if isinstance(self.preprocessor, keras.layers.Layer):
+            preprocessor_layer_ids = set(
+                id(layer) for layer in self.preprocessor._flatten_layers()
+            )
+
+        if preprocessor_layer_ids:
+            user_filters = filters
+
+            def filters(layer):
+                if id(layer) in preprocessor_layer_ids:
+                    return False
+                return should_quantize_layer(layer, user_filters)
+
+        return super().quantize(
+            mode=mode, config=config, filters=filters, **kwargs
+        )
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional

@@ -1,9 +1,28 @@
+import contextlib
+
+import keras
 import pytest
 from keras import ops
-import torch
 
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.tests.test_case import TestCase
+
+
+
+def _restrict_torch_sdpa_backends():
+    """Keep torch off the flash SDPA kernel; a no-op on other backends.
+
+    The tiny test config (`head_dim=1`) is not supported by torchs flash
+    attention kernel on GPU, so fall back to the efficient/math kernels.
+    """
+    if keras.config.backend() != "torch":
+        return contextlib.nullcontext()
+    from torch.nn.attention import SDPBackend
+    from torch.nn.attention import sdpa_kernel
+
+    return sdpa_kernel(
+        backends=[SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]
+    )
 
 
 class WhisperBackboneTest(TestCase):
@@ -24,12 +43,7 @@ class WhisperBackboneTest(TestCase):
         }
 
     def test_backbone_basics(self):
-        with torch.nn.attention.sdpa_kernel(
-        backends=[
-            torch.nn.attention.SDPBackend.EFFICIENT_ATTENTION,
-            torch.nn.attention.SDPBackend.MATH,
-        ]
-    ):
+        with _restrict_torch_sdpa_backends():
             self.run_backbone_test(
                 cls=WhisperBackbone,
                 init_kwargs=self.init_kwargs,

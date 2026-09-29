@@ -6,6 +6,7 @@ from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class WhisperAudioConverterTest(TestCase):
@@ -25,6 +26,11 @@ class WhisperAudioConverterTest(TestCase):
         )
 
     def test_feature_extractor_basics(self):
+        # This compares the direct call against the `tf.data` path at 1e-6.
+        # `tf.data` always runs on the host, so on GPU it would compare cuFFT
+        # against the CPU FFT. Pin to CPU so it tests call-path parity only;
+        # GPU numerics are covered by `test_correctness` and
+        # `test_python_matches_tf`.
         with tf.device("/CPU:0"):
             self.run_preprocessing_layer_test(
                 cls=WhisperAudioConverter,
@@ -33,9 +39,8 @@ class WhisperAudioConverterTest(TestCase):
             )
 
     def test_correctness(self):
-        with tf.device("/CPU:0"):
-            audio_tensor = tf.ones((2,), dtype="float32")
-            outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
+        audio_tensor = tf.ones((2,), dtype="float32")
+        outputs = WhisperAudioConverter(**self.init_kwargs)(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (5, 80))
@@ -46,12 +51,12 @@ class WhisperAudioConverterTest(TestCase):
     def test_python_matches_tf(self):
         converter = WhisperAudioConverter(**self.init_kwargs)
         audio = np.random.default_rng(42).random((2, 300)).astype("float32")
-        with tf.device("/CPU:0"):
-            tf_output = converter._call_tf(audio)
+        # cuFFT on GPU and NumPy's FFT on CPU round differently.
+        atol = 1e-3 if running_on_gpu() else 1e-4
         self.assertAllClose(
             converter._call_python(audio),
-            tf_output,
-            atol=1e-4,
+            converter._call_tf(audio),
+            atol=atol,
         )
 
     def test_grain_outputs_numpy(self):

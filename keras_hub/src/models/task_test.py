@@ -129,8 +129,7 @@ class TestTask(TestCase):
         # Create, quantize, and save the model preset.
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
-        # Skips the unbuilt tokenizer, which `Model.quantize` mishandles.
-        task.quantize(mode="int8", filters=lambda layer: layer.built)
+        task.quantize(mode="int8")
         task.save_to_preset(save_dir)
 
         # Verify that all necessary files were created.
@@ -175,7 +174,7 @@ class TestTask(TestCase):
     def test_load_quantized_preset_with_dtype_override(self):
         save_dir = self.get_temp_dir()
         task = TextClassifier.from_preset("bert_tiny_en_uncased", num_classes=2)
-        task.quantize(mode="int8", filters=lambda layer: layer.built)
+        task.quantize(mode="int8")
         task.save_to_preset(save_dir)
 
         # Check existence of files.
@@ -367,3 +366,18 @@ class TestTask(TestCase):
                 w for w in caught if "unbuilt state" in str(w.message)
             ]
             self.assertEqual(len(unbuilt_warnings), 0)
+
+    def test_quantize_skips_preprocessor_layers(self):
+        # Preprocessing layers are unbuilt until first called, which used to
+        # make `Task.quantize` raise "Cannot quantize a layer that isn't yet
+        # built". They should be skipped while the backbone is quantized.
+        causal_lm, preprocessor = self._create_gemma_for_export_tests()
+        causal_lm.quantize("int8")
+        for layer in preprocessor._flatten_layers():
+            self.assertFalse(getattr(layer, "_is_quantized", False))
+        self.assertTrue(
+            any(
+                getattr(layer, "_is_quantized", False)
+                for layer in causal_lm.backbone._flatten_layers()
+            )
+        )
