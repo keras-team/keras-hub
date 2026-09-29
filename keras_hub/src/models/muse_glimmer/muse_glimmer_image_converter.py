@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -12,42 +13,44 @@ from keras_hub.src.utils.tensor_utils import tf
 
 
 def _smart_resize(height, width, patch_size, merge_size, max_tokens):
-    """Select a patch grid that preserves the input aspect ratio."""
+    """Select a patch grid that preserves the input aspect ratio.
+
+    `height` and `width` are Python ints. The math uses float32 NumPy.
+    """
     resize_patch_size = patch_size * merge_size
-    ideal_grid = ops.array(
+    ideal_grid = np.array(
         [height / resize_patch_size, width / resize_patch_size],
         dtype="float32",
     )
     ratio = ideal_grid[1] / ideal_grid[0]
-    limited_height = ops.sqrt(max_tokens / ratio)
-    limited_grid = ops.stack([limited_height, limited_height * ratio], axis=0)
-    ideal_grid = ops.where(
-        ideal_grid[0] * ideal_grid[1] > max_tokens,
-        limited_grid,
-        ideal_grid,
-    )
+    limited_height = np.sqrt(np.float32(max_tokens) / ratio)
+    if ideal_grid[0] * ideal_grid[1] > max_tokens:
+        ideal_grid = np.stack([limited_height, limited_height * ratio])
 
-    lower_grid = ops.floor(ideal_grid)
-    upper_grid = ops.ceil(ideal_grid)
-    candidates = ops.stack(
+    lower_grid = np.floor(ideal_grid)
+    upper_grid = np.ceil(ideal_grid)
+    candidates = np.array(
         [
-            ops.stack([lower_grid[0], lower_grid[1]]),
-            ops.stack([lower_grid[0], upper_grid[1]]),
-            ops.stack([upper_grid[0], lower_grid[1]]),
-            ops.stack([upper_grid[0], upper_grid[1]]),
-        ]
+            [lower_grid[0], lower_grid[1]],
+            [lower_grid[0], upper_grid[1]],
+            [upper_grid[0], lower_grid[1]],
+            [upper_grid[0], upper_grid[1]],
+        ],
+        dtype="float32",
     )
     valid = (
         (candidates[:, 0] >= 1)
         & (candidates[:, 1] >= 1)
         & (candidates[:, 0] * candidates[:, 1] <= max_tokens)
     )
-    aspect_error = ops.abs(candidates[:, 0] / candidates[:, 1] - height / width)
-    aspect_error = ops.where(valid, aspect_error, 1e9)
-    selected = ops.take(candidates, ops.argmin(aspect_error), axis=0)
-    fallback = ops.maximum(ops.round(ideal_grid), 1)
-    selected = ops.where(ops.any(valid), selected, fallback)
-    selected = ops.convert_to_numpy(selected)
+    if valid.any():
+        aspect_error = np.abs(
+            candidates[:, 0] / candidates[:, 1] - np.float32(height / width)
+        )
+        aspect_error = np.where(valid, aspect_error, np.float32(1e9))
+        selected = candidates[np.argmin(aspect_error)]
+    else:
+        selected = np.maximum(np.round(ideal_grid), 1)
     return (
         int(selected[0]) * resize_patch_size,
         int(selected[1]) * resize_patch_size,
@@ -55,7 +58,12 @@ def _smart_resize(height, width, patch_size, merge_size, max_tokens):
 
 
 def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
-    """Select a patch grid inside a TensorFlow graph."""
+    """Select a patch grid inside a TensorFlow graph.
+
+    Use this function only when the image size is unknown until run
+    time. For a static size, `_smart_resize` gives Python ints, so the
+    converter outputs have static shapes.
+    """
     resize_patch_size = tf.cast(patch_size * merge_size, "float32")
     ideal_grid = tf.cast(tf.stack([height, width]), "float32")
     ideal_grid = ideal_grid / resize_patch_size
@@ -249,8 +257,12 @@ class MuseGlimmerImageConverter(ImageConverter):
     def _call_tf(self, inputs):
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         image = tf.cast(inputs, "float32")
-        orig_h, orig_w = tf.shape(image)[0], tf.shape(image)[1]
-        target_h, target_w = _smart_resize_tf(
+        orig_h, orig_w = image.shape[0], image.shape[1]
+        smart_resize = _smart_resize
+        if orig_h is None or orig_w is None:
+            orig_h, orig_w = tf.shape(image)[0], tf.shape(image)[1]
+            smart_resize = _smart_resize_tf
+        target_h, target_w = smart_resize(
             orig_h,
             orig_w,
             self.patch_size,

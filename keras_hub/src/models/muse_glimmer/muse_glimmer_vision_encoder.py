@@ -3,6 +3,7 @@ import math
 import keras
 import numpy as np
 from keras import ops
+from keras.src.backend.common.symbolic_scope import in_symbolic_scope
 
 from keras_hub.src.api_export import keras_hub_export
 
@@ -806,8 +807,14 @@ class MuseGlimmerVisionEncoder(keras.Model):
             grid_thw = ops.reshape(grid_thw, (-1, 3))
 
         num_patches = ops.shape(pixel_values)[0]
-        if num_patches == 0:
-            empty = ops.zeros((0, self.out_hidden_size))
+        # A traced TF graph can have a symbolic `num_patches`.
+        is_empty = isinstance(num_patches, int) and num_patches == 0
+        if is_empty or in_symbolic_scope():
+            # Keras infers the output shape on torch with placeholder
+            # inputs filled with ones. That `grid_thw` does not match
+            # `pixel_values`, so return zeros of the output shape.
+            num_tokens = num_patches // (self.merge_size**2)
+            empty = ops.zeros((num_tokens, self.out_hidden_size))
             return ops.expand_dims(empty, axis=0) if batched else empty
 
         hidden_states = self.patch_embedder(pixel_values, grid_thw)
