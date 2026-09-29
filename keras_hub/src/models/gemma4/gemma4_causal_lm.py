@@ -817,7 +817,12 @@ class Gemma4CausalLM(CausalLM):
                 # Restore the original sampler and compiled graph.
                 # Do not set generate_function = None — that would discard
                 # the baseline compiled graph and force a recompile.
-                self._cached_spec_assistant = assistant_model
+                # Bypass `__setattr__`: plain assignment would track the
+                # assistant as a sub-layer, and on torch register it as an
+                # `nn.Module` submodule that outlives this call.
+                object.__setattr__(
+                    self, "_cached_spec_assistant", assistant_model
+                )
                 self._assistant_model = None
                 if not assistant_was_tracked:
                     self._tracker.untrack(assistant_model)

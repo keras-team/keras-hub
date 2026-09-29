@@ -1,5 +1,6 @@
 import os
 
+import keras
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
@@ -162,6 +163,13 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         for w in self.model.weights:
             self.assertNotIn(id(w), target_weight_ids)
 
+        if keras.config.backend() == "torch":
+            # On torch every Keras layer is also an `nn.Module`, so an
+            # attribute holding the assistant would register it as a
+            # submodule and leak it into `parameters()` / `state_dict()`.
+            for module in target_model.modules():
+                self.assertIsNot(module, self.model)
+
     def test_generate_keeps_user_attached_assistant(self):
         target_model = self._create_target_model()
         assistant = self._create_assistant()
@@ -174,7 +182,12 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
         inputs = self._make_inputs(token_ids_raw)
 
-        initial_weights_len = len(target_model.weights)
+        # Compare against the state right after attaching rather than
+        # asserting the assistant's weights are present: before Keras 3.15,
+        # a layer attached to a Functional model after construction is
+        # registered with the tracker but does not reach `weights`.
+        initial_weight_ids = {id(w) for w in target_model.weights}
+        self.assertTrue(target_model._tracker.is_in_store("layers", assistant))
 
         target_model.generate(
             inputs,
@@ -182,10 +195,10 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
             stop_token_ids=None,
         )
 
-        self.assertEqual(len(target_model.weights), initial_weights_len)
-        target_weight_ids = {id(w) for w in target_model.weights}
-        for w in assistant.weights:
-            self.assertIn(id(w), target_weight_ids)
+        self.assertEqual(
+            {id(w) for w in target_model.weights}, initial_weight_ids
+        )
+        self.assertTrue(target_model._tracker.is_in_store("layers", assistant))
 
     def test_new_assistant_rebuilds_speculative_graph(self):
         target_model = self._create_target_model()
