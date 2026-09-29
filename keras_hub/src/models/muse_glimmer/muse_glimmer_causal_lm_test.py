@@ -3,6 +3,7 @@ from unittest.mock import patch
 import keras
 import numpy as np
 import pytest
+from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (  # noqa: E501
@@ -29,7 +30,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
 from keras_hub.src.tests.test_case import TestCase
 
 
-class MuseGlimmerCausalLMTest(TestCase):
+class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
@@ -70,6 +71,70 @@ class MuseGlimmerCausalLMTest(TestCase):
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
+        # === Vision + Text model ===
+        self.image_converter = MuseGlimmerImageConverter(
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            max_image_tokens=64,
+            scale=1 / 255.0,
+        )
+        # Map `image_token_id` to a vocabulary token, so prompts can
+        # contain image placeholders.
+        image_vocab = {**self.vocab, "<|image|>": len(self.vocab)}
+        self.multimodal_preprocessor = MuseGlimmerCausalLMPreprocessor(
+            MuseGlimmerTokenizer(
+                vocabulary=image_vocab,
+                merges=self.merges,
+                image_token_id=image_vocab["<|image|>"],
+                unsplittable_tokens=["<|image|>"],
+            ),
+            image_converter=self.image_converter,
+            sequence_length=10,
+        )
+        vision_encoder = MuseGlimmerVisionEncoder(
+            num_layers=2,
+            hidden_size=8,
+            num_heads=2,
+            intermediate_size=16,
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            pos_emb_height=4,
+            pos_emb_width=4,
+            layer_types=["window_attention", "full_attention"],
+        )
+        backbone = MuseGlimmerBackbone(
+            vocabulary_size=len(image_vocab),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=32,
+            intermediate_dim=32,
+            head_dim=8,
+            sliding_window_size=4,
+            layer_types=["sliding_attention", "full_attention"],
+            vision_encoder=vision_encoder,
+            projector_hidden_dim=16,
+        )
+        self.multimodal_init_kwargs = {
+            "preprocessor": self.multimodal_preprocessor,
+            "backbone": backbone,
+        }
+        image = np.ones((8, 8, 3), dtype="float32") * 127.0
+        self.multimodal_train_data = (
+            {
+                "prompts": ["<|image|> airplane at", " airplane<|image|>"],
+                "images": np.stack([image, image]),
+            },
+        )
+        self.multimodal_input_data = self.multimodal_preprocessor(
+            *self.multimodal_train_data
+        )[0]
+        self.multimodal_causal_lm = MuseGlimmerCausalLM(
+            backbone=backbone, preprocessor=None
+        )
+
     def _make_assistant(self, block_size):
         # A tiny DFlash assistant. It reuses the target hidden_dim, because
         # noise_embeds come from the target token_embedding.
@@ -96,16 +161,26 @@ class MuseGlimmerCausalLMTest(TestCase):
             mask_token_id=0,
         )
 
-    def test_causal_lm_basics(self):
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_causal_lm_basics(self, model_type):
+        if model_type == "text_and_vision":
+            init_kwargs = self.multimodal_init_kwargs
+            train_data = self.multimodal_train_data
+            sequence_length = 10
+        else:
+            init_kwargs = self.init_kwargs
+            train_data = self.train_data
+            sequence_length = 7
+        vocabulary_size = init_kwargs[
+            "preprocessor"
+        ].tokenizer.vocabulary_size()
         self.run_task_test(
             cls=MuseGlimmerCausalLM,
-            init_kwargs=self.init_kwargs,
-            train_data=self.train_data,
-            expected_output_shape=(
-                2,
-                7,
-                self.preprocessor.tokenizer.vocabulary_size(),
-            ),
+            init_kwargs=init_kwargs,
+            train_data=train_data,
+            expected_output_shape=(2, sequence_length, vocabulary_size),
         )
 
     def test_generate(self):
@@ -123,48 +198,15 @@ class MuseGlimmerCausalLMTest(TestCase):
         )
 
     def test_generate_with_image_under_compiled_backend(self):
-        image_converter = MuseGlimmerImageConverter(
-            patch_size=4,
-            patch_temporal=2,
-            merge_size=2,
-            max_image_tokens=64,
-            scale=1 / 255.0,
-        )
         tokenizer = self.preprocessor.tokenizer
-        vision_encoder = MuseGlimmerVisionEncoder(
-            num_layers=2,
-            hidden_size=8,
-            num_heads=2,
-            intermediate_size=16,
-            patch_size=4,
-            patch_temporal=2,
-            merge_size=2,
-            pos_emb_height=4,
-            pos_emb_width=4,
-            layer_types=["window_attention", "full_attention"],
-        )
-        backbone = MuseGlimmerBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=32,
-            intermediate_dim=32,
-            head_dim=8,
-            sliding_window_size=4,
-            layer_types=["sliding_attention", "full_attention"],
-            vision_encoder=vision_encoder,
-            projector_hidden_dim=16,
-        )
-        causal_lm = MuseGlimmerCausalLM(backbone=backbone, preprocessor=None)
 
         image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
-        result = image_converter(image)
+        result = self.image_converter(image)
         t, h, w = (int(v) for v in ops.convert_to_numpy(result["grid_thw"]))
         num_image_tokens = (
             t
-            * (h // image_converter.merge_size)
-            * (w // image_converter.merge_size)
+            * (h // self.image_converter.merge_size)
+            * (w // self.image_converter.merge_size)
         )
 
         # image_token_id (200092) exceeds this tiny vocab, so mark image
@@ -194,7 +236,7 @@ class MuseGlimmerCausalLMTest(TestCase):
             "vision_indices": ops.convert_to_tensor(vision_indices[None, :]),
         }
 
-        output = causal_lm.generate(
+        output = self.multimodal_causal_lm.generate(
             inputs, max_length=sequence_length, stop_token_ids=None
         )
         self.assertEqual(ops.shape(output["token_ids"]), (1, sequence_length))
@@ -457,9 +499,19 @@ class MuseGlimmerCausalLMTest(TestCase):
         self.assertEqual(seed_context.shape[1], seq_len)
 
     @pytest.mark.large
-    def test_saved_model(self):
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_saved_model(self, model_type):
+        if model_type == "text_and_vision":
+            init_kwargs = self.multimodal_init_kwargs
+            input_data = self.multimodal_input_data
+        else:
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+
         self.run_model_saving_test(
             cls=MuseGlimmerCausalLM,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
         )

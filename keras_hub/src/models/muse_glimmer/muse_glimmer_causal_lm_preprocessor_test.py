@@ -83,6 +83,111 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
             input_data=([" airplane at airport"],),
         )
 
+    def test_image_preprocessor_basics(self):
+        # `run_preprocessor_test` builds a second layer from
+        # `self.init_kwargs`.
+        self.init_kwargs = {
+            "tokenizer": self.image_tokenizer,
+            "image_converter": self.image_converter,
+            "sequence_length": 8,
+        }
+        # A constant image gives known `pixel_values` after scaling.
+        image = np.full((8, 8, 3), 255.0, dtype="float32")
+        self.run_preprocessor_test(
+            cls=MuseGlimmerCausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=(
+                {
+                    "prompts": ["<|image|> airplane", " air<|image|>"],
+                    "images": np.stack([image, image]),
+                },
+            ),
+            expected_output=(
+                {
+                    "token_ids": [
+                        [1, 5, 30, 21, 2, 4, 4, 4],
+                        [1, 30, 5, 2, 4, 4, 4, 4],
+                    ],
+                    "padding_mask": [
+                        [1, 1, 1, 1, 1, 0, 0, 0],
+                        [1, 1, 1, 1, 0, 0, 0, 0],
+                    ],
+                    # An 8x8 image gives 4 patches and one merged token.
+                    "pixel_values": np.ones((2, 4, 96)),
+                    "image_grid_thw": [[[1, 2, 2]], [[1, 2, 2]]],
+                    "vision_indices": [[1], [2]],
+                },
+                [[5, 30, 21, 2, 4, 4, 4, 4], [30, 5, 2, 4, 4, 4, 4, 4]],
+                # The image tokens are not labels.
+                [[0, 1, 1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0, 0, 0]],
+            ),
+        )
+
+    def test_video_preprocessor_basics(self):
+        self.init_kwargs = {
+            "tokenizer": self.video_preprocessor.tokenizer,
+            "video_converter": self.video_converter,
+            "sequence_length": 8,
+        }
+        video = np.full((2, 8, 8, 3), 255.0, dtype="float32")
+        self.run_preprocessor_test(
+            cls=MuseGlimmerCausalLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=(
+                {
+                    "prompts": ["<|video|> airplane", " air<|video|>"],
+                    "videos": np.stack([video, video]),
+                },
+            ),
+            expected_output=(
+                {
+                    "token_ids": [
+                        [1, 6, 30, 21, 2, 4, 4, 4],
+                        [1, 30, 6, 2, 4, 4, 4, 4],
+                    ],
+                    "padding_mask": [
+                        [1, 1, 1, 1, 1, 0, 0, 0],
+                        [1, 1, 1, 1, 0, 0, 0, 0],
+                    ],
+                    # Two 8x8 frames form one temporal patch group.
+                    "pixel_values": np.ones((2, 4, 96)),
+                    "image_grid_thw": [[[1, 2, 2]], [[1, 2, 2]]],
+                    "vision_indices": [[1], [2]],
+                },
+                [[6, 30, 21, 2, 4, 4, 4, 4], [30, 6, 2, 4, 4, 4, 4, 4]],
+                [[0, 1, 1, 1, 0, 0, 0, 0], [1, 0, 1, 0, 0, 0, 0, 0]],
+            ),
+        )
+
+    def test_call_with_several_images_per_prompt(self):
+        x, _, _ = self.image_preprocessor(
+            {
+                "prompts": "<|image|><|image|> airplane",
+                "images": np.stack([self.image, self.image]),
+            }
+        )
+        self.assertEqual(tuple(x["token_ids"].shape), (8,))
+        self.assertEqual(tuple(x["image_grid_thw"].shape), (2, 3))
+        self.assertAllEqual(x["vision_indices"], [1, 2])
+
+    def test_call_truncated_image_tokens_raise(self):
+        with self.assertRaisesRegex(ValueError, "increase `sequence_length`"):
+            self.image_preprocessor(
+                {"prompts": ["<|image|> airplane"], "images": [self.image]},
+                sequence_length=1,
+            )
+
+    def test_call_placeholder_count_per_prompt_raises(self):
+        # The image count matches the placeholders of the whole batch, but
+        # not of each prompt.
+        with self.assertRaisesRegex(ValueError, "one placeholder per item"):
+            self.image_preprocessor(
+                {
+                    "prompts": ["<|image|><|image|> airplane", " airport"],
+                    "images": np.stack([self.image, self.image]),
+                }
+            )
+
     def test_text_only_generate_preprocess(self):
         output = self.preprocessor.generate_preprocess(" airplane at airport")
         self.assertIn("token_ids", output)

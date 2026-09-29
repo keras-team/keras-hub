@@ -88,8 +88,12 @@ class MuseGlimmerVideoConverter(VideoConverter):
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         video = tf.cast(inputs, "float32")[: self.num_frames]
 
-        orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
-        target_h, target_w = _smart_resize_tf(
+        orig_h, orig_w = video.shape[1], video.shape[2]
+        smart_resize = _smart_resize
+        if orig_h is None or orig_w is None:
+            orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
+            smart_resize = _smart_resize_tf
+        target_h, target_w = smart_resize(
             orig_h,
             orig_w,
             self.patch_size,
@@ -116,7 +120,9 @@ class MuseGlimmerVideoConverter(VideoConverter):
             self.compute_dtype,
         )
 
-        new_frame_count = tf.shape(video)[0]
+        new_frame_count = video.shape[0]
+        if new_frame_count is None:
+            new_frame_count = tf.shape(video)[0]
         remainder = new_frame_count % self.patch_temporal
         pad_len = tf.where(remainder > 0, self.patch_temporal - remainder, 0)
         video = tf.cond(
@@ -127,7 +133,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
             lambda: video,
         )
 
-        grid_t = tf.shape(video)[0] // self.patch_temporal
+        # Round up. This is a Python int when the frame count is static.
+        grid_t = -(-new_frame_count // self.patch_temporal)
         grid_h, grid_w = (
             target_h // self.patch_size,
             target_w // self.patch_size,
