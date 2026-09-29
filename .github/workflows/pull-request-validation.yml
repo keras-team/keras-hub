@@ -1,4 +1,4 @@
-name: PR approved issue check
+name: Pull request validation
 # Every PR from an external contributor is converted to a draft if its
 # description does not link an approved issue assigned to the PR author.
 # Repository owners, org members, collaborators and bots bypass this check.
@@ -13,6 +13,5 @@ permissions:
 
 jobs:
   approved-issue:
-    uses: keras-team/shared-workflows/.github/workflows/pr-approved-issue.yml@f89ada831b82a2399422326e37b3bf0ea402e146
-    with:
-      ref: 'f89ada831b82a2399422326e37b3bf0ea402e146'
+    if: github.repository == 'keras-team/keras-hub'
+    uses: keras-team/shared-workflows/.github/workflows/pull-request-validation.yml@5759d017529ab86921f5908358dd9bf9ee86a14e
