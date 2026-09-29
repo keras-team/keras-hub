@@ -65,6 +65,15 @@ class GPT2CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 4, 16, 26, 25, 18, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0])
 
+    def test_generate_preprocess_no_start_token(self):
+        input_data = "airplane at airport"
+        preprocessor = GPT2CausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [4, 16, 26, 25, 18, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
+
     def test_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 4, 16, 26, 25, 18, 1, 0],

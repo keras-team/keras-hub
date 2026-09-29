@@ -245,6 +245,15 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_text_generate_preprocess_no_start_token(self):
+        input_data = "the quick brown fox"
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            **self.init_text_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
+
     def test_vision_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <start_of_image>",

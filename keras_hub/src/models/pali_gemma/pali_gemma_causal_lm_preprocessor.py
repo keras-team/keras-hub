@@ -140,6 +140,7 @@ class PaliGemmaCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
