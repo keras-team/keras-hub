@@ -115,7 +115,7 @@ class SmolVLM2VideoConverterTest(TestCase):
         self.assertEqual(cfg["num_frames"], 16)
         self.assertEqual(cfg["fps"], 2)
         # Previously dropped from the config, silently resetting to the
-        # `bicubic`/`True` defaults on reload.
+        # `lanczos3`/`True` defaults on reload.
         self.assertEqual(cfg["interpolation"], "bilinear")
         self.assertFalse(cfg["antialias"])
 

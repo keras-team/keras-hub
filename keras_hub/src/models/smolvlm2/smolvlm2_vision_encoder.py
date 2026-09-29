@@ -1,3 +1,4 @@
+import keras
 from keras import layers
 from keras import ops
 
@@ -85,18 +86,21 @@ class SmolVLM2VisionEmbedding(layers.Layer):
                     "Resize the images with `SmolVLM2ImageConverter` first."
                 )
 
-        # On TensorFlow a convolution over a zero-image batch returns its
-        # input unchanged, so `Conv2D`'s bias add fails with `Incompatible
-        # shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`. Append one blank
-        # image so the conv batch is never empty, then drop its output. This
-        # runs on every backend and costs one extra image through the conv.
-        blank = ops.zeros(
-            (1, self.image_size, self.image_size, self.num_channels),
-            dtype=pixel_values.dtype,
-        )
-        patch_embeds = self.patch_embedding(
-            ops.concatenate([pixel_values, blank], axis=0)
-        )[:-1]
+        if keras.config.backend() == "tensorflow":
+            # On TensorFlow a convolution over a zero-image batch returns
+            # its input unchanged, so `Conv2D`'s bias add fails with
+            # `Incompatible shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`.
+            # Append one blank image so the conv batch is never empty, then
+            # drop its output.
+            blank = ops.zeros(
+                (1, self.image_size, self.image_size, self.num_channels),
+                dtype=pixel_values.dtype,
+            )
+            patch_embeds = self.patch_embedding(
+                ops.concatenate([pixel_values, blank], axis=0)
+            )[:-1]
+        else:
+            patch_embeds = self.patch_embedding(pixel_values)
         embeddings = ops.reshape(
             patch_embeds, (-1, self.num_patches, self.hidden_dim)
         )

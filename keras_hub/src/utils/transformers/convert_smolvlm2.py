@@ -289,6 +289,22 @@ def convert_tokenizer(cls, preset, **kwargs):
     return cls(vocabulary=vocab, merges=merges, **kwargs)
 
 
+# HF `PILImageResampling` codes to Keras interpolation names. HF's SmolVLM
+# image and video processors both default to LANCZOS.
+_RESAMPLE_TO_INTERPOLATION = {1: "lanczos3", 2: "bilinear", 3: "bicubic"}
+
+
+def _resample_to_interpolation(resample):
+    """Map an HF `resample` code to a Keras interpolation name."""
+    if resample not in _RESAMPLE_TO_INTERPOLATION:
+        raise ValueError(
+            "Unsupported `resample` in `preprocessor_config.json`. Expected "
+            f"one of {sorted(_RESAMPLE_TO_INTERPOLATION)}. "
+            f"Received: resample={resample}"
+        )
+    return _RESAMPLE_TO_INTERPOLATION[resample]
+
+
 def _compute_scale_offset(image_mean, image_std, rescale_factor=1.0 / 255):
     """Compute KH scale/offset from HF image_mean and image_std.
 
@@ -326,7 +342,9 @@ def _load_vision_normalization_config(preset):
     return {
         "scale": scale,
         "offset": offset,
-        "interpolation": "bicubic",
+        "interpolation": _resample_to_interpolation(
+            preprocessor_config.get("resample", 1)
+        ),
         "antialias": True,
         "max_image_size": preprocessor_config["max_image_size"]["longest_edge"],
         "_preprocessor_config": preprocessor_config,

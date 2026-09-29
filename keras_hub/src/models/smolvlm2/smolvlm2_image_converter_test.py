@@ -220,6 +220,65 @@ class SmolVLM2ImageConverterTest(TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
 
+    def test_same_size_list_with_splitting_stays_a_list(self):
+        """Same-size images are not stacked into a batch when splitting."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=True,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = [
+            np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8")
+            for _ in range(2)
+        ]
+        result = converter(images)
+        self.assertIsInstance(result, list)
+        for output, image in zip(result, images):
+            self.assertAllClose(
+                ops.convert_to_numpy(output["pixel_values"]),
+                ops.convert_to_numpy(converter(image)["pixel_values"]),
+            )
+
+    def test_lanczos_resize_matches_reference(self):
+        """Lanczos runs on every backend and matches TF's `lanczos3`."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=16,
+            do_image_splitting=False,
+            scale=[1.0] * 3,
+            offset=[0.0] * 3,
+        )
+        # A hard vertical edge. Lanczos rings past [0, 255] here, so the
+        # clip is exercised too.
+        images = np.zeros((1, 8, 12, 3), dtype="float32")
+        images[:, :, 6:, :] = 255.0
+        pixel_values = ops.convert_to_numpy(converter(images)["pixel_values"])
+        # `tf.image.resize(method="lanczos3", antialias=True)`, clipped.
+        # Every row and channel is the same.
+        expected_row = [
+            0.0, 0.0, 0.0, 0.0, 0.0, 7.767, 0.0, 23.432,
+            231.568, 255.0, 247.233, 255.0, 255.0, 255.0, 255.0, 255.0,
+        ]  # fmt: skip
+        expected = np.broadcast_to(
+            np.array(expected_row)[None, None, :, None], (1, 16, 16, 3)
+        )
+        self.assertAllClose(pixel_values, expected, atol=0.1)
+
+    def test_empty_batch_lanczos_resize(self):
+        """An empty batch resizes to an empty batch on every backend."""
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        images = np.zeros((0, 20, 24, 3), dtype="uint8")
+        pixel_values = ops.convert_to_numpy(converter(images)["pixel_values"])
+        self.assertEqual(pixel_values.shape, (0, 16, 16, 3))
+
     def test_image_size_is_rejected(self):
         """The base resize to `image_size` would distort the crops."""
         with self.assertRaisesRegex(ValueError, "image_size"):

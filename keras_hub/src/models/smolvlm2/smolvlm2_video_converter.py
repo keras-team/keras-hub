@@ -55,7 +55,7 @@ class SmolVLM2VideoConverter(VideoConverter):
         size=2048,
         num_frames=64,
         fps=1,
-        interpolation="bicubic",
+        interpolation="lanczos3",
         antialias=True,
         **kwargs,
     ):

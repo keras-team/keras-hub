@@ -52,6 +52,8 @@ VIDEO_URL = (
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
 VIDEO_FPS = 1  # SmolVLM2 default sampling fps
+# End-to-end top-1 agreement with HF logits across the prompt.
+MIN_TOP1_AGREEMENT = 0.95
 TEXT_PROMPT = "What is Keras?"
 MULTIMODAL_TEXT = "Describe this image in detail."
 VIDEO_TEXT = "Describe what is happening in this video."
@@ -97,21 +99,22 @@ def _count_keras_params(backbone):
 
 
 def _decode_video(path):
-    """Decode an MP4 into `(THWC uint8 frames, fps)`, failing loudly."""
-    try:
-        from torchvision.io import read_video
+    """Decode an MP4 into `(THWC uint8 frames, fps)`, failing loudly.
 
-        video_tensor, _, info = read_video(
-            path, pts_unit="sec", output_format="THWC"
-        )
+    Uses TorchCodec, which torchvision now points to for video decoding
+    (`torchvision.io.read_video` was removed). TorchCodec needs FFmpeg
+    installed on the system.
+    """
+    try:
+        from torchcodec.decoders import VideoDecoder
     except ImportError as e:
         raise RuntimeError(
-            "Video validation needs `torchvision.io.read_video`, which is "
-            "not available in this environment. Install a torchvision "
-            "version that provides it, or pass `--skip_video_validation` "
-            "to skip the video checks explicitly."
+            "Video validation needs `torchcodec`, which also needs FFmpeg. "
+            "Install both, or pass `--skip_video_validation` to skip the "
+            "video checks explicitly."
         ) from e
-    return video_tensor, info.get("video_fps", 24.0)
+    decoder = VideoDecoder(path, dimension_order="NHWC")
+    return decoder[:], decoder.metadata.average_fps
 
 
 def _hf_pixels_to_channels_last(pixel_values):
@@ -378,15 +381,14 @@ def _validate_multimodal_parity(keras_model, hf_results, prefix, inputs):
     """Compare KerasHub with HF on token ids, pixels, and logits.
 
     Token ids come from the KerasHub preprocessor and must match exactly.
-    Pixels are only reported. Most of the gap to HF is the resize filter
-    (KerasHub bicubic + antialias, HF PIL LANCZOS), but a smaller residual
-    remains even against HF bicubic. Logits are checked twice through a
-    plain `backbone()` call:
+    Pixels are only reported: both sides use Lanczos, but KerasHub's
+    Lanczos is not bit-identical to PIL's. Logits are checked twice
+    through a plain `backbone()` call:
 
     1. HF `pixel_values` into the KerasHub backbone, asserted at
        `atol=1e-3`. This validates the converted weights.
-    2. KerasHub's own pixels, end to end. The logit difference is reported
-       and the predicted next token must match HF's. This is a weak check.
+    2. KerasHub's own pixels, end to end. Top-1 agreement with HF across
+       the prompt must be at least `MIN_TOP1_AGREEMENT`.
     """
     hf_ids = hf_results[f"{prefix}_input_ids"]
     preprocessed = keras_model.preprocessor.generate_preprocess(
@@ -415,9 +417,8 @@ def _validate_multimodal_parity(keras_model, hf_results, prefix, inputs):
     pixel_diff = np.abs(keras_pixels - hf_pixels)
     print(
         f"  Pixel mean absolute diff: {pixel_diff.mean():.6f}, "
-        f"max: {pixel_diff.max():.6f} (not asserted: mostly the resize "
-        "filter, KerasHub bicubic + antialias vs HF PIL LANCZOS, plus a "
-        "smaller residual)"
+        f"max: {pixel_diff.max():.6f} (not asserted: Keras Lanczos vs "
+        "PIL LANCZOS)"
     )
 
     backbone = keras_model.backbone
@@ -458,10 +459,14 @@ def _validate_multimodal_parity(keras_model, hf_results, prefix, inputs):
     keras_next = int(np.argmax(e2e_logits[0, last]))
     hf_next = int(np.argmax(hf_logits[0, last]))
     print(f"  [KH pixels] next token: KerasHub {keras_next}, HF {hf_next}")
-    np.testing.assert_equal(
-        keras_next, hf_next, err_msg="Next-token prediction differs from HF."
+    if agree < MIN_TOP1_AGREEMENT:
+        raise AssertionError(
+            f"End-to-end top-1 agreement {agree:.4f} is below "
+            f"{MIN_TOP1_AGREEMENT}."
+        )
+    print(
+        f"  ✓ End-to-end top-1 agreement {agree:.4f} >= {MIN_TOP1_AGREEMENT}."
     )
-    print("  ✓ End-to-end next-token prediction matches HF.")
 
 
 def validate_multimodal_output(keras_model, hf_results):

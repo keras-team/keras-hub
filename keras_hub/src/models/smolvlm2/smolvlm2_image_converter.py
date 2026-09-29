@@ -68,6 +68,10 @@ class SmolVLM2ImageConverter(ImageConverter):
             Default 2048 (from HF's ``size.longest_edge``).
         do_image_splitting: bool. Whether to split into sub-images.
             Set ``False`` for video frames. Default ``True``.
+        interpolation: str. Resize filter. Default ``"lanczos3"``, which
+            matches HF's PIL LANCZOS.
+        antialias: bool. Whether to antialias when downsampling. Default
+            ``True``.
     """
 
     backbone_cls = SmolVLM2Backbone
@@ -77,9 +81,13 @@ class SmolVLM2ImageConverter(ImageConverter):
         max_image_size=512,
         size=2048,
         do_image_splitting=True,
+        interpolation="lanczos3",
+        antialias=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            interpolation=interpolation, antialias=antialias, **kwargs
+        )
         self._check_image_size_unset()
         self.max_image_size = max_image_size
         self.size = size
@@ -96,9 +104,8 @@ class SmolVLM2ImageConverter(ImageConverter):
                 f"Received: image_size={self.image_size}"
             )
 
-    def _static_hw(self, image):
-        """Return the static `(height, width)` of an unbatched image."""
-        shape = image.shape
+    def _static_hw(self, shape):
+        """Return the static `(height, width)` from an unbatched image shape."""
         if shape[0] is None or shape[1] is None:
             raise ValueError(
                 "`SmolVLM2ImageConverter` needs static image height and "
@@ -112,11 +119,16 @@ class SmolVLM2ImageConverter(ImageConverter):
     def _call_python(self, inputs):
         outputs = None
         if isinstance(inputs, (list, tuple)):
-            try:
-                inputs = np.array(inputs)
-            except ValueError:
-                # Images of different sizes: convert them one at a time.
+            if self.do_image_splitting:
+                # Each image yields its own number of crops, so convert
+                # them one at a time even when they share a size.
                 outputs = self._convert_ragged(inputs)
+            else:
+                try:
+                    inputs = np.array(inputs)
+                except ValueError:
+                    # Images of different sizes: convert one at a time.
+                    outputs = self._convert_ragged(inputs)
         if outputs is None:
             outputs = self._convert_image(inputs)
         if in_grain_data_pipeline():
@@ -182,7 +194,7 @@ class SmolVLM2ImageConverter(ImageConverter):
             )
 
         image = ops.cast(inputs, "float32")
-        h, w = self._static_hw(image)
+        h, w = self._static_hw(image.shape)
 
         # Step 1: Resize so longest edge = self.size.
         new_h, new_w = _resize_output_size_rescale_to_max_len(
@@ -192,13 +204,7 @@ class SmolVLM2ImageConverter(ImageConverter):
             new_h, new_w, max_len=4096
         )
 
-        image = ops.image.resize(
-            ops.expand_dims(image, 0),
-            size=(new_h, new_w),
-            interpolation=self.interpolation,
-            antialias=self.antialias,
-        )[0]
-        image = ops.clip(image, 0.0, 255.0)
+        image = self._resize(ops.expand_dims(image, 0), (new_h, new_w))[0]
 
         ms = self.max_image_size
 
@@ -214,13 +220,7 @@ class SmolVLM2ImageConverter(ImageConverter):
                 snap_w = int(snap_h * aspect_ratio)
                 snap_w = math.ceil(snap_w / ms) * ms
 
-            image = ops.image.resize(
-                ops.expand_dims(image, 0),
-                size=(snap_h, snap_w),
-                interpolation=self.interpolation,
-                antialias=self.antialias,
-            )[0]
-            image = ops.clip(image, 0.0, 255.0)
+            image = self._resize(ops.expand_dims(image, 0), (snap_h, snap_w))[0]
 
             num_rows = 0
             num_cols = 0
@@ -240,14 +240,8 @@ class SmolVLM2ImageConverter(ImageConverter):
                         crops.append(crop)
 
                 # Global view resized to (ms, ms).
-                global_view = ops.image.resize(
-                    ops.expand_dims(image, 0),
-                    size=(ms, ms),
-                    interpolation=self.interpolation,
-                    antialias=self.antialias,
-                )[0]
-                global_view = ops.clip(global_view, 0.0, 255.0)
-                crops.append(global_view)
+                global_view = self._resize(ops.expand_dims(image, 0), (ms, ms))
+                crops.append(global_view[0])
 
                 # Stack: (num_sub_images, ms, ms, 3)
                 pixel_values = ops.stack(crops, axis=0)
@@ -256,34 +250,50 @@ class SmolVLM2ImageConverter(ImageConverter):
                 # Image fits in a single crop.
                 num_rows = 0
                 num_cols = 0
-                pixel_values = ops.image.resize(
-                    ops.expand_dims(image, 0),
-                    size=(ms, ms),
-                    interpolation=self.interpolation,
-                    antialias=self.antialias,
-                )
-                pixel_values = ops.cast(
-                    ops.clip(pixel_values, 0.0, 255.0), "float32"
-                )
+                pixel_values = self._resize(ops.expand_dims(image, 0), (ms, ms))
         else:
             # No splitting (video frames): just resize to square.
             num_rows = 0
             num_cols = 0
-            pixel_values = ops.image.resize(
-                ops.expand_dims(image, 0),
-                size=(ms, ms),
-                interpolation=self.interpolation,
-                antialias=self.antialias,
-            )
-            pixel_values = ops.cast(
-                ops.clip(pixel_values, 0.0, 255.0), "float32"
-            )
+            pixel_values = self._resize(ops.expand_dims(image, 0), (ms, ms))
 
         return {
             "pixel_values": self._rescale_and_normalize(pixel_values),
             "rows": ops.convert_to_tensor(num_rows, dtype="int32"),
             "cols": ops.convert_to_tensor(num_cols, dtype="int32"),
         }
+
+    def _resize(self, images, size):
+        """Resize a `(batch, height, width, channels)` batch and clip.
+
+        `ops.image.resize` rejects `"lanczos3"` on the torch backend
+        (keras-team/keras#23783). `scale_and_translate` with
+        `scale=out/in` and no translation is the same resize and runs on
+        every backend.
+        """
+        if self.interpolation == "lanczos3":
+            in_h, in_w = self._static_hw(images.shape[1:])
+            out_h, out_w = size
+            batch = images.shape[0]
+            if batch is None:
+                batch = ops.shape(images)[0]
+            images = ops.image.scale_and_translate(
+                images,
+                output_shape=(batch, out_h, out_w, images.shape[-1]),
+                scale=(out_h / in_h, out_w / in_w),
+                translation=(0.0, 0.0),
+                spatial_dims=(1, 2),
+                method="lanczos3",
+                antialias=self.antialias,
+            )
+        else:
+            images = ops.image.resize(
+                images,
+                size=size,
+                interpolation=self.interpolation,
+                antialias=self.antialias,
+            )
+        return ops.clip(images, 0.0, 255.0)
 
     def _rescale_and_normalize(self, pixel_values):
         """Apply the HF `rescale_factor` and mean/std normalization.
@@ -304,13 +314,7 @@ class SmolVLM2ImageConverter(ImageConverter):
         """
         ms = self.max_image_size
         images = ops.cast(images, "float32")
-        pixel_values = ops.image.resize(
-            images,
-            size=(ms, ms),
-            interpolation=self.interpolation,
-            antialias=self.antialias,
-        )
-        pixel_values = ops.cast(ops.clip(pixel_values, 0.0, 255.0), "float32")
+        pixel_values = self._resize(images, (ms, ms))
         return {
             "pixel_values": self._rescale_and_normalize(pixel_values),
             "rows": ops.convert_to_tensor(0, dtype="int32"),
