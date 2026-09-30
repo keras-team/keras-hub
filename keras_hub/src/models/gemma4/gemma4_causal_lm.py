@@ -823,12 +823,14 @@ class Gemma4CausalLM(CausalLM):
                 object.__setattr__(
                     self, "_cached_spec_assistant", assistant_model
                 )
-                self._assistant_model = None
+                # `del` rather than `= None`: assigning None leaves the TF
+                # checkpoint dependency in place, so `tf.train.Checkpoint`
+                # of the target would still save the assistant's variables.
+                del self._assistant_model
                 if not assistant_was_tracked:
                     self._tracker.untrack(assistant_model)
-                # TODO: Replace with `del self._assistant_model` once the
-                # minimum Keras version untracks layers on delete
-                # (keras-team/keras#23761).
+                # TODO: Drop the explicit untrack once the minimum Keras
+                # version untracks layers on delete (keras-team/keras#23761).
                 self.sampler = original_sampler
                 self.generate_function = original_generate_function
 

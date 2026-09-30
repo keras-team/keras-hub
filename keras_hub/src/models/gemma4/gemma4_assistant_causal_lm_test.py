@@ -163,12 +163,19 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         for w in self.model.weights:
             self.assertNotIn(id(w), target_weight_ids)
 
-        if keras.config.backend() == "torch":
-            # On torch every Keras layer is also an `nn.Module`, so an
-            # attribute holding the assistant would register it as a
-            # submodule and leak it into `parameters()` / `state_dict()`.
-            for module in target_model.modules():
-                self.assertIsNot(module, self.model)
+        # Backend-native object graphs must not hold the assistant either:
+        # on torch every Keras layer is an `nn.Module` (so it would leak
+        # into `parameters()`), on TF a `Trackable` (so it would leak into
+        # `tf.train.Checkpoint`).
+        backend = keras.config.backend()
+        if backend == "torch":
+            children = list(target_model.modules())
+        elif backend == "tensorflow":
+            children = list(target_model._trackable_children().values())
+        else:
+            children = []
+        for child in children:
+            self.assertIsNot(child, self.model)
 
     def test_generate_keeps_user_attached_assistant(self):
         target_model = self._create_target_model()
