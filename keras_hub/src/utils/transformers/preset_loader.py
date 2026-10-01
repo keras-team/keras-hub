@@ -166,10 +166,6 @@ class TransformersPresetLoader(PresetLoader):
                         self.converter.convert_head(task, loader, self.config)
             return task
 
-        if (
-            not load_task_weights
-            or not issubclass(cls, ImageClassifier)
-            or architecture == "ViTModel"
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
 
