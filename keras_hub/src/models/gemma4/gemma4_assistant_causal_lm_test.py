@@ -1,10 +1,14 @@
+import gc
 import os
+import weakref
+from unittest import mock
 
 import keras
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
 
+from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
     Gemma4AssistantCausalLM,
 )
@@ -285,3 +289,57 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         )
         self.assertAllClose(logits_orig, logits_loaded)
         self.assertAllClose(h_orig, h_loaded)
+
+    def test_assistant_is_garbage_collected(self):
+        target_model = self._create_target_model()
+
+        batch_size = 1
+        seq_len = 5
+        token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
+        inputs = self._make_inputs(token_ids_raw)
+
+        assistant = self._create_assistant()
+        target_model.generate(
+            inputs,
+            assistant_model=assistant,
+            stop_token_ids=None,
+        )
+
+        assistant_ref = weakref.ref(assistant)
+        del assistant
+        gc.collect()
+
+        self.assertIsNone(assistant_ref())
+
+    def test_exception_in_generate_does_not_cache_state(self):
+        target_model = self._create_target_model()
+        assistant = self._create_assistant()
+
+        batch_size = 1
+        seq_len = 5
+        token_ids_raw = np.random.randint(0, 100, (batch_size, seq_len))
+        inputs = self._make_inputs(token_ids_raw)
+
+        original_sampler = target_model.sampler
+        original_generate_function = target_model.generate_function
+
+        with mock.patch.object(
+            CausalLM, "generate", side_effect=RuntimeError("boom")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "boom"):
+                target_model.generate(
+                    inputs,
+                    assistant_model=assistant,
+                    stop_token_ids=None,
+                )
+
+        self.assertFalse(hasattr(target_model, "_cached_spec_sampler"))
+        self.assertFalse(hasattr(target_model, "_cached_spec_generate_fn"))
+        self.assertFalse(hasattr(target_model, "_cached_spec_assistant_ref"))
+
+        self.assertIs(target_model.sampler, original_sampler)
+        self.assertEqual(
+            target_model.generate_function, original_generate_function
+        )
+        self.assertFalse(hasattr(target_model, "_assistant_model"))
+        self.assertFalse(target_model._tracker.is_in_store("layers", assistant))

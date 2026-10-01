@@ -1,3 +1,5 @@
+import weakref
+
 import numpy as np
 from keras import ops
 
@@ -778,13 +780,16 @@ class Gemma4CausalLM(CausalLM):
             # full JIT recompile.
             cached_spec_sampler = getattr(self, "_cached_spec_sampler", None)
             cached_spec_fn = getattr(self, "_cached_spec_generate_fn", None)
+            cached_spec_assistant_ref = getattr(
+                self, "_cached_spec_assistant_ref", None
+            )
 
             if (
                 cached_spec_sampler is not None
                 and cached_spec_sampler.num_speculative_tokens == num_spec
                 and cached_spec_sampler.base_sampler is spec_base_sampler
-                and getattr(self, "_cached_spec_assistant", None)
-                is assistant_model
+                and cached_spec_assistant_ref is not None
+                and cached_spec_assistant_ref() is assistant_model
             ):
                 # Reuse compiled speculative graph.
                 self.sampler = cached_spec_sampler
@@ -810,19 +815,17 @@ class Gemma4CausalLM(CausalLM):
                 stop_token_ids=stop_token_ids,
                 strip_prompt=strip_prompt,
             )
-        finally:
             if assistant_model is not None:
                 self._cached_spec_sampler = self.sampler
                 self._cached_spec_generate_fn = self.generate_function
+                # Cache via weakref to avoid keeping the assistant alive.
+                # Not a Layer, so plain assignment bypasses tracker.
+                self._cached_spec_assistant_ref = weakref.ref(assistant_model)
+        finally:
+            if assistant_model is not None:
                 # Restore the original sampler and compiled graph.
                 # Do not set generate_function = None — that would discard
                 # the baseline compiled graph and force a recompile.
-                # Bypass `__setattr__`: plain assignment would track the
-                # assistant as a sub-layer, and on torch register it as an
-                # `nn.Module` submodule that outlives this call.
-                object.__setattr__(
-                    self, "_cached_spec_assistant", assistant_model
-                )
                 # `del` rather than `= None`: assigning None leaves the TF
                 # checkpoint dependency in place, so `tf.train.Checkpoint`
                 # of the target would still save the assistant's variables.
