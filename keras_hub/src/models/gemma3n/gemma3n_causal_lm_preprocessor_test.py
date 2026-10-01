@@ -270,6 +270,32 @@ class Gemma3nCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["vision_mask"], [0] * 7 + [1] * 5 + [0] * 8)
         self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
 
+    def test_vision_generate_preprocess_no_start_token(self):
+        input_data = {
+            "prompts": "the quick brown fox <start_of_image>",
+            "images": np.ones((8, 8, 3)),
+        }
+        preprocessor = Gemma3nCausalLMPreprocessor(
+            **self.init_vision_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x["token_ids"],
+            [9, 14, 10, 12, 16, 4, 8, 8, 8, 8, 8, 5, 16, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(
+            x["padding_mask"],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(
+            x["vision_indices"], [6, 7, 8, 9, 10, 0, 0, 0, 0, 0]
+        )
+        self.assertAllEqual(
+            x["vision_mask"],
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
+
     def test_audio_generate_preprocess(self):
         input_data = {
             "prompts": "the quick <start_of_audio>",
