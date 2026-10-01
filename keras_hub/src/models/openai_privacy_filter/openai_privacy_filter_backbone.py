@@ -328,6 +328,22 @@ class OpenAIPrivacyFilterExperts(keras.layers.Layer):
         out = out + self.down_proj_bias[:, None, :]
         return out
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_experts": self.num_experts,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "alpha": self.alpha,
+                "limit": self.limit,
+            }
+        )
+        return config
+
 
 # ---------------------------------------------------------------------------
 # Router — Dense with bias, fp32 cast, softmax+top_k, div by top_k
@@ -372,6 +388,19 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         router_scores = ops.sum(weighted_mask, axis=1)
         return router_scores
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config
+
 
 # ---------------------------------------------------------------------------
 # Sparse MoE block — router + experts, output *= num_experts_per_tok
@@ -391,7 +420,7 @@ class OpenAIPrivacyFilterSparseMoeBlock(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_experts = num_experts
         self.top_k = top_k
-        self.kernel_initializer = kernel_initializer
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
         self.router = OpenAIPrivacyFilterTopKRouter(
@@ -431,6 +460,21 @@ class OpenAIPrivacyFilterSparseMoeBlock(keras.layers.Layer):
         final = final * self.top_k
 
         return ops.reshape(final, (batch_size, seq_len, self.hidden_dim))
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "num_experts": self.num_experts,
+                "top_k": self.top_k,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
+        )
+        return config
 
 
 # ---------------------------------------------------------------------------
