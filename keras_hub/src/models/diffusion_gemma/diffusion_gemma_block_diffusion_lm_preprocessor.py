@@ -1055,17 +1055,8 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         # of the prompt, so raise instead of truncating quietly.
         reserved = 1 if self.add_start_token else 0
         max_prompt_length = seq_len - reserved
-        if self._use_tf_workflow():
-            prompt_lengths = prompts_tok.row_lengths()
-            too_long = bool(ops.any(prompt_lengths > max_prompt_length))
-            longest = int(ops.max(prompt_lengths))
-        else:
-            prompt_lengths = [len(row) for row in prompts_tok]
-            too_long = any(
-                length > max_prompt_length for length in prompt_lengths
-            )
-            longest = max(prompt_lengths, default=0)
-        if too_long:
+        longest = max((len(row) for row in prompts_tok), default=0)
+        if longest > max_prompt_length:
             raise ValueError(
                 "A prompt is too long for `sequence_length`. The longest "
                 f"prompt is {longest} tokens, but only {max_prompt_length} "
@@ -1148,7 +1139,8 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             fields when converters are configured.
 
         Raises:
-            ValueError: If a prompt is longer than ``sequence_length``.
+            InvalidArgumentError: If a prompt is longer than
+                ``sequence_length``.
         """
         if not self.built:
             self.build(None)
@@ -1203,23 +1195,18 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         # of the prompt, so raise instead of truncating quietly.
         reserved = 1 if self.add_start_token else 0
         max_prompt_length = seq_len - reserved
-        if self._use_tf_workflow():
-            prompt_lengths = prompts_tok.row_lengths()
-            too_long = bool(tf.reduce_any(prompt_lengths > max_prompt_length))
-            longest = int(tf.reduce_max(prompt_lengths))
-        else:
-            prompt_lengths = [len(row) for row in prompts_tok]
-            too_long = any(
-                length > max_prompt_length for length in prompt_lengths
-            )
-            longest = max(prompt_lengths, default=0)
-        if too_long:
-            raise ValueError(
-                "A prompt is too long for `sequence_length`. The longest "
-                f"prompt is {longest} tokens, but only {max_prompt_length} "
-                "fit (after reserving space for special tokens). Pass a "
-                "larger `sequence_length` to `generate()`."
-            )
+        # A graph assertion also works when `tf.data` traces this function.
+        prompt_lengths = prompts_tok.row_lengths()
+        tf.debugging.assert_less_equal(
+            prompt_lengths,
+            tf.cast(max_prompt_length, prompt_lengths.dtype),
+            message=(
+                "A prompt is too long for `sequence_length`. Only "
+                f"{max_prompt_length} tokens fit (after reserving space for "
+                "special tokens). Pass a larger `sequence_length` to "
+                "`generate()`."
+            ),
+        )
 
         token_ids, segment_ids = self.packer(
             (prompts_tok,),
@@ -1283,9 +1270,28 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             x, sequence_length=sequence_length
         )
 
-    def _generate_postprocess_python(self, x):
-        if not self.built:
-            self.build(None)
+    def generate_postprocess(self, x, stop_token_ids="auto"):
+        """Convert denoised integer tokens back to strings.
+
+        Args:
+            x: int tensor of shape `(B, canvas_length)`, or a
+                `{"token_ids", "padding_mask"}` dict from `generate_step`.
+            stop_token_ids: Optional. `None`, `"auto"`, or tuple of token
+                IDs to strip from the decoded text. `"auto"` uses
+                `self.stop_token_ids`. Defaults to `"auto"`.
+
+        Returns:
+            String or list of strings.
+        """
+        if self._use_tf_workflow():
+            return self._generate_postprocess_tf(
+                x, stop_token_ids=stop_token_ids
+            )
+        return self._generate_postprocess_python(
+            x, stop_token_ids=stop_token_ids
+        )
+
+    def _ids_to_strip(self, stop_token_ids):
         # Keep the start-of-image marker in the detokenized output when
         # images are enabled, unlike the standard special tokens.
         ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
@@ -1293,8 +1299,15 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             soi_id = getattr(self.tokenizer, "start_of_image_token_id", None)
             if soi_id is not None and soi_id in ids_to_strip:
                 ids_to_strip.remove(soi_id)
-        if self.stop_token_ids is not None:
-            ids_to_strip.extend(self.stop_token_ids)
+        if stop_token_ids == "auto":
+            stop_token_ids = self.stop_token_ids
+        ids_to_strip.extend(stop_token_ids or ())
+        return ids_to_strip
+
+    def _generate_postprocess_python(self, x, stop_token_ids="auto"):
+        if not self.built:
+            self.build(None)
+        ids_to_strip = self._ids_to_strip(stop_token_ids)
         if isinstance(x, dict):
             token_ids = x["token_ids"]
             mask = ops.cast(x["padding_mask"], "bool")
@@ -1308,18 +1321,10 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         return self.tokenizer.detokenize(token_ids)
 
     @preprocessing_function
-    def _generate_postprocess_tf(self, x):
+    def _generate_postprocess_tf(self, x, stop_token_ids="auto"):
         if not self.built:
             self.build(None)
-        # Keep the start-of-image marker in the detokenized output when
-        # images are enabled, unlike the standard special tokens.
-        ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
-        if self.image_converter is not None:
-            soi_id = getattr(self.tokenizer, "start_of_image_token_id", None)
-            if soi_id is not None and soi_id in ids_to_strip:
-                ids_to_strip.remove(soi_id)
-        if self.stop_token_ids is not None:
-            ids_to_strip.extend(self.stop_token_ids)
+        ids_to_strip = self._ids_to_strip(stop_token_ids)
         if isinstance(x, dict):
             token_ids = x["token_ids"]
             mask = ops.cast(x["padding_mask"], "bool")

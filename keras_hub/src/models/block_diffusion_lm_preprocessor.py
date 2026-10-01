@@ -3,7 +3,6 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
@@ -99,7 +98,7 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         )
 
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(
                 x,
                 y=y,
@@ -151,7 +150,7 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         Returns:
             A dict with keys `"token_ids"` and `"padding_mask"`.
         """
-        if not self._allow_python_workflow or in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_preprocess_tf(
                 x, sequence_length=sequence_length
             )
@@ -160,10 +159,11 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
                 x, sequence_length=sequence_length
             )
 
-    def _generate_postprocess_python(self, x):
+    def _generate_postprocess_python(self, x, stop_token_ids=None):
         if not self.built:
             self.build(None)
-        ids_to_strip = getattr(self.tokenizer, "special_token_ids", [])
+        ids_to_strip = list(getattr(self.tokenizer, "special_token_ids", []))
+        ids_to_strip.extend(stop_token_ids or ())
         if isinstance(x, dict):
             # From generate_step when stop_token_ids is set: mask out
             # positions after the first stop token.
@@ -180,10 +180,11 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         return self.tokenizer.detokenize(token_ids)
 
     @preprocessing_function
-    def _generate_postprocess_tf(self, x):
+    def _generate_postprocess_tf(self, x, stop_token_ids=None):
         if not self.built:
             self.build(None)
-        ids_to_strip = self.tokenizer.special_token_ids
+        ids_to_strip = list(self.tokenizer.special_token_ids)
+        ids_to_strip.extend(stop_token_ids or ())
         if isinstance(x, dict):
             token_ids = x["token_ids"]
             mask = keras.ops.cast(x["padding_mask"], "bool")
@@ -193,21 +194,28 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
         token_ids = strip_to_ragged(token_ids, mask, ids_to_strip)
         return self.tokenizer.detokenize(token_ids)
 
-    def generate_postprocess(self, x):
+    def generate_postprocess(self, x, stop_token_ids=None):
         """Convert denoised integer tokens back to strings.
 
         Args:
             x: int tensor of shape `(B, canvas_length)` when
                 `stop_token_ids=None`, or a `{"token_ids", "padding_mask"}`
                 dict from `generate_step` otherwise.
+            stop_token_ids: Optional tuple of token IDs. The stop IDs of the
+                `generate()` call. Stripped from the decoded text in
+                addition to the special tokens. Defaults to `None`.
 
         Returns:
             String or list of strings.
         """
-        if not self._allow_python_workflow or in_tf_function():
-            return self._generate_postprocess_tf(x)
+        if self._use_tf_workflow():
+            return self._generate_postprocess_tf(
+                x, stop_token_ids=stop_token_ids
+            )
         else:
-            return self._generate_postprocess_python(x)
+            return self._generate_postprocess_python(
+                x, stop_token_ids=stop_token_ids
+            )
 
     @property
     def sequence_length(self):

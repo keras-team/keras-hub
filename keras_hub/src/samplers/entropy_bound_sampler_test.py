@@ -337,3 +337,17 @@ class EntropyBoundSamplerTest(TestCase):
 
         self.assertAllEqual(output[0], [1, 1, 1])
         self.assertAllEqual(output[1], [3, 3, 3])
+
+    def test_context_is_passed_to_next_on_every_step(self):
+        sampler = EntropyBoundSampler(seed=0)
+        canvas = ops.zeros((2, 3), dtype="int32")
+        # Index 2 gets the highest logit only through the context, so the
+        # argmax shows that `next` read the context.
+        context = (ops.convert_to_tensor([0.0, 0.0, 100.0]),)
+
+        def next(canvas, prev_logits, step, context):
+            (bias,) = context
+            return ops.broadcast_to(bias, (2, 3, 3))
+
+        output = sampler(next=next, canvas=canvas, max_steps=3, context=context)
+        self.assertAllEqual(output, [[2, 2, 2], [2, 2, 2]])

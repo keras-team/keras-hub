@@ -27,11 +27,16 @@ class DiffusionSampler(Sampler):
 
     Call arguments:
         next: Callable accepting `(canvas, prev_logits, step)` and returning
-            logits for the current denoising step.
+            logits for the current denoising step. When `context` is set,
+            `next` also receives `context` as a fourth argument.
         canvas: int tensor of shape `(B, canvas_length)` containing the
             initial token assignment.
         max_steps: int. Maximum number of denoising steps.
         model: Optional Keras model, used by JAX stateless scopes.
+        context: Optional nested structure of tensors that `next` reads.
+            Subclasses pass `context` through their denoising loop as a
+            loop variable, because OpenVINO loop bodies cannot read
+            tensors from outside the loop. Defaults to `None`.
     """
 
     def __init__(self, seed=None, **kwargs):

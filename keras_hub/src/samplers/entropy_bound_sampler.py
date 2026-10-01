@@ -30,11 +30,17 @@ class EntropyBoundSampler(DiffusionSampler):
 
     Call arguments:
         next: Callable accepting `(canvas, prev_logits, step)` and returning
-            logits for the current denoising step.
+            logits for the current denoising step. When `context` is set,
+            `next` also receives `context` as a fourth argument.
         canvas: int tensor of shape `(B, canvas_length)` containing the initial
             random token assignments.
         max_steps: int. Maximum number of denoising steps.
         model: Optional Keras model used by JAX stateless scopes.
+        context: Optional nested structure of tensors that `next` reads.
+            The sampler passes `context` through the denoising loop
+            unchanged. Pass tensors here instead of closing over them in
+            `next`, so the loop also compiles on OpenVINO. Defaults to
+            `None`.
 
     Returns:
         An int tensor of shape `(B, canvas_length)` containing the final greedy
@@ -100,7 +106,11 @@ class EntropyBoundSampler(DiffusionSampler):
         accept_sorted = (cumsum_H - sorted_H) <= self.entropy_bound
 
         unsort_idx = ops.argsort(sort_idx, axis=-1)
-        accept_mask = ops.take_along_axis(accept_sorted, unsort_idx, axis=-1)
+        # Gather as int32: OpenVINO cannot evaluate a gather on bool tensors.
+        accept_mask = ops.take_along_axis(
+            ops.cast(accept_sorted, "int32"), unsort_idx, axis=-1
+        )
+        accept_mask = ops.cast(accept_mask, "bool")
 
         # Commit: accepted positions get a multinomial sample from the logits,
         # rejected positions get a uniform random token.
@@ -153,7 +163,15 @@ class EntropyBoundSampler(DiffusionSampler):
         )
         return new_canvas, stop, cur_argmax, state
 
-    def __call__(self, next, canvas=None, max_steps=None, model=None, **kwargs):
+    def __call__(
+        self,
+        next,
+        canvas=None,
+        max_steps=None,
+        model=None,
+        context=None,
+        **kwargs,
+    ):
         if kwargs or canvas is None or max_steps is None:
             raise TypeError(
                 "`EntropyBoundSampler` is a block-diffusion sampler (see "
@@ -161,11 +179,26 @@ class EntropyBoundSampler(DiffusionSampler):
                 "`BlockDiffusionLM`-style models — it cannot be used as "
                 "the `sampler` for a standard autoregressive `CausalLM` "
                 "model. Expected call arguments `(next, canvas, "
-                "max_steps, model=None)`. Received unexpected keyword "
-                f"arguments: {sorted(kwargs)}."
+                "max_steps, model=None, context=None)`. Received unexpected "
+                f"keyword arguments: {sorted(kwargs)}."
             )
+        # OpenVINO requires all tensors that the loop body reads to be loop
+        # variables. So `context` is a loop variable, not a closure value.
+        has_context = context is not None
+        extra_loop_vars = (context,) if has_context else ()
+
+        def call_next(canvas, prev_logits, step, *extra_loop_vars):
+            if has_context:
+                return next(canvas, prev_logits, step, *extra_loop_vars)
+            return next(canvas, prev_logits, step)
+
         state = self.initialize_state(canvas)
-        logits = next(canvas, None, ops.convert_to_tensor(0, dtype="int32"))
+        logits = call_next(
+            canvas,
+            None,
+            ops.convert_to_tensor(0, dtype="int32"),
+            *extra_loop_vars,
+        )
         canvas, stop, argmax_canvas, state = self._sample_step(
             canvas, logits, 0, state
         )
@@ -179,6 +212,7 @@ class EntropyBoundSampler(DiffusionSampler):
             previous_argmax,
             stable_steps,
             has_previous,
+            *extra_loop_vars,
         ):
             return ops.logical_and(
                 step < max_steps,
@@ -194,9 +228,10 @@ class EntropyBoundSampler(DiffusionSampler):
             previous_argmax,
             stable_steps,
             has_previous,
+            *extra_loop_vars,
         ):
             finished_denoising = stop
-            logits = next(canvas, prev_logits, step)
+            logits = call_next(canvas, prev_logits, step, *extra_loop_vars)
             state = previous_argmax, stable_steps, has_previous
             next_canvas, next_stop, next_argmax_canvas, next_state = (
                 self._sample_step(canvas, logits, step, state)
@@ -232,6 +267,7 @@ class EntropyBoundSampler(DiffusionSampler):
                 previous_argmax,
                 stable_steps,
                 has_previous,
+                *extra_loop_vars,
             )
 
         loop_vars = (
@@ -241,8 +277,9 @@ class EntropyBoundSampler(DiffusionSampler):
             stop,
             argmax_canvas,
             *state,
+            *extra_loop_vars,
         )
-        _, _, _, _, argmax_canvas, _, _, _ = self.run_loop(
+        _, _, _, _, argmax_canvas, *_ = self.run_loop(
             cond=cond,
             body=body,
             loop_vars=loop_vars,

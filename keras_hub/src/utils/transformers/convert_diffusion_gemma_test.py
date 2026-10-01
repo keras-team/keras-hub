@@ -113,12 +113,12 @@ class ConvertDiffusionGemmaTest(TestCase):
                     "sliding_attention",
                     "full_attention",
                 ],
-                "per_layer_config": [
-                    {"head_dim": 16, "num_key_value_heads": 2},
-                    {"head_dim": 32, "num_key_value_heads": 1},
-                    {"head_dim": 16, "num_key_value_heads": 2},
-                    {"head_dim": 32, "num_key_value_heads": 1},
-                ],
+                # `save_pretrained` writes a sparse dict with zero-padded
+                # string keys.
+                "per_layer_config": {
+                    "01": {"head_dim": 32, "num_key_value_heads": 1},
+                    "03": {"head_dim": 32, "num_key_value_heads": 1},
+                },
             },
         }
         kwargs = convert_diffusion_gemma.convert_backbone_config(
@@ -126,6 +126,18 @@ class ConvertDiffusionGemmaTest(TestCase):
         )
         self.assertEqual(kwargs["global_head_dim"], 32)
         self.assertEqual(kwargs["num_global_key_value_heads"], 1)
+
+        # An int-keyed dict without a kv-head override uses the top-level
+        # `num_key_value_heads`.
+        transformers_config["text_config"]["per_layer_config"] = {
+            1: {"head_dim": 32},
+            3: {"head_dim": 32},
+        }
+        kwargs = convert_diffusion_gemma.convert_backbone_config(
+            transformers_config
+        )
+        self.assertEqual(kwargs["global_head_dim"], 32)
+        self.assertEqual(kwargs["num_global_key_value_heads"], 2)
 
     def test_convert_task_config(self):
         transformers_config = {

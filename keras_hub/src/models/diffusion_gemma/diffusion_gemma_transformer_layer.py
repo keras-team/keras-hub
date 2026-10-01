@@ -336,6 +336,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         cache_update_index,
         is_encoder=False,
         vision_mask=None,
+        canvas_mask=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -360,7 +361,14 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             cache_index=cache_update_index,
         )
 
-        if self.use_sliding_window_attention and not self.is_global_attention:
+        # Canvas decoding attends to the full sliced window, as in HF. `call`
+        # already slices the cache to the last `sliding_window_size - 1`
+        # prefix positions.
+        if (
+            self.use_sliding_window_attention
+            and not self.is_global_attention
+            and canvas_mask is None
+        ):
             causal_mask = self.attention._mask_sliding_window(
                 causal_mask,
                 cache_update_index=cache_update_index,
@@ -498,6 +506,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             cache_update_index,
             is_encoder=is_encoder,
             vision_mask=vision_mask,
+            canvas_mask=canvas_mask,
         )
 
         # Canvas bidirectional mask: all canvas queries attend to all canvas

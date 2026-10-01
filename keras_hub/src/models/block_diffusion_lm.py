@@ -121,24 +121,31 @@ class BlockDiffusionLM(Task):
         if keras.config.backend() == "openvino":
             from keras_hub.src.utils.openvino_utils import ov_infer
 
-            # OpenVINO ignores subclass-specific generation arguments.
             def wrapped_generate_function(
                 inputs,
                 max_length=None,
                 stop_token_ids=None,
                 **kwargs,
             ):
-                inputs = tree.map_structure(ops.convert_to_numpy, inputs)
-                return ov_infer(
-                    self,
-                    inputs,
-                    stop_token_ids,
-                    lambda x, stops: self.generate_step(
+                # `ov_infer` reuses the compiled model across calls. Pass the
+                # extra generation arguments as model inputs, so each call
+                # reads its own values instead of the first call's constants.
+                kwarg_names = tuple(kwargs)
+                inputs = tree.map_structure(
+                    ops.convert_to_numpy, {**inputs, **kwargs}
+                )
+
+                def fn(x, stops):
+                    x = dict(x)
+                    step_kwargs = {name: x.pop(name) for name in kwarg_names}
+                    return self.generate_step(
                         x,
                         max_length=max_length,
                         stop_token_ids=stops,
-                    ),
-                )
+                        **step_kwargs,
+                    )
+
+                return ov_infer(self, inputs, stop_token_ids, fn)
 
             self.generate_function = wrapped_generate_function
 
@@ -390,7 +397,9 @@ class BlockDiffusionLM(Task):
             )
 
         def postprocess(x):
-            return self.preprocessor.generate_postprocess(x)
+            return self.preprocessor.generate_postprocess(
+                x, stop_token_ids=stop_token_ids
+            )
 
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 

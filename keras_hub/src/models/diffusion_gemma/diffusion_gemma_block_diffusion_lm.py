@@ -123,13 +123,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 )
             else:
                 resolved_stop_token_ids = self.stop_token_ids
-        # Keep the preprocessor's stop-token list in sync with this call.
-        if self.preprocessor is not None and resolved_stop_token_ids != "auto":
-            self.preprocessor.stop_token_ids = (
-                tuple(resolved_stop_token_ids)
-                if resolved_stop_token_ids is not None
-                else None
-            )
 
         # Pass sampling arguments as tensors so JAX and TF keep them dynamic.
         # Use -1 as the sentinel for no padding token.
@@ -359,7 +352,11 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         t_min = ops.convert_to_tensor(t_min, dtype="float32")
         t_max = ops.convert_to_tensor(t_max, dtype="float32")
         pad_token_id = ops.convert_to_tensor(pad_token_id, dtype="int32")
-        has_pad_token = ops.not_equal(pad_token_id, -1)
+        pad_value = ops.where(
+            ops.not_equal(pad_token_id, -1),
+            pad_token_id,
+            ops.zeros_like(pad_token_id),
+        )
 
         # Add space for the largest local attention window.
         max_sliding_prefix = 0
@@ -386,9 +383,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         padding_mask_buffer = ops.slice_update(
             padding_mask_buffer, (0, 0), prompt_padding_mask
         )
-        pad_value = ops.where(
-            has_pad_token, pad_token_id, ops.zeros_like(pad_token_id)
-        )
         output_canvases_buffer = (
             ops.ones(
                 (batch_size, num_canvases * self.canvas_length),
@@ -403,6 +397,9 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         canvas_index = ops.convert_to_tensor(0, dtype="int32")
         context_length = ops.convert_to_tensor(prompt_length, dtype="int32")
 
+        # OpenVINO requires all tensors that a loop body reads to be loop
+        # variables. So the sampling arguments are loop variables, and the
+        # sampler gets the decoding state as `context`.
         def cond(
             canvas_index,
             context_length,
@@ -411,10 +408,35 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             finished_sequences,
             output_canvases_buffer,
             output_masks_buffer,
+            t_min,
+            t_max,
+            pad_token_id,
         ):
             return ops.logical_and(
                 canvas_index < num_canvases,
                 ops.logical_not(ops.all(finished_sequences)),
+            )
+
+        def next(canvas, prev_logits, step, context):
+            (
+                encoder_cache_buffer,
+                context_length,
+                padding_mask_buffer,
+                t_min,
+                t_max,
+            ) = context
+            step_float = ops.cast(step, "float32")
+            temperature = t_max - (
+                (t_max - t_min) * step_float / self.max_denoising_steps
+            )
+            return self._forward_step(
+                canvas,
+                encoder_cache_buffer,
+                context_length,
+                prev_logits,
+                temperature,
+                prompt_padding_mask=padding_mask_buffer,
+                skip_auto_pad=True,
             )
 
         def body(
@@ -425,31 +447,26 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             finished_sequences,
             output_canvases_buffer,
             output_masks_buffer,
+            t_min,
+            t_max,
+            pad_token_id,
         ):
             canvas = self._init_canvas(batch_size)
-
-            def next(canvas, prev_logits, step):
-                step_float = ops.cast(step, "float32")
-                temperature = t_max - (
-                    (t_max - t_min) * step_float / self.max_denoising_steps
-                )
-                return self._forward_step(
-                    canvas,
-                    encoder_cache_buffer,
-                    context_length,
-                    prev_logits,
-                    temperature,
-                    prompt_padding_mask=padding_mask_buffer,
-                    skip_auto_pad=True,
-                )
-
             argmax_canvas = self.sampler(
                 next=next,
                 canvas=canvas,
                 max_steps=self.max_denoising_steps,
                 model=self,
+                context=(
+                    encoder_cache_buffer,
+                    context_length,
+                    padding_mask_buffer,
+                    t_min,
+                    t_max,
+                ),
             )
             argmax_canvas = ops.cast(argmax_canvas, "int32")
+            has_pad_token = ops.not_equal(pad_token_id, -1)
 
             stop_locations = ops.any(
                 ops.equal(
@@ -496,11 +513,20 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 (0, context_length),
                 canvas_padding_mask,
             )
-            encoder_cache_buffer = self._encode_canvas_as_context(
-                argmax_canvas,
-                encoder_cache_buffer,
-                context_length,
-                padding_mask=padding_mask_buffer,
+            # Skip the encode when no later canvas reads the cache.
+            needs_context = ops.logical_and(
+                canvas_index < num_canvases - 1,
+                ops.logical_not(ops.all(new_finished_sequences)),
+            )
+            encoder_cache_buffer = ops.cond(
+                needs_context,
+                lambda: self._encode_canvas_as_context(
+                    argmax_canvas,
+                    encoder_cache_buffer,
+                    context_length,
+                    padding_mask=padding_mask_buffer,
+                ),
+                lambda: encoder_cache_buffer,
             )
 
             return (
@@ -511,6 +537,9 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 new_finished_sequences,
                 output_canvases_buffer,
                 output_masks_buffer,
+                t_min,
+                t_max,
+                pad_token_id,
             )
 
         loop_vars = (
@@ -521,6 +550,9 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             finished_sequences,
             output_canvases_buffer,
             output_masks_buffer,
+            t_min,
+            t_max,
+            pad_token_id,
         )
         (
             _,
@@ -530,6 +562,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
             _,
             output_canvases_buffer,
             output_masks_buffer,
+            *_,
         ) = self.sampler.run_loop(
             cond=cond,
             body=body,
@@ -590,6 +623,7 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                 image_embeddings=scaled_img_embeddings,
                 text_embeddings=x,
                 vision_indices=vision_indices,
+                pixel_position_ids=pixel_position_ids,
             )
 
         # Global scale applied after interleaving: text positions get

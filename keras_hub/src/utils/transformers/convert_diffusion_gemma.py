@@ -34,14 +34,20 @@ backbone_cls = DiffusionGemmaBackbone
 def _read_global_attention_config(text_cfg, key, per_layer_key):
     """Read a global-attention value from a Transformers config.
 
-    Use the top-level value when present. Otherwise, read the value from the
-    first full-attention layer in `per_layer_config`.
+    Use the top-level value when present. Otherwise, read the override of the
+    first full-attention layer in `per_layer_config`. `per_layer_config` is a
+    sparse dict. A saved config uses zero-padded string keys (e.g. `"05"`).
+    A layer without the override uses the top-level `per_layer_key` value.
     """
     if key in text_cfg:
         return text_cfg[key]
-    layer_types = text_cfg["layer_types"]
-    global_idx = layer_types.index("full_attention")
-    return text_cfg["per_layer_config"][global_idx][per_layer_key]
+    global_idx = text_cfg["layer_types"].index("full_attention")
+    overrides = {}
+    for layer_idx, layer_overrides in text_cfg["per_layer_config"].items():
+        if int(layer_idx) == global_idx:
+            overrides = layer_overrides
+            break
+    return overrides.get(per_layer_key, text_cfg.get(per_layer_key))
 
 
 def convert_backbone_config(transformers_config):

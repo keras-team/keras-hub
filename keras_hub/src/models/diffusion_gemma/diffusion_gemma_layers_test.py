@@ -5,7 +5,10 @@ import keras
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.diffusion_gemma.diffusion_gemma_self_conditioning import (  # noqa: E501
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_layers import (
+    DiffusionGemmaInterleaveEmbeddings,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_layers import (
     DiffusionGemmaSelfConditioning,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -133,12 +136,12 @@ class DiffusionGemmaSelfConditioningTest(TestCase):
         with (
             patch(
                 "keras_hub.src.models.diffusion_gemma."
-                "diffusion_gemma_self_conditioning.ops.matmul",
+                "diffusion_gemma_layers.ops.matmul",
                 side_effect=record_matmul,
             ),
             patch(
                 "keras_hub.src.models.diffusion_gemma."
-                "diffusion_gemma_self_conditioning.ops.softmax",
+                "diffusion_gemma_layers.ops.softmax",
                 side_effect=record_softmax,
             ),
         ):
@@ -147,3 +150,45 @@ class DiffusionGemmaSelfConditioningTest(TestCase):
         self.assertEqual(operand_dtypes, [("float16", "float16")])
         expected_logits = ops.cast(ops.cast(prev_logits, "float16"), "float32")
         self.assertAllEqual(softmax_inputs[0], expected_logits)
+
+
+class DiffusionGemmaInterleaveEmbeddingsTest(TestCase):
+    def setUp(self):
+        self.init_kwargs = {"num_vision_tokens_per_image": 4, "pool_size": 1}
+        # Image 0 has 2 real bins, image 1 has 4. Bin `b` of image `k` holds
+        # the value `100 * k + b`.
+        real = [[0, 0], [1, 0], [0, 1], [1, 1]]
+        # Use backend tensors: `compute_output_spec` reads shapes only from
+        # tensor arguments.
+        self.input_data = {
+            "image_embeddings": ops.array(
+                [[[[0], [1], [2], [3]], [[100], [101], [102], [103]]]],
+                dtype="float32",
+            ),
+            "text_embeddings": -ops.ones((1, 10, 1), dtype="float32"),
+            # Image 0 fills positions 1-2, image 1 fills positions 5-8.
+            "vision_indices": ops.array(
+                [[1, 2, 5, 6, 7, 8, 0, 0]], dtype="int32"
+            ),
+            "pixel_position_ids": ops.array(
+                [[real[:2] + [[-1, -1]] * 2, real]], dtype="int32"
+            ),
+        }
+        # Each image's real bins fill its own placeholders.
+        self.expected_output_data = np.reshape(
+            np.array(
+                [-1, 0, 1, -1, -1, 100, 101, 102, 103, -1], dtype="float32"
+            ),
+            (1, 10, 1),
+        )
+
+    def test_layer_basics(self):
+        self.run_layer_test(
+            cls=DiffusionGemmaInterleaveEmbeddings,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(1, 10, 1),
+            expected_output_data=self.expected_output_data,
+            # The layer has no weights to train.
+            run_training_check=False,
+        )

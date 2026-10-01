@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -155,24 +156,34 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         output = model.generate("the quick brown fox")
         self.assertIsInstance(output, str)
 
-    def test_generate_syncs_explicit_stop_token_ids_to_preprocessor(self):
-        """Sync explicit stop token IDs with the preprocessor."""
-        model = DiffusionGemmaBlockDiffusionLM(
-            **self.init_kwargs, stop_token_ids=(5, 6)
-        )
-        model.compile(sampler=self.sampler)
-        model.generate("the quick brown fox")
-        self.assertEqual(model.preprocessor.stop_token_ids, (5, 6))
-
-    def test_generate_syncs_auto_stop_token_ids_to_preprocessor(self):
+    @parameterized.named_parameters(
+        ("auto", "auto", None),
+        ("explicit", (5, 6), (5, 6)),
+        ("none", None, None),
+    )
+    def test_generate_passes_stop_token_ids_to_postprocess(
+        self, stop_token_ids, expected
+    ):
+        """Pass the call's stop IDs to postprocess without saving them."""
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
         model.compile(sampler=self.sampler)
-        model.generate("the quick brown fox")
-        expected = (
-            self.tokenizer.end_token_id,
-            self.tokenizer.token_to_id("<turn|>"),
+        if stop_token_ids == "auto":
+            expected = (
+                self.tokenizer.end_token_id,
+                self.tokenizer.token_to_id("<turn|>"),
+            )
+        with patch.object(
+            model.preprocessor,
+            "generate_postprocess",
+            wraps=model.preprocessor.generate_postprocess,
+        ) as postprocess:
+            model.generate("the quick brown fox", stop_token_ids=stop_token_ids)
+        self.assertEqual(
+            postprocess.call_args.kwargs["stop_token_ids"], expected
         )
-        self.assertEqual(model.preprocessor.stop_token_ids, expected)
+        # A one-off value does not change later calls or the saved config.
+        self.assertIsNone(model.preprocessor.stop_token_ids)
+        self.assertIsNone(model.preprocessor.get_config()["stop_token_ids"])
 
     def test_generate_raises_for_prompt_that_exceeds_sequence_length(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.init_kwargs)
@@ -486,7 +497,10 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
                 stop_token_ids=model.stop_token_ids,
             )
 
-        self.assertEqual(mock_extend_context.call_count, 1)
+        # No later canvas reads the context, so the encode is skipped. JAX
+        # still traces both `ops.cond` branches once.
+        expected_encodes = 1 if keras.config.backend() == "jax" else 0
+        self.assertEqual(mock_extend_context.call_count, expected_encodes)
         self.assertEqual(mock_sampler_call.call_count, 1)
         self.assertEqual(tuple(output["token_ids"].shape), (2, 16))
         self.assertAllEqual(

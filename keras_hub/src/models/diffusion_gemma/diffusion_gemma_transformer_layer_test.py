@@ -176,7 +176,7 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
                 self.assertLessEqual(int(row.sum()), sliding_window_size)
 
     def test_sliding_window_applies_to_all_queries(self):
-        """Apply the sliding window to every query in a multi-token block."""
+        """Apply the window to every query in a causal multi-token block."""
         sliding_window_size = 6
         layer = DiffusionGemmaTransformerLayer(
             hidden_dim=self.hidden_dim,
@@ -189,7 +189,7 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
             is_global_attention=False,
         )
         # 5 positions of prefix (cache_update_index=5) + 4 query positions,
-        # matching _decode_canvas_step's saturated-prefix shape.
+        # as in the causal pass that encodes a canvas into the context.
         canvas_length = 4
         cache_update_index = 5
         total_length = cache_update_index + canvas_length
@@ -218,6 +218,42 @@ class DiffusionGemmaTransformerLayerTest(TestCase):
                     expected,
                     f"row={row_index} key={key_position}",
                 )
+
+    def test_canvas_decoding_skips_sliding_window(self):
+        """Canvas queries attend to the full sliced window, as in HF."""
+        sliding_window_size = 6
+        layer = DiffusionGemmaTransformerLayer(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=16,
+            head_dim=self.head_dim,
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            use_sliding_window_attention=True,
+            sliding_window_size=sliding_window_size,
+            is_global_attention=False,
+        )
+        # Saturated sliced window: `sliding_window_size - 1` prefix
+        # positions, then the canvas.
+        canvas_length = 4
+        cache_update_index = sliding_window_size - 1
+        total_length = cache_update_index + canvas_length
+        x = np.random.randn(1, canvas_length, self.hidden_dim).astype("float32")
+        cache = np.zeros(
+            (1, 2, total_length, self.num_key_value_heads, self.head_dim),
+            dtype="float32",
+        )
+        mask = layer._compute_attention_mask(
+            x,
+            padding_mask=None,
+            cache=ops.convert_to_tensor(cache),
+            cache_update_index=cache_update_index,
+            canvas_mask=ops.ones((1, canvas_length), dtype="bool"),
+        )
+        mask_np = ops.convert_to_numpy(mask)
+        # Every canvas query sees every prefix key. `call` adds the
+        # canvas-to-canvas keys with the canvas bidirectional mask.
+        for row_index in range(canvas_length):
+            self.assertTrue(mask_np[0, row_index, :cache_update_index].all())
 
     def test_call_auto_slices_local_cache(self):
         """Match internal cache slicing with manual cache slicing."""

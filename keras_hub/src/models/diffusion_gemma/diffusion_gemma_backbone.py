@@ -4,13 +4,15 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.diffusion_gemma.diffusion_gemma_self_conditioning import (  # noqa: E501
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_layers import (
+    DiffusionGemmaInterleaveEmbeddings,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_layers import (
     DiffusionGemmaSelfConditioning,
 )
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_transformer_layer import (  # noqa: E501
     DiffusionGemmaTransformerLayer,
 )
-from keras_hub.src.models.gemma4.gemma4_layers import Gemma4InterleaveEmbeddings
 from keras_hub.src.models.gemma4.gemma4_layers import RMSNormalization
 
 
@@ -187,10 +189,11 @@ class DiffusionGemmaBackbone(Backbone):
         self.layer_types = layer_types
         text_only_model = vision_encoder is None
         if vision_encoder is not None:
-            self.interleave_embeddings = Gemma4InterleaveEmbeddings(
+            self.interleave_embeddings = DiffusionGemmaInterleaveEmbeddings(
                 num_vision_tokens_per_image=(
                     self.vision_encoder.num_vision_tokens_per_image
                 ),
+                pool_size=self.vision_encoder.pool_size,
                 dtype=dtype,
                 name="interleave_embeddings",
             )
@@ -329,6 +332,7 @@ class DiffusionGemmaBackbone(Backbone):
                 image_embeddings=img_embeddings,
                 text_embeddings=text_embeddings,
                 vision_indices=vision_indices_input,
+                pixel_position_ids=pixel_position_ids_input,
             )
         else:
             x = text_embeddings
