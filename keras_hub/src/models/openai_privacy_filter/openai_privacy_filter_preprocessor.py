@@ -53,12 +53,13 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
 
     def build(self, input_shape):
         super().build(input_shape)
-        # Use pad_token_id for start/end/sep since this encoder model
-        # does not use special start/end tokens.
+        # This encoder model uses no special start/end tokens (the HF
+        # tokenizer adds none), so pack the raw token ids and only pad.
+        # `MultiSegmentPacker` needs empty lists here; `None` raises.
         pad_id = self.tokenizer.pad_token_id
         self.packer = MultiSegmentPacker(
-            start_value=pad_id,
-            end_value=pad_id,
+            start_value=[],
+            end_value=[],
             pad_value=pad_id,
             truncate=self.truncate,
             sequence_length=self.sequence_length,

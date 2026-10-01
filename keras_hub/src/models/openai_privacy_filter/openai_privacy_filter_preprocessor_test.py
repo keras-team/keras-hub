@@ -55,6 +55,19 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
 
         self.assertEqual(ops.shape(x["token_ids"])[-1], 16)
 
+    def test_no_special_tokens(self):
+        # The HF tokenizer adds no start/end tokens, so packed ids must be
+        # the raw token ids from index 0, followed only by padding.
+        # "the the" -> ["t", "h", "e", "Ġthe"] with the test vocab.
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        x = preprocessor(["the the"])
+        pad = self.tokenizer.pad_token_id
+        self.assertAllEqual(x["token_ids"], [[3, 2, 1, 11, pad, pad, pad, pad]])
+        self.assertAllEqual(
+            x["padding_mask"],
+            [[True, True, True, True, False, False, False, False]],
+        )
+
     def test_get_config(self):
         preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
         config = preprocessor.get_config()
