@@ -100,6 +100,14 @@ class MuseGlimmerInterleaveEmbeddings(keras.layers.Layer):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
 
+    def build(
+        self,
+        image_embeddings_shape,
+        text_embeddings_shape,
+        vision_indices_shape,
+    ):
+        self.built = True
+
     def call(self, image_embeddings, text_embeddings, vision_indices):
         batch_size = ops.shape(text_embeddings)[0]
         seq_len = ops.shape(text_embeddings)[1]

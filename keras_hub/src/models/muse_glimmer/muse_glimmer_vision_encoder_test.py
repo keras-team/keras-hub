@@ -10,10 +10,16 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoderLayer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionMLP,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionPatchEmbedder,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionRotaryEmbedding,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     _window_layout,
@@ -82,6 +88,29 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             expected_output_shape=(2, 5, 8),
             expected_num_trainable_weights=4,
         )
+
+    def test_patch_embedder_serialization(self):
+        layer = MuseGlimmerVisionPatchEmbedder(
+            hidden_size=8, pos_emb_height=4, pos_emb_width=4
+        )
+        self.run_serialization_test(layer)
+
+    def test_rotary_embedding_serialization(self):
+        layer = MuseGlimmerVisionRotaryEmbedding(head_dim=8, theta=500.0)
+        self.run_serialization_test(layer)
+
+    def test_attention_serialization(self):
+        layer = MuseGlimmerVisionAttention(hidden_size=8, num_heads=2)
+        self.run_serialization_test(layer)
+
+    def test_encoder_layer_serialization(self):
+        layer = MuseGlimmerVisionEncoderLayer(
+            hidden_size=8,
+            num_heads=2,
+            intermediate_size=16,
+            layer_norm_eps=1e-6,
+        )
+        self.run_serialization_test(layer)
 
     def test_position_embedding_interpolation_uses_half_pixel_coordinates(
         self,
