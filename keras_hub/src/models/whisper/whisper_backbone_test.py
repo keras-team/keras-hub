@@ -8,11 +8,10 @@ from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
-
 def _restrict_torch_sdpa_backends():
     """Keep torch off the flash SDPA kernel; a no-op on other backends.
 
-    The tiny test config (`head_dim=1`) is not supported by torchs flash
+    The tiny test config (`head_dim=1`) is not supported by torch's flash
     attention kernel on GPU, so fall back to the efficient/math kernels.
     """
     if keras.config.backend() != "torch":

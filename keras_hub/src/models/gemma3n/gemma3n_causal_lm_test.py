@@ -29,6 +29,7 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
     MockGemma3nTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
@@ -279,8 +280,10 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
                 expected_vocab_size,
             ),
             # Gemma3n fails to XLA-compile on GPU, so disable `jit_compile`
-            # for this test only.
-            compile_kwargs={"jit_compile": False},
+            # there for this test only; CPU keeps the default.
+            compile_kwargs=(
+                {"jit_compile": False} if running_on_gpu() else None
+            ),
         )
 
     def test_text_flash_attention_call(self):

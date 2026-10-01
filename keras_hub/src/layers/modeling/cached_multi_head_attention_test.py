@@ -93,7 +93,7 @@ class CachedMultiHeadAttentionTest(TestCase):
         # Stepping through the sequence one token at a time dispatches
         # different kernels than a single full-sequence call, so the two
         # accumulate float32 error differently on GPU.
-        tol = 5e-3 if running_on_gpu() else 1e-5
+        tol = 5e-3 if running_on_gpu() else 1e-6
         self.assertAllClose(output, no_loop_outputs, atol=tol, rtol=tol)
         self.assertAllClose(output_cache, no_loop_cache, atol=tol, rtol=tol)
 
