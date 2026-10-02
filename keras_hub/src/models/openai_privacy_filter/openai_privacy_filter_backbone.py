@@ -82,9 +82,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
         self.rope_scaling_factor = rope_scaling_factor
         # Dual scaling: head_dim^-0.25 applied to Q and K separately
         self._scaling = head_dim**-0.25
-        self._kernel_initializer = keras.initializers.get(
-            clone_initializer(kernel_initializer)
-        )
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, inputs_shape):
         hidden_dim = inputs_shape[-1]
@@ -93,7 +91,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             bias_axes="uh",
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="query",
@@ -104,7 +102,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             bias_axes="vh",
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="key",
@@ -115,7 +113,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             bias_axes="vh",
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="value",
@@ -126,7 +124,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
             equation="bquh,uhm->bqm",
             output_shape=(None, hidden_dim),
             bias_axes="m",
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer="zeros",
             dtype=self.dtype_policy,
             name="attention_output",
@@ -223,11 +221,7 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
         )
         combined = ops.concatenate([attn_scores, sink_logits], axis=-1)
 
-        # Stabilize and softmax
-        max_logits = ops.stop_gradient(
-            ops.max(combined, axis=-1, keepdims=True)
-        )
-        combined = combined - max_logits
+        # Softmax in float32 for numerical stability
         probs = ops.softmax(ops.cast(combined, "float32"), axis=-1)
 
         # Drop sink probability, keep only real token probs
@@ -248,6 +242,9 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "sliding_window": self.sliding_window,
                 "attention_dropout": self.attention_dropout,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
             }
         )
         return config

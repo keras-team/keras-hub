@@ -1,3 +1,4 @@
+import keras
 import pytest
 from keras import ops
 
@@ -146,3 +147,39 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         ]
         self.assertAllClose(outputs[0, 0, 0, 9:18], expected_even, atol=1e-4)
         self.assertAllClose(outputs[0, 0, 0, 41:50], expected_odd, atol=1e-4)
+
+    def test_attention_get_config_keeps_kernel_initializer(self):
+        attention = OpenAIPrivacyFilterAttention(
+            num_query_heads=2,
+            num_key_value_heads=1,
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
+        )
+        restored = OpenAIPrivacyFilterAttention.from_config(
+            attention.get_config()
+        )
+        restored.build((None, None, 16))
+        for dense in (
+            restored.query_dense,
+            restored.key_dense,
+            restored.value_dense,
+            restored.output_dense,
+        ):
+            self.assertIsInstance(
+                dense.kernel_initializer, keras.initializers.RandomNormal
+            )
+            self.assertEqual(dense.kernel_initializer.stddev, 0.02)
+
+    def test_attention_projections_get_independent_initializers(self):
+        attention = OpenAIPrivacyFilterAttention(
+            num_query_heads=2,
+            num_key_value_heads=2,
+            head_dim=8,
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
+        )
+        attention.build((None, None, 16))
+        self.assertNotAllClose(
+            attention.query_dense.kernel, attention.key_dense.kernel
+        )
+        self.assertNotAllClose(
+            attention.key_dense.kernel, attention.value_dense.kernel
+        )

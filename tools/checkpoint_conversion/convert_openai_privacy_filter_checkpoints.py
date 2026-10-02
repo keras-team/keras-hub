@@ -110,21 +110,14 @@ def main(_):
     )
     print("  ✅ KerasHub tokenizer loaded")
 
-    # Note: The HF tokenizer uses a GPT-4o regex pre-tokenizer that differs
-    # from KerasHub's default BytePairTokenizer split pattern. Token IDs
-    # may differ for inputs containing special characters like '@', '.'.
-    # For numerical parity, we use HF token IDs for both models.
+    # This checks the tokenizer's eager Python path only. The preset's
+    # preprocessor runs the TF path, which splits '@', '.' and digits
+    # differently from HF's GPT-4o pre-tokenizer, including on this text.
+    # The logits check below uses HF token IDs for both models.
     keras_tok_ids = ops.convert_to_numpy(keras_tokenizer([test_text]))
     hf_tok_ids = hf_tokenizer([test_text])["input_ids"]
-    if keras_tok_ids.tolist() == hf_tok_ids:
-        print("  ✅ Tokenizer parity verified")
-    else:
-        print(
-            f"  ⚠️  Tokenizer difference detected "
-            f"(keras={keras_tok_ids.shape[1]} tokens, "
-            f"hf={len(hf_tok_ids[0])} tokens)"
-        )
-        print("      Using HF token IDs for numerical parity check.")
+    np.testing.assert_equal(keras_tok_ids, hf_tok_ids)
+    print("  ✅ Tokenizer parity verified")
     del hf_tokenizer
 
     # === Load KerasHub classifier ===
@@ -160,21 +153,8 @@ def main(_):
     print(f"  Max absolute diff: {max_diff:.6f}")
     print(f"  Mean absolute diff: {mean_diff:.6f}")
 
-    try:
-        np.testing.assert_allclose(
-            keras_logits, hf_logits, atol=1e-4, rtol=1e-4
-        )
-        print("  ✅ Numerical parity verified (atol=1e-4)")
-    except AssertionError as e:
-        print(f"  ⚠️  Strict parity failed: {e}")
-        # Try relaxed tolerance
-        try:
-            np.testing.assert_allclose(
-                keras_logits, hf_logits, atol=5e-2, rtol=5e-2
-            )
-            print("  ✅ Relaxed parity verified (atol=5e-2)")
-        except AssertionError:
-            print("  ❌ Parity check failed even at relaxed tolerance")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-4, rtol=1e-4)
+    print("  ✅ Numerical parity verified (atol=1e-4, rtol=1e-4)")
 
     # === Check predictions match ===
     keras_preds = np.argmax(keras_logits, axis=-1)[0]

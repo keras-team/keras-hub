@@ -1,13 +1,11 @@
 """OpenAI Privacy Filter checkpoint conversion."""
 
-import json
-
 import numpy as np
 
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
-from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = OpenAIPrivacyFilterBackbone
 
@@ -126,9 +124,7 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    tokenizer_file = get_file(preset, "tokenizer.json")
-    with open(tokenizer_file, "r") as f:
-        tokenizer_data = json.load(f)
+    tokenizer_data = load_json(preset, "tokenizer.json")
     vocabulary = tokenizer_data.get("model", {}).get("vocab", {})
     merges = tokenizer_data.get("model", {}).get("merges", [])
     added_tokens = tokenizer_data.get("added_tokens", [])
