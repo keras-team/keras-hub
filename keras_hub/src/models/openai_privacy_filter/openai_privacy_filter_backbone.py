@@ -147,6 +147,9 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
             beta_fast=32.0,
             beta_slow=1.0,
             original_max_position_embeddings=4096,
+            # HF sets `"truncate": False`; rounding the YaRN ramp bounds
+            # (the layer default) changes the blended frequencies.
+            truncate=False,
             dtype=self.dtype_policy,
         )
 

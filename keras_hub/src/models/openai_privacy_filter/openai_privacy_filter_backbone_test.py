@@ -2,6 +2,9 @@ import pytest
 from keras import ops
 
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
+    OpenAIPrivacyFilterAttention,
+)
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -90,3 +93,56 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         # So position 0 should see zero or near-zero difference.
         diff = ops.convert_to_numpy(ops.max(ops.abs(out1[0, 0] - out2[0, 0])))
         self.assertLess(diff, 1e-5)
+
+    def test_yarn_rope_matches_hf(self):
+        # Reference values from HF, with the openai/privacy-filter RoPE
+        # config (the `OpenAIPrivacyFilterConfig` defaults):
+        #   from transformers.models.openai_privacy_filter import (
+        #       modeling_openai_privacy_filter as m,
+        #   )
+        #   rope = m.OpenAIPrivacyFilterRotaryEmbedding(
+        #       m.OpenAIPrivacyFilterConfig()
+        #   )
+        #   x = torch.linspace(-1, 1, 64).reshape(1, 1, 1, 64)
+        #   cos, sin = rope(x, torch.tensor([[359]]))
+        #   out, _ = m.apply_rotary_pos_emb(x, x, cos, sin)
+        #   out[0, 0, 0, 18:36:2], out[0, 0, 0, 19:36:2]
+        # These are frequencies 9-17, the ones the YaRN ramp blends. HF
+        # rotates interleaved pairs; after `_deinterleave`, frequency `i`
+        # sits at channels `i` and `32 + i`.
+        attention = OpenAIPrivacyFilterAttention(
+            num_query_heads=1,
+            num_key_value_heads=1,
+            head_dim=64,
+            rope_max_wavelength=150000.0,
+            rope_scaling_factor=32.0,
+        )
+        attention.build((None, None, 8))
+        x = ops.reshape(ops.linspace(-1.0, 1.0, 64), (1, 1, 1, 64))
+        outputs = attention.rotary_embedding_layer(
+            attention._deinterleave(x), start_index=359
+        )
+        expected_even = [
+            -0.712565958,
+            -0.114422232,
+            -0.097053885,
+            0.424235344,
+            0.145855650,
+            -0.036326163,
+            -0.051712390,
+            0.010626465,
+            0.099812068,
+        ]
+        expected_odd = [
+            0.332914978,
+            -0.655787706,
+            0.536224484,
+            0.005043730,
+            -0.266478777,
+            -0.180243447,
+            -0.043524399,
+            0.066750452,
+            0.154417753,
+        ]
+        self.assertAllClose(outputs[0, 0, 0, 9:18], expected_even, atol=1e-4)
+        self.assertAllClose(outputs[0, 0, 0, 41:50], expected_odd, atol=1e-4)
