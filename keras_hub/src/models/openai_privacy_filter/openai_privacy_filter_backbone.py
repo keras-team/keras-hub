@@ -600,7 +600,7 @@ class OpenAIPrivacyFilterEncoderLayer(keras.layers.Layer):
 class OpenAIPrivacyFilterBackbone(Backbone):
     """OpenAI Privacy Filter encoder-only backbone.
 
-    A compact (~400M param) encoder-only MoE transformer for PII detection.
+    A compact (~1.4B param) encoder-only MoE transformer for PII detection.
     Uses bidirectional sliding-window attention with sinks, interleaved YaRN
     RoPE, and GLU experts.
 
