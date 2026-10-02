@@ -159,36 +159,26 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
 
         self.built = True
 
-    def _apply_interleaved_rotary(self, x, cos, sin):
-        """Interleaved RoPE: operates on even/odd indices."""
-        first_half = x[..., ::2]
-        second_half = x[..., 1::2]
-        first_ = first_half * cos - second_half * sin
-        second_ = second_half * cos + first_half * sin
-        return ops.reshape(
-            ops.stack([first_, second_], axis=-1),
-            ops.shape(x),
-        )
+    def _deinterleave(self, x):
+        """Reorder `[x0, x1, x2, x3, ...]` to `[x0, x2, ..., x1, x3, ...]`.
+
+        HF applies RoPE to interleaved (even, odd) channel pairs. After this
+        reorder, the split-half rotation in `RotaryEmbedding` rotates the
+        same pairs. Q and K share the reorder, so attention scores are
+        unchanged.
+        """
+        # `stack` + `reshape` rather than `concatenate`, as in
+        # `RotaryEmbedding`, to avoid an XLA compilation bug on jax.
+        reordered = ops.stack((x[..., ::2], x[..., 1::2]), axis=-2)
+        return ops.reshape(reordered, ops.shape(x))
 
     def call(self, hidden_states, attention_mask=None, training=None):
         query = self.query_dense(hidden_states)
         key = self.key_dense(hidden_states)
         value = self.value_dense(hidden_states)
 
-        # Compute cos/sin from the RotaryEmbedding layer, then apply
-        # interleaved layout manually (KerasHub default uses split-half).
-        cos, sin = self.rotary_embedding_layer._compute_cos_sin_embedding(
-            query, start_index=0
-        )
-        # cos/sin shape: (1, seq, 1, head_dim) with split-half layout
-        # [f0,f1,...,f_{d/2-1}, f0,f1,...,f_{d/2-1}].
-        # For interleaved RoPE we need [f0,...,f_{d/2-1}] of size head_dim/2
-        # to match x[..., ::2] and x[..., 1::2] which each have head_dim/2.
-        half = self.head_dim // 2
-        cos = cos[..., :half]
-        sin = sin[..., :half]
-        query = self._apply_interleaved_rotary(query, cos, sin)
-        key = self._apply_interleaved_rotary(key, cos, sin)
+        query = self.rotary_embedding_layer(self._deinterleave(query))
+        key = self.rotary_embedding_layer(self._deinterleave(key))
 
         # Dual scaling (Q*s, K*s instead of attn_scores/sqrt(d))
         scaling = ops.cast(self._scaling, self.compute_dtype)
