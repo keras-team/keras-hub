@@ -67,13 +67,5 @@ jobs:
         # the primary backend (torch/jax) when TF is used for preprocessing.
         TF_FORCE_GPU_ALLOW_GROWTH: "true"
       run: |
-        pytest keras_hub --check_gpu --run_large --cov=keras_hub --cov-report=xml \
+        pytest keras_hub --check_gpu --run_large --cov=keras_hub \
           --durations=50 --splits 4 --group ${{ matrix.shard }}
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
-        flags: gpu-${{ matrix.backend }}
-        name: codecov-umbrella
