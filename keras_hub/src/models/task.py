@@ -1,5 +1,4 @@
 import keras
-from keras.src.quantizers.utils import should_quantize_layer
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -123,7 +122,9 @@ class Task(PipelineModel):
             def filters(layer):
                 if id(layer) in preprocessor_layer_ids:
                     return False
-                return should_quantize_layer(layer, user_filters)
+                if user_filters is not None:
+                    return user_filters(layer)
+                return True
 
         return super().quantize(
             mode=mode, config=config, filters=filters, **kwargs

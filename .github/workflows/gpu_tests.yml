@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
-    types: [unlabeled]
+    types: [labeled]
   release:
     types: [created]
 
@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   gpu_tests:
-    # Only run on pushes to master, releases or "kokoro:force-run" unlabel
+    # Only run on pushes to master, releases or "kokoro:force-run" label
     if: |
       github.event_name == 'push' ||
       github.event_name == 'release' ||
-      (github.event.action == 'unlabeled' && github.event.label.name == 'kokoro:force-run')
+      (github.event.action == 'labeled' && github.event.label.name == 'kokoro:force-run')
 
     strategy:
       fail-fast: false
@@ -67,5 +67,13 @@ jobs:
         # the primary backend (torch/jax) when TF is used for preprocessing.
         TF_FORCE_GPU_ALLOW_GROWTH: "true"
       run: |
-        pytest keras_hub --check_gpu --run_large --cov=keras_hub \
+        pytest keras_hub --check_gpu --run_large --cov=keras_hub --cov-report=xml \
           --durations=50 --splits 4 --group ${{ matrix.shard }}
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+        flags: gpu-${{ matrix.backend }}
+        name: codecov-umbrella

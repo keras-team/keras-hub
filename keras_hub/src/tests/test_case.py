@@ -1290,12 +1290,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             output_shape = tree.map_structure(lambda x: x.shape, output)
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
-        # These compare three different execution paths rather than an exact
-        # invariant. Preprocessing such as image resizing runs with different
-        # kernels in the `tf.data` path than in the backend, which diverges
-        # noticeably more on GPU.
-        tol = 1e-4 if running_on_gpu() else 1e-6
-        atol, rtol = max(atol, tol), max(rtol, tol)
         output_ds = task.predict(ds)
         self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
