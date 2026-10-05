@@ -366,3 +366,18 @@ class TestTask(TestCase):
                 w for w in caught if "unbuilt state" in str(w.message)
             ]
             self.assertEqual(len(unbuilt_warnings), 0)
+
+    def test_quantize_skips_preprocessor_layers(self):
+        # Preprocessing layers are unbuilt until first called, which used to
+        # make `Task.quantize` raise "Cannot quantize a layer that isn't yet
+        # built". They should be skipped while the backbone is quantized.
+        causal_lm, preprocessor = self._create_gemma_for_export_tests()
+        causal_lm.quantize("int8")
+        for layer in preprocessor._flatten_layers():
+            self.assertFalse(getattr(layer, "_is_quantized", False))
+        self.assertTrue(
+            any(
+                getattr(layer, "_is_quantized", False)
+                for layer in causal_lm.backbone._flatten_layers()
+            )
+        )

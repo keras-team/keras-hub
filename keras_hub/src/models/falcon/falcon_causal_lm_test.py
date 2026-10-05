@@ -10,6 +10,7 @@ from keras_hub.src.models.falcon.falcon_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class FalconCausalLMTest(TestCase):
@@ -188,7 +189,9 @@ class FalconCausalLMTest(TestCase):
             pieces.append(logits)
         stepwise_logits = ops.concatenate(pieces, axis=1)
 
-        self.assertAllClose(stepwise_logits, full_logits, atol=1e-5, rtol=1e-5)
+        # Cached and full-sequence attention use different kernels on GPU.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(stepwise_logits, full_logits, atol=tol, rtol=tol)
 
     def test_generate_compilation(self):
         causal_lm = FalconCausalLM(**self.init_kwargs)

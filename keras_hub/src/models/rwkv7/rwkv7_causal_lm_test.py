@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 from keras import ops
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
@@ -9,6 +10,7 @@ from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class RWKV7CausalLMTest(TestCase):
@@ -56,12 +58,24 @@ class RWKV7CausalLMTest(TestCase):
         }
         self.train_data = (["hello world", "the python"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
+        # XLA-compiling `generate()` crashes the TF GPU runner (the T=1
+        # `TensorArray` loop in `rnn_generalized_delta_rule`), so run it
+        # without XLA there. Other backends and CPU are unchanged.
+        self.generate_compile_kwargs = {}
+        if keras.config.backend() == "tensorflow" and running_on_gpu():
+            self.generate_compile_kwargs = {"jit_compile": False}
+
+    def _build_causal_lm(self):
+        causal_lm = RWKV7CausalLM(**self.init_kwargs)
+        if self.generate_compile_kwargs:
+            causal_lm.compile(**self.generate_compile_kwargs)
+        return causal_lm
 
     def test_generate(self):
         """
         Test text generation functionality.
         """
-        causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
+        causal_lm = self._build_causal_lm()
         prompt = ["hello world"]
         output = causal_lm.generate(prompt, 16)
         self.assertTrue(isinstance(output[0], str))
@@ -76,7 +90,7 @@ class RWKV7CausalLMTest(TestCase):
         Test that generated text can strip the prompt from output.
         """
         prompt = ["hello world"]
-        causal_lm = RWKV7CausalLM(self.backbone, self.preprocessor)
+        causal_lm = self._build_causal_lm()
         output = causal_lm.generate(prompt, 16, strip_prompt=True)
         self.assertFalse(output[0].startswith(prompt[0]))
 
@@ -89,18 +103,18 @@ class RWKV7CausalLMTest(TestCase):
         )
 
     def test_generate_compilation(self):
-        causal_lm = RWKV7CausalLM(**self.init_kwargs)
+        causal_lm = self._build_causal_lm()
         causal_lm.generate("hello world", max_length=16)
         first_fn = causal_lm.generate_function
         causal_lm.generate("hello world", max_length=16)
         second_fn = causal_lm.generate_function
         self.assertEqual(first_fn, second_fn)
 
-        causal_lm.compile(sampler="greedy")
+        causal_lm.compile(sampler="greedy", **self.generate_compile_kwargs)
         self.assertIsNone(causal_lm.generate_function)
 
     def test_early_stopping(self):
-        causal_lm = RWKV7CausalLM(**self.init_kwargs)
+        causal_lm = self._build_causal_lm()
         call_with_cache = causal_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
