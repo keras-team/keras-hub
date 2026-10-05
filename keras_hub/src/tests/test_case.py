@@ -16,7 +16,6 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.models.retinanet.feature_pyramid import FeaturePyramid
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
-from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 
 
