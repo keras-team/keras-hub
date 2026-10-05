@@ -1,14 +1,17 @@
 import keras
 import numpy as np
+from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.flux.flux_layers import ApproximateGELU
 from keras_hub.src.models.flux.flux_layers import DoubleStreamBlock
 from keras_hub.src.models.flux.flux_layers import EmbedND
+from keras_hub.src.models.flux.flux_layers import LastLayer
 from keras_hub.src.models.flux.flux_layers import MLPEmbedder
 from keras_hub.src.models.flux.flux_layers import Modulation
 from keras_hub.src.models.flux.flux_layers import QKNorm
 from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
+from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 from keras_hub.src.tests.test_case import TestCase
@@ -59,7 +62,7 @@ class TimestepEmbeddingTest(TestCase):
         args = scaled[:, None] * freqs[None]
         expected = np.concatenate([np.cos(args), np.sin(args)], axis=-1)
 
-        actual = TimestepEmbedding()(ops.convert_to_tensor(t), dim=dim)
+        actual = TimestepEmbedding(dim=dim)(ops.convert_to_tensor(t))
         self.assertAllClose(actual, expected, atol=1e-5)
 
     def test_cos_occupies_leading_half(self):
@@ -67,7 +70,7 @@ class TimestepEmbeddingTest(TestCase):
         half = dim // 2
         t = ops.convert_to_tensor(np.array([0.3], dtype="float32"))
 
-        out = ops.convert_to_numpy(TimestepEmbedding()(t, dim=dim))
+        out = ops.convert_to_numpy(TimestepEmbedding(dim=dim)(t))
 
         freqs = np.exp(
             -np.log(10000.0) * np.arange(half, dtype="float32") / half
@@ -78,17 +81,18 @@ class TimestepEmbeddingTest(TestCase):
 
     def test_time_factor_is_applied(self):
         """`t` and `t * time_factor` must not produce the same embedding."""
-        layer = TimestepEmbedding()
         t = ops.convert_to_tensor(np.array([0.5], dtype="float32"))
 
-        default = ops.convert_to_numpy(layer(t, dim=8))
-        unscaled = ops.convert_to_numpy(layer(t, dim=8, time_factor=1.0))
+        default = ops.convert_to_numpy(TimestepEmbedding(dim=8)(t))
+        unscaled = ops.convert_to_numpy(
+            TimestepEmbedding(dim=8, time_factor=1.0)(t)
+        )
 
         self.assertNotAllClose(default, unscaled)
 
     def test_odd_dim_is_zero_padded(self):
         t = ops.convert_to_tensor(np.array([0.5], dtype="float32"))
-        out = ops.convert_to_numpy(TimestepEmbedding()(t, dim=7))
+        out = ops.convert_to_numpy(TimestepEmbedding(dim=7)(t))
         self.assertEqual(out.shape, (1, 7))
         self.assertAllClose(out[:, -1], np.zeros((1,)), atol=1e-6)
 
@@ -376,11 +380,95 @@ class SupportLayersTest(TestCase):
             embedder.build((BATCH, IMG_LEN, 4))
 
 
+class LastLayerTest(TestCase):
+    def test_output_shape(self):
+        layer = LastLayer(HIDDEN_SIZE, patch_size=2, output_channels=3)
+        rng = np.random.default_rng(0)
+        x = ops.cast(rng.normal(size=(BATCH, IMG_LEN, HIDDEN_SIZE)), "float32")
+        modulation = ops.cast(rng.normal(size=(BATCH, HIDDEN_SIZE)), "float32")
+
+        out = layer(x, modulation)
+
+        self.assertEqual(tuple(out.shape), (BATCH, IMG_LEN, 2 * 2 * 3))
+
+    def test_build_creates_all_weights(self):
+        """`build` must create every weight up front, without `call`."""
+        layer = LastLayer(HIDDEN_SIZE, patch_size=1, output_channels=3)
+        layer.build((BATCH, IMG_LEN, HIDDEN_SIZE), (BATCH, HIDDEN_SIZE))
+
+        self.assertTrue(layer.built)
+        # `linear` and the `adaLN_modulation` Dense, kernel + bias each. The
+        # final LayerNorm is non-affine, so it owns no weights.
+        self.assertLen(layer.trainable_weights, 4)
+
+
+class ConfigRoundTripTest(TestCase):
+    """Every FLUX layer must be re-creatable from its config.
+
+    Uses non-default values, so a constructor argument that is missing from
+    `get_config()` fails here instead of silently reverting to its default.
+    """
+
+    @parameterized.named_parameters(
+        (
+            "timestep_embedding",
+            TimestepEmbedding,
+            {"dim": 8, "max_period": 500, "time_factor": 10.0},
+        ),
+        (
+            "flux_rope_attention",
+            FluxRoPEAttention,
+            {"dropout_p": 0.1, "is_causal": True},
+        ),
+        ("embed_nd", EmbedND, {"theta": 500, "axes_dim": AXES_DIM}),
+        ("mlp_embedder", MLPEmbedder, {"hidden_dim": HIDDEN_SIZE}),
+        ("qk_norm", QKNorm, {"input_dim": HEAD_DIM}),
+        ("modulation", Modulation, {"dim": HIDDEN_SIZE, "double": False}),
+        (
+            "double_stream_block",
+            DoubleStreamBlock,
+            {
+                "hidden_size": HIDDEN_SIZE,
+                "num_heads": NUM_HEADS,
+                "mlp_ratio": 2.0,
+                "use_bias": True,
+            },
+        ),
+        (
+            "single_stream_block",
+            SingleStreamBlock,
+            {
+                "hidden_size": HIDDEN_SIZE,
+                "num_heads": NUM_HEADS,
+                "mlp_ratio": 2.0,
+            },
+        ),
+        (
+            "last_layer",
+            LastLayer,
+            {
+                "hidden_size": HIDDEN_SIZE,
+                "patch_size": 2,
+                "output_channels": 3,
+            },
+        ),
+    )
+    def test_config_round_trip(self, cls, init_kwargs):
+        layer = cls(**init_kwargs)
+        config = layer.get_config()
+        for name, value in init_kwargs.items():
+            # Every constructor argument is kept as a same-named attribute
+            # and exported by `get_config()`.
+            self.assertEqual(getattr(layer, name), value)
+            self.assertEqual(config[name], value)
+        self.run_serialization_test(layer)
+
+
 class DTypeTest(TestCase):
     def test_timestep_embedding_casts_low_precision_input(self):
         """`t` arrives as bfloat16 under a mixed policy; output must be f32."""
         t = ops.cast(ops.convert_to_tensor([0.5, 0.75]), "bfloat16")
-        out = TimestepEmbedding()(t, dim=8)
+        out = TimestepEmbedding(dim=8)(t)
         self.assertEqual(keras.backend.standardize_dtype(out.dtype), "float32")
 
 

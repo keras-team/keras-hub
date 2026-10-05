@@ -4,8 +4,8 @@ from keras import ops
 
 from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
-from keras_hub.src.models.flux.flux_maths import RotaryPositionalEmbedding
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
+from keras_hub.src.models.flux.flux_maths import rope
 
 
 class ApproximateGELU(layers.Layer):
@@ -46,22 +46,25 @@ class StripTextTokens(layers.Layer):
         return keras.KerasTensor(tuple(shape), dtype=self.compute_dtype)
 
 
-class EmbedND(keras.Model):
+class EmbedND(keras.layers.Layer):
     """Embedding layer for N-dimensional inputs using RoPE.
 
     This layer applies RoPE embeddings across multiple axes of the input tensor
     and concatenates the embeddings along a specified axis.
 
     Args:
-        theta. Rotational angle parameter for RoPE.
-        axes_dim. Dimensionality for each axis of the input tensor.
+        theta: int. The base frequency of the rotary embedding.
+        axes_dim: list of int. The rotary embedding dimension of each
+            positional axis. `sum(axes_dim)` must equal the attention head
+            dimension.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
-    def __init__(self, theta, axes_dim):
-        super().__init__()
+    def __init__(self, theta, axes_dim, **kwargs):
+        super().__init__(**kwargs)
         self.theta = theta
         self.axes_dim = axes_dim
-        self.rope = RotaryPositionalEmbedding()
 
     def build(self, input_shape):
         n_axes = input_shape[-1]
@@ -71,9 +74,6 @@ class EmbedND(keras.Model):
                 f"but axes_dim has {len(self.axes_dim)} entries. "
                 f"input_shape={input_shape}, axes_dim={self.axes_dim}"
             )
-
-        for i in range(n_axes):
-            self.rope.build(input_shape[:-1] + (self.axes_dim[i],))
 
     def call(self, ids):
         """Computes the positional embeddings for each axis and concatenates.
@@ -88,7 +88,7 @@ class EmbedND(keras.Model):
         n_axes = ids.shape[-1]
         emb = ops.concatenate(
             [
-                self.rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
+                rope(ids[..., i], dim=self.axes_dim[i], theta=self.theta)
                 for i in range(n_axes)
             ],
             axis=-2,
@@ -96,19 +96,31 @@ class EmbedND(keras.Model):
 
         return emb
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "theta": self.theta,
+                "axes_dim": self.axes_dim,
+            }
+        )
+        return config
 
-class MLPEmbedder(keras.Model):
-    """A simple multi-layer perceptron (MLP) embedder model.
 
-    This model applies a linear transformation followed by the SiLU activation
+class MLPEmbedder(keras.layers.Layer):
+    """A simple multi-layer perceptron (MLP) embedder layer.
+
+    This layer applies a linear transformation followed by the SiLU activation
     function and another linear transformation to the input tensor.
 
     Args:
-        hidden_dim. The dimensionality of the hidden layer.
+        hidden_dim: int. The dimensionality of the hidden layer.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
-    def __init__(self, hidden_dim):
-        super().__init__()
+    def __init__(self, hidden_dim, **kwargs):
+        super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.input_layer = layers.Dense(hidden_dim, use_bias=True)
         self.silu = layers.Activation("silu")
@@ -132,6 +144,11 @@ class MLPEmbedder(keras.Model):
         x = self.silu(x)
         return self.output_layer(x)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"hidden_dim": self.hidden_dim})
+        return config
+
 
 class QKNorm(keras.layers.Layer):
     """A layer that applies RMS normalization to query and key tensors.
@@ -140,11 +157,14 @@ class QKNorm(keras.layers.Layer):
     RMSNormalization layers for each.
 
     Args:
-        input_dim. The dimensionality of the input query and key tensors.
+        input_dim: int. The dimensionality of the input query and key tensors.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
-    def __init__(self, input_dim):
-        super().__init__()
+    def __init__(self, input_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.input_dim = input_dim
         self.query_norm = RMSNormalization(input_dim)
         self.key_norm = RMSNormalization(input_dim)
 
@@ -168,8 +188,13 @@ class QKNorm(keras.layers.Layer):
         k = self.key_norm(k)
         return q, k
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"input_dim": self.input_dim})
+        return config
 
-class Modulation(keras.Model):
+
+class Modulation(keras.layers.Layer):
     """Modulation layer that produces shift, scale, and gate tensors.
 
     This layer applies a SiLU activation to the input tensor followed by a
@@ -179,12 +204,14 @@ class Modulation(keras.Model):
     Args:
         dim: int. Dimensionality of the modulation output.
         double: bool. Whether to generate two sets of modulation parameters.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
-    def __init__(self, dim, double):
-        super().__init__()
+    def __init__(self, dim, double, **kwargs):
+        super().__init__(**kwargs)
         self.dim = dim
-        self.is_double = double
+        self.double = double
         self.multiplier = 6 if double else 3
         self.linear_projection = keras.layers.Dense(
             self.multiplier * dim, use_bias=True
@@ -205,7 +232,7 @@ class Modulation(keras.Model):
             shift, scale, and gate tensors. If `double` is True, returns two
             sets of modulation parameters.
         """
-        x = keras.layers.Activation("silu")(x)
+        x = keras.activations.silu(x)
         out = self.linear_projection(x)
         out = ops.split(
             out[:, None, :], indices_or_sections=self.multiplier, axis=-1
@@ -214,11 +241,21 @@ class Modulation(keras.Model):
         first_output = {"shift": out[0], "scale": out[1], "gate": out[2]}
         second_output = (
             {"shift": out[3], "scale": out[4], "gate": out[5]}
-            if self.is_double
+            if self.double
             else None
         )
 
         return first_output, second_output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "double": self.double,
+            }
+        )
+        return config
 
 
 class DoubleStreamBlock(keras.layers.Layer):
@@ -233,6 +270,8 @@ class DoubleStreamBlock(keras.layers.Layer):
             size.
         use_bias: bool, optional. Whether to include bias in QKV projection.
             Default is False.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
     def __init__(
@@ -454,7 +493,7 @@ class DoubleStreamBlock(keras.layers.Layer):
         return config
 
 
-class SingleStreamBlock(keras.Model):
+class SingleStreamBlock(keras.layers.Layer):
     """
     A DiT block with parallel linear layers.
 
@@ -466,8 +505,12 @@ class SingleStreamBlock(keras.Model):
         num_heads: int. The number of attention heads.
         mlp_ratio: float, optional. The ratio of the MLP hidden dimension to the
             hidden size. Default is 4.0.
-        qk_scale: float, optional. Scaling factor for the query-key product.
-            Default is None.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
+
+    Note: the reference implementation also takes a `qk_scale` argument, but
+    never uses it (attention always scales by `head_dim**-0.5`), so it is
+    intentionally not exposed here.
     """
 
     def __init__(
@@ -475,13 +518,13 @@ class SingleStreamBlock(keras.Model):
         hidden_size,
         num_heads,
         mlp_ratio=4.0,
-        qk_scale=None,
+        **kwargs,
     ):
-        super().__init__()
-        self.hidden_dim = hidden_size
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
         self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
         head_dim = hidden_size // num_heads
-        self.scale = qk_scale or head_dim**-0.5
 
         self.mlp_hidden_dim = int(hidden_size * mlp_ratio)
         # qkv and mlp_in
@@ -491,7 +534,6 @@ class SingleStreamBlock(keras.Model):
 
         self.norm = QKNorm(head_dim)
 
-        self.hidden_size = hidden_size
         self.pre_norm = keras.layers.LayerNormalization(
             epsilon=1e-6, scale=False, center=False
         )
@@ -501,6 +543,7 @@ class SingleStreamBlock(keras.Model):
     def build(
         self, x_shape, modulation_encoding_shape, positional_encoding_shape
     ):
+        self.pre_norm.build(x_shape)
         self.linear1.build(x_shape)
         self.linear2.build(
             (x_shape[0], x_shape[1], self.hidden_size + self.mlp_hidden_dim)
@@ -561,19 +604,40 @@ class SingleStreamBlock(keras.Model):
         """
         return keras.KerasTensor(x.shape, dtype=self.compute_dtype)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "num_heads": self.num_heads,
+                "mlp_ratio": self.mlp_ratio,
+            }
+        )
+        return config
 
-class LastLayer(keras.Model):
+
+class LastLayer(keras.layers.Layer):
     """
     Final layer for processing output tensors with adaptive normalization.
+
+    Applies a LayerNorm whose shift and scale are predicted from
+    `modulation_encoding`, then projects every token to
+    `patch_size * patch_size * output_channels` values.
 
     Args:
         hidden_size: int. The hidden dimension size for the model.
         patch_size: int. The size of each patch.
         output_channels: int. The number of output channels.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
     """
 
-    def __init__(self, hidden_size, patch_size, output_channels):
-        super().__init__()
+    def __init__(self, hidden_size, patch_size, output_channels, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.patch_size = patch_size
+        self.output_channels = output_channels
+
         self.norm_final = keras.layers.LayerNormalization(
             epsilon=1e-6, scale=False, center=False
         )
@@ -586,6 +650,11 @@ class LastLayer(keras.Model):
                 keras.layers.Dense(2 * hidden_size, use_bias=True),
             ]
         )
+
+    def build(self, x_shape, modulation_encoding_shape):
+        self.norm_final.build(x_shape)
+        self.linear.build(x_shape)
+        self.adaLN_modulation.build(modulation_encoding_shape)
 
     def call(self, x, modulation_encoding):
         """
@@ -604,3 +673,14 @@ class LastLayer(keras.Model):
         x = (1 + scale[:, None, :]) * self.norm_final(x) + shift[:, None, :]
         x = self.linear(x)
         return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_size": self.hidden_size,
+                "patch_size": self.patch_size,
+                "output_channels": self.output_channels,
+            }
+        )
+        return config

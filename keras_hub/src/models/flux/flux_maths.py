@@ -5,33 +5,41 @@ from keras import ops
 class TimestepEmbedding(keras.layers.Layer):
     """Creates sinusoidal timestep embeddings.
 
+    Args:
+        dim: int. The dimension of the output. Defaults to `256`.
+        max_period: int. Controls the minimum frequency of the embeddings.
+            Defaults to `10000`.
+        time_factor: float. A scaling factor applied to `t`. Defaults to
+            `1000.0`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
+
     Call arguments:
-        t: Tensor of shape (N,), representing N indices, one per batch element.
-            These values may be fractional.
-        dim: int. The dimension of the output.
-        max_period: int, optional. Controls the minimum frequency of the
-            embeddings. Defaults to 10000.
-        time_factor: float, optional. A scaling factor applied to `t`. Defaults
-            to 1000.0.
+        t: Tensor of shape `(N,)`, representing N indices, one per batch
+            element. These values may be fractional.
 
     Returns:
-        A tensor of shape (N, D) representing the positional embeddings,
-        where N is the number of batch elements and D is the specified
-        dimension `dim`.
+        A tensor of shape `(N, dim)` representing the positional embeddings.
     """
 
-    def call(self, t, dim=256, max_period=10000, time_factor=1000.0):
+    def __init__(self, dim=256, max_period=10000, time_factor=1000.0, **kwargs):
+        super().__init__(**kwargs)
+        self.dim = dim
+        self.max_period = max_period
+        self.time_factor = time_factor
+
+    def call(self, t):
         # Cast before scaling so that low-precision global policies (e.g.
         # bfloat16) do not lose resolution on the `time_factor` multiply.
         # `floatx()` rather than a hardcoded "float32": under a bfloat16
         # policy floatx is still float32, but this avoids silently
         # downcasting when the model is genuinely run in float64.
         compute_dtype = keras.backend.floatx()
-        t = ops.cast(t, compute_dtype) * time_factor
-        half_dim = dim // 2
+        t = ops.cast(t, compute_dtype) * self.time_factor
+        half_dim = self.dim // 2
 
         freqs = ops.exp(
-            -ops.log(ops.cast(max_period, compute_dtype))
+            -ops.log(ops.cast(self.max_period, compute_dtype))
             * ops.arange(half_dim, dtype=compute_dtype)
             / ops.cast(half_dim, compute_dtype)
         )
@@ -43,89 +51,100 @@ class TimestepEmbedding(keras.layers.Layer):
         # permutes the input features of the following MLP.
         embedding = ops.concatenate([ops.cos(args), ops.sin(args)], axis=-1)
 
-        if dim % 2 != 0:
+        if self.dim % 2 != 0:
             embedding = ops.concatenate(
                 [embedding, ops.zeros_like(embedding[..., :1])], axis=-1
             )
 
         return embedding
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "max_period": self.max_period,
+                "time_factor": self.time_factor,
+            }
+        )
+        return config
 
-class RotaryPositionalEmbedding(keras.layers.Layer):
-    """
-    Applies Rotary Positional Embedding (RoPE) to the input tensor.
 
-    Call arguments:
-        pos: KerasTensor. The positional tensor with shape (..., n, d).
-        dim: int. The embedding dimension, should be even.
+def rope(pos, dim, theta):
+    """Computes the rotary positional embedding (RoPE) of one position axis.
+
+    A plain function rather than a layer: it holds no weights, and `dim` and
+    `theta` are structural, so they are passed explicitly by `EmbedND`.
+
+    Args:
+        pos: Tensor of shape `(..., n)`. The positions along one axis.
+        dim: int. The embedding dimension of this axis. Must be even.
         theta: int. The base frequency.
 
     Returns:
-        KerasTensor: The tensor with applied RoPE transformation.
+        A float32 tensor of shape `(..., n, dim // 2, 2)` holding the
+        `(cos, sin)` pair of every position and frequency.
     """
-
-    def call(self, pos, dim, theta):
-        scale = ops.arange(0, dim, 2, dtype="float32") / dim
-        omega = 1.0 / (theta**scale)
-        out = ops.einsum("...n,d->...nd", pos, omega)
-        out = ops.stack([ops.cos(out), ops.sin(out)], axis=-1)
-        return ops.cast(out, dtype="float32")
+    scale = ops.arange(0, dim, 2, dtype="float32") / dim
+    omega = 1.0 / (theta**scale)
+    out = ops.einsum("...n,d->...nd", pos, omega)
+    out = ops.stack([ops.cos(out), ops.sin(out)], axis=-1)
+    return ops.cast(out, dtype="float32")
 
 
-class ApplyRoPE(keras.layers.Layer):
-    """
-    Applies the RoPE transformation to the query and key tensors.
+def apply_rope(xq, xk, freqs_cis):
+    """Applies the RoPE transformation to the query and key tensors.
 
-    Call arguments:
-        xq: KerasTensor. The query tensor of shape (..., L, D).
-        xk: KerasTensor. The key tensor of shape (..., L, D).
-        freqs_cis: KerasTensor. The frequency complex numbers tensor with shape
-            (..., L, D//2, 2).
+    Args:
+        xq: Tensor. The query tensor of shape `(..., L, D)`.
+        xk: Tensor. The key tensor of shape `(..., L, D)`.
+        freqs_cis: Tensor. The `(cos, sin)` frequency pairs, of shape
+            `(..., L, D // 2, 2)`.
 
     Returns:
-        tuple[KerasTensor, KerasTensor]: The transformed query and key tensors.
+        A `(query, key)` tuple of the rotated tensors.
     """
+    # xq, xk shape (..., num_heads, seq_len, D)
+    # freqs_cis shape (..., seq_len, D//2, 2)
+    # Expand freqs_cis to match num_heads dimension
+    freqs_cis = ops.expand_dims(freqs_cis, axis=-4)
+    # Now freqs_cis shape (..., 1, seq_len, D//2, 2)
 
-    def call(self, xq, xk, freqs_cis):
-        # xq, xk shape (..., num_heads, seq_len, D)
-        # freqs_cis shape (..., seq_len, D//2, 2)
-        # Expand freqs_cis to match num_heads dimension
-        freqs_cis = ops.expand_dims(freqs_cis, axis=-4)
-        # Now freqs_cis shape (..., 1, seq_len, D//2, 2)
+    xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 2))
+    xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 2))
 
-        xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 2))
-        xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 2))
+    xq_real = xq_[..., 0]
+    xq_imag = xq_[..., 1]
+    xk_real = xk_[..., 0]
+    xk_imag = xk_[..., 1]
 
-        xq_real = xq_[..., 0]
-        xq_imag = xq_[..., 1]
-        xk_real = xk_[..., 0]
-        xk_imag = xk_[..., 1]
+    freqs_cos = freqs_cis[..., 0]
+    freqs_sin = freqs_cis[..., 1]
 
-        freqs_cos = freqs_cis[..., 0]
-        freqs_sin = freqs_cis[..., 1]
+    xq_out_real = xq_real * freqs_cos - xq_imag * freqs_sin
+    xq_out_imag = xq_real * freqs_sin + xq_imag * freqs_cos
+    xk_out_real = xk_real * freqs_cos - xk_imag * freqs_sin
+    xk_out_imag = xk_real * freqs_sin + xk_imag * freqs_cos
 
-        xq_out_real = xq_real * freqs_cos - xq_imag * freqs_sin
-        xq_out_imag = xq_real * freqs_sin + xq_imag * freqs_cos
-        xk_out_real = xk_real * freqs_cos - xk_imag * freqs_sin
-        xk_out_imag = xk_real * freqs_sin + xk_imag * freqs_cos
+    xq_out = ops.reshape(
+        ops.stack([xq_out_real, xq_out_imag], axis=-1), ops.shape(xq)
+    )
+    xk_out = ops.reshape(
+        ops.stack([xk_out_real, xk_out_imag], axis=-1), ops.shape(xk)
+    )
 
-        xq_out = ops.reshape(
-            ops.stack([xq_out_real, xq_out_imag], axis=-1), ops.shape(xq)
-        )
-        xk_out = ops.reshape(
-            ops.stack([xk_out_real, xk_out_imag], axis=-1), ops.shape(xk)
-        )
-
-        return xq_out, xk_out
+    return xq_out, xk_out
 
 
 class FluxRoPEAttention(keras.layers.Layer):
     """Computes the attention mechanism with RoPE.
 
     Args:
-        dropout_p: float, optional. Dropout probability. Defaults to 0.0.
-        is_causal: bool, optional. If True, applies causal masking. Defaults to
-            False.
+        dropout_p: float. Dropout probability. Defaults to `0.0`.
+        is_causal: bool. If True, applies causal masking. Defaults to
+            `False`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         q: KerasTensor. Query tensor of shape (..., L, D).
@@ -137,14 +156,14 @@ class FluxRoPEAttention(keras.layers.Layer):
         KerasTensor: The resulting tensor from the attention mechanism.
     """
 
-    def __init__(self, dropout_p=0.0, is_causal=False):
-        super(FluxRoPEAttention, self).__init__()
+    def __init__(self, dropout_p=0.0, is_causal=False, **kwargs):
+        super().__init__(**kwargs)
         self.dropout_p = dropout_p
         self.is_causal = is_causal
 
     def call(self, q, k, v, positional_encoding):
         # Apply the RoPE transformation
-        q, k = ApplyRoPE()(q, k, positional_encoding)
+        q, k = apply_rope(q, k, positional_encoding)
 
         # Scaled dot-product attention
         x = scaled_dot_product_attention(
@@ -153,6 +172,16 @@ class FluxRoPEAttention(keras.layers.Layer):
         x = ops.transpose(x, (0, 2, 1, 3))
         b, s, h, d = ops.shape(x)
         return ops.reshape(x, (b, s, h * d))
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dropout_p": self.dropout_p,
+                "is_causal": self.is_causal,
+            }
+        )
+        return config
 
 
 # TODO: This is probably already implemented in several places, but is needed to

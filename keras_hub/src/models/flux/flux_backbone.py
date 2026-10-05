@@ -108,7 +108,7 @@ class FluxBackbone(Backbone):
 
         self.final_layer = LastLayer(hidden_size, 1, input_channels)
         self.strip_text_tokens = StripTextTokens()
-        self.timestep_embedding = TimestepEmbedding()
+        self.timestep_embedding = TimestepEmbedding(dim=256)
         self.guidance_embed = guidance_embed
 
         # === Functional Model ===
@@ -131,7 +131,7 @@ class FluxBackbone(Backbone):
         # running on sequences image
         image = self.image_input_embedder(image_input)
         modulation_encoding = self.time_input_embedder(
-            self.timestep_embedding(timesteps_input, dim=256)
+            self.timestep_embedding(timesteps_input)
         )
         if self.guidance_embed:
             if guidance_input is None:
@@ -141,7 +141,7 @@ class FluxBackbone(Backbone):
             modulation_encoding = (
                 modulation_encoding
                 + self.guidance_input_embedder(
-                    self.timestep_embedding(guidance_input, dim=256)
+                    self.timestep_embedding(guidance_input)
                 )
             )
 
