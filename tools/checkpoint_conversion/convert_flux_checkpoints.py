@@ -17,6 +17,10 @@ same values as the checkpoint, and validating it in float32 checks the
 architecture and the weight mapping to float32 noise rather than to
 bfloat16 rounding.
 
+Validation needs `diffusers` and `accelerate` (`pip install
+"diffusers>=0.32" accelerate`); they are checked before anything is
+downloaded.
+
 To convert and validate in separate processes:
 
     python tools/checkpoint_conversion/convert_flux_checkpoints.py \
@@ -30,6 +34,7 @@ Conversion runs on the host; set FLUX_CONVERT_ALLOW_GPU=1 to allow a GPU.
 import argparse
 import gc
 import importlib.metadata
+import importlib.util
 import os
 import shutil
 import sys
@@ -223,6 +228,35 @@ def _free_gb(path):
             return None
         path = parent
     return shutil.disk_usage(path).free / 1024**3
+
+
+# Only validation needs these. `diffusers` is the reference implementation;
+# without `accelerate` it falls back to its slow, memory-hungry loading path
+# for the 11.9B parameter reference.
+_VALIDATION_PACKAGES = ("diffusers", "accelerate")
+
+
+def check_validation_dependencies():
+    """Fail now if validation could not run, not after the conversion.
+
+    Otherwise a missing package only surfaces once the 24GB download and
+    the conversion have finished, when validation starts.
+    """
+    missing = [
+        name
+        for name in _VALIDATION_PACKAGES
+        if importlib.util.find_spec(name) is None
+    ]
+    if missing:
+        raise SystemExit(
+            f"Validation needs {', '.join(missing)}, which "
+            f"{'is' if len(missing) == 1 else 'are'} not installed for "
+            f"{sys.executable}. Install into the same environment:\n"
+            f"    {sys.executable} -m pip install 'diffusers>=0.32' "
+            "accelerate\n"
+            "or convert now and validate later with --validate_only:\n"
+            f"    python {os.path.relpath(__file__)} --skip_validation"
+        )
 
 
 def download_checkpoint(repo_id, filename):
@@ -719,6 +753,8 @@ def main():
 
     if args.validate_only and args.skip_validation:
         parser.error("--validate_only and --skip_validation are exclusive.")
+    if not args.skip_validation:
+        check_validation_dependencies()
 
     spec = PRESETS[args.preset]
     guidance_embed = spec["guidance_embed"]
@@ -733,6 +769,15 @@ def main():
             args.tolerance,
         )
         print(f"✅ Output validated in {args.validation_dtype}")
+        validated_dir = os.path.normpath(args.validate_only)
+        if validated_dir.endswith(".unvalidated"):
+            # The staging directory of an earlier run whose validation
+            # failed or did not finish.
+            print(
+                "Move it into place with:\n"
+                f"    mv {validated_dir} "
+                f"{validated_dir.removesuffix('.unvalidated')}"
+            )
         return
 
     # A preset that does not match the reference implementation must never
@@ -749,9 +794,10 @@ def main():
             )
         if os.path.exists(staging_dir):
             raise SystemExit(
-                f"`{staging_dir}` is left over from an earlier run that did "
-                "not pass validation. Inspect it (or re-validate it with "
-                f"`--validate_only {staging_dir}`), delete it, and re-run."
+                f"`{staging_dir}` is left over from an earlier run whose "
+                "validation failed or did not finish. Either validate it "
+                f"without re-converting (`--validate_only {staging_dir}`, "
+                f"then move it to `{output_dir}`), or delete it and re-run."
             )
 
     keras.config.set_dtype_policy(args.dtype)
@@ -802,7 +848,19 @@ def main():
             args.tolerance,
         )
     except SystemExit:
+        # A verdict (the preset failed a check), not an interruption.
         print(f"\nThe unvalidated preset was left in {staging_dir}.")
+        raise
+    except BaseException:
+        # Validation itself broke (e.g. a network error fetching the
+        # reference, or Ctrl-C) after the conversion had finished: resume
+        # from the saved preset instead of converting again.
+        print(
+            f"\nValidation did not finish. The converted preset is in "
+            f"{staging_dir}; validate it without re-converting:\n"
+            f"    python {os.path.relpath(__file__)} --preset {args.preset} "
+            f"--validate_only {staging_dir}"
+        )
         raise
     os.replace(staging_dir, output_dir)
     print(f"✅ Output validated in {args.validation_dtype}")
