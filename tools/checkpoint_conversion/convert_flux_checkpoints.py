@@ -680,7 +680,12 @@ def validate_preset(preset_dir, spec, guidance_embed, dtype, tolerance=None):
     expected = _reference_output(spec, reference_dtype, tensors)
     print(f"Loading the converted preset from {preset_dir} in {dtype}...")
     keras.config.set_dtype_policy(dtype)
-    backbone = FluxBackbone.from_preset(preset_dir, dtype=dtype)
+    # Absolute, because `from_preset` resolves a string that matches a
+    # registered preset name to its Kaggle handle before it looks on disk,
+    # and the default output directory, `flux1_schnell`, is such a name.
+    backbone = FluxBackbone.from_preset(
+        os.path.abspath(preset_dir), dtype=dtype
+    )
     actual = _keras_output(backbone, tensors, guidance_embed)
     del backbone
     gc.collect()
