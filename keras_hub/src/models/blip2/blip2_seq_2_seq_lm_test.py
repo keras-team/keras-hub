@@ -17,6 +17,7 @@ from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
 )
 from keras_hub.src.models.blip2.blip2_vision_encoder import BLIP2VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class BLIP2Seq2SeqLMTest(TestCase):
@@ -137,11 +138,14 @@ class BLIP2Seq2SeqLMTest(TestCase):
                 cross_attention_cache=cross_cache,
                 cross_attention_cache_update_index=None,
             )
+            # Cached single-step decoding dispatches different kernels than
+            # the full forward pass, which diverges more on GPU.
+            tol = 5e-3 if running_on_gpu() else 1e-4
             self.assertAllClose(
                 logits[:, 0, :],
                 expected_logits[:, index, :],
-                atol=1e-4,
-                rtol=1e-4,
+                atol=tol,
+                rtol=tol,
             )
 
     def test_generate_compilation(self):

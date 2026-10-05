@@ -38,6 +38,21 @@ def convert_to_comparible_type(x):
     return x
 
 
+def _to_host_leaf(x):
+    """Move a backend tensor leaf (e.g. a torch CUDA tensor) to NumPy.
+
+    `tf.data` cannot consume tensors that live on an accelerator. Native `tf`
+    tensors are left as is (unlike `_to_grain_leaf`), since converting a
+    `tf.RaggedTensor` yields a non-rectangular list that `from_tensor_slices`
+    rejects. Other leaves are passed through unchanged.
+    """
+    if isinstance(x, list):
+        return [_to_host_leaf(e) for e in x]
+    if ops.is_tensor(x) and not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+        return ops.convert_to_numpy(x)
+    return x
+
+
 def _to_grain_leaf(x):
     """Convert a single data leaf to a Grain friendly Python/NumPy object."""
     if isinstance(x, tf.RaggedTensor):
@@ -1242,6 +1257,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_output_shape=None,
         batch_size=2,
         compile_kwargs=None,
+        atol=1e-6,
+        rtol=1e-6,
     ):
         """Run basic tests for a backbone, including compilation."""
         task = cls(**init_kwargs)
@@ -1250,7 +1267,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
+        # `tf.data` cannot consume tensors that live on an accelerator, so move
+        # them back to the host first.
+        host_data = _map_leaves(_to_host_leaf, train_data)
+        ds = tf.data.Dataset.from_tensor_slices(host_data)
+        ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
         # Test: the tree struct output by the
@@ -1269,12 +1290,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
+        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split)
+        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
