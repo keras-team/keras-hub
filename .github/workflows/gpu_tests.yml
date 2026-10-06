@@ -38,8 +38,6 @@ jobs:
 
     env:
       KERAS_BACKEND: ${{ matrix.backend }}
-      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
 
     steps:
     - name: Install binary dependencies
@@ -66,6 +64,10 @@ jobs:
         # Prevent TF from pre-allocating all GPU memory, leaving room for
         # the primary backend (torch/jax) when TF is used for preprocessing.
         TF_FORCE_GPU_ALLOW_GROWTH: "true"
+        # Only the test step downloads presets; keep the secrets out of the
+        # install and setup steps above.
+        KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       run: |
         pytest keras_hub --check_gpu --run_large --cov=keras_hub \
           --durations=50 --splits 4 --group ${{ matrix.shard }}
