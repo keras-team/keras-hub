@@ -1,11 +1,24 @@
 import grain
 import numpy as np
+from absl.testing import parameterized
 from keras import ops
 
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+
+# `tf.image.resize(method=<name>, antialias=True)` on the (1, 8, 12, 3)
+# hard-edge image in `test_lanczos_resize_matches_reference`, resized to
+# 16x16 and clipped to [0, 255]. Every row and channel is the same.
+_LANCZOS3_REFERENCE_ROW = [
+    0.0, 0.0, 0.0, 0.0, 0.0, 7.767, 0.0, 23.432,
+    231.568, 255.0, 247.233, 255.0, 255.0, 255.0, 255.0, 255.0,
+]  # fmt: skip
+_LANCZOS5_REFERENCE_ROW = [
+    0.0, 0.0, 1.383, 0.0, 0.0, 14.637, 0.0, 24.592,
+    230.408, 255.0, 240.363, 255.0, 255.0, 253.617, 255.0, 255.0,
+]  # fmt: skip
 
 
 class SmolVLM2ImageConverterTest(TestCase):
@@ -241,12 +254,19 @@ class SmolVLM2ImageConverterTest(TestCase):
                 ops.convert_to_numpy(converter(image)["pixel_values"]),
             )
 
-    def test_lanczos_resize_matches_reference(self):
-        """Lanczos runs on every backend and matches TF's `lanczos3`."""
+    @parameterized.named_parameters(
+        ("lanczos3", "lanczos3", _LANCZOS3_REFERENCE_ROW),
+        ("lanczos5", "lanczos5", _LANCZOS5_REFERENCE_ROW),
+    )
+    def test_lanczos_resize_matches_reference(
+        self, interpolation, expected_row
+    ):
+        """Both Lanczos filters run on every backend and match TF's."""
         converter = SmolVLM2ImageConverter(
             max_image_size=16,
             size=16,
             do_image_splitting=False,
+            interpolation=interpolation,
             scale=[1.0] * 3,
             offset=[0.0] * 3,
         )
@@ -255,12 +275,6 @@ class SmolVLM2ImageConverterTest(TestCase):
         images = np.zeros((1, 8, 12, 3), dtype="float32")
         images[:, :, 6:, :] = 255.0
         pixel_values = ops.convert_to_numpy(converter(images)["pixel_values"])
-        # `tf.image.resize(method="lanczos3", antialias=True)`, clipped.
-        # Every row and channel is the same.
-        expected_row = [
-            0.0, 0.0, 0.0, 0.0, 0.0, 7.767, 0.0, 23.432,
-            231.568, 255.0, 247.233, 255.0, 255.0, 255.0, 255.0, 255.0,
-        ]  # fmt: skip
         expected = np.broadcast_to(
             np.array(expected_row)[None, None, :, None], (1, 16, 16, 3)
         )

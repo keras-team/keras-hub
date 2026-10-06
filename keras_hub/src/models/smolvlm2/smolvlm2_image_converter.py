@@ -69,7 +69,8 @@ class SmolVLM2ImageConverter(ImageConverter):
         do_image_splitting: bool. Whether to split into sub-images.
             Set ``False`` for video frames. Default ``True``.
         interpolation: str. Resize filter. Default ``"lanczos3"``, which
-            matches HF's PIL LANCZOS.
+            matches HF's PIL LANCZOS. ``"lanczos5"`` and the filters
+            `ops.image.resize` accepts are also supported.
         antialias: bool. Whether to antialias when downsampling. Default
             ``True``.
     """
@@ -266,12 +267,15 @@ class SmolVLM2ImageConverter(ImageConverter):
     def _resize(self, images, size):
         """Resize a `(batch, height, width, channels)` batch and clip.
 
-        `ops.image.resize` rejects `"lanczos3"` on the torch backend
-        (keras-team/keras#23783). `scale_and_translate` with
-        `scale=out/in` and no translation is the same resize and runs on
-        every backend.
+        `ops.image.resize` rejects `"lanczos3"` and `"lanczos5"` on the
+        torch backend (keras-team/keras#23783). keras-team/keras#23792
+        fixes that by routing both through `scale_and_translate` with
+        `scale=out/in` and no translation; this does the same here so the
+        output matches on every backend and every Keras version. Once a
+        Keras release includes that PR, this branch can collapse into the
+        plain `ops.image.resize` call below.
         """
-        if self.interpolation == "lanczos3":
+        if self.interpolation in ("lanczos3", "lanczos5"):
             in_h, in_w = self._static_hw(images.shape[1:])
             out_h, out_w = size
             batch = images.shape[0]
@@ -283,7 +287,7 @@ class SmolVLM2ImageConverter(ImageConverter):
                 scale=(out_h / in_h, out_w / in_w),
                 translation=(0.0, 0.0),
                 spatial_dims=(1, 2),
-                method="lanczos3",
+                method=self.interpolation,
                 antialias=self.antialias,
             )
         else:
