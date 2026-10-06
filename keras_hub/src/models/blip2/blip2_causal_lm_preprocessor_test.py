@@ -103,6 +103,20 @@ class BLIP2CausalLMPreprocessorTest(TestCase):
         self.assertIn("padding_mask", x)
         self.assertEqual(len(x["token_ids"]), 10)
 
+    def test_text_generate_preprocess_no_start_token(self):
+        preprocessor = BLIP2CausalLMPreprocessor(
+            **self.init_text_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess({"text": "the"})
+        # "the" -> ["t", "he"] -> [6, 13]; no "</s>" (2) is prepended.
+        self.assertAllEqual(x["token_ids"], [6, 13] + [1] * 8)
+        self.assertAllEqual(x["padding_mask"], [1, 1] + [0] * 8)
+
+        preprocessor = BLIP2CausalLMPreprocessor(**self.init_text_kwargs)
+        x = preprocessor.generate_preprocess({"text": "the"})
+        self.assertAllEqual(x["token_ids"], [2, 6, 13] + [1] * 7)
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1] + [0] * 7)
+
     def test_generate_preprocess(self):
         preprocessor = BLIP2CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(

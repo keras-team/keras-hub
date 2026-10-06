@@ -1,24 +1,37 @@
-name: Weekly Extra Large GPU Tests
+name: KerasHub GPU Tests
 
 on:
-  workflow_dispatch: # Manual trigger for on-demand runs
-  schedule:
-    - cron: '0 4 * * 6' # Run every Saturday at 4 AM UTC (Saturday night PDT)
+  push:
+    branches: [master]
+  pull_request:
+    types: [unlabeled]
+  release:
+    types: [created]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
-  extra_large_gpu_tests:
+  gpu_tests:
+    # Only run on pushes to master, releases or "kokoro:force-run" unlabel
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      (github.event.action == 'unlabeled' && github.event.label.name == 'kokoro:force-run')
+
     strategy:
       fail-fast: false
       matrix:
         backend: [jax, tensorflow, torch]
         shard: [1, 2, 3, 4]
 
-    name: Extra Large GPU (${{ matrix.backend }}, shard ${{ matrix.shard }})
+    name: GPU tests (${{ matrix.backend }}, shard ${{ matrix.shard }})
     runs-on: linux-x86-g2-32-l4-1gpu
-    timeout-minutes: 360
+    timeout-minutes: 300
 
     container:
       image: python:3.11-slim
@@ -56,6 +69,5 @@ jobs:
         KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       run: |
-        pytest keras_hub --check_gpu --run_extra_large --cov=keras_hub \
+        pytest keras_hub --check_gpu --run_large --cov=keras_hub \
           --durations=50 --splits 4 --group ${{ matrix.shard }}
-
