@@ -30,9 +30,9 @@ jobs:
     if: github.event.action == 'synchronize'
     runs-on: ubuntu-latest
     steps:
-    - run: echo "Superseded by ${HEAD_SHA}"
-      env:
+    - env:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: echo "Superseded by ${HEAD_SHA}"
 
   gpu_tests:
     # Only run on pushes to master, releases or when "run-gpu-tests" is added
