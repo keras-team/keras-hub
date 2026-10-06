@@ -5,6 +5,9 @@ from keras import ops
 from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (  # noqa: E501
     DiffusionGemmaBlockDiffusionLMPreprocessor,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_layers import (
+    DiffusionGemmaInterleaveEmbeddings,
+)
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter,
 )
@@ -124,7 +127,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         # One image per sample: image expands to 4 placeholder tokens
         # (num_vision_tokens_per_image=4), bracketed by start/end tokens.
         pixel_values = np.ones([2, 1, 16, 3 * 4 * 4], dtype="float32")
+        # Four real patches (one pooled token each), twelve padding patches.
         pixel_position_ids = np.ones([2, 1, 16, 2], dtype="int32")
+        pixel_position_ids[:, :, 4:] = -1
         x, y, sw = self.vision_preprocessor(
             {
                 "prompts": [
@@ -198,10 +203,107 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         )
         self.assertEqual(int(ops.sum(x["vision_mask"][0])), 6)
 
+    def test_vision_precomputed_pixels_two_images_different_counts(self):
+        """Precomputed pixels give the same alignment as raw images."""
+        wide_image = np.ones((16, 32, 3), dtype="float32")
+        square_image = np.ones((16, 16, 3), dtype="float32")
+        prompt = "<|image|> and <|image|>"
+        raw_x, _, _ = self.vision_preprocessor(
+            {
+                "prompts": [prompt],
+                "responses": ["round"],
+                "images": [[wide_image, square_image]],
+            }
+        )
+        x, _, _ = self.vision_preprocessor(
+            {
+                "prompts": [prompt],
+                "responses": ["round"],
+                "pixel_values": ops.convert_to_numpy(raw_x["pixel_values"]),
+                "pixel_position_ids": ops.convert_to_numpy(
+                    raw_x["pixel_position_ids"]
+                ),
+            }
+        )
+        self.assertAllEqual(x["vision_mask"], raw_x["vision_mask"])
+        self.assertAllEqual(x["vision_indices"], raw_x["vision_indices"])
+        self.assertEqual(int(ops.sum(x["vision_mask"][0])), 6)
+
+        # Bin `b` of image `k` holds `100 * k + b`. Each image must receive
+        # its own real bins.
+        image_embeddings = np.zeros((1, 2, 4, 1), dtype="float32")
+        for k in range(2):
+            image_embeddings[0, k, :, 0] = 100 * k + np.arange(4)
+        seq_len = x["token_ids"].shape[1]
+        embeddings = DiffusionGemmaInterleaveEmbeddings(
+            num_vision_tokens_per_image=4, pool_size=1
+        )(
+            image_embeddings,
+            np.zeros((1, seq_len, 1), dtype="float32"),
+            x["vision_indices"],
+            x["pixel_position_ids"],
+        )
+        placeholder_values = ops.convert_to_numpy(embeddings)[0, :, 0][
+            ops.convert_to_numpy(x["vision_mask"])[0]
+        ]
+        self.assertAllEqual(placeholder_values, [0, 1, 100, 101, 102, 103])
+
+    def test_vision_precomputed_pixels_mixed_batch(self):
+        """Rows with different image counts and sizes stay aligned."""
+        wide_image = np.ones((16, 32, 3), dtype="float32")
+        square_image = np.ones((16, 16, 3), dtype="float32")
+        prompts = ["<|image|> and <|image|>", "the <|image|> fox"]
+        raw_x, _, _ = self.vision_preprocessor(
+            {
+                "prompts": prompts,
+                "responses": ["round", "round"],
+                "images": [[wide_image, square_image], [square_image]],
+            }
+        )
+        x, _, _ = self.vision_preprocessor(
+            {
+                "prompts": prompts,
+                "responses": ["round", "round"],
+                "pixel_values": ops.convert_to_numpy(raw_x["pixel_values"]),
+                "pixel_position_ids": ops.convert_to_numpy(
+                    raw_x["pixel_position_ids"]
+                ),
+            }
+        )
+        self.assertAllEqual(x["vision_mask"], raw_x["vision_mask"])
+        self.assertAllEqual(x["vision_indices"], raw_x["vision_indices"])
+        vision_mask = ops.convert_to_numpy(x["vision_mask"])
+        self.assertAllEqual(vision_mask.sum(axis=-1), [6, 4])
+
+        # Bin `b` of image `k` in row `r` holds `1000 * r + 100 * k + b`.
+        image_embeddings = np.zeros((2, 2, 4, 1), dtype="float32")
+        for r in range(2):
+            for k in range(2):
+                image_embeddings[r, k, :, 0] = 1000 * r + 100 * k + np.arange(4)
+        seq_len = x["token_ids"].shape[1]
+        embeddings = ops.convert_to_numpy(
+            DiffusionGemmaInterleaveEmbeddings(
+                num_vision_tokens_per_image=4, pool_size=1
+            )(
+                image_embeddings,
+                np.zeros((2, seq_len, 1), dtype="float32"),
+                x["vision_indices"],
+                x["pixel_position_ids"],
+            )
+        )[..., 0]
+        self.assertAllEqual(
+            embeddings[0][vision_mask[0]], [0, 1, 100, 101, 102, 103]
+        )
+        self.assertAllEqual(
+            embeddings[1][vision_mask[1]], [1000, 1001, 1002, 1003]
+        )
+
     def test_vision_no_responses_masks_placeholder_labels(self):
         """Vision placeholder labels receive zero sample weight."""
         pixel_values = np.ones([1, 1, 16, 3 * 4 * 4], dtype="float32")
+        # Four real patches, twelve padding patches.
         pixel_position_ids = np.ones([1, 1, 16, 2], dtype="int32")
+        pixel_position_ids[:, :, 4:] = -1
         x, y, sw = self.vision_preprocessor(
             {
                 "prompts": ["the <|image|> fox"],
@@ -231,7 +333,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
 
     def test_vision_generate_preprocess(self):
         pixel_values = np.ones([1, 16, 3 * 4 * 4], dtype="float32")
+        # Four real patches, twelve padding patches.
         pixel_position_ids = np.ones([1, 16, 2], dtype="int32")
+        pixel_position_ids[:, 4:] = -1
         output = self.vision_preprocessor.generate_preprocess(
             {
                 "prompts": "the <|image|> fox",
@@ -243,6 +347,64 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         # Unbatched input: the leading batch dim is squeezed back out.
         self.assertAllEqual(output["pixel_values"].shape, [1, 16, 48])
         self.assertEqual(output["vision_indices"].shape[-1], 8)
+        self.assertEqual(int(ops.sum(output["vision_mask"])), 4)
+
+    def test_vision_generate_preprocess_precomputed_pixels_alignment(self):
+        """Generate preprocessing expands each image to its real count."""
+        wide_image = np.ones((16, 32, 3), dtype="float32")
+        square_image = np.ones((16, 16, 3), dtype="float32")
+        prompts = ["<|image|> and <|image|>", "the <|image|> fox"]
+        raw_x, _, _ = self.vision_preprocessor(
+            {
+                "prompts": prompts,
+                "responses": ["round", "round"],
+                "images": [[wide_image, square_image], [square_image]],
+            }
+        )
+        pixel_values = ops.convert_to_numpy(raw_x["pixel_values"])
+        pixel_position_ids = ops.convert_to_numpy(raw_x["pixel_position_ids"])
+        raw_output = self.vision_preprocessor.generate_preprocess(
+            {
+                "prompts": prompts,
+                "images": [[wide_image, square_image], [square_image]],
+            }
+        )
+        output = self.vision_preprocessor.generate_preprocess(
+            {
+                "prompts": prompts,
+                "pixel_values": pixel_values,
+                "pixel_position_ids": pixel_position_ids,
+            }
+        )
+        self.assertAllEqual(output["vision_mask"], raw_output["vision_mask"])
+        self.assertAllEqual(
+            output["vision_indices"], raw_output["vision_indices"]
+        )
+        vision_mask = ops.convert_to_numpy(output["vision_mask"])
+        self.assertAllEqual(vision_mask.sum(axis=-1), [6, 4])
+
+        # Bin `b` of image `k` in row `r` holds `1000 * r + 100 * k + b`.
+        image_embeddings = np.zeros((2, 2, 4, 1), dtype="float32")
+        for r in range(2):
+            for k in range(2):
+                image_embeddings[r, k, :, 0] = 1000 * r + 100 * k + np.arange(4)
+        seq_len = output["token_ids"].shape[1]
+        embeddings = ops.convert_to_numpy(
+            DiffusionGemmaInterleaveEmbeddings(
+                num_vision_tokens_per_image=4, pool_size=1
+            )(
+                image_embeddings,
+                np.zeros((2, seq_len, 1), dtype="float32"),
+                output["vision_indices"],
+                output["pixel_position_ids"],
+            )
+        )[..., 0]
+        self.assertAllEqual(
+            embeddings[0][vision_mask[0]], [0, 1, 100, 101, 102, 103]
+        )
+        self.assertAllEqual(
+            embeddings[1][vision_mask[1]], [1000, 1001, 1002, 1003]
+        )
 
     def test_vision_serialization(self):
         self.run_serialization_test(self.vision_preprocessor)

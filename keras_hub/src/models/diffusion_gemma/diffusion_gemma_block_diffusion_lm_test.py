@@ -222,11 +222,14 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
     def test_generate_with_unbatched_pixel_inputs(self):
         model = DiffusionGemmaBlockDiffusionLM(**self.vision_init_kwargs)
         model.compile(sampler=self.sampler)
+        # Four real patches, twelve padding patches.
+        pixel_position_ids = np.ones((1, 16, 2), dtype="int32")
+        pixel_position_ids[:, 4:] = -1
         output = model.generate(
             {
                 "prompts": "the <|image|> fox",
                 "pixel_values": np.ones((1, 16, 3 * 4 * 4), dtype="float32"),
-                "pixel_position_ids": np.ones((1, 16, 2), dtype="int32"),
+                "pixel_position_ids": pixel_position_ids,
             }
         )
         self.assertIsInstance(output, str)

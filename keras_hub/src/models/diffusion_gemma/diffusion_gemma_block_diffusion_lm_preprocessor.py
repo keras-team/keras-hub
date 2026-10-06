@@ -172,6 +172,32 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             batched_vision_indices,
         )
 
+    def _real_token_counts_from_position_ids(self, pixel_position_ids, batched):
+        """Return the real soft-token count of each precomputed image.
+
+        Padding patches have the position `(-1, -1)`. The output has shape
+        `(batch_size, num_images)`. A single image without an image axis
+        counts as one image.
+        """
+        pooling_kernel_size = self.image_converter.resizing.pooling_kernel_size
+        if self._use_tf_workflow():
+            position_ids = tf.convert_to_tensor(pixel_position_ids)
+            if not batched:
+                position_ids = tf.expand_dims(position_ids, 0)
+            if len(position_ids.shape) == 3:
+                position_ids = tf.expand_dims(position_ids, 1)
+            real_patches = tf.cast(position_ids[..., 0] != -1, "int32")
+            real_patch_count = tf.reduce_sum(real_patches, axis=-1)
+        else:
+            position_ids = ops.convert_to_tensor(pixel_position_ids)
+            if not batched:
+                position_ids = ops.expand_dims(position_ids, 0)
+            if len(position_ids.shape) == 3:
+                position_ids = ops.expand_dims(position_ids, 1)
+            real_patches = ops.cast(position_ids[..., 0] != -1, "int32")
+            real_patch_count = ops.sum(real_patches, axis=-1)
+        return real_patch_count // pooling_kernel_size**2
+
     def _preprocess_images(self, images, batched):
         if self._use_tf_workflow():
             return self._preprocess_images_tf(images, batched)
@@ -703,6 +729,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         if images is not None and self.image_converter is not None:
             preprocessed_images = self._preprocess_images(images, batched)
             real_token_counts = preprocessed_images["real_token_count"]
+        elif (
+            pixel_position_ids is not None and self.image_converter is not None
+        ):
+            real_token_counts = self._real_token_counts_from_position_ids(
+                pixel_position_ids, batched
+            )
 
         prompts_tok = self._expand_and_tokenize_prompts(
             prompts, batched, real_token_counts=real_token_counts
@@ -855,6 +887,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         if images is not None and self.image_converter is not None:
             preprocessed_images = self._preprocess_images(images, batched)
             real_token_counts = preprocessed_images["real_token_count"]
+        elif (
+            pixel_position_ids is not None and self.image_converter is not None
+        ):
+            real_token_counts = self._real_token_counts_from_position_ids(
+                pixel_position_ids, batched
+            )
 
         prompts_tok = self._expand_and_tokenize_prompts(
             prompts, batched, real_token_counts=real_token_counts
@@ -1045,6 +1083,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         if images is not None and self.image_converter is not None:
             preprocessed_images = self._preprocess_images(images, batched)
             real_token_counts = preprocessed_images["real_token_count"]
+        elif (
+            pixel_position_ids is not None and self.image_converter is not None
+        ):
+            real_token_counts = self._real_token_counts_from_position_ids(
+                pixel_position_ids, batched
+            )
 
         prompts_tok = self._expand_and_tokenize_prompts(
             prompts, batched, real_token_counts=real_token_counts
@@ -1185,6 +1229,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
         if images is not None and self.image_converter is not None:
             preprocessed_images = self._preprocess_images(images, batched)
             real_token_counts = preprocessed_images["real_token_count"]
+        elif (
+            pixel_position_ids is not None and self.image_converter is not None
+        ):
+            real_token_counts = self._real_token_counts_from_position_ids(
+                pixel_position_ids, batched
+            )
 
         prompts_tok = self._expand_and_tokenize_prompts(
             prompts, batched, real_token_counts=real_token_counts
