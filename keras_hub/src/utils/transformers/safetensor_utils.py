@@ -1,5 +1,7 @@
 import contextlib
 
+import keras
+
 from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
@@ -12,8 +14,29 @@ except ImportError:
     safetensors = None
 
 
+def default_fast_framework_and_device():
+    """Return `(framework, device)` for fast, backend-native weight loading.
+
+    The default weight-loading path opens tensors as numpy (host memory) and
+    casts/transposes them on the CPU, which is slow for large `bfloat16`
+    checkpoints. When the active backend has a native `safetensors` framework
+    we can instead load tensors directly as backend tensors and let the cast
+    happen natively, which is several times faster. Only the torch backend is
+    enabled here for now; other backends fall back to the numpy path.
+
+    Returns `(None, None)` when no faster path is known, meaning callers should
+    keep the default `framework="np"` behavior.
+    """
+    if keras.config.backend() == "torch":
+        # Load on CPU; `assign` then moves the value to the variable's device.
+        return "pt", "cpu"
+    return None, None
+
+
 class SafetensorLoader(contextlib.ExitStack):
-    def __init__(self, preset, prefix=None, fname=None):
+    def __init__(
+        self, preset, prefix=None, fname=None, framework="np", device=None
+    ):
         super().__init__()
 
         if safetensors is None:
@@ -30,6 +53,16 @@ class SafetensorLoader(contextlib.ExitStack):
             self.safetensor_config = None
         self.safetensor_files = {}
         self.prefix = prefix
+        # `framework`/`device` are passed through to `safetensors.safe_open`.
+        # The default (`"np"`, host memory) preserves the original behavior
+        # for every existing converter. A converter can opt in to
+        # `framework="pt", device="cuda"` to load weights straight onto the
+        # accelerator and cast/transpose there, which is much faster for large
+        # checkpoints. Weight hooks that use `np.transpose`/`np.reshape` keep
+        # working on torch tensors; only host-numpy-specific ops (e.g.
+        # `.astype`) need care.
+        self.framework = framework
+        self.device = device
 
         if fname is not None and self.safetensor_config is not None:
             raise ValueError(
@@ -84,8 +117,11 @@ class SafetensorLoader(contextlib.ExitStack):
             file = self.safetensor_files[fname]
         else:
             path = get_file(self.preset, fname)
+            open_kwargs = {"framework": self.framework}
+            if self.device is not None:
+                open_kwargs["device"] = self.device
             file = self.enter_context(
-                safetensors.safe_open(path, framework="np")
+                safetensors.safe_open(path, **open_kwargs)
             )
             self.safetensor_files[fname] = file
 

@@ -1,4 +1,4 @@
-import numpy as np
+from keras import ops
 
 from keras_hub.src.models.mistral.mistral_backbone import MistralBackbone
 from keras_hub.src.models.mistral.mistral_tokenizer import (
@@ -8,6 +8,12 @@ from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 
 backbone_cls = MistralBackbone
+
+# Load weights through the backend-native `safetensors` framework when possible
+# (much faster for large bf16 checkpoints). The weight hooks below use
+# `keras.ops` so they stay backend- and device-agnostic: they work whether the
+# loader returns numpy arrays (default path) or torch tensors (fast path).
+fast_safetensor_loading = True
 
 
 def convert_backbone_config(transformers_config):
@@ -35,13 +41,13 @@ def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=backbone.token_embedding.embeddings,
         hf_weight_key="model.embed_tokens.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: ops.cast(hf_tensor, "float16"),
     )
     loader.port_weight(
         keras_variable=backbone.token_embedding.reverse_embeddings,
         hf_weight_key="lm_head.weight",
-        hook_fn=lambda hf_tensor, _: np.transpose(
-            hf_tensor.astype(np.float16), axes=(1, 0)
+        hook_fn=lambda hf_tensor, _: ops.transpose(
+            ops.cast(hf_tensor, "float16"), axes=(1, 0)
         ),
     )
 
@@ -53,41 +59,41 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.input_layernorm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: ops.cast(hf_tensor, "float16"),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_layernorm.scale,
             hf_weight_key=f"model.layers.{index}.post_attention_layernorm.weight",
-            hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+            hook_fn=lambda hf_tensor, _: ops.cast(hf_tensor, "float16"),
         )
 
         # Attention layers
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._query_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.q_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+            hook_fn=lambda hf_tensor, keras_shape: ops.reshape(
+                ops.transpose(ops.cast(hf_tensor, "float16")), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._key_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.k_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+            hook_fn=lambda hf_tensor, keras_shape: ops.reshape(
+                ops.transpose(ops.cast(hf_tensor, "float16")), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._value_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.v_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+            hook_fn=lambda hf_tensor, keras_shape: ops.reshape(
+                ops.transpose(ops.cast(hf_tensor, "float16")), keras_shape
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._self_attention_layer._output_dense.kernel,
             hf_weight_key=f"model.layers.{index}.self_attn.o_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.reshape(
-                np.transpose(hf_tensor.astype(np.float16)), keras_shape
+            hook_fn=lambda hf_tensor, keras_shape: ops.reshape(
+                ops.transpose(ops.cast(hf_tensor, "float16")), keras_shape
             ),
         )
 
@@ -95,22 +101,22 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_gate_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.gate_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+            hook_fn=lambda hf_tensor, _: ops.transpose(
+                ops.cast(hf_tensor, "float16"), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_intermediate_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.up_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+            hook_fn=lambda hf_tensor, _: ops.transpose(
+                ops.cast(hf_tensor, "float16"), axes=(1, 0)
             ),
         )
         loader.port_weight(
             keras_variable=decoder_layer._feedforward_output_dense.kernel,
             hf_weight_key=f"model.layers.{index}.mlp.down_proj.weight",
-            hook_fn=lambda hf_tensor, _: np.transpose(
-                hf_tensor.astype(np.float16), axes=(1, 0)
+            hook_fn=lambda hf_tensor, _: ops.transpose(
+                ops.cast(hf_tensor, "float16"), axes=(1, 0)
             ),
         )
 
@@ -118,7 +124,7 @@ def convert_weights(backbone, loader, transformers_config):
     loader.port_weight(
         keras_variable=backbone.layer_norm.scale,
         hf_weight_key="model.norm.weight",
-        hook_fn=lambda hf_tensor, _: hf_tensor.astype(np.float16),
+        hook_fn=lambda hf_tensor, _: ops.cast(hf_tensor, "float16"),
     )
 
 
