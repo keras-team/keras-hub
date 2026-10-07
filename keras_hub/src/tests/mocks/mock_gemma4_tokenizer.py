@@ -1,12 +1,16 @@
 import re
 
-import tensorflow as tf
+import numpy as np
 
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import restore_outer_shape
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class MockGemma4Tokenizer(Tokenizer):
@@ -54,18 +58,12 @@ class MockGemma4Tokenizer(Tokenizer):
             "<|video>",
             "<video|>",
         ]
-        self.string_to_id = tf.lookup.StaticHashTable(
-            tf.lookup.KeyValueTensorInitializer(
-                self.vocabulary, list(range(len(self.vocabulary)))
-            ),
-            default_value=3,
-        )
-        self.id_to_string = tf.lookup.StaticHashTable(
-            tf.lookup.KeyValueTensorInitializer(
-                list(range(len(self.vocabulary))), self.vocabulary
-            ),
-            default_value="<unk>",
-        )
+        self._python_string_to_id = {
+            v: i for i, v in enumerate(self.vocabulary)
+        }
+        self._python_id_to_string = {
+            i: v for i, v in enumerate(self.vocabulary)
+        }
 
         # Standard tokens.
         self._add_special_token("<bos>", "start_token")
@@ -89,6 +87,33 @@ class MockGemma4Tokenizer(Tokenizer):
         self.add_eos = add_eos
         self.audio_placeholder_id = -1
 
+    def _maybe_initialized_tf(self):
+        """Builds the TF lookup tables the first time the TF path runs.
+
+        The tables are not built in `__init__` so that this mock stays
+        constructible when TensorFlow is absent. `tf.init_scope()` lifts
+        their creation out of any enclosing `tf.function` trace (e.g. a
+        `tf.data.Dataset.map`), which would otherwise capture them as
+        symbolic tensors and fail on the second call.
+        """
+        if hasattr(self, "string_to_id"):
+            return
+        if tf is None:
+            return
+        with tf.init_scope():
+            self.string_to_id = tf.lookup.StaticHashTable(
+                tf.lookup.KeyValueTensorInitializer(
+                    self.vocabulary, list(range(len(self.vocabulary)))
+                ),
+                default_value=3,
+            )
+            self.id_to_string = tf.lookup.StaticHashTable(
+                tf.lookup.KeyValueTensorInitializer(
+                    list(range(len(self.vocabulary))), self.vocabulary
+                ),
+                default_value="<unk>",
+            )
+
     def vocabulary_size(self):
         return len(self.vocabulary)
 
@@ -102,7 +127,8 @@ class MockGemma4Tokenizer(Tokenizer):
         return self.vocabulary.index(token)
 
     @preprocessing_function
-    def tokenize(self, inputs):
+    def _tokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         inputs = tf.convert_to_tensor(inputs)
         unbatched = inputs.shape.rank == 0
         if unbatched:
@@ -177,8 +203,55 @@ class MockGemma4Tokenizer(Tokenizer):
 
         return tokens
 
+    def _tokenize_python(self, inputs):
+        inputs, batched, outer_shape = canonicalize_python_string_inputs(inputs)
+
+        batched_tokens = []
+        for text in inputs:
+            text = text.replace(
+                self.start_of_image_token, f" {self.start_of_image_token} "
+            )
+            text = text.replace(
+                self.end_of_image_token, f" {self.end_of_image_token} "
+            )
+            text = text.replace(
+                self.image_placeholder, f" {self.image_placeholder} "
+            )
+            text = text.replace("<|audio>", " <|audio> ")
+            text = text.replace("<audio|>", " <audio|> ")
+            text = text.replace("<|audio|>", " <|audio|> ")
+            text = text.replace("<|video>", " <|video> ")
+            text = text.replace("<video|>", " <video|> ")
+            text = text.replace("<|video|>", " <|video|> ")
+            text = text.replace("  ", " ")
+            text = text.strip()
+
+            sep_inputs = text.split(" ")
+            tokens = [self._python_string_to_id.get(w, 3) for w in sep_inputs]
+
+            if self.add_bos:
+                tokens = [self.start_token_id] + tokens
+            if self.add_eos:
+                tokens = tokens + [self.end_token_id]
+            batched_tokens.append(tokens)
+
+        if outer_shape is not None:
+            return restore_outer_shape(batched_tokens, outer_shape)
+
+        if not batched:
+            return np.array(batched_tokens[0], dtype=self.compute_dtype)
+
+        return batched_tokens
+
+    def tokenize(self, inputs):
+        if self._use_tf_workflow():
+            return self._tokenize_tf(inputs)
+        else:
+            return self._tokenize_python(inputs)
+
     @preprocessing_function
-    def detokenize(self, inputs):
+    def _detokenize_tf(self, inputs):
+        self._maybe_initialized_tf()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, "int32")
 
@@ -197,6 +270,34 @@ class MockGemma4Tokenizer(Tokenizer):
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
+
+    def _detokenize_python(self, inputs):
+        inputs, batched = canonicalize_python_token_inputs(inputs)
+
+        outputs_list = []
+        for sample in inputs:
+            strings = [
+                self._python_id_to_string.get(id, "<unk>") for id in sample
+            ]
+            out_str = " ".join(strings)
+            for token in [
+                self.start_token,
+                self.end_token,
+                self.pad_token,
+            ]:
+                out_str = out_str.replace(token, "")
+            out_str = out_str.strip()
+            outputs_list.append(out_str)
+
+        if not batched:
+            return outputs_list[0]
+        return outputs_list
+
+    def detokenize(self, inputs):
+        if self._use_tf_workflow():
+            return self._detokenize_tf(inputs)
+        else:
+            return self._detokenize_python(inputs)
 
     def __call__(self, inputs):
         return self.tokenize(inputs)
