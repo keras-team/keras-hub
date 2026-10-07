@@ -4,7 +4,6 @@ from keras.layers import ReversibleEmbedding
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.phi3.phi3_decoder import Phi3Decoder
-from keras_hub.src.models.phi3.phi3_layernorm import Phi3LayerNorm
 
 
 def _phi3_kernel_initializer(stddev=0.02):
@@ -142,7 +141,7 @@ class Phi3Backbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = Phi3LayerNorm(
+        self.layer_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",
