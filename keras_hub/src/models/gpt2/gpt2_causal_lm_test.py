@@ -1,9 +1,13 @@
 from unittest.mock import patch
 
 import keras
+import numpy as np
 import pytest
 from keras import ops
 
+from keras_hub.src.kv_press.knorm_press import KnormPress
+from keras_hub.src.kv_press.random_press import RandomPress
+from keras_hub.src.kv_press.streaming_llm_press import StreamingLLMPress
 from keras_hub.src.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_hub.src.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_hub.src.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -103,6 +107,177 @@ class GPT2CausalLMTest(TestCase):
         # Assert we do recompile after compile is called.
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
+
+    def test_call_with_cache_position_index_decoupling(self):
+        # `position_index` (used for position embeddings) must be decoupled
+        # from `cache_update_index` (the physical cache write slot / causal
+        # mask offset) -- this is what lets a compressed, shorter-than-
+        # original cache still assign tokens their true original position.
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        prompt = " airplane at airport"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        token_ids = preprocessed["token_ids"]
+        padding_mask = preprocessed["padding_mask"]
+        hidden_states, cache, cache_index_offset = causal_lm._build_cache(
+            token_ids, padding_mask
+        )
+        self.assertEqual(cache_index_offset, 0)
+        next_token = ops.slice(token_ids, [0, 0], [1, 1])
+
+        # Same `cache_update_index` both times, but different
+        # `position_index` -- isolates the effect of the position embedding
+        # from cache addressing/masking.
+        _, hidden_a, _ = causal_lm.call_with_cache(
+            next_token, cache, 2, position_index=2
+        )
+        _, hidden_b, _ = causal_lm.call_with_cache(
+            next_token, cache, 2, position_index=5
+        )
+        self.assertNotAllClose(hidden_a, hidden_b)
+
+        # Omitting `position_index` falls back to `cache_update_index`,
+        # matching pre-compression behavior exactly.
+        _, hidden_c, _ = causal_lm.call_with_cache(next_token, cache, 2)
+        self.assertAllClose(hidden_a, hidden_c)
+
+    def test_kv_cache_compression_shrinks_cache_and_offsets_index(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        causal_lm.compile(press=KnormPress(compression_ratio=0.5))
+        prompt = " airplane at airport"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        token_ids = preprocessed["token_ids"]
+        padding_mask = preprocessed["padding_mask"]
+        max_length = int(token_ids.shape[1])
+
+        _, cache, cache_index_offset = causal_lm._build_cache(
+            token_ids, padding_mask
+        )
+        prompt_length = int(ops.sum(ops.cast(padding_mask, "int32")))
+        expected_keep_len = max(1, round(prompt_length * 0.5))
+        # The buffer keeps `expected_keep_len` prompt slots *plus* one free
+        # slot per token generation is about to write -- without that
+        # reserve the decode loop would overwrite what was just retained.
+        expected_reserve = max_length - prompt_length
+        self.assertEqual(cache.shape[3], expected_keep_len + expected_reserve)
+        # The last prompt token maps to the final retained slot, so decoding
+        # continues into the reserve rather than back over the prompt.
+        self.assertEqual(cache_index_offset, prompt_length - expected_keep_len)
+        self.assertEqual(
+            (prompt_length - 1) - cache_index_offset, expected_keep_len - 1
+        )
+        # The very last decode step must still land inside the buffer.
+        self.assertLess((max_length - 1) - cache_index_offset, cache.shape[3])
+
+    def test_kv_cache_compression_retains_prompt_through_decoding(self):
+        # Regression test for the retained prompt being silently clobbered:
+        # every retained slot must still be read by the decode loop. If the
+        # slot mapping is off, corrupting them leaves the logits untouched.
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        prompt = " airplane at airport"
+        preprocessed = self.preprocessor.generate_preprocess([prompt])
+        padding_mask = preprocessed["padding_mask"]
+        prompt_length = int(ops.sum(ops.cast(padding_mask, "int32")))
+
+        def logits_with_corrupted_prompt_cache(corrupt):
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
+            causal_lm.compile(
+                sampler="greedy", press=KnormPress(compression_ratio=0.5)
+            )
+            keep_len = max(1, round(prompt_length * 0.5))
+            seen = []
+            original = causal_lm._compress_layer_cache
+
+            def compress_layer_cache(layer_cache, padding_mask=None):
+                layer_cache = original(layer_cache, padding_mask)
+                if corrupt:
+                    corrupted = ops.convert_to_numpy(layer_cache).copy()
+                    corrupted[:, :, :keep_len, :, :] = 37.0
+                    layer_cache = ops.convert_to_tensor(corrupted)
+                return layer_cache
+
+            call_with_cache = causal_lm.call_with_cache
+
+            def spy(
+                token_ids,
+                cache,
+                cache_update_index,
+                position_index=None,
+                compress_cache=False,
+                padding_mask=None,
+            ):
+                out = call_with_cache(
+                    token_ids,
+                    cache,
+                    cache_update_index,
+                    position_index,
+                    compress_cache=compress_cache,
+                    padding_mask=padding_mask,
+                )
+                seen.append(ops.convert_to_numpy(out[0]).copy())
+                return out
+
+            causal_lm._compress_layer_cache = compress_layer_cache
+            causal_lm.call_with_cache = spy
+            causal_lm.generate([prompt], stop_token_ids=None)
+            return np.concatenate(seen[1:], axis=1)
+
+        clean = logits_with_corrupted_prompt_cache(corrupt=False)
+        corrupted = logits_with_corrupted_prompt_cache(corrupt=True)
+        self.assertGreater(np.abs(clean - corrupted).max(), 0.0)
+
+    def test_press_string_identifier(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        causal_lm.compile(press="knorm")
+        self.assertIsInstance(causal_lm.press, KnormPress)
+
+    def test_generate_with_kv_cache_compression_ratio_zero_matches_baseline(
+        self,
+    ):
+        # A `compression_ratio=0.0` press is a true no-op end-to-end, so
+        # generation must match the uncompressed baseline exactly. The two
+        # models share the same (already-built) backbone, so weights match.
+        baseline = GPT2CausalLM(**self.init_kwargs)
+        baseline.compile(sampler="greedy")
+        compressed = GPT2CausalLM(**self.init_kwargs)
+        compressed.compile(
+            sampler="greedy",
+            press=StreamingLLMPress(compression_ratio=0.0),
+        )
+
+        prompt = " airplane at airport"
+        baseline_output = baseline.generate(prompt, stop_token_ids=None)
+        compressed_output = compressed.generate(prompt, stop_token_ids=None)
+        self.assertEqual(baseline_output, compressed_output)
+
+    def test_generate_with_kv_cache_compression(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        for press in (
+            RandomPress(compression_ratio=0.5),
+            KnormPress(compression_ratio=0.5),
+            StreamingLLMPress(compression_ratio=0.5, n_sink=1),
+        ):
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
+            causal_lm.compile(sampler="greedy", press=press)
+            prompt = " airplane at airport"
+            output = causal_lm.generate(prompt, stop_token_ids=None)
+            self.assertTrue(prompt in output)
+
+    def test_generate_with_kv_cache_compression_mixed_length_batch(self):
+        if keras.config.backend() != "torch":
+            self.skipTest("Compression during generate() is torch-only.")
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        causal_lm.compile(
+            sampler="greedy",
+            press=StreamingLLMPress(compression_ratio=0.5, n_sink=1),
+        )
+        prompts = [" airplane at airport", " airplane"]
+        output = causal_lm.generate(prompts, stop_token_ids=None)
+        for prompt, generated in zip(prompts, output):
+            self.assertTrue(prompt in generated)
 
     @pytest.mark.large
     def test_saved_model(self):
