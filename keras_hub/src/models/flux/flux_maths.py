@@ -184,10 +184,6 @@ class FluxRoPEAttention(keras.layers.Layer):
         return config
 
 
-# TODO: This is probably already implemented in several places, but is needed to
-# ensure numeric equivalence to the original implementation. It uses
-# torch.functional.scaled_dot_product_attention() - do we have an equivalent
-# already in Keras?
 def scaled_dot_product_attention(
     query,
     key,

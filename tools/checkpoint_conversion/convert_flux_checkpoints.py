@@ -12,6 +12,16 @@ to `--output_dir`. Validation runs in `--validation_dtype` (float32 by
 default) for both models, one after the other, so only one 11.9B parameter
 model is ever resident: ~48GB of host RAM at float32, ~24GB at bfloat16.
 
+Validation compares the preset with the reference on:
+
+  - the config and the parameter count;
+  - every embedding, double block and single block, and the final layer,
+    each fed the reference's own inputs, so that a fault is reported at the
+    layer that has it rather than everywhere downstream of it;
+  - the output of `FluxBackbone.predict`, at two different input shapes;
+  - a 4-step Euler sampling trajectory, where each step is fed the previous
+    step's output (skip it with `--skip_sampling`).
+
 The checkpoint weights are bfloat16, so a bfloat16 preset holds exactly the
 same values as the checkpoint, and validating it in float32 checks the
 architecture and the weight mapping to float32 noise rather than to
@@ -32,6 +42,7 @@ Conversion runs on the host; set FLUX_CONVERT_ALLOW_GPU=1 to allow a GPU.
 """
 
 import argparse
+import functools
 import gc
 import importlib.metadata
 import importlib.util
@@ -62,6 +73,9 @@ from safetensors import safe_open  # noqa: E402
 try:
     from keras_hub.src.models.flux.flux_backbone import (  # noqa: E402
         FluxBackbone,
+    )
+    from keras_hub.src.models.flux.flux_presets import (  # noqa: E402
+        presets as REGISTERED_PRESETS,
     )
     from keras_hub.src.utils.transformers import convert_flux  # noqa: E402
 except ModuleNotFoundError as e:
@@ -364,12 +378,22 @@ _REFERENCE_DTYPES = {
 _GUIDANCE_FLOAT32_TOLERANCE = 1e-3
 
 
-def _reference_dtype_and_tolerance(dtype, guidance_embed):
-    """Map a Keras dtype policy name onto a torch dtype and a tolerance.
+def _reference_dtype_and_tolerances(dtype, guidance_embed):
+    """Map a Keras dtype policy name onto a torch dtype and tolerances.
 
     Mixed policies keep their weights in the low-precision dtype, which is
     what governs the achievable agreement, so `mixed_bfloat16` is treated
     exactly like `bfloat16`.
+
+    Returns `(reference_dtype, layer_tolerance, sinusoid_tolerance,
+    output_tolerance)`. In float32, the sinusoidal embeddings get
+    `_GUIDANCE_FLOAT32_TOLERANCE` too: at t=1 the timestep's argument
+    reaches 1000, where correct backends already disagree by ~6e-5 (one
+    float32 ulp), and a sinusoid has no weights, so its faults (the cos /
+    sin order, the time factor, the frequencies) all show at O(1). A layer
+    fed the reference's own intermediates never sees KerasHub's guidance
+    embedding, so of the other checks only those downstream of that
+    embedding need the looser tolerance.
     """
     name = dtype.removeprefix("mixed_")
     if name not in _REFERENCE_DTYPES:
@@ -378,9 +402,12 @@ def _reference_dtype_and_tolerance(dtype, guidance_embed):
             f"{sorted(_REFERENCE_DTYPES)} (optionally `mixed_` prefixed)."
         )
     reference_dtype, tolerance = _REFERENCE_DTYPES[name]
-    if guidance_embed and name == "float32":
-        tolerance = _GUIDANCE_FLOAT32_TOLERANCE
-    return reference_dtype, tolerance
+    sinusoid_tolerance = output_tolerance = tolerance
+    if name == "float32":
+        sinusoid_tolerance = _GUIDANCE_FLOAT32_TOLERANCE
+        if guidance_embed:
+            output_tolerance = _GUIDANCE_FLOAT32_TOLERANCE
+    return reference_dtype, tolerance, sinusoid_tolerance, output_tolerance
 
 
 def _relative_error(reference, actual):
@@ -441,13 +468,33 @@ _VALIDATION_GRID = (8, 12)  # latent rows x columns: 96 image tokens.
 _VALIDATION_TEXT_TOKENS = 16
 _VALIDATION_GUIDANCE = 3.5
 
+# `predict` is also compared on a second input set that changes every
+# dynamic axis -- one sample, a portrait grid and an odd text length -- so
+# that a preset tied to the first set's shapes cannot pass.
+_SHAPE_CHECK_TIMESTEPS = (0.5,)
+_SHAPE_CHECK_GRID = (6, 4)  # 24 image tokens, the transposed aspect.
+_SHAPE_CHECK_TEXT_TOKENS = 7
 
-def _validation_inputs(guidance_embed):
+# FLUX samples by integrating the predicted velocity with Euler steps from
+# noise at t=1 to t=0, and FLUX.1-schnell is distilled for 4 of them.
+# Comparing whole trajectories is the diffusion counterpart of the
+# generation checks in the LLM conversion scripts: every step is fed the
+# previous step's output, so an error that compounds shows up.
+_SAMPLING_STEPS = 4
+
+
+def _validation_inputs(
+    guidance_embed,
+    timesteps=_VALIDATION_TIMESTEPS,
+    grid=_VALIDATION_GRID,
+    text_tokens=_VALIDATION_TEXT_TOKENS,
+    seed=0,
+):
     """Build the deterministic inputs both implementations are fed."""
-    batch = len(_VALIDATION_TIMESTEPS)
-    rows, cols = _VALIDATION_GRID
-    image_sequence, text_sequence = rows * cols, _VALIDATION_TEXT_TOKENS
-    generator = torch.Generator().manual_seed(0)
+    batch = len(timesteps)
+    rows, cols = grid
+    image_sequence, text_sequence = rows * cols, text_tokens
+    generator = torch.Generator().manual_seed(seed)
     image = torch.randn(
         batch, image_sequence, INPUT_CHANNELS, generator=generator
     )
@@ -455,7 +502,7 @@ def _validation_inputs(guidance_embed):
         batch, text_sequence, TEXT_EMBEDDING_DIM, generator=generator
     )
     pooled = torch.randn(batch, Y_DIM, generator=generator)
-    timestep = torch.tensor(_VALIDATION_TIMESTEPS)
+    timestep = torch.tensor(timesteps)
     image_ids = torch.zeros(rows, cols, 3)
     image_ids[..., 1] = torch.arange(rows).float()[:, None]
     image_ids[..., 2] = torch.arange(cols).float()[None, :]
@@ -472,17 +519,18 @@ def _validation_inputs(guidance_embed):
         "image_ids": image_ids,
         "text_ids": text_ids,
         "guidance": guidance,
+        "grid": grid,
     }
 
 
 def _describe_inputs(tensors):
     batch, image_sequence, _ = tensors["image"].shape
-    rows, cols = _VALIDATION_GRID
+    rows, cols = tensors["grid"]
     timesteps = ", ".join(f"{t:g}" for t in tensors["timestep"].tolist())
     description = (
-        f"batch {batch} (timesteps {timesteps}), {image_sequence} image "
-        f"tokens on a {rows}x{cols} grid, {tensors['text'].shape[1]} text "
-        "tokens"
+        f"batch {batch} (timestep{'s' if batch > 1 else ''} {timesteps}), "
+        f"{image_sequence} image tokens on a {rows}x{cols} grid, "
+        f"{tensors['text'].shape[1]} text tokens"
     )
     if tensors["guidance"] is not None:
         description += f", guidance {_VALIDATION_GUIDANCE:g}"
@@ -522,9 +570,109 @@ def _load_reference(spec, reference_dtype):
     )
 
 
-def _reference_output(spec, reference_dtype, tensors):
-    """Run the diffusers reference and free it before returning.
+def _to_numpy(value):
+    """A torch tensor, or a tuple of them, as float32 numpy."""
+    if isinstance(value, (tuple, list)):
+        return tuple(_to_numpy(item) for item in value)
+    return value.detach().float().cpu().numpy()
 
+
+def _reference_forward(reference, reference_dtype, tensors):
+    """One forward pass of the diffusers reference, as float32 numpy."""
+    guidance = tensors["guidance"]
+    output = reference(
+        hidden_states=tensors["image"].to(reference_dtype),
+        encoder_hidden_states=tensors["text"].to(reference_dtype),
+        pooled_projections=tensors["pooled"].to(reference_dtype),
+        timestep=tensors["timestep"].to(reference_dtype),
+        # Position ids stay float32: diffusers computes the RoPE
+        # frequencies from them in float64 regardless.
+        img_ids=tensors["image_ids"],
+        txt_ids=tensors["text_ids"],
+        guidance=None if guidance is None else guidance.to(reference_dtype),
+        return_dict=False,
+    )[0]
+    return output.float().numpy()
+
+
+def _fused_sequence(output):
+    """A single block's output as one `[text, image]` sequence.
+
+    Older diffusers releases return the fused sequence itself; newer ones
+    split it and return `(text, image)`.
+    """
+    if isinstance(output, (tuple, list)):
+        return torch.cat(tuple(output), dim=1)
+    return output
+
+
+def _trace_reference(reference, trace):
+    """Record the output of every diffusers module KerasHub mirrors.
+
+    Each output is appended to `trace[name]`. Returns the hook handles;
+    remove them to stop recording.
+    """
+
+    def record(name, transform=lambda output: output):
+        def hook(module, args, output):
+            trace.setdefault(name, []).append(_to_numpy(transform(output)))
+
+        return hook
+
+    embed = reference.time_text_embed
+    hooks = [
+        # The sinusoidal projection runs for the timestep, then once more
+        # for the guidance strength of guidance-distilled models.
+        (embed.time_proj, record("sinusoids")),
+        (embed.timestep_embedder, record("time_in")),
+        (embed.text_embedder, record("vector_in")),
+        (embed, record("vec")),
+        (reference.x_embedder, record("img_in")),
+        (reference.context_embedder, record("txt_in")),
+        (reference.pos_embed, record("rope")),
+    ]
+    if hasattr(embed, "guidance_embedder"):
+        hooks.append((embed.guidance_embedder, record("guidance_in")))
+    # Double blocks return `(text, image)`; recorded as `(image, text)`.
+    hooks += [
+        (block, record("double", lambda output: output[::-1]))
+        for block in reference.transformer_blocks
+    ]
+    hooks += [
+        (block, record("single", _fused_sequence))
+        for block in reference.single_transformer_blocks
+    ]
+    return [module.register_forward_hook(hook) for module, hook in hooks]
+
+
+def _sample(forward, tensors, steps):
+    """Integrate the flow from the inputs' noise with Euler steps.
+
+    `forward` maps an input set to the predicted velocity. Each step is fed
+    the previous step's latents, as in a sampler, and the update is done in
+    float32, as diffusers' `FlowMatchEulerDiscreteScheduler` does.
+    """
+    sigmas = np.linspace(1.0, 0.0, steps + 1, dtype="float32")
+    latents = tensors["image"].numpy()
+    batch = latents.shape[0]
+    for sigma, next_sigma in zip(sigmas[:-1], sigmas[1:]):
+        velocity = forward(
+            dict(
+                tensors,
+                image=torch.from_numpy(latents),
+                timestep=torch.full((batch,), float(sigma)),
+            )
+        )
+        latents = latents + (next_sigma - sigma) * velocity
+    return latents
+
+
+def _reference_run(spec, reference_dtype, input_sets, sampling_steps):
+    """Run every reference computation up front, then free the reference.
+
+    The forward pass on the first input set also records the output of
+    each diffusers module that has a KerasHub counterpart, so that every
+    Keras layer can later be fed exactly the inputs its counterpart saw.
     The reference is local to this call so that callers can sequence it
     against the Keras model rather than holding both.
     """
@@ -532,44 +680,46 @@ def _reference_output(spec, reference_dtype, tensors):
     reference = _load_reference(spec, reference_dtype)
     reference.eval()
     _align_reference_epsilon(reference)
-
-    guidance = tensors["guidance"]
+    run = {
+        "config": dict(reference.config),
+        "params": sum(p.numel() for p in reference.parameters()),
+        "trace": {},
+    }
+    forward = functools.partial(_reference_forward, reference, reference_dtype)
+    print("Running the reference...")
     with torch.no_grad():
-        expected = reference(
-            hidden_states=tensors["image"].to(reference_dtype),
-            encoder_hidden_states=tensors["text"].to(reference_dtype),
-            pooled_projections=tensors["pooled"].to(reference_dtype),
-            timestep=tensors["timestep"].to(reference_dtype),
-            # Position ids stay float32: diffusers computes the RoPE
-            # frequencies from them in float64 regardless.
-            img_ids=tensors["image_ids"],
-            txt_ids=tensors["text_ids"],
-            guidance=None if guidance is None else guidance.to(reference_dtype),
-            return_dict=False,
-        )[0]
+        hooks = _trace_reference(reference, run["trace"])
+        try:
+            run["outputs"] = [forward(input_sets[0])]
+        finally:
+            for hook in hooks:
+                hook.remove()
+        run["outputs"] += [forward(tensors) for tensors in input_sets[1:]]
+        if sampling_steps:
+            run["sampled"] = _sample(forward, input_sets[0], sampling_steps)
     # Free the reference before running Keras, so the two 11.9B parameter
     # copies are never resident at the same time.
-    del reference
+    del forward, reference
     gc.collect()
-    return expected.float().numpy()
+    return run
+
+
+def _per_sample(ids, batch):
+    # diffusers takes one `(sequence, 3)` id table for the whole batch,
+    # the Keras backbone one per sample.
+    return np.repeat(ids.numpy()[None], batch, axis=0)
 
 
 def _keras_output(backbone, tensors, guidance_embed):
     """Run the converted backbone on the same inputs as the reference."""
     batch = tensors["image"].shape[0]
-
-    def per_sample(ids):
-        # diffusers takes one `(sequence, 3)` id table for the whole batch,
-        # the Keras backbone one per sample.
-        return np.repeat(ids.numpy()[None], batch, axis=0)
-
     inputs = {
         "image": tensors["image"].numpy(),
         "text": tensors["text"].numpy(),
         "y": tensors["pooled"].numpy(),
         "timesteps": tensors["timestep"].numpy(),
-        "image_ids": per_sample(tensors["image_ids"]),
-        "text_ids": per_sample(tensors["text_ids"]),
+        "image_ids": _per_sample(tensors["image_ids"], batch),
+        "text_ids": _per_sample(tensors["text_ids"], batch),
     }
     if guidance_embed:
         inputs["guidance"] = tensors["guidance"].numpy()
@@ -578,73 +728,355 @@ def _keras_output(backbone, tensors, guidance_embed):
     )
 
 
-def _report(expected, actual, tolerance, dtype):
-    """Print the agreement and refuse to continue if it is too poor."""
-    error = _relative_error(expected, actual)
+def _keras_numpy(value):
+    """A Keras tensor (or a numpy array) as numpy, upcast to float32."""
+    if isinstance(value, np.ndarray):
+        return value
+    return np.asarray(
+        keras.ops.convert_to_numpy(keras.ops.cast(value, "float32"))
+    )
+
+
+class _Checks:
+    """Records every check's verdict, so that one failure hides no other.
+
+    Gated checks decide the outcome. Diagnostics only add context: they are
+    flagged when out of tolerance, but never fail validation.
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        self.passed = 0
+        self.failed = []
+
+    def verdict(self, name, ok, detail, gate=True):
+        if gate and ok:
+            self.passed += 1
+        elif gate:
+            self.failed.append(name)
+        else:
+            detail += "  (diagnostic)"
+        mark = "✅" if ok else "❌" if gate else "⚠️ "
+        print(f"  {mark} {name:<24}{detail}")
+
+    def record(self, name, error, tolerance, detail="", gate=True):
+        """Judge a relative error against its tolerance."""
+        # `error <= tolerance` rather than `not error > tolerance`: a NaN
+        # anywhere must fail, not slip through the comparison.
+        detail = f"max rel {error:.2e}" + (f"  {detail}" if detail else "")
+        self.verdict(name, bool(error <= tolerance), detail, gate)
+
+    def compare(self, name, expected, actual, tolerance, detail="", gate=True):
+        try:
+            error = _relative_error(expected, _keras_numpy(actual))
+        except AssertionError as e:  # A shape mismatch.
+            self.verdict(name, False, str(e), gate)
+        else:
+            self.record(name, error, tolerance, detail, gate)
+
+    def finish(self):
+        """Fail unless every gated check passed; return how many did."""
+        low_precision = self.dtype.removeprefix("mixed_") != "float32"
+        if self.failed:
+            hint = ""
+            if low_precision:
+                hint = (
+                    f" In {self.dtype} these comparisons are dominated by "
+                    "rounding noise; re-run with `--validation_dtype "
+                    "float32` before concluding the conversion is wrong."
+                )
+            raise SystemExit(
+                f"\nNumerical validation FAILED: {len(self.failed)} of "
+                f"{self.passed + len(self.failed)} checks failed "
+                f"({', '.join(self.failed)}). Do not upload this preset." + hint
+            )
+        if low_precision:
+            print(
+                f"\n  ⚠️  A {self.dtype} pass only rules out gross faults (a "
+                "missing, transposed or random tensor); subtler mapping "
+                "errors, such as swapped q/k norm scales, pass it too. "
+                "Re-run with `--validation_dtype float32` before uploading."
+            )
+        return self.passed
+
+
+def _plain(value):
+    """A config value with tuples as lists, as it reads back from JSON."""
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
+
+
+def _check_architecture(checks, backbone, run, preset):
+    """Check the preset's config and size against the reference."""
+    print("\nArchitecture:")
+    config = backbone.get_config()
+    # What KerasHub's own Hugging Face converter builds from the reference
+    # config, including the dynamic sequence axes.
+    expected = convert_flux.convert_backbone_config(run["config"])
+    mismatched = [
+        f"{key} is {_plain(config.get(key))}, diffusers {_plain(value)}"
+        for key, value in expected.items()
+        if _plain(config.get(key)) != _plain(value)
+    ]
+    checks.verdict(
+        "config",
+        not mismatched,
+        "; ".join(mismatched)
+        or (
+            f"matches diffusers: {config['depth']} double + "
+            f"{config['depth_single_blocks']} single blocks, hidden size "
+            f"{config['hidden_size']}, {config['num_heads']} heads, "
+            f"guidance_embed {config['guidance_embed']}, dynamic sequence "
+            "lengths"
+        ),
+    )
+    params = backbone.count_params()
+    checks.verdict(
+        "parameter count",
+        params == run["params"],
+        f"{params:,} (diffusers {run['params']:,})",
+    )
+    metadata = REGISTERED_PRESETS.get(preset, {}).get("metadata", {})
+    if "params" in metadata:
+        checks.verdict(
+            "preset metadata",
+            metadata["params"] == params,
+            f"flux_presets.py lists {metadata['params']:,} parameters",
+            gate=False,
+        )
+
+
+def _check_layers(
+    checks,
+    backbone,
+    trace,
+    tensors,
+    expected,
+    tolerance,
+    sinusoid_tolerance,
+    output_tolerance,
+):
+    """Check every KerasHub layer against its diffusers counterpart.
+
+    Each layer is fed the reference's own inputs (teacher forcing), so its
+    error is its own: a fault shows up at the layer that has it, instead of
+    in every layer downstream. Alongside, KerasHub's own forward pass is
+    replayed layer by layer ("free-running"), a diagnostic of how the error
+    accumulates with depth. Returns that pass's output.
+    """
+    batch, text_tokens = tensors["text"].shape[:2]
+
+    def tolerance_note(value):
+        # Marks the checks judged at other than their section's tolerance.
+        return f"(tol {value:.0e})" if value != tolerance else ""
+
+    sinusoid_note = tolerance_note(sinusoid_tolerance)
+    output_note = tolerance_note(output_tolerance)
+
+    print(
+        "\nEmbeddings, each fed its diffusers counterpart's inputs "
+        f"(tol {tolerance:.0e}):"
+    )
+    sinusoids = trace["sinusoids"]
+    time_sinusoid = backbone.timestep_embedding(tensors["timestep"].numpy())
+    checks.compare(
+        "timestep sinusoid",
+        sinusoids[0],
+        time_sinusoid,
+        sinusoid_tolerance,
+        sinusoid_note,
+    )
+    checks.compare(
+        "time_in",
+        trace["time_in"][0],
+        backbone.time_input_embedder(sinusoids[0]),
+        tolerance,
+    )
+    vec = backbone.time_input_embedder(time_sinusoid)
+    if backbone.guidance_embed:
+        guidance_sinusoid = backbone.timestep_embedding(
+            tensors["guidance"].numpy()
+        )
+        checks.compare(
+            "guidance sinusoid",
+            sinusoids[1],
+            guidance_sinusoid,
+            sinusoid_tolerance,
+            sinusoid_note,
+        )
+        checks.compare(
+            "guidance_in",
+            trace["guidance_in"][0],
+            backbone.guidance_input_embedder(sinusoids[1]),
+            tolerance,
+        )
+        vec = vec + backbone.guidance_input_embedder(guidance_sinusoid)
+    vector = backbone.vector_embedder(tensors["pooled"].numpy())
+    checks.compare("vector_in", trace["vector_in"][0], vector, tolerance)
+    vec = vec + vector
+    checks.compare(
+        "vec (modulation)",
+        trace["vec"][0],
+        vec,
+        output_tolerance,
+        f"from KerasHub's own sinusoids {output_note}".rstrip(),
+    )
+    image = backbone.image_input_embedder(tensors["image"].numpy())
+    checks.compare("img_in", trace["img_in"][0], image, tolerance)
+    text = backbone.text_input_embedder(tensors["text"].numpy())
+    checks.compare("txt_in", trace["txt_in"][0], text, tolerance)
+    ids = np.concatenate(
+        [
+            _per_sample(tensors["text_ids"], batch),
+            _per_sample(tensors["image_ids"], batch),
+        ],
+        axis=1,
+    )
+    rope = backbone.positional_embedder(ids)
+    # diffusers keeps one `(sequence, head_dim)` table each of cos and sin
+    # for the whole batch, with every frequency repeated twice; KerasHub
+    # one `(sequence, head_dim // 2, 2)` table of `(cos, sin)` pairs per
+    # sample.
+    cos, sin = trace["rope"][0]
+    table = _keras_numpy(rope)
+    checks.compare(
+        "RoPE cos/sin tables",
+        np.broadcast_to(np.stack([cos, sin])[:, None], (2, batch) + cos.shape),
+        np.stack([np.repeat(table[..., i], 2, axis=-1) for i in (0, 1)]),
+        tolerance,
+    )
+    forced_rope = np.repeat(
+        np.stack([cos[:, ::2], sin[:, ::2]], axis=-1)[None], batch, axis=0
+    )
+
+    print(
+        f"\nBlocks, each fed the reference's inputs (tol {tolerance:.0e}); "
+        "free-running is KerasHub's own forward pass, for context:"
+    )
+    forced_vec = trace["vec"][0]
+    forced_image, forced_text = trace["img_in"][0], trace["txt_in"][0]
+    for index, block in enumerate(backbone.double_blocks):
+        expected_image, expected_text = trace["double"][index]
+        out_image, out_text = block(
+            image=forced_image,
+            text=forced_text,
+            modulation_encoding=forced_vec,
+            positional_encoding=forced_rope,
+        )
+        image, text = block(
+            image=image,
+            text=text,
+            modulation_encoding=vec,
+            positional_encoding=rope,
+        )
+        # Judged per stream: each has its own weights and its own scale.
+        image_error = _relative_error(expected_image, _keras_numpy(out_image))
+        text_error = _relative_error(expected_text, _keras_numpy(out_text))
+        drift = np.max(
+            [
+                _relative_error(expected_image, _keras_numpy(image)),
+                _relative_error(expected_text, _keras_numpy(text)),
+            ]
+        )
+        checks.record(
+            f"double block {index}",
+            # `np.max`, unlike `max`, propagates a NaN from either stream.
+            float(np.max([image_error, text_error])),
+            tolerance,
+            f"(image {image_error:.2e}, text {text_error:.2e}), "
+            f"free-running {drift:.2e}",
+        )
+        forced_image, forced_text = expected_image, expected_text
+
+    forced = np.concatenate([forced_text, forced_image], axis=1)
+    sequence = keras.ops.concatenate([text, image], axis=1)
+    for index, block in enumerate(backbone.single_blocks):
+        out = block(
+            forced,
+            modulation_encoding=forced_vec,
+            positional_encoding=forced_rope,
+        )
+        sequence = block(
+            sequence, modulation_encoding=vec, positional_encoding=rope
+        )
+        drift = _relative_error(trace["single"][index], _keras_numpy(sequence))
+        checks.compare(
+            f"single block {index}",
+            trace["single"][index],
+            out,
+            tolerance,
+            f"free-running {drift:.2e}",
+        )
+        forced = trace["single"][index]
+    checks.compare(
+        "final layer",
+        expected,
+        backbone.final_layer(
+            np.ascontiguousarray(forced[:, text_tokens:]), forced_vec
+        ),
+        tolerance,
+    )
+    output = backbone.final_layer(
+        backbone.strip_text_tokens(sequence, text), vec
+    )
+    return _keras_numpy(output)
+
+
+def _check_output(checks, name, expected, actual, tolerance):
+    """An end-to-end comparison, reported in full."""
     expected = np.asarray(expected, dtype="float64")
     actual = np.asarray(actual, dtype="float64")
-    difference = np.abs(expected - actual)
-    cosine = float(
-        np.sum(expected * actual)
-        / max(np.linalg.norm(expected) * np.linalg.norm(actual), 1e-30)
-    )
-    print(
-        f"  output shape {expected.shape}, max |reference| "
-        f"{np.abs(expected).max():.4g}"
-    )
-    print(
-        f"  max abs error {difference.max():.3e}, mean abs error "
-        f"{difference.mean():.3e}, cosine similarity {cosine:.8f}"
-    )
-    print(f"  max relative error {error:.3e}  (tol {tolerance:.0e})")
-    # `not error <= tolerance` rather than `error > tolerance`: a NaN or inf
-    # anywhere in the output must fail, not slip through the comparison.
-    if not error <= tolerance:
-        hint = ""
-        if dtype.removeprefix("mixed_") != "float32":
-            hint = (
-                f" In {dtype} this comparison is dominated by rounding noise; "
-                "re-run with `--validation_dtype float32` before concluding "
-                "the conversion is wrong."
-            )
-        raise SystemExit(
-            f"Numerical validation FAILED: {error:.3e} > {tolerance:.0e}. "
-            "Do not upload this preset." + hint
+    if expected.shape == actual.shape:
+        difference = np.abs(expected - actual)
+        cosine = float(
+            np.sum(expected * actual)
+            / max(np.linalg.norm(expected) * np.linalg.norm(actual), 1e-30)
         )
-    if dtype.removeprefix("mixed_") != "float32":
         print(
-            f"  ⚠️  A {dtype} pass only rules out gross faults (a missing, "
-            "transposed or random tensor); subtler mapping errors, such as "
-            "swapped q/k norm scales, pass it too. Re-run with "
-            "`--validation_dtype float32` before uploading."
+            f"    output shape {expected.shape}, max |reference| "
+            f"{np.abs(expected).max():.4g}"
         )
+        print(
+            f"    max abs error {difference.max():.3e}, mean abs error "
+            f"{difference.mean():.3e}, cosine similarity {cosine:.8f}"
+        )
+    checks.compare(name, expected, actual, tolerance)
 
 
-def validate_preset(preset_dir, spec, guidance_embed, dtype, tolerance=None):
+def validate_preset(
+    preset_dir, preset, dtype, tolerance=None, sampling_steps=_SAMPLING_STEPS
+):
     """Compare a saved preset against the real diffusers model.
 
     Uses the diffusers-format copy of the same checkpoint as an independent
     reference: if both the architecture and the weight mapping are right,
-    the two must agree to floating point noise.
+    the two must agree to floating point noise -- layer by layer, end to
+    end, and over a sampling trajectory.
 
     This reliably catches artifact-level faults -- a mis-mapped, transposed
-    or missing tensor, which land around 1e-1. It is a weaker detector of
-    subtly wrong formulas: an incorrect activation function moves the
-    end-to-end error only to ~1e-4. That class is covered instead by the
-    unit tests in `keras_hub/src/models/flux/flux_layers_test.py`, which
-    check the layers individually.
+    or missing tensor, which land around 1e-1 -- and the per-layer checks
+    name the layer that has one. It is a weaker detector of subtly wrong
+    formulas: an incorrect activation function moves the end-to-end error
+    only to ~1e-4. That class is covered instead by the unit tests in
+    `keras_hub/src/models/flux/flux_layers_test.py`, which check the layers
+    individually.
 
     Both models run in `dtype`, whatever dtype the preset was saved in, and
     the reference runs and is freed *before* the preset is read back, so
     only one 11.9B parameter model is ever resident (~48GB at float32, ~24GB
     at bfloat16). Validating the saved preset rather than the model in
     memory also covers the save / load round trip.
+
+    Returns the number of checks passed; raises `SystemExit` if any failed.
     """
-    reference_dtype, default_tolerance = _reference_dtype_and_tolerance(
-        dtype, guidance_embed
+    spec = PRESETS[preset]
+    guidance_embed = spec["guidance_embed"]
+    reference_dtype, layer_tolerance, sinusoid_tolerance, output_tolerance = (
+        _reference_dtype_and_tolerances(dtype, guidance_embed)
     )
-    if tolerance is None:
-        tolerance = default_tolerance
+    if tolerance is not None:
+        layer_tolerance = sinusoid_tolerance = output_tolerance = tolerance
     # Checked before the reference loads, which otherwise spends ~24GB and
     # several minutes before failing. `save_backbone` writes the config
     # first, so its absence means the conversion phase never reached the
@@ -665,38 +1097,99 @@ def validate_preset(preset_dir, spec, guidance_embed, dtype, tolerance=None):
             "bfloat16. Check `free -g`, then re-run:\n"
             f"    python {os.path.relpath(__file__)} --skip_validation"
         )
-    if dtype.removeprefix("mixed_") == "float32":
+    full_precision = dtype.removeprefix("mixed_") == "float32"
+    if full_precision:
         _use_full_float32_matmuls()
-    tensors = _validation_inputs(guidance_embed)
+    input_sets = [
+        _validation_inputs(guidance_embed),
+        _validation_inputs(
+            guidance_embed,
+            _SHAPE_CHECK_TIMESTEPS,
+            _SHAPE_CHECK_GRID,
+            _SHAPE_CHECK_TEXT_TOKENS,
+            seed=1,
+        ),
+    ]
     print(
         f"Validating against diffusers `FluxTransformer2DModel` "
-        f"({spec['repo_id']}), both in {dtype}, on {_describe_inputs(tensors)}."
+        f"({spec['repo_id']}), both in {dtype}, on "
+        f"{_describe_inputs(input_sets[0])}."
     )
     print(
         f"  keras {keras.__version__} ({keras.config.backend()} backend), "
         f"torch {torch.__version__}, diffusers "
         f"{importlib.metadata.version('diffusers')}"
     )
-    expected = _reference_output(spec, reference_dtype, tensors)
+    run = _reference_run(spec, reference_dtype, input_sets, sampling_steps)
     print(f"Loading the converted preset from {preset_dir} in {dtype}...")
     keras.config.set_dtype_policy(dtype)
-    # Absolute, because `from_preset` resolves a string that matches a
-    # registered preset name to its Kaggle handle before it looks on disk,
-    # and the default output directory, `flux1_schnell`, is such a name.
     backbone = FluxBackbone.from_preset(
         os.path.abspath(preset_dir), dtype=dtype
     )
-    actual = _keras_output(backbone, tensors, guidance_embed)
+    checks = _Checks(dtype)
+    _check_architecture(checks, backbone, run, preset)
+    # The replay calls layers eagerly, which on the torch backend would
+    # otherwise record an autograd graph holding every activation.
+    with torch.no_grad():
+        eager = _check_layers(
+            checks,
+            backbone,
+            run["trace"],
+            input_sets[0],
+            run["outputs"][0],
+            layer_tolerance,
+            sinusoid_tolerance,
+            output_tolerance,
+        )
+        print(
+            "\nEnd to end, `FluxBackbone.predict` on the saved preset "
+            f"(tol {output_tolerance:.0e}):"
+        )
+        predicted = []
+        for tensors, expected in zip(input_sets, run["outputs"]):
+            print(f"  {_describe_inputs(tensors)}:")
+            predicted.append(_keras_output(backbone, tensors, guidance_embed))
+            rows, cols = tensors["grid"]
+            _check_output(
+                checks,
+                f"output ({rows}x{cols} grid)",
+                expected,
+                predicted[-1],
+                output_tolerance,
+            )
+        if sampling_steps:
+            sampled = _sample(
+                functools.partial(
+                    _keras_output, backbone, guidance_embed=guidance_embed
+                ),
+                input_sets[0],
+                sampling_steps,
+            )
+            # Gated in float32 only: in the low precision dtypes the
+            # rounding noise compounds over the steps too.
+            checks.compare(
+                f"{sampling_steps}-step sampling",
+                run["sampled"],
+                sampled,
+                output_tolerance,
+                f"latents after {sampling_steps} Euler steps, t=1 to 0",
+                gate=full_precision,
+            )
+        checks.compare(
+            "eager replay vs predict",
+            predicted[0],
+            eager,
+            layer_tolerance,
+            gate=False,
+        )
     del backbone
     gc.collect()
-    _report(expected, actual, tolerance, dtype)
+    return checks.finish()
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
-        # The docstring is mostly copy-pasteable commands, which the
-        # default formatter reflows into one unreadable paragraph.
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     dtypes = sorted(_REFERENCE_DTYPES) + ["mixed_bfloat16", "mixed_float16"]
@@ -732,9 +1225,19 @@ def main():
         type=float,
         default=None,
         help=(
-            "Override the max relative error tolerance (default: 1e-4 at "
-            "float32, 1e-3 for guidance-distilled models, 5e-2 at float16, "
-            "1e-1 at bfloat16)."
+            "Override the max relative error tolerance of every check "
+            "(default: 1e-4 at float32, except 1e-3 for the sinusoidal "
+            "embeddings and, in guidance-distilled models, the checks "
+            "downstream of the guidance embedding; 5e-2 at float16; 1e-1 "
+            "at bfloat16)."
+        ),
+    )
+    parser.add_argument(
+        "--skip_sampling",
+        action="store_true",
+        help=(
+            f"Skip the {_SAMPLING_STEPS}-step sampling comparison, which "
+            f"runs each model {_SAMPLING_STEPS} more times."
         ),
     )
     parser.add_argument(
@@ -764,16 +1267,20 @@ def main():
     spec = PRESETS[args.preset]
     guidance_embed = spec["guidance_embed"]
     output_dir = os.path.normpath(args.output_dir or args.preset)
+    sampling_steps = 0 if args.skip_sampling else _SAMPLING_STEPS
 
     if args.validate_only:
-        validate_preset(
+        passed = validate_preset(
             args.validate_only,
-            spec,
-            guidance_embed,
+            args.preset,
             args.validation_dtype,
             args.tolerance,
+            sampling_steps,
         )
-        print(f"✅ Output validated in {args.validation_dtype}")
+        print(
+            f"✅ Preset validated in {args.validation_dtype}: all {passed} "
+            "checks passed"
+        )
         validated_dir = os.path.normpath(args.validate_only)
         if validated_dir.endswith(".unvalidated"):
             # The staging directory of an earlier run whose validation
@@ -845,12 +1352,12 @@ def main():
     gc.collect()
 
     try:
-        validate_preset(
+        passed = validate_preset(
             staging_dir,
-            spec,
-            guidance_embed,
+            args.preset,
             args.validation_dtype,
             args.tolerance,
+            sampling_steps,
         )
     except SystemExit:
         # A verdict (the preset failed a check), not an interruption.
@@ -868,7 +1375,10 @@ def main():
         )
         raise
     os.replace(staging_dir, output_dir)
-    print(f"✅ Output validated in {args.validation_dtype}")
+    print(
+        f"✅ Preset validated in {args.validation_dtype}: all {passed} "
+        "checks passed"
+    )
     print(f"Saved the validated preset to {output_dir}")
 
 

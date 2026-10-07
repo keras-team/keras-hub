@@ -8,7 +8,7 @@ presets = {
                 "text-to-image generation, timestep-distilled for "
                 "few-step sampling."
             ),
-            "params": 11901408256,
+            "params": 11891178560,
             "path": "flux",
             "model_card": "https://huggingface.co/black-forest-labs/FLUX.1-schnell",
         },
