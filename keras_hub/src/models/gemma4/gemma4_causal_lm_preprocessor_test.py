@@ -160,6 +160,15 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_text_generate_preprocess_no_start_token(self):
+        input_data = "the quick brown fox"
+        preprocessor = Gemma4CausalLMPreprocessor(
+            **self.init_text_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
+
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <|image|>",
@@ -175,6 +184,31 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["padding_mask"], [1] * 12 + [0] * 8)
         self.assertAllEqual(x["vision_indices"], list(range(6, 11)) + [0] * 5)
         self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
+        self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
+
+    def test_generate_preprocess_no_start_token(self):
+        input_data = {
+            "prompts": "the quick brown fox <|image|>",
+            "pixel_values": np.ones((2, 1, 48), dtype="float32"),
+            "pixel_position_ids": np.ones((2, 1, 2), dtype="int32"),
+        }
+        preprocessor = Gemma4CausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x["token_ids"],
+            [9, 14, 10, 12, 4, 8, 8, 8, 8, 8, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(
+            x["padding_mask"],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(x["vision_indices"], [5, 6, 7, 8, 9, 0, 0, 0, 0, 0])
+        self.assertAllEqual(
+            x["vision_mask"],
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
         self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
 
     def test_text_generate_postprocess(self):
