@@ -1,0 +1,91 @@
+name: KerasHub GPU Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [labeled, synchronize]
+  release:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  # One group per PR for the run-gpu-tests label and for pushes, so a push
+  # cancels a stale in-progress run. Any other label gets its own group and
+  # can never cancel a live run. On push/release head_ref is empty, so the
+  # key falls back to run_id and master runs are never cancelled.
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ github.event.action == 'labeled' && github.event.label.name || 'run-gpu-tests' }}
+  cancel-in-progress: true
+
+jobs:
+  cancel_stale:
+    # A push to a PR claims this PR's concurrency group, which cancels a GPU
+    # run still going for the previous commit. It deliberately does not
+    # re-run the tests: add the run-gpu-tests label again to test the new
+    # commit. A real job is needed here; a run whose jobs are all skipped is
+    # not guaranteed to cancel anything.
+    name: Cancel stale GPU run
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    steps:
+    - env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: echo "Superseded by ${HEAD_SHA}"
+
+  gpu_tests:
+    # Only run on pushes to master, releases or when "run-gpu-tests" is added
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'release' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'run-gpu-tests')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [jax, tensorflow, torch]
+        shard: [1, 2, 3, 4]
+
+    name: GPU tests (${{ matrix.backend }}, shard ${{ matrix.shard }})
+    runs-on: linux-x86-g2-32-l4-1gpu
+    timeout-minutes: 300
+
+    container:
+      image: python:3.11-slim
+
+    env:
+      KERAS_BACKEND: ${{ matrix.backend }}
+
+    steps:
+    - name: Install binary dependencies
+      run: |
+        apt-get update
+        apt-get -y install build-essential curl git gnupg
+        git config --global --add safe.directory '*'
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Check CUDA Version
+      run: nvidia-smi
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
+        pip install huggingface_hub --progress-bar off
+        pip install --no-deps -e "." --progress-bar off
+
+    - name: Test with pytest
+      env:
+        # Prevent TF from pre-allocating all GPU memory, leaving room for
+        # the primary backend (torch/jax) when TF is used for preprocessing.
+        TF_FORCE_GPU_ALLOW_GROWTH: "true"
+        # Only the test step downloads presets; keep the secrets out of the
+        # install and setup steps above.
+        KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      run: |
+        pytest keras_hub --check_gpu --run_large --cov=keras_hub \
+          --durations=50 --splits 4 --group ${{ matrix.shard }}
