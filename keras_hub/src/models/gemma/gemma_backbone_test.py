@@ -12,7 +12,7 @@ class GemmaBackboneTest(TestCase):
             "vocabulary_size": 20,
             "num_layers": 2,
             "num_query_heads": 4,
-            "num_key_value_heads": 1,
+            "num_key_value_heads": 2,
             "hidden_dim": 16,
             "intermediate_dim": 32,
             "head_dim": 4,
@@ -154,6 +154,42 @@ class GemmaBackboneTest(TestCase):
                 )
             if "attention/value/lora_kernel_b" in w.path:
                 self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+
+    def test_distribution_with_dora(self):
+        if keras.backend.backend() != "jax":
+            self.skipTest("`ModelParallel` testing requires the Jax backend.")
+        devices = keras.distribution.list_devices("CPU")
+        if len(devices) == 1:
+            self.skipTest("`ModelParallel` testing requires multiple devices.")
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(1, len(devices)),
+            axis_names=("batch", "model"),
+            devices=devices,
+        )
+
+        layout_map = GemmaBackbone.get_layout_map(device_mesh)
+        distribution = keras.distribution.ModelParallel(layout_map=layout_map)
+        with distribution.scope():
+            model = GemmaBackbone(**self.init_kwargs)
+            model.enable_dora(rank=4)
+
+        for w in model.weights:
+            if "attention/query/dora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/query/dora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+            if "attention/query/dora_magnitude" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ())
+            if "attention/value/dora_kernel_a" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, None)
+                )
+            if "attention/value/dora_kernel_b" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, None))
+            if "attention/value/dora_magnitude" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ())
 
 
 class Gemma2BackboneTest(TestCase):

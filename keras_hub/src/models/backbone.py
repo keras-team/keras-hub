@@ -223,6 +223,36 @@ class Backbone(keras.Model):
                         layer.enable_lora(rank)
                         self._lora_enabled_layers.append(i)
 
+    def enable_dora(self, rank, target_layer_names=None):
+        """Enable DoRA on the backbone.
+
+        Calling this method will freeze all weights on the backbone,
+        while enabling DoRA on the specified layers.
+
+        Args:
+            rank: The rank of the DoRA factorization.
+            target_layer_names: A list of strings, the names of the layers to
+                apply DoRA to. If `None`, this will be populated with the
+                default LoRA layer names as returned by
+                `backbone.default_lora_layer_names()`.
+        """
+        if target_layer_names is None:
+            target_layer_names = self.default_lora_layer_names()
+        self.trainable = True
+        self._dora_enabled_layers = []
+        self._dora_rank = rank
+        for layer in self._flatten_layers(include_self=False):
+            layer.trainable = False
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for i, layer in enumerate(all_layers):
+            for name in target_layer_names:
+                if layer.name == name:
+                    if hasattr(layer, "enable_dora"):
+                        layer.trainable = True
+                        layer.enable_dora(rank)
+                        self._dora_enabled_layers.append(i)
+
     def save_lora_weights(self, filepath):
         if not getattr(self, "_lora_enabled_layers", []):
             raise ValueError(
@@ -275,6 +305,64 @@ class Backbone(keras.Model):
             lora_kernel_b = store.get(f"lora/{layer_index}")["lora_kernel_b"]
             layer.lora_kernel_a.assign(lora_kernel_a)
             layer.lora_kernel_b.assign(lora_kernel_b)
+        store.close()
+
+    def save_dora_weights(self, filepath):
+        if not getattr(self, "_dora_enabled_layers", []):
+            raise ValueError(
+                "There are no dora-enabled layers in this model. "
+                "Make sure to call `.enable_dora(rank)` first."
+            )
+        if not str(filepath).endswith(".dora.h5"):
+            raise ValueError(
+                "The filename must end in `.dora.h5`. "
+                f"Received: filepath={filepath}"
+            )
+
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="w")
+        lora_store = store.make("dora")
+        lora_store["rank"] = self._dora_rank
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._dora_enabled_layers:
+            layer = all_layers[layer_index]
+            inner_store = store.make(f"dora/{layer_index}")
+            if hasattr(layer, "dora_kernel_a"):
+                inner_store["dora_kernel_a"] = layer.dora_kernel_a
+                inner_store["dora_kernel_b"] = layer.dora_kernel_b
+            elif hasattr(layer, "dora_embeddings_a"):
+                inner_store["dora_embeddings_a"] = layer.dora_embeddings_a
+                inner_store["dora_embeddings_b"] = layer.dora_embeddings_b
+            inner_store["dora_magnitude"] = layer.dora_magnitude
+        store.close()
+
+    def load_dora_weights(self, filepath):
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="r")
+        lora_store = store.get("dora")
+        rank = int(lora_store["rank"][()])
+
+        if not getattr(self, "_dora_enabled_layers", []):
+            self.enable_dora(rank)
+        else:
+            if self._dora_rank != rank:
+                raise ValueError(
+                    f"The DoRA rank expected by file '{filepath}' "
+                    f"is rank={rank}, but the model was called with "
+                    f"`.enable_dora(rank={self._dora_rank})`. "
+                    "Both ranks must match."
+                )
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._dora_enabled_layers:
+            layer = all_layers[layer_index]
+            inner_store = store.get(f"dora/{layer_index}")
+            if "dora_kernel_a" in inner_store:
+                layer.dora_kernel_a.assign(inner_store["dora_kernel_a"])
+                layer.dora_kernel_b.assign(inner_store["dora_kernel_b"])
+            elif "dora_embeddings_a" in inner_store:
+                layer.dora_embeddings_a.assign(inner_store["dora_embeddings_a"])
+                layer.dora_embeddings_b.assign(inner_store["dora_embeddings_b"])
+            layer.dora_magnitude.assign(inner_store["dora_magnitude"])
         store.close()
 
     def export_to_transformers(self, path):
