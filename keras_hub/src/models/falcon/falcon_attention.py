@@ -3,6 +3,8 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
+
 
 class FalconAttention(keras.layers.Layer):
     def __init__(
@@ -31,7 +33,7 @@ class FalconAttention(keras.layers.Layer):
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="bqm,mnh->bqnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
@@ -40,7 +42,7 @@ class FalconAttention(keras.layers.Layer):
         )
         self.query_dense.build(inputs_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bkm,mnh->bknh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
@@ -49,7 +51,7 @@ class FalconAttention(keras.layers.Layer):
         )
         self.key_dense.build(inputs_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bkm,mnh->bknh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
