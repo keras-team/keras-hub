@@ -1,0 +1,469 @@
+import numpy as np
+
+from keras_hub.src.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
+from keras_hub.src.tests.test_case import TestCase
+
+
+class MultiSegmentPackerTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = True
+
+    def test_layer_basics(self):
+        # `call()` takes one `inputs` arg (the segment tuple), so it must be
+        # wrapped in an extra 1-tuple here.
+        self.run_preprocessing_layer_test(
+            cls=MultiSegmentPacker,
+            init_kwargs={
+                "sequence_length": 7,
+                "start_value": 1,
+                "end_value": 2,
+                "truncate": "round_robin",
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=(
+                (
+                    [[10, 11, 12], [10, 11, 12]],
+                    [[20, 21, 22], [20, 21, 22]],
+                ),
+            ),
+            expected_output=(
+                [
+                    [1, 10, 11, 2, 20, 21, 2],
+                    [1, 10, 11, 2, 20, 21, 2],
+                ],
+                [
+                    [0, 0, 0, 0, 1, 1, 1],
+                    [0, 0, 0, 0, 1, 1, 1],
+                ],
+            ),
+        )
+
+    def test_trim_single_input_ints(self):
+        # right padding
+        input_data = np.arange(3, 10)
+        packer = MultiSegmentPacker(
+            sequence_length=8,
+            start_value=1,
+            end_value=2,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, [1, 3, 4, 5, 6, 7, 8, 2])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 0, 0, 0])
+
+        # left padding
+        input_data = np.arange(3, 10)
+        packer = MultiSegmentPacker(
+            sequence_length=8,
+            start_value=1,
+            end_value=2,
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, [1, 3, 4, 5, 6, 7, 8, 2])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 0, 0, 0])
+
+    def test_trim_single_input_strings(self):
+        # right padding
+        input_data = ["a", "b", "c", "d"]
+        packer = MultiSegmentPacker(
+            sequence_length=5,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, ["[CLS]", "a", "b", "c", "[SEP]"])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0])
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=5,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, ["[CLS]", "a", "b", "c", "[SEP]"])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0])
+
+    def test_trim_multiple_inputs_round_robin(self):
+        # right padding
+        seq1 = ["a", "b", "c"]
+        seq2 = ["x", "y", "z"]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids, ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"]
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1, 1])
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids, ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"]
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1, 1])
+
+    def test_trim_multiple_inputs_waterfall(self):
+        # right padding
+        seq1 = ["a", "b", "c"]
+        seq2 = ["x", "y", "z"]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids, ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"]
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 1, 1])
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids, ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"]
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 1, 1])
+
+    def test_trim_batched_inputs_round_robin(self):
+        # right padding
+        seq1 = [["a", "b", "c"], ["a", "b", "c"]]
+        seq2 = [["x", "y", "z"], ["x", "y", "z"]]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
+        )
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
+        )
+
+    def test_trim_batched_inputs_waterfall(self):
+        # right padding
+        seq1 = [["a", "b", "c"], ["a", "b"]]
+        seq2 = [["x", "y", "z"], ["x", "y", "z"]]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
+        )
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
+        )
+
+    def test_pad_inputs(self):
+        # right padding
+        seq1 = ["a"]
+        seq2 = ["x"]
+        packer = MultiSegmentPacker(
+            6,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 1, 1, 0])
+
+        # left padding
+        packer = MultiSegmentPacker(
+            6,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            ["[PAD]", "[CLS]", "a", "[SEP]", "x", "[SEP]"],
+        )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1])
+
+    def test_pad_batched_inputs(self):
+        # right padding
+        seq1 = [["a"], ["a"]]
+        seq2 = [["x"], ["x", "y"]]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]", "[PAD]"],
+                ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 1, 1, 0, 0],
+                [0, 0, 0, 1, 1, 1, 0],
+            ],
+        )
+
+        # left padding
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["[PAD]", "[PAD]", "[CLS]", "a", "[SEP]", "x", "[SEP]"],
+                ["[PAD]", "[CLS]", "a", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
+        )
+
+    def test_list_special_tokens(self):
+        # right padding
+        seq1 = [["a", "b"], ["a", "b"]]
+        seq2 = [["x", "y"], ["x"]]
+        packer = MultiSegmentPacker(
+            8,
+            start_value="<s>",
+            end_value="</s>",
+            sep_value=["</s>", "</s>"],
+            pad_value="<pad>",
+            truncate="round_robin",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["<s>", "a", "b", "</s>", "</s>", "x", "y", "</s>"],
+                ["<s>", "a", "b", "</s>", "</s>", "x", "</s>", "<pad>"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 0, 1, 1, 0],
+            ],
+        )
+
+        # left padding
+        packer = MultiSegmentPacker(
+            8,
+            start_value="<s>",
+            end_value="</s>",
+            sep_value=["</s>", "</s>"],
+            pad_value="<pad>",
+            truncate="round_robin",
+            padding_side="left",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        token_ids, segment_ids = packer((seq1, seq2))
+        self.assertAllEqual(
+            token_ids,
+            [
+                ["<s>", "a", "b", "</s>", "</s>", "x", "y", "</s>"],
+                ["<pad>", "<s>", "a", "b", "</s>", "</s>", "x", "</s>"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 1, 1],
+            ],
+        )
+
+    def test_sequence_length_override(self):
+        """Caller-supplied sequence_length should override init value."""
+        seq1 = [1, 2, 3, 4, 5]
+        seq2 = [6, 7, 8, 9, 10]
+        packer = MultiSegmentPacker(
+            sequence_length=8,
+            start_value=101,
+            end_value=102,
+            pad_value=0,
+            sep_value=[],
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        # Call with sequence_length=12 (overriding init value of 8).
+        # Budget = 12 - 1(start) - 1(end) = 10 → all tokens fit.
+        token_ids, segment_ids = packer((seq1, seq2), sequence_length=12)
+        self.assertAllEqual(
+            token_ids,
+            [101, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 102],
+        )
+
+    def test_no_start_token(self):
+        """add_start_value=False should not reserve space for start token."""
+        seq1 = [1, 2, 3, 4]
+        seq2 = [5, 6, 7, 8]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value=101,
+            end_value=102,
+            pad_value=0,
+            sep_value=[],
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        # With add_start_value=False:
+        # Budget = 7 - 0(no start) - 1(end) = 6, round_robin → 3+3.
+        # Output: [1,2,3, 5,6,7, 102]
+        token_ids, segment_ids = packer((seq1, seq2), add_start_value=False)
+        self.assertAllEqual(token_ids, [1, 2, 3, 5, 6, 7, 102])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 1, 1, 1, 1])
+
+    def test_no_end_token(self):
+        """add_end_value=False should not reserve space for end token."""
+        seq1 = [1, 2, 3, 4]
+        seq2 = [5, 6, 7, 8]
+        packer = MultiSegmentPacker(
+            sequence_length=7,
+            start_value=101,
+            end_value=102,
+            pad_value=0,
+            sep_value=[],
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        # With add_end_value=False:
+        # Budget = 7 - 1(start) - 0(no end) = 6, round_robin → 3+3.
+        # Output: [101, 1,2,3, 5,6,7]
+        token_ids, segment_ids = packer((seq1, seq2), add_end_value=False)
+        self.assertAllEqual(token_ids, [101, 1, 2, 3, 5, 6, 7])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1, 1])
+
+
+class MultiSegmentPackerTFTest(MultiSegmentPackerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False

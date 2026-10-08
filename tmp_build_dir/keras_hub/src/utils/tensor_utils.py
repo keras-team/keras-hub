@@ -1,0 +1,996 @@
+import codecs
+import contextlib
+import functools
+import inspect
+import math
+import re
+import threading
+import unicodedata
+
+import keras
+import numpy as np
+from keras import ops
+from keras.src.utils.backend_utils import in_grain_data_pipeline
+from packaging import version
+
+
+def try_import_tensorflow():
+    """Import TensorFlow with a guard for partially-uninstalled packages.
+
+    ``pip uninstall tensorflow`` can leave an empty ``tensorflow/``
+    directory behind, which Python then imports as a *namespace package*:
+    the import succeeds but the module has no attributes, so ``except
+    ImportError`` never fires and the first attribute access raises
+    ``AttributeError``.
+
+    This helper detects that situation and returns ``None`` so callers
+    get the same "no TensorFlow" semantics as a clean uninstall.
+
+    Returns:
+        The ``tensorflow`` module, or ``None`` if TensorFlow is not
+        usable.
+    """
+    try:
+        import tensorflow as _tf
+    except ImportError:
+        return None
+    if not hasattr(_tf, "executing_eagerly"):
+        return None
+    return _tf
+
+
+tf = try_import_tensorflow()
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
+
+
+NO_CONVERT_COUNTER = threading.local()
+
+
+def pad(x, shape, padding_side, pad_value):
+    if padding_side == "left":
+        x = x[..., ::-1]
+
+    outputs = x.to_tensor(
+        default_value=pad_value,
+        shape=shape,
+    )
+
+    if padding_side == "left":
+        outputs = outputs[..., ::-1]
+    return outputs
+
+
+@contextlib.contextmanager
+def no_convert_scope():
+    try:
+        NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) + 1
+        yield
+    finally:
+        NO_CONVERT_COUNTER.count = getattr(NO_CONVERT_COUNTER, "count", 0) - 1
+
+
+def in_tf_function():
+    if tf is None:
+        return False
+    return not tf.executing_eagerly()
+
+
+def in_no_convert_scope():
+    return getattr(NO_CONVERT_COUNTER, "count", 0) > 0
+
+
+def preprocessing_function(fn):
+    """Wraps a preprocessing function to handle tf tensor conversion."""
+    if tf is None:
+        return fn
+
+    params = inspect.signature(fn).parameters
+    accepts_labels = all(k in params for k in ("x", "y", "sample_weight"))
+    if not accepts_labels:
+
+        @functools.wraps(fn)
+        def wrapper(self, x, **kwargs):
+            with tf.device("cpu"):
+                x = convert_preprocessing_inputs(x)
+                with no_convert_scope():
+                    x = fn(self, x, **kwargs)
+                return convert_preprocessing_outputs(x)
+
+    else:
+
+        @functools.wraps(fn)
+        def wrapper(self, x, y=None, sample_weight=None, **kwargs):
+            with tf.device("cpu"):
+                x, y, sample_weight = convert_preprocessing_inputs(
+                    (x, y, sample_weight)
+                )
+                with no_convert_scope():
+                    x = fn(self, x, y=y, sample_weight=sample_weight, **kwargs)
+                return convert_preprocessing_outputs(x)
+
+    return wrapper
+
+
+def convert_to_numpy(x):
+    """Convert `x` to a numpy array.
+
+    Unlike `keras.ops.convert_to_numpy`, this does not require `x` to be a
+    tensor of the current backend. Preprocessing layers, tokenizers and metrics
+    all work in TensorFlow regardless of the active backend, so they routinely
+    hold `tf.Tensor`s that the backend cannot convert. Only backend tensors are
+    handed to the backend; everything else is converted directly.
+    """
+    if isinstance(x, np.ndarray):
+        return x
+    if tf is not None and isinstance(x, tf.RaggedTensor):
+        return x.numpy()
+    if tf is not None and isinstance(x, tf.Tensor):
+        return np.asarray(x)
+    if ops.is_tensor(x):
+        return ops.convert_to_numpy(x)
+    return np.array(x)
+
+
+def convert_preprocessing_inputs(x):
+    """Convert raw inputs for preprocessing.
+
+    This function is used to convert raw inputs (strings, lists, `np.ndarray`s,
+    `jax.Array`s, `torch.Tensor`s, etc) to a canonical format for
+    preprocessing layers. All inputs will be converted to backend tensors if
+    possible, except ragged inputs and string inputs which be converted to tf
+    tensors regardless of backend.
+
+    `tuple` and `list` elements are handled differently by this function. A
+    `tuple` is assumed to enumerate separate inputs, and a `list` is assumed to
+    enumerate elements in a single array-like input. This makes it possible to
+    represent ragged and string inputs in a multi-backend format, as shown in
+    the examples below.
+
+    Examples:
+    ```python
+    # Two ragged arrays of token ids.
+    x = ([[1, 2, 3], [4, 5]], [[1, 2], [3, 4, 5]])
+    keras_hub.utils.convert_preprocessing_inputs(x)
+
+    # A batch of three samples each with two string segments.
+    x = (["hi", "hello", "hey"], ["bye", "later", "so long"])
+    keras_hub.utils.convert_preprocessing_inputs(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": ["hi", "hello", "hey"],
+        "images": np.ones((3, 64, 64, 3)),
+        "labels": [1, 0, 1],
+    }
+    keras_hub.utils.convert_preprocessing_inputs(x)
+    ```
+    """
+    if not tf.executing_eagerly() or in_no_convert_scope():
+        return x
+
+    if isinstance(x, dict):
+        return {k: convert_preprocessing_inputs(x[k]) for k, v in x.items()}
+    if isinstance(x, tuple):
+        return tuple(convert_preprocessing_inputs(v) for v in x)
+    if isinstance(x, (str, bytes)):
+        return tf.constant(x)
+    if isinstance(x, list):
+        try:
+            numpy_x = np.array(x)
+        except ValueError as e:
+            # If numpy conversion failed, try converting to a ragged array.
+            try:
+                return tf.ragged.constant(x)
+            except ValueError:
+                # If ragged conversion failed return to the numpy error.
+                raise e
+        # If we have a string input, use tf.tensor.
+        if numpy_x.dtype.type is np.str_ or numpy_x.dtype.type is np.bytes_:
+            return tf.convert_to_tensor(x)
+        # Numpy will default to int64, int32 works with more ops.
+        if numpy_x.dtype == np.int64:
+            numpy_x = numpy_x.astype(np.int32)
+        # We have non-ragged, non-string input. Use backbend type.
+        x = ops.convert_to_tensor(numpy_x)
+        # Torch will complain about device placement for GPU tensors.
+        if keras.config.backend() == "torch":
+            x = x.cpu()
+        return x
+    if is_tensor_type(x):
+        # String or ragged types we keep as tf.
+        if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+            return x
+        # If we have a string input, use tf.tensor.
+        if isinstance(x, np.ndarray) and x.dtype.type is np.str_:
+            return tf.convert_to_tensor(x)
+        x = ops.convert_to_tensor(x)
+        # Torch will complain about device placement for GPU tensors.
+        if keras.config.backend() == "torch":
+            x = x.cpu()
+        return x
+    return x
+
+
+def convert_preprocessing_outputs_grain(x):
+    """Convert outputs after preprocessing to NumPy arrays and Python objects.
+
+    Grain executes preprocessing in Python worker processes and pickles every
+    element across process boundaries. Backend tensors (`jax.Array`,
+    `torch.Tensor`, ...) pickle poorly and would initialize device state in
+    each worker, so inside a Grain pipeline preprocessing outputs are:
+
+    - `np.ndarray`s for dense numeric data.
+    - Python lists (of lists) for ragged and string data.
+    - Unchanged for Python scalars, strings, and `None`.
+
+    This is used automatically by `convert_preprocessing_outputs` and
+    `convert_preprocessing_outputs_python` when executing inside a Grain
+    pipeline.
+    """
+
+    def convert(x):
+        if x is None or isinstance(x, (str, bytes)):
+            return x
+        if tf is not None and isinstance(x, tf.RaggedTensor):
+            return tensor_to_list(x)
+        if tf is not None and isinstance(x, tf.Tensor):
+            if x.dtype == tf.string:
+                return tensor_to_list(x)
+            return x.numpy()
+        if isinstance(x, np.ndarray):
+            return x
+        if ops.is_tensor(x):
+            return ops.convert_to_numpy(x)
+        return x
+
+    return keras.tree.map_structure(convert, x)
+
+
+def convert_preprocessing_outputs(x):
+    """Convert outputs after preprocessing to a backend agnostic format.
+
+    This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
+    from preprocessing layers to either:
+
+    - The correct tensor type for the Keras backend framework.
+    - Python lists, in the case of ragged and string data.
+
+    When called inside a Grain pipeline (e.g. `grain.MapDataset.map(layer)`),
+    dense outputs are instead returned as `np.ndarray`s so they can be pickled
+    across Grain worker processes. See `convert_preprocessing_outputs_grain`.
+
+    This will automatically be called when on the output of preprocessing
+    layers or `keras_hub.models.Task`s with preprocessing included. It could be
+    used directly to convert a `tf.data.Dataset` output to a backend agnostic
+    type.
+
+    Examples:
+    ```python
+    # Two ragged arrays of token ids.
+    x = tf.ragged.constant([[1, 2, 3], [4, 5]])
+    keras_hub.utils.convert_preprocessing_outputs(x)
+
+    # A batch of three samples each with two string segments.
+    x = (tf.constant["hi", "yo", "hey"]), tf.constant(["bye", "ciao", ""]))
+    keras_hub.utils.convert_preprocessing_outputs(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": tf.constant(["hi", "hello", "hey"]),
+        "images": tf.ones((3, 64, 64, 3)),
+        "labels": tf.constant([1, 0, 1]),
+    }
+    keras_hub.utils.convert_preprocessing_outputs(x)
+    ```
+    """
+    if not tf.executing_eagerly() or in_no_convert_scope():
+        return x
+    if in_grain_data_pipeline():
+        return convert_preprocessing_outputs_grain(x)
+
+    def convert(x):
+        if x is None:
+            return x
+        if isinstance(x, tf.RaggedTensor):
+            return tensor_to_list(x)
+        dtype = getattr(x, "dtype", None)
+
+        if dtype is None:
+            return x
+
+        if dtype == tf.string:
+            return tensor_to_list(x)
+
+        dtype = keras.backend.standardize_dtype(dtype)
+        return ops.convert_to_tensor(x, dtype=dtype)
+
+    return keras.tree.map_structure(convert, x)
+
+
+def convert_preprocessing_outputs_python(x):
+    """Convert outputs after preprocessing to a backend agnostic format.
+
+    This function is used to convert `tf.Tensor` and `tf.RaggedTensor` output
+    from preprocessing layers to either:
+
+    - The correct tensor type for the Keras backend framework.
+    - Python lists, in the case of string data.
+
+    When called inside a Grain pipeline (e.g. `grain.MapDataset.map(layer)`),
+    dense outputs are instead returned as `np.ndarray`s so they can be pickled
+    across Grain worker processes. See `convert_preprocessing_outputs_grain`.
+
+    Examples:
+    ```python
+    # A batch of three samples each with two string segments.
+    x = (["hi", "yo", "hey"], ["bye", "ciao", ""])
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+
+    # A batch of features in a dictionary.
+    x = {
+        "text": ["hi", "hello", "hey"],
+        "images": np.ones((3, 64, 64, 3)),
+        "labels": [1, 0, 1],
+    }
+    keras_hub.utils.convert_preprocessing_outputs_python(x)
+    ```
+    """
+    if in_no_convert_scope():
+        return x
+    if in_grain_data_pipeline():
+        return convert_preprocessing_outputs_grain(x)
+
+    def convert(x):
+        if x is None:
+            return x
+        if isinstance(x, (str, bytes)):
+            return x
+        dtype = None
+        if hasattr(x, "dtype"):
+            dtype = keras.backend.standardize_dtype(x.dtype)
+        return ops.convert_to_tensor(x, dtype=dtype)
+
+    return keras.tree.map_structure(convert, x)
+
+
+def _decode_strings_to_utf8(inputs):
+    """Recursively decodes to list of strings with 'utf-8' encoding."""
+    if isinstance(inputs, bytes):
+        # Handles the case when the input is a scalar string.
+        return inputs.decode("utf-8", errors="ignore")
+    else:
+        # Recursively iterate when input is a list.
+        return [_decode_strings_to_utf8(x) for x in inputs]
+
+
+def tensor_to_list(inputs):
+    """Converts a tensor to nested lists.
+
+    Args:
+        inputs: Input tensor, or dict/list/tuple of input tensors.
+    """
+    assert_tf_installed("tensor_to_list")
+    if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
+        inputs = tf.convert_to_tensor(inputs)
+    if isinstance(inputs, tf.RaggedTensor):
+        list_outputs = inputs.to_list()
+    elif isinstance(inputs, tf.Tensor):
+        list_outputs = inputs.numpy()
+        if inputs.shape.rank != 0:
+            list_outputs = list_outputs.tolist()
+    if inputs.dtype == tf.string:
+        list_outputs = _decode_strings_to_utf8(list_outputs)
+    return list_outputs
+
+
+def convert_to_ragged_batch(inputs):
+    """Ensure a tf.Tensor is a ragged rank 2 tensor."""
+    assert_tf_installed("convert_to_ragged_batch")
+    if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
+        inputs = tf.convert_to_tensor(inputs)
+    unbatched = inputs.shape.rank == 1
+    rectangular = isinstance(inputs, tf.Tensor)
+    if unbatched:
+        inputs = tf.expand_dims(inputs, 0)
+    if rectangular:
+        inputs = tf.RaggedTensor.from_tensor(inputs)
+    return inputs, unbatched, rectangular
+
+
+def canonicalize_python_inputs(inputs):
+    if isinstance(inputs, (tuple, list)):
+        # Fast path for common cases:
+        # If the inputs are just normal python types (or lists of
+        # python types), it immediately returns.
+        if not inputs:
+            return [list(inputs)], False
+        first = inputs[0]
+        if isinstance(first, (int, str, float, bool, np.integer, np.floating)):
+            return [list(inputs)], False
+        if isinstance(first, (tuple, list)) and (
+            not first
+            or isinstance(
+                first[0],
+                (int, str, float, bool, np.integer, np.floating),
+            )
+        ):
+            return [list(x) for x in inputs], True
+
+        # `keras.tree.map_structure` is expensive.
+        inputs = keras.tree.map_structure(convert_to_list, inputs)
+        if inputs and isinstance(inputs[0], (tuple, list)):
+            return inputs, True
+        else:
+            return [inputs], False
+    elif tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+        unbatched = inputs.shape.rank == 1
+        if unbatched:
+            inputs = tf.expand_dims(inputs, 0)
+        if isinstance(inputs, tf.Tensor):
+            inputs = inputs.numpy().tolist()
+        else:
+            inputs = inputs.to_list()
+        return inputs, not unbatched
+    elif isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+        inputs = convert_to_list(inputs)
+        if inputs and isinstance(inputs[0], (tuple, list)):
+            return inputs, True
+        else:
+            return [inputs], False
+    else:
+        raise ValueError(
+            f"Input should be a list or a list of lists. Received: {inputs}"
+        )
+
+
+def canonicalize_python_string_inputs(
+    inputs, encoding="utf-8", errors="strict"
+):
+    """Canonicalize string inputs for the Python path of a tokenizer.
+
+    Accepts a single string, a list/tuple of strings, a string
+    tensor/array (backend, NumPy or TensorFlow) of any rank, a
+    ``tf.RaggedTensor`` of strings, or an inhomogeneous nested list of
+    strings such as ``[["hi", "yo"], ["hey"]]``.  ``bytes`` are decoded
+    with *encoding* and *errors*.
+
+    Returns:
+        A tuple ``(inputs, batched, outer_shape)``, where *inputs* is a
+        flat list of Python strings, *batched* is whether the input was a
+        batch, and *outer_shape* is either:
+
+        - ``None`` for rank 0 and rank 1 inputs,
+        - a **tuple** (the dense shape) for regular rank >= 2 inputs, or
+        - a **list** of row lengths for ragged / inhomogeneous inputs.
+
+        Callers should pass *outer_shape* to `restore_outer_shape` to
+        regroup their per-string results.
+    """
+
+    def to_str(x):
+        if isinstance(x, bytes):
+            return x.decode(encoding, errors=errors)
+        if isinstance(x, np.str_):
+            return str(x)
+        if isinstance(x, str):
+            return x
+        raise ValueError(
+            "If a list, tuple or array is provided as input, all elements "
+            f"must be strings. Received: {inputs}"
+        )
+
+    if isinstance(inputs, (str, bytes, np.str_)):
+        return [to_str(inputs)], False, None
+    # Handle tf.RaggedTensor: convert to a nested Python list so the
+    # ragged branch below can flatten it with row lengths.
+    if tf is not None and isinstance(inputs, tf.RaggedTensor):
+        inputs = inputs.to_list()
+    if isinstance(inputs, (tuple, list)):
+        if len(inputs) and isinstance(inputs[0], (tuple, list, np.ndarray)):
+            # A nested batch. Check whether all rows have the same
+            # length (homogeneous) before paying for np.array().
+            def _row_len(r):
+                if isinstance(r, (list, tuple)):
+                    return len(r)
+                if isinstance(r, np.ndarray):
+                    return r.shape[0]
+                raise ValueError(
+                    "If a nested list is provided, all elements must "
+                    "be lists, tuples or arrays. "
+                    f"Received: {inputs}"
+                )
+
+            first_len = _row_len(inputs[0])
+            is_ragged = any(_row_len(r) != first_len for r in inputs[1:])
+            if is_ragged:
+                # Inhomogeneous (ragged). Flatten with row lengths so
+                # callers can restore the structure.
+                flat = []
+                row_lengths = []
+                for row in inputs:
+                    if isinstance(row, (list, tuple)):
+                        row_strs = [to_str(x) for x in row]
+                    elif isinstance(row, np.ndarray):
+                        row_strs = [to_str(x) for x in row.tolist()]
+                    else:
+                        row_strs = [to_str(row)]
+                    flat.extend(row_strs)
+                    row_lengths.append(len(row_strs))
+                return flat, True, row_lengths
+            # Homogeneous nested batch — fall through to the array
+            # branch so the leading dimensions are preserved.
+            inputs = np.array(inputs)
+        else:
+            return [to_str(x) for x in inputs], True, None
+    if (
+        isinstance(inputs, np.ndarray)
+        or keras.ops.is_tensor(inputs)
+        or (tf is not None and isinstance(inputs, tf.Tensor))
+    ):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [to_str(inputs.item())], False, None
+        if inputs.ndim == 1:
+            return [to_str(x) for x in inputs.tolist()], True, None
+        # Rank >= 2. The TF path handles this (`keras_hub.metrics.Bleu`
+        # tokenizes a `(batch, num_references)` tensor), so flatten here and
+        # let the caller restore the leading dimensions.
+        return (
+            [to_str(x) for x in inputs.ravel().tolist()],
+            True,
+            inputs.shape,
+        )
+    raise ValueError(
+        f"Input should be a string or a list of strings. Received: {inputs}"
+    )
+
+
+def restore_outer_shape(outputs, outer_shape):
+    """Regroup flat per-string tokenizer outputs into `outer_shape`.
+
+    `canonicalize_python_string_inputs` flattens rank >= 2 string inputs, so
+    the Python tokenizer paths produce one result per string.  This restores
+    the leading dimensions, matching the TF path for the same input.
+
+    ``outer_shape`` is either a **tuple** (dense shape for regular rank >= 2
+    inputs) or a **list** of row lengths (for ragged / inhomogeneous inputs
+    such as ``[["hi", "yo"], ["hey"]]``).
+    """
+    if isinstance(outer_shape, list):
+        # Ragged: outer_shape is a list of per-row string counts.
+        result = []
+        idx = 0
+        for length in outer_shape:
+            result.append(outputs[idx : idx + length])
+            idx += length
+        return result
+    if isinstance(outputs, np.ndarray):
+        # Dense output, e.g. when `sequence_length` is set.
+        return outputs.reshape(tuple(outer_shape) + outputs.shape[1:])
+    for dim in reversed(tuple(outer_shape)[1:]):
+        if dim == 0:
+            # Empty inner dimension (e.g. shape (N, 0)). Each group is
+            # empty, so produce len(outputs) or outer_shape[0] empties.
+            n_groups = outer_shape[0] if len(outputs) == 0 else len(outputs)
+            outputs = [[] for _ in range(n_groups)]
+        else:
+            outputs = [
+                outputs[i : i + dim] for i in range(0, len(outputs), dim)
+            ]
+    return outputs
+
+
+def canonicalize_python_token_inputs(inputs):
+    """Canonicalize token id inputs for the Python path of a tokenizer.
+
+    Accepts a single integer, a list of integers, a list of lists of integers,
+    or a rank 0, 1 or 2 integer tensor/array (backend, NumPy or TensorFlow,
+    ragged or dense).
+
+    Returns:
+        A tuple `(inputs, batched)`, where `inputs` is a list of lists of
+        Python integers and `batched` is whether the input was a batch.
+    """
+    if tf is not None and isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+        if isinstance(inputs, tf.RaggedTensor):
+            inputs = inputs.to_list()
+        else:
+            inputs = np.array(inputs)
+    if isinstance(inputs, (int, np.integer)):
+        return [[int(inputs)]], False
+    if isinstance(inputs, (tuple, list)):
+        if not inputs or isinstance(inputs[0], (int, np.integer)):
+            # Unbatched list of ints.
+            return [[int(x) for x in inputs]], False
+        # Batched list of lists of ints.
+        return [[int(x) for x in convert_to_list(seq)] for seq in inputs], True
+    if isinstance(inputs, np.ndarray) or keras.ops.is_tensor(inputs):
+        inputs = convert_to_numpy(inputs)
+        if inputs.ndim == 0:
+            return [[inputs.item()]], False
+        if inputs.ndim == 1:
+            return [inputs.tolist()], False
+        if inputs.ndim == 2:
+            return inputs.tolist(), True
+        raise ValueError(
+            f"Array must be 0, 1 or 2 dimensional, got {inputs.shape}."
+        )
+    raise ValueError(
+        "Input should be an integer, a list of integers, backend "
+        f"tensor or numpy array. Received: {inputs}"
+    )
+
+
+# Unicode "Default_Ignorable_Code_Point" ranges. These are removed by
+# `tf_text.case_fold_utf8` (which applies NFKC_Casefold), so the Python case
+# folding below removes them too.
+_DEFAULT_IGNORABLE_RANGES = (
+    (0x00AD, 0x00AD),
+    (0x034F, 0x034F),
+    (0x061C, 0x061C),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180F),
+    (0x200B, 0x200F),
+    (0x202A, 0x202E),
+    (0x2060, 0x206F),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+
+
+def _is_default_ignorable(char):
+    cp = ord(char)
+    return any(lo <= cp <= hi for lo, hi in _DEFAULT_IGNORABLE_RANGES)
+
+
+def casefold_utf8(text):
+    """Python equivalent of `tf_text.case_fold_utf8`.
+
+    `tf_text.case_fold_utf8` applies the Unicode NFKC_Casefold mapping, which
+    is NFKC normalization plus full case folding, and drops default ignorable
+    code points (e.g. zero width spaces and soft hyphens).
+    """
+    text = unicodedata.normalize("NFKC", text).casefold()
+    # NFKC_Casefold is NFKC(casefold(NFKC(x))). The casefold() above can
+    # produce decomposed sequences, so a final NFKC pass recomposes them
+    # to match tf_text.case_fold_utf8.
+    text = unicodedata.normalize("NFKC", text)
+    if any(_is_default_ignorable(c) for c in text):
+        text = "".join(c for c in text if not _is_default_ignorable(c))
+    return text
+
+
+_REGISTERED_ERROR_HANDLERS = {}
+
+
+def get_decode_errors_name(errors, replacement_char=65533):
+    """Return a codecs error handler name for `str.encode`/`bytes.decode`.
+
+    Python equivalent of the `errors` and `replacement_char` arguments of
+    `tf.strings.unicode_decode`/`tf.strings.unicode_transcode`. `errors` is
+    one of `"strict"`, `"ignore"` or `"replace"`. For `"replace"`, a custom
+    handler replacing each invalid sequence with `chr(replacement_char)` is
+    registered with the `codecs` module and returned.
+    """
+    if errors != "replace" or replacement_char == 65533:
+        return errors
+    name = f"keras_hub_replace_{replacement_char}"
+    if name not in _REGISTERED_ERROR_HANDLERS:
+        replacement = chr(replacement_char)
+
+        def handler(exception):
+            return replacement, exception.end
+
+        codecs.register_error(name, handler)
+        _REGISTERED_ERROR_HANDLERS[name] = handler
+    return name
+
+
+def compute_padding_mask(token_ids, pad_token_id):
+    if isinstance(token_ids, (list, tuple)):
+        if token_ids and isinstance(token_ids[0], (list, tuple)):
+            return [
+                [token != pad_token_id for token in seq] for seq in token_ids
+            ]
+        else:
+            return [token != pad_token_id for token in token_ids]
+    else:
+        return token_ids != pad_token_id
+
+
+def truncate_at_token(inputs, token, mask):
+    """Truncate at first instance of `token`, ignoring `mask`."""
+    assert_tf_installed("truncate_at_token")
+    matches = (inputs == token) & (~mask)
+    end_indices = tf.cast(tf.math.argmax(matches, -1), "int32")
+    end_indices = tf.where(end_indices == 0, tf.shape(inputs)[-1], end_indices)
+    return tf.RaggedTensor.from_tensor(inputs, end_indices)
+
+
+def strip_to_ragged(token_ids, mask, ids_to_strip):
+    """Remove masked and special tokens from a sequence before detokenizing."""
+    assert_tf_installed("strip_to_ragged")
+    mask = tf.cast(mask, "bool")
+    for id in ids_to_strip:
+        mask = mask & (token_ids != id)
+    return tf.ragged.boolean_mask(token_ids, mask)
+
+
+def strip_to_ragged_python(token_ids, mask, ids_to_strip):
+    """Remove masked and special tokens using numpy and Python."""
+    if keras.ops.is_tensor(token_ids):
+        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
+    if keras.ops.is_tensor(mask):
+        mask = keras.ops.convert_to_numpy(mask).astype("bool")
+    if not isinstance(token_ids, np.ndarray):
+        token_ids = np.array(token_ids, dtype="int32")
+    if not isinstance(mask, np.ndarray):
+        mask = np.array(mask, dtype="bool")
+
+    for id in ids_to_strip:
+        mask = mask & (token_ids != id)
+    if token_ids.ndim == 1:
+        token_ids = token_ids[mask].tolist()
+    else:
+        ragged_ids = []
+        for i in range(token_ids.shape[0]):
+            ragged_ids.append(token_ids[i][mask[i]].tolist())
+        token_ids = ragged_ids
+    return token_ids
+
+
+def assert_tf_installed(symbol_name):
+    if tf is None:
+        raise ImportError(
+            f"{symbol_name} requires `tensorflow`. "
+            "Run `pip install tensorflow` to install it."
+        )
+
+
+def assert_tf_libs_installed(symbol_name):
+    if tf_text is None or tf is None:
+        raise ImportError(
+            f"{symbol_name} requires `tensorflow` and `tensorflow-text` for "
+            "text processing. Run `pip install tensorflow-text` to install "
+            "both packages or visit https://www.tensorflow.org/install\n\n"
+            "If `tensorflow-text` is already installed, try importing it "
+            "in a clean python session. Your installation may have errors.\n\n"
+            "KerasHub uses `tf.data` and `tensorflow-text` to preprocess text "
+            "on all Keras backends. If you are running on Jax or Torch, this "
+            "installation does not need GPU support."
+        )
+
+
+def check_bounding_box_support():
+    return version.parse(keras.__version__) >= version.parse("3.8.0")
+
+
+def assert_bounding_box_support(symbol_name):
+    if not check_bounding_box_support():
+        raise ImportError(
+            f"{symbol_name} requires Keras version to be 3.8.0 or higher. "
+            f"Current keras version: {keras.__version__}"
+        )
+
+
+def assert_tf_backend(symbol_name):
+    if keras.config.backend() != "tensorflow":
+        raise RuntimeError(
+            f"{symbol_name} requires the `tensorflow` backend. "
+            "Please set `KERAS_BACKEND=tensorflow` when running your program."
+        )
+
+
+def is_tensor_type(x):
+    return hasattr(x, "__array__")
+
+
+def is_float_dtype(dtype):
+    """
+    Checks if a dtype is a float type by using a regex.
+
+    This function standardizes the input dtype and then uses a regular
+    expression to perform an exact match. It identifies standard floats,
+    bfloats, and mixed-precision float types.
+
+    For example:
+    - `is_float_dtype("float32")` returns `True`.
+    - `is_float_dtype("bfloat16")` returns `True`.
+    - `is_float_dtype("mixed_float16")` returns `True`.
+    - `is_float_dtype("int8")` returns `False`.
+    - `is_float_dtype("int8_from_float32")` returns `False`.
+
+    Args:
+        dtype: str, DTypePolicy. The data type to check.
+
+    Returns:
+        bool: `True` if the dtype is a floating-point type, `False` otherwise.
+    """
+    pattern = re.compile(r"^(mixed_)?(b)?float[0-9]*$")
+    standardized_dtype = keras.backend.standardize_dtype(dtype)
+    return pattern.match(standardized_dtype) is not None
+
+
+def is_int_dtype(dtype):
+    return "int" in keras.backend.standardize_dtype(dtype)
+
+
+def is_string_dtype(dtype):
+    return "string" in keras.backend.standardize_dtype(dtype)
+
+
+def get_dtype_size_in_bits(dtype):
+    """Get the size of a given dtype in bits."""
+    dtype = keras.backend.standardize_dtype(dtype)
+    # If dtype is bool, return 1 immediately.
+    if dtype == "bool":
+        return 1
+    # Else, we extract the bit size from the string.
+    return int(re.sub(r"bfloat|float|uint|int", "", dtype))
+
+
+def get_tensor_size_in_bits(shape, dtype):
+    """Calculate the size given dtype and shape in bits.
+
+    Args:
+        dtype: The dtype of the tensor.
+        shape: List of iterables representing the shape of the tensor.
+
+    Returns:
+        The size of the tensor in bytes.
+    """
+    return math.prod(shape) * get_dtype_size_in_bits(dtype)
+
+
+def any_equal(inputs, values, padding_mask):
+    """Return a mask that is True anywhere `inputs` has a value in `values`.
+
+    Final mask has `padding_mask` applied.
+
+    Args:
+        inputs: Input tensor.
+        values: List or iterable of tensors shaped like `inputs` or
+            broadcastable by bit operators.
+        padding_mask: Tensor with shape compatible with inputs that will
+            condition output.
+
+    Returns:
+        A tensor with `inputs` shape where each position is True if it contains
+            a value from any `values`. Padding mask will be applied before
+            returning.
+    """
+    output = ops.equal(inputs, values[0])
+    for value in values[1:]:
+        value_equality = ops.equal(inputs, value)
+        output = ops.logical_or(output, value_equality)
+
+    return ops.logical_and(output, padding_mask)
+
+
+def target_gather(
+    targets,
+    indices,
+    mask=None,
+    mask_val=0.0,
+):
+    """A utility function wrapping `ops.take`, which deals with:
+        1) both batched and unbatched `targets`.
+        2) when unbatched `targets` have empty rows, the result will be filled
+            with `mask_val`.
+        3) target masking.
+
+    Args:
+        targets: `[N, ...]` or `[batch_size, N, ...]` Tensor representing
+            targets such as boxes, keypoints, etc.
+        indices: [M] or [batch_size, M] int32 Tensor representing indices within
+            `targets` to gather.
+        mask: `[M, ...]` or `[batch_size, M, ...]` boolean Tensor
+            representing the masking for each target. `True` means the
+            corresponding entity should be masked to `mask_val`, `False`
+            means the corresponding entity should be the target value.
+            Defaults to `None`.
+        mask_val: float. representing the masking value if `mask` is True
+            on the entity.
+            Defaults to `0.0`
+
+    Returns:
+        targets: `[M, ...]` or `[batch_size, M, ...]` Tensor representing
+            selected targets.
+
+        Raise:
+            ValueError: If `targets` is higher than rank 3.
+    """
+    targets_shape = list(targets.shape)
+    if len(targets_shape) > 3:
+        raise ValueError(
+            f"`target_gather` does not support `targets` with rank "
+            f"larger than 3, got {len(targets.shape)}"
+        )
+
+    def gather_unbatched(labels, match_indices, mask, mask_val):
+        """Gather based on unbatched labels and boxes."""
+        num_gt_boxes = labels.shape[0]
+
+        def assign_when_rows_empty():
+            if len(labels.shape) > 1:
+                mask_shape = [match_indices.shape[0], labels.shape[-1]]
+            else:
+                mask_shape = [match_indices.shape[0]]
+            return ops.cast(mask_val, labels.dtype) * ops.ones(
+                mask_shape, dtype=labels.dtype
+            )
+
+        def assign_when_rows_not_empty():
+            targets = ops.take(labels, match_indices, axis=0)
+            if mask is None:
+                return targets
+            else:
+                masked_targets = ops.cast(
+                    mask_val, labels.dtype
+                ) * ops.ones_like(mask, dtype=labels.dtype)
+                return ops.where(mask, masked_targets, targets)
+
+        if num_gt_boxes > 0:
+            return assign_when_rows_not_empty()
+        else:
+            return assign_when_rows_empty()
+
+    def _gather_batched(labels, match_indices, mask, mask_val):
+        """Gather based on batched labels."""
+        batch_size = labels.shape[0]
+        if batch_size == 1:
+            if mask is not None:
+                result = gather_unbatched(
+                    ops.squeeze(labels, axis=0),
+                    ops.squeeze(match_indices, axis=0),
+                    ops.squeeze(mask, axis=0),
+                    mask_val,
+                )
+            else:
+                result = gather_unbatched(
+                    ops.squeeze(labels, axis=0),
+                    ops.squeeze(match_indices, axis=0),
+                    None,
+                    mask_val,
+                )
+            return ops.expand_dims(result, axis=0)
+        else:
+            targets = ops.take_along_axis(
+                labels, ops.expand_dims(match_indices, axis=-1), axis=1
+            )
+
+            if mask is None:
+                return targets
+            else:
+                masked_targets = ops.cast(
+                    mask_val, labels.dtype
+                ) * ops.ones_like(mask, dtype=labels.dtype)
+                return ops.where(mask, masked_targets, targets)
+
+    if len(targets_shape) <= 2:
+        return gather_unbatched(targets, indices, mask, mask_val)
+    elif len(targets_shape) == 3:
+        return _gather_batched(targets, indices, mask, mask_val)
+
+
+def convert_to_list(inputs):
+    """Converts NumPy array, backend tensor to a list.
+
+    Args:
+        inputs: NumPy array or backend tensor.
+    """
+    if isinstance(inputs, np.ndarray):
+        return inputs.tolist()
+    elif keras.ops.is_tensor(inputs):
+        return keras.ops.convert_to_numpy(inputs).tolist()
+    return inputs
