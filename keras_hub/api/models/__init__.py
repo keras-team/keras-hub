@@ -326,7 +326,7 @@ from keras_hub.src.models.falcon.falcon_tokenizer import (
 from keras_hub.src.models.feature_pyramid_backbone import (
     FeaturePyramidBackbone as FeaturePyramidBackbone,
 )
-from keras_hub.src.models.flux.flux_model import FluxBackbone as FluxBackbone
+from keras_hub.src.models.flux.flux_backbone import FluxBackbone as FluxBackbone
 from keras_hub.src.models.flux.flux_text_to_image import (
     FluxTextToImage as FluxTextToImage,
 )
