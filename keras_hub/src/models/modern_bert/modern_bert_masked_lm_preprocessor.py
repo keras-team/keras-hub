@@ -36,7 +36,7 @@ class ModernBertMaskedLMPreprocessor(MaskedLMPreprocessor):
     import keras_hub
 
     preprocessor = keras_hub.models.ModernBertMaskedLMPreprocessor.from_preset(
-        "modernbert_base_en"
+        "modern_bert_base_en"
     )
 
     # Tokenize and mask a single sentence.

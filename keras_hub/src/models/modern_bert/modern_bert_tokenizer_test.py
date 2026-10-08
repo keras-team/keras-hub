@@ -266,7 +266,7 @@ class ModernBertTokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=ModernBertTokenizer,
-            preset="modernbert_base_en",
+            preset="modern_bert_base_en",
             input_data=["The quick brown fox."],
         )
 

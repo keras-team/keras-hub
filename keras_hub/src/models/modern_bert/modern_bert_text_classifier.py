@@ -41,7 +41,7 @@ class ModernBertTextClassifier(TextClassifier):
 
     # Fine-tune from a preset.
     classifier = keras_hub.models.ModernBertTextClassifier.from_preset(
-        "modernbert_base_en",
+        "modern_bert_base_en",
         num_classes=2,
     )
     classifier.fit(

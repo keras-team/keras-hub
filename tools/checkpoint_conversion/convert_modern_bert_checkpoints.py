@@ -11,7 +11,7 @@ porting is handled by `convert_modern_bert.py` through the standard
 To run (from a checkout installed with `pip install -e .`):
 
     python tools/checkpoint_conversion/convert_modern_bert_checkpoints.py \
-        --preset modernbert_base_en
+        --preset modern_bert_base_en
 """
 
 import argparse
@@ -27,8 +27,8 @@ from keras_hub.src.models.modern_bert.modern_bert_masked_lm import (
 )
 
 PRESET_MAP = {
-    "modernbert_base_en": "answerdotai/ModernBERT-base",
-    "modernbert_large_en": "answerdotai/ModernBERT-large",
+    "modern_bert_base_en": "answerdotai/ModernBERT-base",
+    "modern_bert_large_en": "answerdotai/ModernBERT-large",
 }
 
 # Tolerances for float32 CPU comparisons against the PyTorch reference.
@@ -789,7 +789,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preset",
         type=str,
-        default="modernbert_base_en",
+        default="modern_bert_base_en",
     )
 
     parser.add_argument(

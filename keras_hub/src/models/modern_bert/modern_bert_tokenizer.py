@@ -39,7 +39,7 @@ class ModernBertTokenizer(BytePairTokenizer):
 
     # Load tokenizer directly from a preset configuration
     tokenizer = keras_hub.models.ModernBertTokenizer.from_preset(
-        "modernbert_base_en"
+        "modern_bert_base_en"
     )
 
     # Encode raw text strings to integer ID tokens

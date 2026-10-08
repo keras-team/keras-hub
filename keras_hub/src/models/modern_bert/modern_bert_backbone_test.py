@@ -99,7 +99,7 @@ class ModernBertBackboneTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=ModernBertBackbone,
-            preset="modernbert_base_en",
+            preset="modern_bert_base_en",
             input_data=self.input_data,
         )
 
