@@ -65,6 +65,17 @@ class Mistral3TokenizerTest(TestCase):
             expected_output=[[265, 40, 124, 266], [266, 40, 265]],
         )
 
+    def test_special_tokens(self):
+        tokenizer = Mistral3Tokenizer(**self.init_kwargs)
+        self.assertEqual(tokenizer.start_token_id, 1)
+        self.assertEqual(tokenizer.end_token_id, 2)
+        self.assertEqual(tokenizer.pad_token_id, 3)
+
+    def test_padding_uses_pad_token_id(self):
+        tokenizer = Mistral3Tokenizer(sequence_length=6, **self.init_kwargs)
+        output = tokenizer("the tin")
+        self.assertEqual(list(output[-2:]), [3, 3])
+
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
