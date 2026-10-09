@@ -271,6 +271,30 @@ from keras_hub.src.models.electra.electra_backbone import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (
+    EmbeddingGemma2AudioConverter as EmbeddingGemma2AudioConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
+    EmbeddingGemma2Backbone as EmbeddingGemma2Backbone,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_encoder_block import (
+    EmbeddingGemma2EncoderBlock as EmbeddingGemma2EncoderBlock,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter import (
+    EmbeddingGemma2ImageConverter as EmbeddingGemma2ImageConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder import (
+    EmbeddingGemma2TextEmbedder as EmbeddingGemma2TextEmbedder,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (
+    EmbeddingGemma2TextEmbedderPreprocessor as EmbeddingGemma2TextEmbedderPreprocessor,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer as EmbeddingGemma2Tokenizer,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (
+    EmbeddingGemma2VideoConverter as EmbeddingGemma2VideoConverter,
+)
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESM2Backbone
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESMBackbone
 from keras_hub.src.models.esm.esm_classifier import (
