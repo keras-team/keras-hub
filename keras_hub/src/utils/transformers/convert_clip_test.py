@@ -29,6 +29,17 @@ class TestTask(TestCase):
         self.assertIsInstance(model, CLIPBackbone)
 
     @pytest.mark.large
+    def test_dtype_propagation(self):
+        model = CLIPBackbone.from_preset(
+            "hf://openai/clip-vit-base-patch32",
+            load_weights=False,
+            dtype="bfloat16",
+        )
+        self.assertEqual(model.dtype_policy.name, "bfloat16")
+        self.assertEqual(model.vision_encoder.dtype_policy.name, "bfloat16")
+        self.assertEqual(model.text_encoder.dtype_policy.name, "bfloat16")
+
+    @pytest.mark.large
     def test_preprocessor(self):
         preprocessor = CLIPPreprocessor.from_preset(
             "hf://openai/clip-vit-base-patch32"
