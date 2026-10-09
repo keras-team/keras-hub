@@ -1,0 +1,343 @@
+import numpy as np
+from keras import ops
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.video_converter import VideoConverter
+from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
+    MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _normalize,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _resize_pixels,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _resize_pixels_tf,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize_tf,
+)
+from keras_hub.src.utils.tensor_utils import in_tf_function
+from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
+
+
+def _sample_frame_indices(
+    total_frames, num_frames, patch_temporal, fps, source_fps
+):
+    """Select frame indices as HF `sample_frames` does.
+
+    Returns `None` if the converter keeps all frames. The float32 steps
+    match `torch.linspace(...).long()` in HF.
+    """
+    count = min(int(total_frames * fps / source_fps), num_frames, total_frames)
+    # HF rounds the count down to a multiple of `patch_temporal`.
+    count = max(patch_temporal, count // patch_temporal * patch_temporal)
+    count = min(count, total_frames)
+    if count == total_frames:
+        return None
+    last = np.float32(total_frames - 1)
+    step = np.float32(last / np.float32(max(count - 1, 1)))
+    position = np.arange(count, dtype="float32")
+    values = np.where(
+        position < count // 2,
+        step * position,
+        last - step * (np.float32(count - 1) - position),
+    )
+    return values.astype("float32").astype("int32")
+
+
+def _sample_frame_indices_tf(
+    total_frames, num_frames, patch_temporal, fps, source_fps
+):
+    """Select frame indices in a TensorFlow graph.
+
+    `total_frames` is a scalar tensor. `source_fps` is a float or a scalar
+    tensor. Use this function when either value is dynamic.
+    """
+    source_fps = tf.cast(source_fps, "float64")
+    sampled = tf.cast(
+        tf.cast(total_frames, "float64") * fps / source_fps, "int32"
+    )
+    count = tf.minimum(tf.minimum(sampled, num_frames), total_frames)
+    count = tf.maximum(patch_temporal, count // patch_temporal * patch_temporal)
+    count = tf.minimum(count, total_frames)
+    last = tf.cast(total_frames - 1, "float32")
+    count_float = tf.cast(count, "float32")
+    step = last / tf.maximum(count_float - 1.0, 1.0)
+    position = tf.range(count_float)
+    values = tf.where(
+        position < tf.cast(count // 2, "float32"),
+        step * position,
+        last - step * (count_float - 1.0 - position),
+    )
+    return tf.cast(values, "int32")
+
+
+@keras_hub_export("keras_hub.layers.MuseGlimmerVideoConverter")
+class MuseGlimmerVideoConverter(VideoConverter):
+    """Video preprocessor for MuseGlimmer.
+
+    Per the model card, video is not handled by a distinct encoder. Each
+    frame goes through the same patch/merge pipeline as a still image (see
+    HF's `get_video_features` == `get_image_features` pass-through).
+
+    The converter samples about `fps` frames per second, up to
+    `num_frames`, spread evenly across the video, as HF does. A video
+    array has no frame rate, so the converter assumes `source_fps`. To
+    override it for one video, call `converter(video, source_fps=30.0)`.
+
+    Args:
+        patch_size: int. Spatial patch size in pixels. Defaults to `14`.
+        patch_temporal: int. Temporal patch size (frames grouped per
+            temporal patch). Defaults to `2`.
+        merge_size: int. Spatial merge factor. Defaults to `2`.
+        fps: float. Target number of sampled frames per second of video.
+            Defaults to `2.0`.
+        source_fps: float. Frame rate of the input videos. Defaults to `24.0`.
+        num_frames: int. Maximum number of sampled frames. Defaults to
+            `96`.
+        max_video_frame_tokens: int. Maximum merged vision tokens per
+            frame, used to derive the pixel budget. Defaults to `144`.
+    """
+
+    backbone_cls = MuseGlimmerBackbone
+
+    def __init__(
+        self,
+        patch_size=14,
+        patch_temporal=2,
+        merge_size=2,
+        fps=2.0,
+        source_fps=24.0,
+        num_frames=96,
+        max_video_frame_tokens=144,
+        interpolation="bilinear",
+        antialias=False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.patch_size = patch_size
+        self.patch_temporal = patch_temporal
+        self.merge_size = merge_size
+        self.fps = fps
+        self.source_fps = source_fps
+        self.num_frames = num_frames
+        self.max_video_frame_tokens = max_video_frame_tokens
+        # `VideoConverter` (unlike `ImageConverter`) doesn't expose these
+        # directly — it delegates per-frame resizing to a composed
+        # `image_converter`, but this class resizes frames itself in
+        # `_call_ops`/`_call_tf`, so they're set here to match
+        # `ImageConverter`'s own defaults.
+        self.interpolation = interpolation
+        self.antialias = antialias
+        self._patch_stride = patch_size * merge_size
+        self.max_pixels = max_video_frame_tokens * (self._patch_stride**2)
+        self.min_pixels = self._patch_stride**2
+
+    @preprocessing_function
+    def call(self, inputs, source_fps=None):
+        if source_fps is None:
+            source_fps = self.source_fps
+        if in_tf_function():
+            return self._call_tf(inputs, source_fps)
+        return self._call_ops(inputs, source_fps)
+
+    def _call_tf(self, inputs, source_fps):
+        input_is_integer = tf.as_dtype(inputs.dtype).is_integer
+        video = tf.cast(inputs, "float32")
+        total_frames = video.shape[0]
+        if total_frames is None or tf.is_tensor(source_fps):
+            indices = _sample_frame_indices_tf(
+                tf.shape(video)[0],
+                self.num_frames,
+                self.patch_temporal,
+                self.fps,
+                source_fps,
+            )
+        else:
+            indices = _sample_frame_indices(
+                total_frames,
+                self.num_frames,
+                self.patch_temporal,
+                self.fps,
+                source_fps,
+            )
+        if indices is not None:
+            video = tf.gather(video, indices, axis=0)
+
+        orig_h, orig_w = video.shape[1], video.shape[2]
+        smart_resize = _smart_resize
+        if orig_h is None or orig_w is None:
+            orig_h, orig_w = tf.shape(video)[1], tf.shape(video)[2]
+            smart_resize = _smart_resize_tf
+        target_h, target_w = smart_resize(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_video_frame_tokens,
+        )
+        video = _resize_pixels_tf(
+            video,
+            input_is_integer,
+            orig_h,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        # `VideoConverter` does not define `_expand_non_channel_dims` or
+        # `_convert_types`. The composed `self.image_converter` defines
+        # them and shares the same `data_format`.
+        video = _normalize(
+            video,
+            self.image_converter,
+            self.scale,
+            self.offset,
+            self.compute_dtype,
+        )
+
+        new_frame_count = video.shape[0]
+        if new_frame_count is None:
+            new_frame_count = tf.shape(video)[0]
+        remainder = new_frame_count % self.patch_temporal
+        pad_len = tf.where(remainder > 0, self.patch_temporal - remainder, 0)
+        video = tf.cond(
+            pad_len > 0,
+            lambda: tf.concat(
+                [video, tf.tile(video[-1:], [pad_len, 1, 1, 1])], axis=0
+            ),
+            lambda: video,
+        )
+
+        # Round up. This is a Python int when the frame count is static.
+        grid_t = -(-new_frame_count // self.patch_temporal)
+        grid_h, grid_w = (
+            target_h // self.patch_size,
+            target_w // self.patch_size,
+        )
+        video = tf.reshape(
+            video,
+            (
+                grid_t,
+                self.patch_temporal,
+                grid_h,
+                self.patch_size,
+                grid_w,
+                self.patch_size,
+                3,
+            ),
+        )
+        video = tf.transpose(video, (0, 2, 4, 1, 6, 3, 5))
+        num_patches = grid_t * grid_h * grid_w
+        patches = tf.reshape(
+            video,
+            (
+                num_patches,
+                self.patch_temporal * self.patch_size * self.patch_size * 3,
+            ),
+        )
+        grid_thw = tf.stack([grid_t, grid_h, grid_w])
+        return {"patches": patches, "grid_thw": grid_thw}
+
+    def _call_ops(self, inputs, source_fps):
+        video = inputs
+        indices = _sample_frame_indices(
+            int(ops.shape(video)[0]),
+            self.num_frames,
+            self.patch_temporal,
+            self.fps,
+            float(source_fps),
+        )
+        if indices is not None:
+            video = ops.take(video, indices, axis=0)
+
+        orig_h, orig_w = int(ops.shape(video)[1]), int(ops.shape(video)[2])
+        target_h, target_w = _smart_resize(
+            orig_h,
+            orig_w,
+            self.patch_size,
+            self.merge_size,
+            self.max_video_frame_tokens,
+        )
+        video = _resize_pixels(
+            video,
+            orig_h,
+            orig_w,
+            target_h,
+            target_w,
+            self.interpolation,
+            self.antialias,
+        )
+        video = _normalize(
+            video,
+            self.image_converter,
+            self.scale,
+            self.offset,
+            self.compute_dtype,
+        )
+
+        new_frame_count = int(ops.shape(video)[0])
+        remainder = new_frame_count % self.patch_temporal
+        if remainder > 0:
+            pad_len = self.patch_temporal - remainder
+            video = ops.concatenate(
+                [video, ops.tile(video[-1:], (pad_len, 1, 1, 1))], axis=0
+            )
+
+        grid_t = int(ops.shape(video)[0]) // self.patch_temporal
+        grid_h, grid_w = (
+            target_h // self.patch_size,
+            target_w // self.patch_size,
+        )
+        video = ops.reshape(
+            video,
+            (
+                grid_t,
+                self.patch_temporal,
+                grid_h,
+                self.patch_size,
+                grid_w,
+                self.patch_size,
+                3,
+            ),
+        )
+        video = ops.transpose(video, (0, 2, 4, 1, 6, 3, 5))
+        num_patches = grid_t * grid_h * grid_w
+        patches = ops.reshape(
+            video,
+            (
+                num_patches,
+                self.patch_temporal * self.patch_size * self.patch_size * 3,
+            ),
+        )
+        grid_thw = ops.stack(
+            [
+                ops.array(grid_t, dtype="int32"),
+                ops.array(grid_h, dtype="int32"),
+                ops.array(grid_w, dtype="int32"),
+            ]
+        )
+        return {"patches": patches, "grid_thw": grid_thw}
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "patch_size": self.patch_size,
+                "patch_temporal": self.patch_temporal,
+                "merge_size": self.merge_size,
+                "fps": self.fps,
+                "source_fps": self.source_fps,
+                "num_frames": self.num_frames,
+                "max_video_frame_tokens": self.max_video_frame_tokens,
+                "interpolation": self.interpolation,
+                "antialias": self.antialias,
+            }
+        )
+        return config

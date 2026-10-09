@@ -86,6 +86,9 @@ from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
+    MuseGlimmerTokenizer as MuseGlimmerTokenizer,
+)
 from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,

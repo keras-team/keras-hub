@@ -584,6 +584,24 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
+    MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
+    MuseGlimmerBackbone as MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm import (
+    MuseGlimmerCausalLM as MuseGlimmerCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor import (
+    MuseGlimmerCausalLMPreprocessor as MuseGlimmerCausalLMPreprocessor,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
+    MuseGlimmerTokenizer as MuseGlimmerTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoder as MuseGlimmerVisionEncoder,
+)
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
 )

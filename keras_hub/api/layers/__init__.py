@@ -141,6 +141,12 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    MuseGlimmerImageConverter as MuseGlimmerImageConverter,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
+    MuseGlimmerVideoConverter as MuseGlimmerVideoConverter,
+)
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
 )
