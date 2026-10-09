@@ -1,5 +1,8 @@
 import contextlib
 
+import ml_dtypes
+import numpy as np
+
 from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
@@ -10,6 +13,12 @@ try:
     import safetensors
 except ImportError:
     safetensors = None
+
+# `safetensors` looks up FP8 dtypes as `numpy` attributes, but `numpy` does
+# not define them. Alias the `ml_dtypes` types so FP8 checkpoints can load.
+for _name in ("float8_e4m3fn", "float8_e5m2"):
+    if not hasattr(np, _name):
+        setattr(np, _name, getattr(ml_dtypes, _name))
 
 
 class SafetensorLoader(contextlib.ExitStack):
