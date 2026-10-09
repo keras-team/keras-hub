@@ -71,6 +71,10 @@ jobs:
       run: |
         pip uninstall -y keras
         pip install keras-nightly --no-cache-dir --progress-bar off
+    - name: Install OpenVINO backend plugin
+      if: ${{ matrix.config.backend == 'openvino' }}
+      run: |
+        pip install keras-openvino --no-deps --progress-bar off
     - name: Test with pytest
       env:
         SHARD_COUNT: ${{ inputs.shard_count }}
