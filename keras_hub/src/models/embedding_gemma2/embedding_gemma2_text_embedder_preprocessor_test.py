@@ -1,5 +1,8 @@
+import os
+from unittest import mock
+
 import numpy as np
-import tensorflow as tf
+import pytest
 from keras import ops
 
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (  # noqa: E501
@@ -10,6 +13,9 @@ from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter impo
 )
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
     EmbeddingGemma2TextEmbedderPreprocessor,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer,
 )
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (  # noqa: E501
     EmbeddingGemma2VideoConverter,
@@ -101,7 +107,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         )
         img1 = np.ones((16, 16, 3), dtype="float32")
         img2 = np.ones((32, 16, 3), dtype="float32")
-        images = tf.ragged.constant([img1, img2])
+        images = [img1, img2]
         out = preprocessor({"images": images})
         if isinstance(out, tuple):
             out = out[0]
@@ -132,7 +138,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         )
         vid1 = np.ones((5, 16, 16, 3), dtype="float32")
         vid2 = np.ones((40, 16, 16, 3), dtype="float32")
-        videos = tf.ragged.constant([vid1, vid2])
+        videos = [vid1, vid2]
         out = preprocessor({"videos": videos})
         if isinstance(out, tuple):
             out = out[0]
@@ -163,7 +169,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
 
         aud1 = np.ones((8000,), dtype="float32")
         aud2 = np.ones((20800,), dtype="float32")
-        audio = tf.ragged.constant([aud1, aud2])
+        audio = [aud1, aud2]
         out = preprocessor({"audio": audio})
         if isinstance(out, tuple):
             out = out[0]
@@ -242,3 +248,77 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
 
     def test_serialization(self):
         self.run_serialization_test(self.preprocessor)
+
+    def test_call_with_python_only_tokenizer(self):
+        tokenizer = EmbeddingGemma2Tokenizer(
+            proto=os.path.join(
+                self.get_test_data_dir(), "gemma4_test_vocab.spm"
+            )
+        )
+        image_converter = EmbeddingGemma2ImageConverter(
+            image_size=(16, 16),
+            patch_size=16,
+            pooling_kernel_size=1,
+            max_soft_tokens=1,
+        )
+        preprocessor = EmbeddingGemma2TextEmbedderPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=12,
+        )
+
+        texts = ["the quick brown fox", "short"]
+
+        # Force the python path so this pins `_call_python`, not the TF path.
+        with mock.patch.object(
+            preprocessor, "_use_tf_workflow", return_value=False
+        ):
+            out = preprocessor({"texts": texts})
+
+        token_ids = ops.convert_to_numpy(out["token_ids"])
+        self.assertEqual(token_ids.shape, (2, 12))
+
+        tok_out = tokenizer(texts)
+
+        exp_1 = (
+            [tokenizer.start_token_id] + tok_out[0] + [tokenizer.end_token_id]
+        )
+        exp_1 = exp_1 + [tokenizer.pad_token_id] * (12 - len(exp_1))
+
+        exp_2 = (
+            [tokenizer.start_token_id] + tok_out[1] + [tokenizer.end_token_id]
+        )
+        exp_2 = exp_2 + [tokenizer.pad_token_id] * (12 - len(exp_2))
+
+        self.assertAllEqual(token_ids[0], exp_1)
+        self.assertAllEqual(token_ids[1], exp_2)
+
+    def test_call_with_tf_ragged_media(self):
+        # Eager `tf.RaggedTensor` media must be accepted by the python path
+        # and give the same result as plain python lists. One modality per
+        # call: Keras rejects a nested argument that mixes a python list
+        # (`texts`) with a tensor on the TensorFlow backend.
+        tf = pytest.importorskip("tensorflow")
+        rng = np.random.RandomState(0)
+        audio = [
+            rng.uniform(-1, 1, (4000,)).astype("float32"),
+            rng.uniform(-1, 1, (6000,)).astype("float32"),
+        ]
+        videos = [
+            [rng.randint(0, 256, (16, 16, 3), dtype=np.uint8)],
+            [
+                rng.randint(0, 256, (16, 16, 3), dtype=np.uint8),
+                rng.randint(0, 256, (16, 16, 3), dtype=np.uint8),
+            ],
+        ]
+        for key, plain in (("audio", audio), ("videos", videos)):
+            with mock.patch.object(
+                self.preprocessor, "_use_tf_workflow", return_value=False
+            ):
+                plain_out = self.preprocessor({key: plain})
+                ragged_out = self.preprocessor({key: tf.ragged.constant(plain)})
+            for k in plain_out:
+                self.assertAllEqual(
+                    ops.convert_to_numpy(plain_out[k]),
+                    ops.convert_to_numpy(ragged_out[k]),
+                )

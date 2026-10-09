@@ -54,15 +54,11 @@ class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
         if total_frames <= self.max_frames:
             return ops.arange(total_frames, dtype="int32")
         else:
-            import numpy as np
-
             return ops.cast(
-                ops.convert_to_tensor(
-                    np.linspace(
-                        0.0,
-                        total_frames - 1.0,
-                        self.max_frames,
-                    )
+                ops.linspace(
+                    0.0,
+                    ops.cast(total_frames - 1, "float32"),
+                    self.max_frames,
                 ),
                 "int32",
             )

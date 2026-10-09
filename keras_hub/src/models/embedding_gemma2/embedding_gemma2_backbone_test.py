@@ -123,6 +123,33 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
         del self.text_backbone_input_data["vision_mask"]
         del self.text_backbone_input_data["vision_indices"]
 
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_backbone_basics(self, backbone_type):
+        if backbone_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        else:
+            init_kwargs = self.text_init_kwargs
+            input_data = self.text_backbone_input_data
+
+        self.run_backbone_test(
+            cls=EmbeddingGemma2Backbone,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape=(
+                self.batch_size,
+                self.text_sequence_length,
+                12,
+            ),
+            variable_length_data=[input_data],
+            # Same policy as `Gemma4BackboneTest`: the vision encoder is not
+            # exercised under mixed precision.
+            run_mixed_precision_check=(backbone_type != "text_and_vision"),
+            run_quantization_check=False,
+        )
+
     def test_audio_backbone_basics(self):
         """Backbone with audio encoder."""
 

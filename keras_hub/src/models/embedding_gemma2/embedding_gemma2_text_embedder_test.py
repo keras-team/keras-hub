@@ -1,4 +1,6 @@
 import numpy as np
+import pytest
+from keras import ops
 
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
     EmbeddingGemma2Backbone,
@@ -138,3 +140,44 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
         ):
             output = embedder.encode_text("hello")
             self.assertEqual(output.shape, (1, 12))
+
+    def test_output_is_normalized(self):
+        embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
+        output = embedder.predict(["hello"])
+        norms = np.linalg.norm(output, axis=-1)
+        self.assertAllClose(norms, np.ones_like(norms), atol=1e-5)
+
+    def test_mean_pooling_respects_mask(self):
+        """Mean pooling must ignore every padded position."""
+        embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
+        inputs = {
+            k: ops.convert_to_numpy(v)
+            for k, v in embedder.preprocessor(["hello", "hello"]).items()
+        }
+        token_ids = inputs["token_ids"].copy()
+        padding_mask = inputs["padding_mask"]
+        pad_positions = np.where(~padding_mask[1])[0]
+        self.assertGreater(len(pad_positions), 0)
+        # Row 1 differs from row 0 only at masked positions.
+        token_ids[1, pad_positions] = 99
+        inputs["token_ids"] = token_ids
+
+        out = ops.convert_to_numpy(embedder(inputs))
+        self.assertAllClose(out[0], out[1])
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=EmbeddingGemma2TextEmbedder,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in EmbeddingGemma2TextEmbedder.presets:
+            self.run_preset_test(
+                cls=EmbeddingGemma2TextEmbedder,
+                preset=preset,
+                input_data=self.input_data,
+            )

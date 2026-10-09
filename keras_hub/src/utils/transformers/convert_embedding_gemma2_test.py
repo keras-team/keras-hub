@@ -47,7 +47,7 @@ def _tiny_text_config():
 
 
 class ConvertEmbeddingGemma2Test(TestCase):
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_backbone_from_hf_preset(self):
         model = EmbeddingGemma2Backbone.from_preset(
             "hf://google/embeddinggemma-2",
@@ -58,7 +58,7 @@ class ConvertEmbeddingGemma2Test(TestCase):
         self.assertEqual(model.num_layers, 24)
         self.assertEqual(model.embedding_dim, 768)
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_class_detection(self):
         preset_name = "hf://google/embeddinggemma-2"
         model = TextEmbedder.from_preset(
