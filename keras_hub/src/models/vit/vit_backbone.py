@@ -167,6 +167,7 @@ class ViTBackbone(Backbone):
                 "use_mlp_bias": self.use_mlp_bias,
                 "use_class_token": self.use_class_token,
                 "use_patch_bias": self.use_patch_bias,
+                "data_format": self.data_format,
             }
         )
         return config

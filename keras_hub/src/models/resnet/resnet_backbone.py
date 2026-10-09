@@ -273,6 +273,7 @@ class ResNetBackbone(FeaturePyramidBackbone):
                 "block_type": self.block_type,
                 "use_pre_activation": self.use_pre_activation,
                 "image_shape": self.image_shape,
+                "data_format": self.data_format,
             }
         )
         return config

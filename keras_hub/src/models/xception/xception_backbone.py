@@ -183,6 +183,7 @@ class XceptionBackbone(Backbone):
                 "stackwise_conv_filters": self.stackwise_conv_filters,
                 "stackwise_pooling": self.stackwise_pooling,
                 "image_shape": self.image_shape,
+                "data_format": self.data_format,
             }
         )
         return config

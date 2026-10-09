@@ -33,6 +33,14 @@ class EfficientNetBackboneTest(TestCase):
         }
         self.input_data = keras.ops.ones(shape=(8, 224, 224, 3))
 
+    def test_data_format_is_serialized(self):
+        # `run_serialization_test` compares config to config, so a key that is
+        # missing from `get_config` is missing on both sides and matches.
+        backbone = EfficientNetBackbone(**self.init_kwargs)
+        self.assertEqual(
+            backbone.get_config()["data_format"], backbone.data_format
+        )
+
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=EfficientNetBackbone,
