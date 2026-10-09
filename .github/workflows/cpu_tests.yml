@@ -60,6 +60,10 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
+    - name: Install OpenVINO backend plugin
+      if: ${{ matrix.config.backend == 'openvino' }}
+      run: |
+        pip install git+https://github.com/keras-team/keras-openvino.git --progress-bar off
     - name: Pin Keras 3.14
       if: ${{ matrix.config.version == 'keras-3.14'}}
       run: |
@@ -71,10 +75,6 @@ jobs:
       run: |
         pip uninstall -y keras
         pip install keras-nightly --no-cache-dir --progress-bar off
-    - name: Install OpenVINO backend plugin
-      if: ${{ matrix.config.backend == 'openvino' }}
-      run: |
-        pip install git+https://github.com/keras-team/keras-openvino.git --no-deps --progress-bar off
     - name: Test with pytest
       env:
         SHARD_COUNT: ${{ inputs.shard_count }}
