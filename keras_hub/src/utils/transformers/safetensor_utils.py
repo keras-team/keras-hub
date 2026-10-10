@@ -90,7 +90,29 @@ class SafetensorLoader(contextlib.ExitStack):
             self.safetensor_files[fname] = file
 
         full_key = self.get_prefixed_key(hf_weight_key, file)
+        if full_key not in file.keys():
+            full_key = self.get_tied_key(hf_weight_key, file)
         return file.get_tensor(full_key)
+
+    def get_tied_key(self, hf_weight_key, file):
+        """Resolve a weight that is stored under a different (tied) name.
+
+        Tied weights (e.g. a shared input/output embedding) are only stored
+        once in a safetensors file. The other names are recorded in the file
+        metadata as aliases pointing at the stored tensor, so look the key up
+        there and follow the alias. Returns `hf_weight_key` unchanged if no
+        alias exists.
+        """
+        stored_keys = set(file.keys())
+        aliases = {
+            alias: target
+            for alias, target in (file.metadata() or {}).items()
+            if target in stored_keys
+        }
+        if not aliases:
+            return hf_weight_key
+        alias = self.get_prefixed_key(hf_weight_key, aliases)
+        return aliases.get(alias, hf_weight_key)
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)
