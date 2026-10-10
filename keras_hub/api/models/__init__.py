@@ -536,6 +536,18 @@ from keras_hub.src.models.mixtral.mixtral_causal_lm_preprocessor import (
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
+from keras_hub.src.models.mm_bert.mm_bert_backbone import (
+    MMBertBackbone as MMBertBackbone,
+)
+from keras_hub.src.models.mm_bert.mm_bert_masked_lm import (
+    MMBertMaskedLM as MMBertMaskedLM,
+)
+from keras_hub.src.models.mm_bert.mm_bert_masked_lm_preprocessor import (
+    MMBertMaskedLMPreprocessor as MMBertMaskedLMPreprocessor,
+)
+from keras_hub.src.models.mm_bert.mm_bert_tokenizer import (
+    MMBertTokenizer as MMBertTokenizer,
+)
 from keras_hub.src.models.mobilenet.mobilenet_backbone import (
     MobileNetBackbone as MobileNetBackbone,
 )
