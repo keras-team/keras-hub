@@ -1,5 +1,6 @@
 """KerasHub tokenizer for mmBERT."""
 
+import functools
 import json
 import os
 
@@ -33,6 +34,18 @@ ATOM_PATTERN = f"{TOKEN_ATOM_PATTERN}|▁[^▁{TOKEN_SENTINEL}]*"
 # The merges are saved as JSON because some of them contain newlines, which
 # one line per merge cannot represent.
 MERGES_JSON_FILENAME = "merges.json"
+
+
+@functools.lru_cache(maxsize=None)
+def _added_token_pattern(tokens):
+    """Compile a regex that matches any of `tokens`, longest first."""
+    return re.compile(
+        "("
+        + "|".join(
+            re.escape(token) for token in sorted(tokens, key=len, reverse=True)
+        )
+        + ")"
+    )
 
 
 @keras_hub_export(
@@ -311,6 +324,54 @@ class MMBertTokenizer(BytePairTokenizer):
         self.cache.insert(tokens, tokenized_words)
 
     @preprocessing_function
+    def tokenize(self, inputs):
+        inputs = self._lstrip_mask_token_space(inputs)
+        return super().tokenize(inputs)
+
+    def _lstrip_mask_token_space(self, inputs):
+        """Drop the whitespace before `<mask>` in plain string inputs.
+
+        Strings are tokenized by the `tokenizers` pipeline, while tensors go
+        through `_tokenize_tf`, which trims the whitespace itself.
+        """
+        if isinstance(inputs, str):
+            return self._lstrip_mask_token_text(inputs)
+
+        if isinstance(inputs, (list, tuple)) and all(
+            isinstance(item, str) for item in inputs
+        ):
+            return [self._lstrip_mask_token_text(item) for item in inputs]
+
+        return inputs
+
+    def _lstrip_mask_token_text(self, text):
+        """Trim the whitespace in front of every `<mask>` token.
+
+        The reference tokenizer declares `<mask>` with `lstrip=True`. Older
+        `tokenizers` releases ignore that flag for tokens that are also
+        special tokens, so the trimming is done here. Added tokens are matched
+        first, which keeps the whitespace of tokens like `"\n\n"` intact.
+        """
+        if self.mask_token not in text:
+            return text
+
+        if not self.unsplittable_tokens:
+            return re.sub(
+                r"\s+(?=" + re.escape(self.mask_token) + r")", "", text
+            )
+
+        # Plain text pieces land on the even indices of the split, matched
+        # added tokens on the odd ones.
+        atoms = _added_token_pattern(tuple(self.unsplittable_tokens)).split(
+            text
+        )
+
+        for index in range(0, len(atoms) - 1, 2):
+            if atoms[index + 1] == self.mask_token:
+                atoms[index] = atoms[index].rstrip()
+
+        return "".join(atoms)
+
     def _tokenize_tf(self, inputs):
         self._maybe_initialized_tf()
         inputs = tf.convert_to_tensor(inputs)
