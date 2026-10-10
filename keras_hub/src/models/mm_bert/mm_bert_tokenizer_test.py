@@ -111,6 +111,34 @@ class MMBertTokenizerTest(TestCase):
         self.assertEqual(tokenizer.mask_token_id, self.vocab["<mask>"])
         self.assertEqual(tokenizer.unk_token_id, self.vocab["<unk>"])
 
+    def test_mask_token_lstrip_without_the_tokenizers_flag(self):
+        """`<mask>` absorbs the whitespace before it on any release.
+
+        The checkpoint declares `<mask>` with `lstrip=True`, a flag that older
+        `tokenizers` releases ignore for tokens that are also special tokens.
+        Re-registering `<mask>` as a special token drops the flag and
+        reproduces that behaviour, which must not change the token ids.
+        """
+        tokenizer = MMBertTokenizer(
+            vocabulary=self.vocab,
+            merges=self.merges,
+            unsplittable_tokens=["\n\n", "<mask>"],
+        )
+        tokenizer._maybe_initialized_tokenizers()
+        tokenizer._tokenizer.add_special_tokens(["<mask>"])
+
+        for text in [
+            "a <mask> b",
+            "The capital of <mask> is Paris.",
+            "a  <mask>  b",
+            "a\n\n <mask> b",
+        ]:
+            stripped = text.replace(" <mask>", "<mask>")
+            self.assertAllEqual(
+                [int(i) for i in tokenizer([text])[0]],
+                [int(i) for i in tokenizer([stripped])[0]],
+            )
+
     @pytest.mark.extra_large
     def test_tokenizer_matches_hf(self):
         """Body-token parity with the checkpoint's tokenizer.

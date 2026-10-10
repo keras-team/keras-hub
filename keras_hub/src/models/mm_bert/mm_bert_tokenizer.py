@@ -323,7 +323,6 @@ class MMBertTokenizer(BytePairTokenizer):
         )
         self.cache.insert(tokens, tokenized_words)
 
-    @preprocessing_function
     def tokenize(self, inputs):
         inputs = self._lstrip_mask_token_space(inputs)
         return super().tokenize(inputs)
@@ -372,6 +371,7 @@ class MMBertTokenizer(BytePairTokenizer):
 
         return "".join(atoms)
 
+    @preprocessing_function
     def _tokenize_tf(self, inputs):
         self._maybe_initialized_tf()
         inputs = tf.convert_to_tensor(inputs)

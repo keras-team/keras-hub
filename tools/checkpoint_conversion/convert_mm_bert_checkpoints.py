@@ -21,7 +21,9 @@ import tempfile
 
 import keras
 import numpy as np
+import tokenizers
 import torch
+import transformers
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 
@@ -67,6 +69,12 @@ TOKENIZER_TEXTS = [
     "<bos>hello<eos>",
     "Mixed<mask>inline",
     "The capital of <mask> is Paris.",
+    "a <mask> b",
+    "a  <mask>  b",
+    "\t<mask> x",
+    "a\n\n<mask>",
+    "x <bos> y",
+    "a <mask> <mask> b",
     "Das ist ein Test. Ça va? これはテストです。",
     "你好，世界！",
     " ᐊᖏᔪᖅ",
@@ -473,6 +481,13 @@ def main(
 ):
     """Convert, verify and save the mmBERT checkpoint."""
     hf_repo = PRESET_MAP.get(preset, preset)
+
+    # Tokenizer behaviour differs between `transformers` / `tokenizers`
+    # releases, so the versions are always part of the report.
+    print(
+        f"transformers {transformers.__version__}, "
+        f"tokenizers {tokenizers.__version__}"
+    )
 
     owns_checkpoint = checkpoint_dir is None
 
