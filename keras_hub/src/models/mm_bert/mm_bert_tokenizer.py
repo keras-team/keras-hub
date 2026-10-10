@@ -149,10 +149,13 @@ class MMBertTokenizer(BytePairTokenizer):
         """Save the vocabulary and the merge table as JSON."""
         os.makedirs(dir_path, exist_ok=True)
 
-        with open(os.path.join(dir_path, VOCAB_FILENAME), "w") as file:
+        with open(
+            os.path.join(dir_path, VOCAB_FILENAME), "w", encoding="utf-8"
+        ) as file:
             file.write(json.dumps(dict(self.vocabulary)))
-
-        with open(os.path.join(dir_path, MERGES_JSON_FILENAME), "w") as file:
+        with open(
+            os.path.join(dir_path, MERGES_JSON_FILENAME), "w", encoding="utf-8"
+        ) as file:
             json.dump(list(self.merges), file)
 
     def load_assets(self, dir_path):
@@ -160,7 +163,7 @@ class MMBertTokenizer(BytePairTokenizer):
         vocabulary_path = os.path.join(dir_path, VOCAB_FILENAME)
         merges_path = os.path.join(dir_path, MERGES_JSON_FILENAME)
 
-        with open(merges_path) as file:
+        with open(merges_path, encoding="utf-8") as file:
             merges = json.load(file)
 
         self.set_vocabulary_and_merges(vocabulary_path, merges)
