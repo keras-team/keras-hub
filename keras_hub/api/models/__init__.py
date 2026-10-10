@@ -445,6 +445,18 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier import (
 from keras_hub.src.models.hgnetv2.hgnetv2_image_classifier_preprocessor import (
     HGNetV2ImageClassifierPreprocessor as HGNetV2ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.hrm_text.hrm_text_backbone import (
+    HrmTextBackbone as HrmTextBackbone,
+)
+from keras_hub.src.models.hrm_text.hrm_text_causal_lm import (
+    HrmTextCausalLM as HrmTextCausalLM,
+)
+from keras_hub.src.models.hrm_text.hrm_text_causal_lm_preprocessor import (
+    HrmTextCausalLMPreprocessor as HrmTextCausalLMPreprocessor,
+)
+from keras_hub.src.models.hrm_text.hrm_text_tokenizer import (
+    HrmTextTokenizer as HrmTextTokenizer,
+)
 from keras_hub.src.models.image_classifier import (
     ImageClassifier as ImageClassifier,
 )
