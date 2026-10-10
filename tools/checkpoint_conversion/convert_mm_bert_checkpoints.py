@@ -113,6 +113,27 @@ def convert_pytorch_weights(checkpoint_dir, remove_original=True):
         if isinstance(value, torch.Tensor)
     }
 
+    # `safetensors` refuses to save tensors that share memory. The tied output
+    # embedding is stored a second time as `decoder.weight`, and the Keras
+    # converter reads the `model.embeddings...` name, so keep that one.
+    kept_names = {}
+
+    for key, value in state_dict.items():
+        name = kept_names.setdefault(value.data_ptr(), key)
+
+        if name != key and name.startswith("decoder."):
+            kept_names[value.data_ptr()] = key
+            name = key
+
+        if name != key:
+            print(f"Dropping `{key}`, it shares memory with `{name}`.")
+
+    state_dict = {
+        key: value
+        for key, value in state_dict.items()
+        if kept_names[value.data_ptr()] == key
+    }
+
     safetensors.torch.save_file(state_dict, safetensor_path)
 
     # Drop the original weights, they are 1.2GB and no longer needed. A
@@ -313,6 +334,17 @@ def verify_masked_lm(
         return None, 0, 0
 
     mask_positions = mask_positions.reshape(-1, 2)
+    batch_indices = mask_positions[:, 0]
+    sequence_indices = mask_positions[:, 1]
+    masks_per_element = np.bincount(batch_indices, minlength=len(input_ids))
+
+    if np.any(masks_per_element != masks_per_element[0]):
+        raise ValueError(
+            "MaskedLM verification requires the same number of mask "
+            "positions for every batch element."
+        )
+
+    num_masks = int(masks_per_element[0])
     print(f"Mask positions: {mask_positions.tolist()}")
 
     with torch.no_grad():
@@ -326,17 +358,24 @@ def verify_masked_lm(
             hf_logits[int(batch_index), int(seq_index)].cpu().numpy()
             for batch_index, seq_index in mask_positions
         ]
-    )
+    ).reshape(len(input_ids), num_masks, -1)
 
+    # The Keras model takes one row of positions per batch element, while the
+    # positions above are `[batch, sequence]` pairs.
     keras_logits = keras.ops.convert_to_numpy(
         keras_lm(
             {
                 "token_ids": input_ids,
                 "padding_mask": padding_mask,
-                "mask_positions": mask_positions,
+                "mask_positions": sequence_indices.reshape(
+                    len(input_ids), num_masks
+                ).astype("int32"),
             },
             training=False,
         )
+    )
+    keras_logits = np.asarray(keras_logits).reshape(
+        len(input_ids), num_masks, -1
     )
 
     diff = np.abs(
@@ -359,14 +398,15 @@ def verify_masked_lm(
             == np.argmax(keras_logits, axis=-1)
         )
     )
-    hf_top5 = np.argsort(hf_mask_logits, axis=-1)[:, -5:]
-    keras_top5 = np.argsort(keras_logits, axis=-1)[:, -5:]
+    hf_top5 = np.argsort(hf_mask_logits, axis=-1)[..., -5:].reshape(-1, 5)
+    keras_top5 = np.argsort(keras_logits, axis=-1)[..., -5:].reshape(-1, 5)
     top5_matches = int(
         np.sum([len(set(a) & set(b)) for a, b in zip(hf_top5, keras_top5)])
     )
 
-    print(f"Top-1 matches: {top1_matches}/{len(mask_positions)}")
-    print(f"Top-5 matches: {top5_matches}/{len(mask_positions)}")
+    num_masks = np.prod(hf_mask_logits.shape[:-1])
+    print(f"Top-1 matches: {top1_matches}/{num_masks}")
+    print(f"Top-5 matches: {top5_matches}/{num_masks}")
     print("✅ MaskedLM verification passed.")
 
     return max_diff, top1_matches, top5_matches
@@ -550,7 +590,7 @@ def main(
         )
         print(
             f"✅ Top-5 prediction matches: "
-            f"{sum(result['top5'] for result in valid)}/{total_masks}"
+            f"{sum(result['top5'] for result in valid)}/{5 * total_masks}"
         )
 
         if not skip_save:

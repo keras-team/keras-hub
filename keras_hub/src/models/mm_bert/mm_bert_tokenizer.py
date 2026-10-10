@@ -194,6 +194,13 @@ class MMBertTokenizer(BytePairTokenizer):
         if self.unsplittable_tokens:
             self._tokenizer.add_special_tokens(list(self.unsplittable_tokens))
 
+        if self.mask_token:
+            # `<mask>` is the one token declared with `lstrip=True` in the
+            # checkpoint's `tokenizer_config.json`.
+            self._tokenizer.add_tokens(
+                [tokenizers.AddedToken(self.mask_token, lstrip=True)]
+            )
+
         self._tokenizer.normalizer = normalizers.Replace(" ", "▁")
         self._tokenizer.pre_tokenizer = pre_tokenizers.Metaspace(
             replacement="▁", prepend_scheme="always"
@@ -228,6 +235,14 @@ class MMBertTokenizer(BytePairTokenizer):
                 text,
                 "(" + pattern + ")",
                 TOKEN_SENTINEL + "\\1" + TOKEN_SENTINEL,
+            )
+
+            # `<mask>` is declared with `lstrip=True` in the checkpoint's
+            # `tokenizer_config.json`, so the whitespace before it is dropped.
+            # Wrapping keeps e.g. the `"\n\n"` added token intact.
+            mask = TOKEN_SENTINEL + self.mask_token + TOKEN_SENTINEL
+            text = tf.strings.regex_replace(
+                text, r"\s+" + re.escape(mask), mask
             )
 
         text = tf.strings.regex_replace(text, " ", "▁")

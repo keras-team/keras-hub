@@ -113,20 +113,20 @@ class MMBertTokenizerTest(TestCase):
 
     @pytest.mark.extra_large
     def test_tokenizer_matches_hf(self):
-        """Body-token parity with the checkpoint's `tokenizer.json`.
+        """Body-token parity with the checkpoint's tokenizer.
 
         mmBERT ships no `tokenizer.model`, so `convert_modern_bert.py` builds
-        this tokenizer from `tokenizer.json`. The pre-tokenization of an added
-        token is subtle enough (`<start_of_turn>`, runs of newlines, byte
-        fallback) that it is worth comparing against the file itself.
+        this tokenizer from `tokenizer.json`, and the added-token flags come
+        from `tokenizer_config.json`, where `<mask>` is declared with
+        `lstrip=True`. The pre-tokenization of an added token is subtle enough
+        (`<start_of_turn>`, runs of newlines, byte fallback) that it is worth
+        comparing against the reference tokenizer.
         """
-        import tokenizers as hf_tokenizers
+        from transformers import AutoTokenizer
 
         from keras_hub.src.utils.transformers import convert_modern_bert
 
-        reference = hf_tokenizers.Tokenizer.from_pretrained(
-            "jhu-clsp/mmBERT-base"
-        )
+        reference = AutoTokenizer.from_pretrained("jhu-clsp/mmBERT-base")
         # `MMBertTokenizer.backbone_cls` is the mmBERT backbone, so the HF
         # route cannot use `from_preset`; the conversion script and this test
         # both go through the converter.
@@ -148,13 +148,19 @@ class MMBertTokenizerTest(TestCase):
             "\n\n\n",
             "Mixed<mask>inline",
             "The capital of <mask> is Paris.",
+            "a <mask> b",
+            "a  <mask>  b",
+            "\t<mask> x",
+            "a\n\n<mask>",
+            "x <bos> y",
+            "a <mask> <mask> b",
             "<start_of_turn>user\nhi<end_of_turn>",
             "café naïve résumé",
             "你好，世界！",
             " ᐊᖏᔪᖅ",
         ]
         for text in test_strings:
-            expected = reference.encode(text, add_special_tokens=False).ids
+            expected = reference(text, add_special_tokens=False)["input_ids"]
             self.assertAllEqual(
                 [int(i) for i in tokenizer([text])[0]],
                 expected,
