@@ -575,12 +575,16 @@ class Gemma4VisionAveragePooling(keras.layers.Layer):
         kernel_x = clamped_positions[..., 0] // k
         kernel_y = clamped_positions[..., 1] // k
 
-        # Derive the pooled-grid width from the maximum x-position in the
-        # batch. For a rectangular image (e.g. 57 patch-cols × 42 patch-rows
-        # pooled by k=3) this gives n_w_pooled=19, which `round(sqrt(280))`
-        # would get wrong (17). The `ops.max` call is dynamic but is only
-        # used for indexing, not for slicing, so JAX JIT accepts it.
-        n_w_pooled = (ops.max(clamped_positions[..., 0]) + 1) // k
+        # Derive the pooled-grid width of each image from its maximum
+        # x-position. For a rectangular image (e.g. 57 patch-cols × 42
+        # patch-rows pooled by k=3) this gives n_w_pooled=19, which
+        # `round(sqrt(280))` would get wrong (17). Images with different
+        # aspect ratios need their own width. The `ops.max` call is dynamic
+        # but is only used for indexing, not for slicing, so JAX JIT
+        # accepts it.
+        n_w_pooled = (
+            ops.max(clamped_positions[..., 0], axis=-1, keepdims=True) + 1
+        ) // k
         kernel_idxs = kernel_x + n_w_pooled * kernel_y
 
         # Zero out padding patches (position_ids == -1 for both coords) before

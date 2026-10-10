@@ -3,6 +3,7 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.samplers.beam_sampler import BeamSampler
 from keras_hub.src.samplers.contrastive_sampler import ContrastiveSampler
+from keras_hub.src.samplers.entropy_bound_sampler import EntropyBoundSampler
 from keras_hub.src.samplers.greedy_sampler import GreedySampler
 from keras_hub.src.samplers.random_sampler import RandomSampler
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
@@ -21,6 +22,7 @@ def deserialize(config, custom_objects=None):
     all_classes = {
         "beam": BeamSampler,
         "contrastive": ContrastiveSampler,
+        "entropy_bound": EntropyBoundSampler,
         "greedy": GreedySampler,
         "random": RandomSampler,
         "speculative": SpeculativeSampler,

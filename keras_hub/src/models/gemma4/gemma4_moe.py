@@ -197,11 +197,10 @@ class Gemma4Router(keras.layers.Layer):
         normed = normed * ops.cast(self._scalar_root_size, normed.dtype)
         normed = normed * ops.cast(self.per_dim_scale, normed.dtype)
 
-        # Router logits and probabilities.
+        # Keep router probabilities in float32 through top-k selection.
         router_logits = self.proj(normed)  # [T, E]
-        router_probs = ops.cast(
-            ops.softmax(ops.cast(router_logits, "float32"), axis=-1),
-            x.dtype,
+        router_probs = ops.softmax(
+            ops.cast(router_logits, "float32"), axis=-1
         )  # [T, E]
 
         # Top-k selection.
@@ -227,7 +226,7 @@ class Gemma4Router(keras.layers.Layer):
         dispatch_weights = ops.sum(
             one_hot * ops.expand_dims(top_k_probs, axis=-1), axis=1
         )  # [T, E]
-        return dispatch_weights
+        return ops.cast(dispatch_weights, x.dtype)
 
     def get_config(self):
         config = super().get_config()
