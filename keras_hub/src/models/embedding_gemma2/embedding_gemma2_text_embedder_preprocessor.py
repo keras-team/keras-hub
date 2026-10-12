@@ -527,7 +527,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         batch_size = tf.shape(token_ids)[0]
 
         vision_indices = None
-        vision_mask = None
 
         if pixel_values is not None:
             vision_mask = token_ids == self.tokenizer.token_to_id(
@@ -541,7 +540,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 )
             vision_indices = self._get_vision_indices(vision_mask)
             vision_indices = tf.cast(vision_indices, "int32")
-            vision_mask = tf.cast(vision_mask, "int32")
         elif (
             self.image_converter is not None or self.video_converter is not None
         ):
@@ -553,11 +551,9 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 [batch_size, 0, 0, patch_dim], dtype="float32"
             )
             pixel_position_ids = tf.zeros([batch_size, 0, 0, 2], dtype="int32")
-            vision_mask = tf.zeros_like(token_ids, dtype="int32")
             vision_indices = tf.zeros([batch_size, 0], dtype="int32")
 
         audio_indices = None
-        audio_mask = None
 
         if audio_mel is not None:
             audio_mask = token_ids == self.tokenizer.token_to_id(
@@ -565,7 +561,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             )
             audio_indices = self._get_audio_indices(audio_mask)
             audio_indices = tf.cast(audio_indices, "int32")
-            audio_mask = tf.cast(audio_mask, "int32")
         elif self.audio_converter is not None:
             input_feat_size = self.audio_converter.num_mels
             audio_mel = tf.zeros(
@@ -573,7 +568,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             )
             audio_mel_mask = tf.zeros([batch_size, 0, 1], dtype="int32")
             audio_indices = tf.zeros([batch_size, 0], dtype="int32")
-            audio_mask = tf.zeros_like(token_ids, dtype="int32")
 
         output = {
             "token_ids": token_ids,
@@ -584,13 +578,11 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             output["pixel_values"] = pixel_values
             output["pixel_position_ids"] = pixel_position_ids
             output["vision_indices"] = vision_indices
-            output["vision_mask"] = vision_mask
 
         if self.audio_converter is not None:
             output["audio_mel"] = audio_mel
             output["audio_mel_mask"] = tf.cast(audio_mel_mask, "int32")
             output["audio_indices"] = audio_indices
-            output["audio_mask"] = audio_mask
 
         if not batched:
             output = keras.tree.map_structure(
@@ -607,9 +599,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             placeholder_ids: the token ids that mark a soft-token slot.
 
         Returns:
-            `(mask, indices)`: an int32 `(batch, seq)` mask and the int32
-            `(batch, max_tokens)` positions of the set bits, right-padded
-            with 0 to the longest row, exactly like the TF path.
+            int32 `(batch, max_tokens)` positions of the placeholder tokens,
+            right-padded with 0 to the longest row, exactly like the TF path.
         """
         mask = np.isin(token_ids, list(placeholder_ids))
         counts = mask.sum(axis=1)
@@ -617,7 +608,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         indices = np.zeros((token_ids.shape[0], max_len), dtype="int32")
         for row, (m, n) in enumerate(zip(mask, counts)):
             indices[row, :n] = np.flatnonzero(m)
-        return mask.astype("int32"), indices
+        return indices
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
@@ -899,14 +890,11 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         batch_size = token_ids.shape[0]
 
         vision_indices = None
-        vision_mask = None
 
         if pixel_values is not None:
             img_tok = self.tokenizer.token_to_id(self.image_placeholder)
             vid_tok = self.tokenizer.token_to_id(self.video_placeholder)
-            vision_mask, vision_indices = self._python_indices(
-                token_ids, [img_tok, vid_tok]
-            )
+            vision_indices = self._python_indices(token_ids, [img_tok, vid_tok])
         elif (
             self.image_converter is not None or self.video_converter is not None
         ):
@@ -918,17 +906,13 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 (batch_size, 0, 0, patch_dim), dtype="float32"
             )
             pixel_position_ids = np.zeros((batch_size, 0, 0, 2), dtype="int32")
-            vision_mask = np.zeros_like(token_ids, dtype="int32")
             vision_indices = np.zeros((batch_size, 0), dtype="int32")
 
         audio_indices = None
-        audio_mask = None
 
         if audio_mel is not None:
             aud_tok = self.tokenizer.token_to_id(self.audio_placeholder)
-            audio_mask, audio_indices = self._python_indices(
-                token_ids, [aud_tok]
-            )
+            audio_indices = self._python_indices(token_ids, [aud_tok])
         elif self.audio_converter is not None:
             input_feat_size = self.audio_converter.num_mels
             audio_mel = np.zeros(
@@ -936,7 +920,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             )
             audio_mel_mask = np.zeros((batch_size, 0, 1), dtype="int32")
             audio_indices = np.zeros((batch_size, 0), dtype="int32")
-            audio_mask = np.zeros_like(token_ids, dtype="int32")
 
         output = {
             "token_ids": token_ids,
@@ -947,13 +930,11 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             output["pixel_values"] = pixel_values
             output["pixel_position_ids"] = pixel_position_ids
             output["vision_indices"] = vision_indices
-            output["vision_mask"] = vision_mask
 
         if self.audio_converter is not None:
             output["audio_mel"] = audio_mel
             output["audio_mel_mask"] = np.array(audio_mel_mask, dtype="int32")
             output["audio_indices"] = audio_indices
-            output["audio_mask"] = audio_mask
 
         output = convert_preprocessing_outputs_python(output)
         if not is_batched:

@@ -287,14 +287,10 @@ class EmbeddingGemma2Backbone(Backbone):
 
         # === Functional Model ===
 
-        # Vision inputs.
         # Audio inputs.
         if audio_encoder is not None:
             audio_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="audio_indices"
-            )
-            audio_mask_input = keras.Input(
-                shape=(None,), dtype="int32", name="audio_mask"
             )
             audio_mel_input = keras.Input(
                 shape=(None, None, audio_encoder.input_feat_size),
@@ -325,9 +321,6 @@ class EmbeddingGemma2Backbone(Backbone):
         if vision_encoder is not None:
             vision_indices_input = keras.Input(
                 shape=(None,), dtype="int32", name="vision_indices"
-            )
-            vision_mask_input = keras.Input(
-                shape=(None,), dtype="int32", name="vision_mask"
             )
 
         # Text embeddings.
@@ -369,15 +362,6 @@ class EmbeddingGemma2Backbone(Backbone):
                 vision_indices=audio_indices_input,
             )
 
-        # Force connection of audio_mask_input if not used in per-layer
-        # embeddings
-        if audio_encoder is not None and hidden_size_per_layer_input <= 0:
-            dummy = ops.cast(audio_mask_input, x.dtype) * 0.0
-            dummy = ops.expand_dims(dummy, axis=-1)
-            x = x + dummy
-
-        # Per-layer model projection, computed after the global scale.
-
         # Global scale: text positions → token_embedding * sqrt(hidden_dim);
         # vision/audio positions remain at their pre-scaled embed magnitude.
         x = x * ops.cast(ops.sqrt(hidden_dim), x.dtype)
@@ -401,12 +385,11 @@ class EmbeddingGemma2Backbone(Backbone):
             else:
                 per_layer_input_i = None
 
+            # Attention is fully bidirectional, so no `vision_mask` is
+            # needed to open up image spans the way Gemma 4 does.
             x, new_cache = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
-                vision_mask=(
-                    None if vision_encoder is None else vision_mask_input
-                ),
                 per_layer_input=per_layer_input_i,
                 positions=None,
             )
@@ -433,14 +416,12 @@ class EmbeddingGemma2Backbone(Backbone):
                     "pixel_position_ids": pixel_position_ids_input,
                     "pixel_values": pixel_values_input,
                     "vision_indices": vision_indices_input,
-                    "vision_mask": vision_mask_input,
                 }
             )
         if audio_encoder is not None:
             inputs.update(
                 {
                     "audio_indices": audio_indices_input,
-                    "audio_mask": audio_mask_input,
                     "audio_mel": audio_mel_input,
                     "audio_mel_mask": audio_mel_mask_input,
                 }

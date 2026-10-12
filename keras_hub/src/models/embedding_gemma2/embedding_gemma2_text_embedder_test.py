@@ -177,9 +177,12 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
 
     @pytest.mark.extra_large
     def test_all_presets(self):
+        # `run_preset_test` calls the model directly, which skips
+        # preprocessing; the real checkpoint needs its own preprocessor
+        # (vocab, mel bins), so go through `predict` on raw text instead.
         for preset in EmbeddingGemma2TextEmbedder.presets:
-            self.run_preset_test(
-                cls=EmbeddingGemma2TextEmbedder,
-                preset=preset,
-                input_data=self.input_data,
-            )
+            embedder = EmbeddingGemma2TextEmbedder.from_preset(preset)
+            output = embedder.predict(["hello", "world"])
+            self.assertEqual(output.shape, (2, embedder.backbone.embedding_dim))
+            norms = np.linalg.norm(output, axis=-1)
+            self.assertAllClose(norms, np.ones_like(norms), atol=1e-4)

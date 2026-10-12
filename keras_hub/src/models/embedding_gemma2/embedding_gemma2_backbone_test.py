@@ -85,25 +85,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
             ),
         }
         # 4 vision tokens per image; 3 images per sample => 12 vision tokens
-        vision_mask_0 = (
-            [False] * 20
-            + [True] * 4
-            + [False] * 16
-            + [True] * 4
-            + [False] * 16
-            + [True] * 4
-        )
-        vision_mask_1 = (
-            [False] * 16
-            + [True] * 4
-            + [False] * 16
-            + [True] * 4
-            + [False] * 20
-            + [True] * 4
-        )
-        self.input_data["vision_mask"] = np.array(
-            [vision_mask_0, vision_mask_1]
-        )
         self.input_data["vision_indices"] = np.array(
             [
                 list(range(20, 24)) + list(range(40, 44)) + list(range(60, 64)),
@@ -118,7 +99,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
         self.text_backbone_input_data = copy.deepcopy(self.input_data)
         del self.text_backbone_input_data["pixel_values"]
         del self.text_backbone_input_data["pixel_position_ids"]
-        del self.text_backbone_input_data["vision_mask"]
         del self.text_backbone_input_data["vision_indices"]
 
     @parameterized.named_parameters(
@@ -187,10 +167,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
                 (self.batch_size, num_clips * num_audio_tokens_per_clip),
                 dtype="int32",
             ),
-            "audio_mask": np.zeros(
-                (self.batch_size, self.text_sequence_length),
-                dtype="int32",
-            ),
         }
         backbone = EmbeddingGemma2Backbone(**audio_init_kwargs)
         output = backbone(audio_input_data)
@@ -208,10 +184,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
             ),
             "audio_mel_mask": np.zeros((self.batch_size, 0, 1), dtype="int32"),
             "audio_indices": np.zeros((self.batch_size, 0), dtype="int32"),
-            "audio_mask": np.zeros(
-                (self.batch_size, self.text_sequence_length),
-                dtype="int32",
-            ),
         }
         output_dummy = backbone(dummy_audio_data)
         self.assertEqual(

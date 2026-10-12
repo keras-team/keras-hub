@@ -113,9 +113,11 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             out = out[0]
         self.assertIn("pixel_values", out)
 
-        mask = ops.convert_to_numpy(out["vision_mask"])
-        count1 = np.sum(mask[0])
-        count2 = np.sum(mask[1])
+        # `vision_indices` is right-padded with 0; position 0 is always BOS,
+        # so non-zero entries are exactly the soft-token slots.
+        indices = ops.convert_to_numpy(out["vision_indices"])
+        count1 = np.count_nonzero(indices[0])
+        count2 = np.count_nonzero(indices[1])
         # img1 is 16x16: square fills the 4-token budget (2x2 patches).
         # img2 is 32x16: 2:1 aspect snaps to a 2x1 patch grid -> 2 tokens.
         self.assertEqual(count1, 4)
@@ -144,9 +146,9 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             out = out[0]
         self.assertIn("pixel_values", out)
 
-        mask = ops.convert_to_numpy(out["vision_mask"])
-        count1 = np.sum(mask[0])
-        count2 = np.sum(mask[1])
+        indices = ops.convert_to_numpy(out["vision_indices"])
+        count1 = np.count_nonzero(indices[0])
+        count2 = np.count_nonzero(indices[1])
         # 5 frames -> 5 tokens, 40 frames -> 32 tokens
         self.assertEqual(count1, 5)
         self.assertEqual(count2, 32)
@@ -175,9 +177,9 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             out = out[0]
         self.assertIn("audio_mel", out)
 
-        mask = ops.convert_to_numpy(out["audio_mask"])
-        count1 = np.sum(mask[0])
-        count2 = np.sum(mask[1])
+        indices = ops.convert_to_numpy(out["audio_indices"])
+        count1 = np.count_nonzero(indices[0])
+        count2 = np.count_nonzero(indices[1])
         self.assertEqual(count1, 13)
         self.assertEqual(count2, 33)
 
