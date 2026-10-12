@@ -9,6 +9,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def get_diffusion_sampler(sampler):
@@ -22,12 +23,6 @@ def get_diffusion_sampler(sampler):
             f"`{type(resolved).__name__}`."
         )
     return resolved
-
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 @keras_hub_export("keras_hub.models.BlockDiffusionLM")

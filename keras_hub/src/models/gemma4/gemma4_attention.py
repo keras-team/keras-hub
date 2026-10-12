@@ -728,7 +728,8 @@ class Gemma4VisionAttention(keras.layers.Layer):
         # `(kv_heads, groups)` matmul. The two forms are mathematically
         # equivalent, but can have different Torch reduction order and cause
         # small vision-only drift after many encoder layers.
-        b, q_len, _, h = ops.shape(q)
+        b, _, _, h = ops.shape(q)
+        k_len = ops.shape(k)[1]
         num_groups = self.num_query_heads // self.num_key_value_heads
         q = ops.transpose(q, (0, 2, 1, 3))  # (B, Q, T, H)
         k = ops.transpose(k, (0, 2, 1, 3))  # (B, K, S, H)
@@ -740,20 +741,20 @@ class Gemma4VisionAttention(keras.layers.Layer):
             b,
             self.num_key_value_heads,
             num_groups,
-            q_len,
+            k_len,
             h,
         )
         # Do not infer the query-head dimension with ``-1`` here. For an
-        # empty batch or empty sequence, both ``b`` and ``q_len`` can be zero,
+        # empty batch or empty sequence, both ``b`` and ``k_len`` can be zero,
         # so Torch cannot infer the unspecified dimension from a zero-element
         # tensor. The repeated head count is known statically.
         k = ops.reshape(
             ops.broadcast_to(k, repeated_shape),
-            (b, self.num_query_heads, q_len, h),
+            (b, self.num_query_heads, k_len, h),
         )
         v = ops.reshape(
             ops.broadcast_to(v, repeated_shape),
-            (b, self.num_query_heads, q_len, h),
+            (b, self.num_query_heads, k_len, h),
         )
 
         attention_logits = ops.matmul(
