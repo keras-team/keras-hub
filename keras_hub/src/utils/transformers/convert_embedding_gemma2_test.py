@@ -21,6 +21,9 @@ from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
 from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
     convert_tokenizer,
 )
+from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
+    load_task_config,
+)
 
 
 def _tiny_text_config():
@@ -101,6 +104,46 @@ class ConvertEmbeddingGemma2Test(TestCase):
         input_proj = audio_encoder.subsample_conv_projection.input_proj
         # (8 // 4) * 8 = 16 input features, projected to hidden_size 32.
         self.assertEqual(tuple(input_proj.kernel.shape), (16, 32))
+
+    def test_task_config_reads_sentence_transformers_files(self):
+        # The HF checkpoint ships `modules.json` and `1_Pooling/config.json`;
+        # they must be read through the preset helpers, not `os.path`.
+        def write(preset, rel_path, payload):
+            path = os.path.join(preset, rel_path)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(payload, f)
+
+        preset = self.get_temp_dir()
+        self.assertEqual(load_task_config(preset, {}), {})
+
+        write(
+            preset,
+            "modules.json",
+            [{"type": "sentence_transformers.models.Transformer"}],
+        )
+        # EmbeddingGemma 2 spelling.
+        write(preset, "1_Pooling/config.json", {"pooling_mode": "mean"})
+        self.assertEqual(
+            load_task_config(preset, {}),
+            {"normalize": False, "pooling_mode": "mean"},
+        )
+
+        write(
+            preset,
+            "modules.json",
+            [{"type": "sentence_transformers.models.Normalize"}],
+        )
+        # Older sentence-transformers spelling.
+        write(
+            preset,
+            "1_Pooling/config.json",
+            {"pooling_mode_mean_tokens": True},
+        )
+        self.assertEqual(
+            load_task_config(preset, {}),
+            {"normalize": True, "pooling_mode": "mean"},
+        )
 
     def test_backbone_config_reads_rope_and_audio_token_counts(self):
         text_cfg = _tiny_text_config()

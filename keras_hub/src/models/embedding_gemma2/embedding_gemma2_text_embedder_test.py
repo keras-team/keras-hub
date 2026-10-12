@@ -116,7 +116,9 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
             ["hello", "world"],
             np.ones((2, 12), dtype="float32"),
         )
-        self.input_data = self.train_data[0]
+        # `run_model_saving_test` calls the model directly, which does not
+        # apply preprocessing, so hand it preprocessed tensors.
+        self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_embedder_basics(self):
         self.run_task_test(

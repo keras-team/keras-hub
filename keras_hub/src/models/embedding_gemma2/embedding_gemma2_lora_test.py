@@ -22,8 +22,6 @@ class EmbeddingGemma2LoraTest(TestCase):
             "embedding_dim": 8,
             "use_sliding_window_attention": True,
             "sliding_window_size": 16,
-            "attention_logit_soft_cap": None,
-            "final_logit_soft_cap": None,
             "vision_encoder": None,
         }
 

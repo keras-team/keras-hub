@@ -50,8 +50,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
             "embedding_dim": 12,
             "use_sliding_window_attention": True,
             "sliding_window_size": 16,
-            "attention_logit_soft_cap": None,
-            "final_logit_soft_cap": None,
             "vision_encoder": vision_encoder,
         }
 

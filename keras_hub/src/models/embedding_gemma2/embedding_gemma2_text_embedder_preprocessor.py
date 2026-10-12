@@ -631,21 +631,21 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             texts = x
             images = videos = audio = None
 
-        if tf is not None:
-            if isinstance(images, tf.RaggedTensor):
-                images = [r.numpy() for r in images]
-            elif isinstance(images, tf.Tensor):
-                images = images.numpy()
+        def _to_host(value):
+            # Everything below is host-side numpy. A backend tensor handed in
+            # by the caller (on the torch backend with a GPU, a CUDA tensor
+            # that `np.asarray` cannot read) is copied to host once here.
+            if tf is not None and isinstance(value, tf.RaggedTensor):
+                return [r.numpy() for r in value]
+            if isinstance(value, (list, tuple)):
+                return [_to_host(v) for v in value]
+            if keras.ops.is_tensor(value):
+                return keras.ops.convert_to_numpy(value)
+            return value
 
-            if isinstance(videos, tf.RaggedTensor):
-                videos = [r.numpy() for r in videos]
-            elif isinstance(videos, tf.Tensor):
-                videos = videos.numpy()
-
-            if isinstance(audio, tf.RaggedTensor):
-                audio = [r.numpy() for r in audio]
-            elif isinstance(audio, tf.Tensor):
-                audio = audio.numpy()
+        images = _to_host(images)
+        videos = _to_host(videos)
+        audio = _to_host(audio)
 
         if texts is not None:
             texts, is_batched, outer_shape = canonicalize_python_string_inputs(
