@@ -8,7 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.gemma4.gemma4_attention import Gemma4TextAttention
-from keras_hub.src.models.gemma4.gemma4_attention import Gemma4VisionAttention
 from keras_hub.src.models.gemma4.gemma4_layers import RMSNormalization
 from keras_hub.src.models.gemma4.gemma4_moe import Gemma4MoEBlock
 from keras_hub.src.models.gemma4.gemma4_moe import Gemma4Router
@@ -83,10 +82,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             expert MLP when `enable_moe_block=True`. Defaults to `None`.
         num_experts_per_token: int. Number of experts activated per token
             when `enable_moe_block=True`. Defaults to `8`.
-        is_text_layer: bool. Whether this block is a text (as opposed to
-            vision) decoder layer; controls whether a non-trainable
-            `layer_scalar` (or `encoder_layer_scalar`) is applied to the
-            output. Defaults to `True`.
     """
 
     def __init__(
@@ -114,7 +109,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         num_experts=None,
         expert_intermediate_dim=None,
         num_experts_per_token=8,
-        is_text_layer=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -144,7 +138,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
         self.num_experts = num_experts
         self.expert_intermediate_dim = expert_intermediate_dim
         self.num_experts_per_token = num_experts_per_token
-        self.is_text_layer = is_text_layer
 
         self.pre_attention_norm = RMSNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -162,10 +155,7 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             if is_global_attention and global_head_dim is not None
             else head_dim
         )
-        attention_cls = (
-            Gemma4TextAttention if self.is_text_layer else Gemma4VisionAttention
-        )
-        self.attention = attention_cls(
+        self.attention = Gemma4TextAttention(
             head_dim=effective_head_dim,
             num_query_heads=num_query_heads,
             num_key_value_heads=num_key_value_heads,
@@ -283,21 +273,20 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             self.moe_router.build(input_shape)
             self.moe_expert_bank.build(input_shape)
 
-        if self.is_text_layer:
-            # Decoder-pass scalar (matches Gemma4 layer_scalar).
-            self.layer_scalar = self.add_weight(
-                name="layer_scalar",
-                shape=(),
-                initializer="ones",
-                trainable=False,
-            )
-            # Encoder-pass scalar (causal prompt encoding).
-            self.encoder_layer_scalar = self.add_weight(
-                name="encoder_layer_scalar",
-                shape=(),
-                initializer="ones",
-                trainable=False,
-            )
+        # Decoder-pass scalar (matches Gemma4 layer_scalar).
+        self.layer_scalar = self.add_weight(
+            name="layer_scalar",
+            shape=(),
+            initializer="ones",
+            trainable=False,
+        )
+        # Encoder-pass scalar (causal prompt encoding).
+        self.encoder_layer_scalar = self.add_weight(
+            name="encoder_layer_scalar",
+            shape=(),
+            initializer="ones",
+            trainable=False,
+        )
 
         self.built = True
 
@@ -607,11 +596,8 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
             x = residual + x
 
         # Scale by encoder or decoder scalar depending on the pass type.
-        if self.is_text_layer:
-            scalar = (
-                self.encoder_layer_scalar if is_encoder else self.layer_scalar
-            )
-            x = x * ops.cast(scalar, x.dtype)
+        scalar = self.encoder_layer_scalar if is_encoder else self.layer_scalar
+        x = x * ops.cast(scalar, x.dtype)
 
         return x, new_cache
 
@@ -652,7 +638,6 @@ class DiffusionGemmaTransformerLayer(keras.layers.Layer):
                 "num_experts": self.num_experts,
                 "expert_intermediate_dim": self.expert_intermediate_dim,
                 "num_experts_per_token": self.num_experts_per_token,
-                "is_text_layer": self.is_text_layer,
             }
         )
         return config

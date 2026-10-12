@@ -28,12 +28,11 @@ class BlockDiffusionLMPreprocessor(Preprocessor):
 
     Args:
         tokenizer: A `keras_hub.tokenizers.Tokenizer` instance.
-        sequence_length: int. Maximum prompt sequence length. During
-            generation, the canvas is packed separately, so the total model
-            input length is then `sequence_length + canvas_length`.
-            Defaults to `256`.
-        canvas_length: int. Number of canvas (mask) tokens appended after
-            the prompt during generation preprocessing. Defaults to `256`.
+        sequence_length: int. Maximum prompt sequence length. The
+            preprocessor does not add the canvas. Defaults to `256`.
+        canvas_length: int. Number of canvas tokens. The preprocessor stores
+            and serializes this value but does not use it. The task model
+            `canvas_length` sets the canvas size. Defaults to `256`.
         add_start_token: bool. Whether to prepend the start token to the
             prompt. Defaults to `True`.
         add_end_token: bool. Whether to append the end token to the prompt.

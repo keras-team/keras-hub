@@ -239,6 +239,18 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
                     inputs["images"] = x[tf.newaxis]
                 elif isinstance(x, list):
                     inputs["images"] = [x]
+
+            # Precomputed pixel inputs hold one row per image, so a scalar
+            # prompt needs a batch axis in front of that row axis.
+            if input_is_scalar:
+                for key in ("pixel_values", "pixel_position_ids"):
+                    x = inputs.get(key)
+                    if x is None:
+                        continue
+                    if tf and isinstance(x, tf.Tensor) and x.shape.rank == 3:
+                        inputs[key] = x[tf.newaxis]
+                    elif isinstance(x, np.ndarray) and x.ndim == 3:
+                        inputs[key] = x[np.newaxis]
         else:
             inputs, input_is_scalar = normalize(inputs)
 
@@ -584,15 +596,6 @@ class DiffusionGemmaBlockDiffusionLM(BlockDiffusionLM):
         pixel_position_ids = inputs.get("pixel_position_ids", None)
         vision_indices = inputs.get("vision_indices", None)
         vision_mask = inputs.get("vision_mask", None)
-
-        # Add a batch dimension for unbatched image inputs.
-        if pixel_values is not None and len(ops.shape(pixel_values)) == 3:
-            pixel_values = ops.expand_dims(pixel_values, axis=0)
-        if (
-            pixel_position_ids is not None
-            and len(ops.shape(pixel_position_ids)) == 3
-        ):
-            pixel_position_ids = ops.expand_dims(pixel_position_ids, axis=0)
 
         # Text embeddings are unscaled until after vision interleaving.
         x = self.backbone.token_embedding(token_ids)

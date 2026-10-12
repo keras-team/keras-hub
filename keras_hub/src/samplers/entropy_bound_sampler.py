@@ -10,16 +10,19 @@ class EntropyBoundSampler(DiffusionSampler):
     """Entropy-bound sampler for discrete block-diffusion generation.
 
     This sampler implements an entropy-bound decoding algorithm for use with
-    `DiffusionLM` models. Each step, token positions are committed greedily
-    from lowest to highest entropy until the cumulative entropy exceeds
-    `entropy_bound`; uncommitted positions are re-noised with random tokens.
+    `BlockDiffusionLM` models. Each step, the sampler sorts the token
+    positions from lowest to highest entropy. The sampler commits a position
+    while the cumulative entropy of the positions before it is at most
+    `entropy_bound`. The sampler re-noises uncommitted positions with random
+    tokens.
 
     Args:
-        entropy_bound: float. Maximum cumulative entropy budget.  Positions are
-            committed greedily from lowest to highest entropy until the next
-            position would push the cumulative sum above this bound.  Smaller
-            values commit fewer tokens per step (more denoising steps needed);
-            larger values commit more. Defaults to `0.1`.
+        entropy_bound: float. Entropy budget for one step. The sampler
+            commits a position if the cumulative entropy of the lower-entropy
+            positions before it is at most this bound. The first position that
+            crosses the bound is also committed. Smaller values commit fewer
+            tokens per step, so generation needs more denoising steps. Larger
+            values commit more tokens. Defaults to `0.1`.
         confidence_threshold: float. Mean per-token entropy below which the
             model is considered confident enough to stop.  Defaults to `0.005`.
         stability_threshold: int. Number of consecutive steps for which the

@@ -36,8 +36,7 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
     """Preprocessing layer for DiffusionGemma diffusion language model tasks.
 
     Tokenizes and packs prompt strings, optionally expanding image
-    placeholders, then appends `canvas_length` placeholder (pad) tokens
-    to form the full model input for the block-diffusion generation loop.
+    placeholders. The task model creates the canvas during generation.
 
     This layer supports two operational modes:
     - **Text-only**: no converters provided; plain string or dict with
@@ -65,8 +64,9 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
             instance. Defaults to `None`.
         sequence_length: int. Maximum prompt sequence length. Defaults to
             `1024`.
-        canvas_length: int. Number of canvas tokens appended after the packed
-            prompt during generation preprocessing. Defaults to `256`.
+        canvas_length: int. Number of canvas tokens. The preprocessor stores
+            and serializes this value but does not use it. The task model
+            `canvas_length` sets the canvas size. Defaults to `256`.
         add_start_token: bool. Whether to prepend the BOS token. Defaults to
             `True`.
         add_end_token: bool. Whether to append the EOS token after the prompt.
@@ -586,6 +586,30 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
 
         if self.image_converter is not None:
             if real_token_counts is not None:
+                num_markers = (
+                    tf.strings.split(
+                        prompts, sep=self.image_placeholder
+                    ).row_lengths()
+                    - 1
+                )
+                if in_tf_function():
+                    tf.debugging.assert_less_equal(
+                        num_markers,
+                        tf.cast(self.max_images_per_prompt, num_markers.dtype),
+                        message=(
+                            f"A prompt has more `{self.image_placeholder}` "
+                            "markers than `max_images_per_prompt="
+                            f"{self.max_images_per_prompt}`."
+                        ),
+                    )
+                elif int(tf.reduce_max(num_markers)) > (
+                    self.max_images_per_prompt
+                ):
+                    raise ValueError(
+                        f"A prompt has more `{self.image_placeholder}` "
+                        "markers than `max_images_per_prompt="
+                        f"{self.max_images_per_prompt}`."
+                    )
                 prompts = tf.map_fn(
                     lambda args: self._expand_one_prompt_per_occurrence(
                         args[0], args[1]
@@ -624,6 +648,12 @@ class DiffusionGemmaBlockDiffusionLMPreprocessor(BlockDiffusionLMPreprocessor):
                 expanded_prompts = []
                 for prompt, counts in zip(prompts, real_token_counts):
                     segments = prompt.split(self.image_placeholder)
+                    if len(segments) - 1 > self.max_images_per_prompt:
+                        raise ValueError(
+                            f"A prompt has more `{self.image_placeholder}` "
+                            "markers than `max_images_per_prompt="
+                            f"{self.max_images_per_prompt}`."
+                        )
                     result = segments[0]
                     for index, segment in enumerate(segments[1:]):
                         count = int(counts[index])

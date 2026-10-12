@@ -234,6 +234,21 @@ class DiffusionGemmaBlockDiffusionLMTest(TestCase, parameterized.TestCase):
         )
         self.assertIsInstance(output, str)
 
+    def test_generate_with_two_unbatched_pixel_images(self):
+        model = DiffusionGemmaBlockDiffusionLM(**self.vision_init_kwargs)
+        model.compile(sampler=self.sampler)
+        pixel_position_ids = np.ones((2, 16, 2), dtype="int32")
+        pixel_position_ids[0, 4:] = -1
+        pixel_position_ids[1, 8:] = -1
+        output = model.generate(
+            {
+                "prompts": "the <|image|> quick <|image|> fox",
+                "pixel_values": np.ones((2, 16, 3 * 4 * 4), dtype="float32"),
+                "pixel_position_ids": pixel_position_ids,
+            }
+        )
+        self.assertIsInstance(output, str)
+
     def test_generate_without_preprocessor(self):
         model = DiffusionGemmaBlockDiffusionLM(
             backbone=self.backbone,

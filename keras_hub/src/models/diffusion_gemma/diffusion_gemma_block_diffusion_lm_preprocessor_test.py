@@ -203,6 +203,29 @@ class DiffusionGemmaBlockDiffusionLMPreprocessorTest(TestCase):
         )
         self.assertEqual(int(ops.sum(x["vision_mask"][0])), 6)
 
+    def test_vision_too_many_image_markers_raises(self):
+        image = np.ones((16, 16, 3), dtype="float32")
+        prompt = "<|image|> and <|image|> and <|image|>"
+        with self.assertRaisesRegex(ValueError, "max_images_per_prompt"):
+            self.vision_preprocessor(
+                {
+                    "prompts": [prompt],
+                    "responses": ["round"],
+                    "images": [[image, image]],
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "max_images_per_prompt"):
+            self.vision_preprocessor.generate_preprocess(
+                {"prompts": [prompt], "images": [[image, image]]}
+            )
+
+    def test_vision_too_many_image_markers_raises_python_path(self):
+        counts = np.array([[4, 4]], dtype="int32")
+        with self.assertRaisesRegex(ValueError, "max_images_per_prompt"):
+            self.vision_preprocessor._expand_and_tokenize_prompts_python(
+                ["<|image|> <|image|> <|image|>"], real_token_counts=counts
+            )
+
     def test_vision_precomputed_pixels_two_images_different_counts(self):
         """Precomputed pixels give the same alignment as raw images."""
         wide_image = np.ones((16, 32, 3), dtype="float32")
