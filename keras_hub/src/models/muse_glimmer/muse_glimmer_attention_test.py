@@ -113,6 +113,45 @@ class MuseGlimmerTextAttentionTest(TestCase):
             expected[lo : hi + 1] = True
             np.testing.assert_array_equal(mask_np[i], expected)
 
+    def test_bidirectional_sliding_window_mask(self):
+        # Bidirectional layers use radius `window` and start queries at
+        # row 0, with no context offset.
+        window, query_len, context_len = 2, 3, 4
+        key_len = query_len + context_len
+        layer = MuseGlimmerTextAttention(
+            **dict(
+                self.init_kwargs,
+                use_rope=False,
+                sliding_window_size=window,
+                use_bidirectional_attention=True,
+            )
+        )
+        self.run_serialization_test(layer)
+        mask = layer._mask_sliding_window(
+            ops.ones((1, query_len, key_len), dtype="bool"),
+            context_len=context_len,
+        )
+        expected = np.abs(
+            np.arange(query_len)[:, None] - np.arange(key_len)[None, :]
+        )
+        np.testing.assert_array_equal(
+            ops.convert_to_numpy(mask)[0], expected <= window
+        )
+
+    def test_causal_sliding_window_radius(self):
+        # Causal layers keep radius `window - 1`.
+        window, length = 3, 6
+        layer = MuseGlimmerTextAttention(
+            **dict(self.init_kwargs, use_rope=False, sliding_window_size=window)
+        )
+        mask = layer._mask_sliding_window(
+            ops.ones((1, length, length), dtype="bool")
+        )
+        expected = np.abs(np.arange(length)[:, None] - np.arange(length)) <= (
+            window - 1
+        )
+        np.testing.assert_array_equal(ops.convert_to_numpy(mask)[0], expected)
+
     def test_context_cache_persists_across_cycles(self):
         # DFlash context caching: `cache` should only ever be written at
         # the context position (`cache_update_index`), never at the fresh

@@ -196,11 +196,13 @@ def _normalize(images, image_converter, scale, offset, compute_dtype):
 class MuseGlimmerImageConverter(ImageConverter):
     """Image preprocessor for MuseGlimmer.
 
-    Resizes an image to a patch-grid-aligned size, extracts
-    `patch_size x patch_size` patches, duplicates each along the temporal
-    axis (`patch_temporal`, since a still image has no motion), and
-    flattens each patch to the vector `MuseGlimmerVisionPatchEmbedder`
-    expects.
+    The converter takes one unbatched image. The image has the shape
+    `(height, width, 3)` for `data_format="channels_last"` and
+    `(3, height, width)` for `data_format="channels_first"`.
+    The converter resizes an image to a patch-grid-aligned size. It
+    extracts `patch_size x patch_size` patches. It duplicates each patch
+    along the temporal axis (`patch_temporal`). It flattens each patch to
+    the vector that `MuseGlimmerVisionPatchEmbedder` expects.
 
     Args:
         patch_size: int. Spatial patch size in pixels. Defaults to `14`.
@@ -208,9 +210,7 @@ class MuseGlimmerImageConverter(ImageConverter):
         merge_size: int. Spatial merge (pixel-shuffle) factor. Defaults to
             `2`.
         max_image_tokens: int. Maximum number of merged vision tokens per
-            image, used to derive the pixel budget. Defaults to `4096`.
-        min_pixels: int. Minimum pixel budget. Defaults to the area of one
-            merge-aligned patch stride squared.
+            image. Defaults to `4096`.
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -221,7 +221,6 @@ class MuseGlimmerImageConverter(ImageConverter):
         patch_temporal=2,
         merge_size=2,
         max_image_tokens=4096,
-        min_pixels=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -229,9 +228,6 @@ class MuseGlimmerImageConverter(ImageConverter):
         self.patch_temporal = patch_temporal
         self.merge_size = merge_size
         self.max_image_tokens = max_image_tokens
-        self._patch_stride = patch_size * merge_size
-        self.min_pixels = min_pixels or self._patch_stride**2
-        self.max_pixels = max_image_tokens * (self._patch_stride**2)
 
     @preprocessing_function
     def call(self, inputs):
@@ -239,7 +235,18 @@ class MuseGlimmerImageConverter(ImageConverter):
             return self._call_tf(inputs)
         return self._call_ops(inputs)
 
+    def _check_rank(self, rank):
+        if rank != 3:
+            raise ValueError(
+                "`MuseGlimmerImageConverter` expects one unbatched image "
+                "with rank 3. Call the converter once for each image. "
+                f"Received an input with rank {rank}."
+            )
+
     def _call_tf(self, inputs):
+        self._check_rank(inputs.shape.rank)
+        if self.data_format == "channels_first":
+            inputs = tf.transpose(inputs, (1, 2, 0))
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
         image = tf.cast(inputs, "float32")
         orig_h, orig_w = image.shape[0], image.shape[1]
@@ -291,7 +298,10 @@ class MuseGlimmerImageConverter(ImageConverter):
         return {"patches": image, "grid_thw": grid_thw}
 
     def _call_ops(self, inputs):
+        self._check_rank(len(ops.shape(inputs)))
         image = inputs
+        if self.data_format == "channels_first":
+            image = ops.transpose(image, (1, 2, 0))
         orig_h, orig_w = int(ops.shape(image)[0]), int(ops.shape(image)[1])
         target_h, target_w = _smart_resize(
             orig_h,
@@ -344,7 +354,6 @@ class MuseGlimmerImageConverter(ImageConverter):
                 "patch_temporal": self.patch_temporal,
                 "merge_size": self.merge_size,
                 "max_image_tokens": self.max_image_tokens,
-                "min_pixels": self.min_pixels,
             }
         )
         return config

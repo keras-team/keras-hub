@@ -9,8 +9,12 @@ from keras_hub.src.api_export import keras_hub_export
 
 
 def _per_patch_coordinates(grid_thw, num_patches):
-    """Per-patch `(row, col, height, width, frame_id, frame_start)` via
-    `ops.searchsorted` + gather, no Python loop.
+    """Compute the coordinates of each patch without a Python loop.
+
+    The function uses `ops.searchsorted` and gather. It returns a dict
+    with the keys `row`, `col`, `height`, `width`, `frame_id`,
+    `frame_start`, `image_id`, `frame_within_image` and `image_start`.
+    Each value has shape `(num_patches,)`.
     """
     if len(ops.shape(grid_thw)) == 1:
         grid_thw = ops.expand_dims(grid_thw, axis=0)
@@ -26,7 +30,8 @@ def _per_patch_coordinates(grid_thw, num_patches):
     image_id = ops.cast(
         ops.searchsorted(cumulative, positions, side="right"), "int32"
     )
-    local_offset = positions - ops.take(starts, image_id)
+    image_start = ops.take(starts, image_id)
+    local_offset = positions - image_start
 
     h_per_patch = ops.take(h, image_id)
     w_per_patch = ops.take(w, image_id)
@@ -39,11 +44,19 @@ def _per_patch_coordinates(grid_thw, num_patches):
 
     frame_starts = ops.cumsum(t) - t
     frame_id = ops.take(frame_starts, image_id) + frame_within_image
-    frame_start = ops.take(starts, image_id) + frame_within_image * (
-        hw_per_patch
-    )
+    frame_start = image_start + frame_within_image * hw_per_patch
 
-    return row, col, h_per_patch, w_per_patch, frame_id, frame_start
+    return {
+        "row": row,
+        "col": col,
+        "height": h_per_patch,
+        "width": w_per_patch,
+        "frame_id": frame_id,
+        "frame_start": frame_start,
+        "image_id": image_id,
+        "frame_within_image": frame_within_image,
+        "image_start": image_start,
+    }
 
 
 class MuseGlimmerVisionRotaryEmbedding(keras.layers.Layer):
@@ -121,20 +134,17 @@ class MuseGlimmerVisionPatchEmbedder(keras.layers.Layer):
         self.position_embedding_table.build((None,))
         self.built = True
 
-    def _bilinear_position_embeddings(self, grid_thw, num_patches):
+    def _bilinear_position_embeddings(self, coordinates):
         """Interpolate the learned position table for each patch.
 
         The interpolation uses half-pixel coordinates and zero padding.
         The interpolation matches HuggingFace `grid_sample` behavior.
         """
         gh, gw = self.pos_emb_height, self.pos_emb_width
-        row, col, h_per_patch, w_per_patch, _, _ = _per_patch_coordinates(
-            grid_thw, num_patches
-        )
-        row = ops.cast(row, "float32")
-        col = ops.cast(col, "float32")
-        h_per_patch = ops.cast(h_per_patch, "float32")
-        w_per_patch = ops.cast(w_per_patch, "float32")
+        row = ops.cast(coordinates["row"], "float32")
+        col = ops.cast(coordinates["col"], "float32")
+        h_per_patch = ops.cast(coordinates["height"], "float32")
+        w_per_patch = ops.cast(coordinates["width"], "float32")
 
         h_source = (row + 0.5) * gh / h_per_patch - 0.5
         w_source = (col + 0.5) * gw / w_per_patch - 0.5
@@ -174,16 +184,20 @@ class MuseGlimmerVisionPatchEmbedder(keras.layers.Layer):
             ops.expand_dims(h_weights, -1) * ops.expand_dims(w_weights, 1),
             (-1, 4),
         )
+        corner_embeds = ops.cast(
+            self.position_embedding_table(corner_indices), "float32"
+        )
         return ops.sum(
-            self.position_embedding_table(corner_indices)
-            * ops.expand_dims(corner_weights, -1),
-            axis=1,
+            corner_embeds * ops.expand_dims(corner_weights, -1), axis=1
         )
 
-    def call(self, pixel_values, grid_thw):
+    def call(self, pixel_values, grid_thw=None, coordinates=None):
         embeddings = self.patch_embedding(pixel_values)
-        num_patches = ops.shape(pixel_values)[0]
-        pos_embeds = self._bilinear_position_embeddings(grid_thw, num_patches)
+        if coordinates is None:
+            coordinates = _per_patch_coordinates(
+                grid_thw, ops.shape(pixel_values)[0]
+            )
+        pos_embeds = self._bilinear_position_embeddings(coordinates)
         return embeddings + ops.cast(pos_embeds, embeddings.dtype)
 
     def get_config(self):
@@ -276,10 +290,12 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
     def _padded_segment_attention(
         self, q, k, v, padded_index, num_slots, slot_size
     ):
-        """Batched per-segment attention (a window, or a frame for full
-        attention): scatter rows into a `(num_slots, slot_size)` buffer
-        by segment and in-segment rank, matmul+softmax per slot, gather
-        the real rows back out.
+        """Run batched attention per segment.
+
+        A segment is a window or, for full attention, a frame. The method
+        scatters rows into a `(num_slots, slot_size)` buffer by segment
+        and in-segment rank. It computes matmul and softmax for each slot.
+        It then gathers the real rows out of the buffer.
         """
         padded_len = num_slots * slot_size
         seq_len = ops.shape(q)[0]
@@ -530,10 +546,13 @@ class MuseGlimmerVisionEncoderLayer(keras.layers.Layer):
         return config
 
 
-def _window_layout(grid_thw, num_patches, window_patches):
-    """`window_index`/`reverse_indices`/`window_segment_id` grouping
-    each image's (pre-merge) patch grid into `window_patches x
-    window_patches` windows, for alternating window/full attention.
+def _window_layout(grid_thw, coordinates, window_patches):
+    """Group the patches of each image into attention windows.
+
+    Each window covers `window_patches x window_patches` pre-merge
+    patches. The function returns `window_index`, `reverse_indices` and
+    `window_segment_id`. The layers use them for alternating window and
+    full attention.
     """
     if len(ops.shape(grid_thw)) == 1:
         grid_thw = ops.expand_dims(grid_thw, axis=0)
@@ -541,30 +560,18 @@ def _window_layout(grid_thw, num_patches, window_patches):
     t, h, w = grid_thw[:, 0], grid_thw[:, 1], grid_thw[:, 2]
     m = window_patches
 
-    lengths = t * h * w
-    cumulative = ops.cumsum(lengths)
-    starts = ops.concatenate(
-        [ops.zeros((1,), dtype=cumulative.dtype), cumulative[:-1]]
-    )
     num_window_cols = ops.floor_divide(w + m - 1, m)
     blocks_per_frame = ops.floor_divide(h + m - 1, m) * num_window_cols
     blocks_total = blocks_per_frame * t
     block_starts = ops.cumsum(blocks_total) - blocks_total
 
-    positions = ops.arange(num_patches, dtype="int32")
-    image_id = ops.cast(
-        ops.searchsorted(cumulative, positions, side="right"), "int32"
-    )
-    local_offset = positions - ops.take(starts, image_id)
-
-    h_p = ops.take(h, image_id)
-    w_p = ops.take(w, image_id)
+    row, col = coordinates["row"], coordinates["col"]
+    h_p, w_p = coordinates["height"], coordinates["width"]
+    image_id = coordinates["image_id"]
+    frame_within_image = coordinates["frame_within_image"]
+    positions = ops.arange(ops.shape(row)[0], dtype="int32")
     hw_p = h_p * w_p
-    offset_in_frame = ops.mod(local_offset, hw_p)
-    frame_within_image = ops.floor_divide(local_offset, hw_p)
 
-    row = ops.floor_divide(offset_in_frame, w_p)
-    col = ops.mod(offset_in_frame, w_p)
     block_row = ops.floor_divide(row, m)
     block_col = ops.floor_divide(col, m)
     local_row = row - block_row * m
@@ -579,13 +586,13 @@ def _window_layout(grid_thw, num_patches, window_patches):
         + local_col
     )
     reverse_indices = ops.cast(
-        ops.take(starts, image_id)
+        coordinates["image_start"]
         + frame_within_image * hw_p
         + offset_within_frame_reordered,
         "int32",
     )
     window_index = ops.scatter(
-        ops.expand_dims(reverse_indices, -1), positions, (num_patches,)
+        ops.expand_dims(reverse_indices, -1), positions, (ops.shape(row)[0],)
     )
 
     orig_block_id = ops.cast(
@@ -600,15 +607,16 @@ def _window_layout(grid_thw, num_patches, window_patches):
     return window_index, reverse_indices, window_segment_id
 
 
-def _shuffle_index_positions(grid_thw, num_patches, merge_size):
-    """Pixel-shuffle merge permutation — the same block-transpose as
-    `get_vision_pixel_shuffle_index`, as arithmetic instead of an actual
-    reshape, so it traces without concrete `grid_thw` values.
+def _shuffle_index_positions(coordinates, merge_size):
+    """Compute the pixel-shuffle merge permutation.
+
+    The result equals the block-transpose of
+    `get_vision_pixel_shuffle_index`. The function uses arithmetic instead
+    of a reshape. Tracing then works without concrete `grid_thw` values.
     """
-    row, col, _, w_per_patch, _, frame_start = _per_patch_coordinates(
-        grid_thw, num_patches
-    )
-    offset_in_frame = row * w_per_patch + col
+    w_per_patch = coordinates["width"]
+    frame_start = coordinates["frame_start"]
+    offset_in_frame = coordinates["row"] * w_per_patch + coordinates["col"]
     block_size = merge_size * merge_size
     num_col_blocks = ops.floor_divide(w_per_patch, merge_size)
     stride = num_col_blocks * block_size
@@ -653,10 +661,11 @@ def _group_segments(lengths):
 class MuseGlimmerVisionEncoder(keras.Model):
     """MuseGlimmer's ViT-style perception encoder.
 
-    Processes pre-extracted, pre-flattened image patches through patch
-    embedding + bilinear position embeddings, alternating window/full
-    attention (via index permutation, not a windowed attention mask), axial
-    2D RoPE, and pixel-shuffle patch merging.
+    The encoder takes pre-extracted, pre-flattened image patches. It applies
+    patch embedding and bilinear position embeddings. It alternates window
+    and full attention. Window attention uses an index permutation, not a
+    windowed attention mask. The encoder also applies axial 2D RoPE and
+    pixel-shuffle patch merging.
 
     Attention runs per window and per frame. With eager inputs, the
     encoder batches the windows and frames of the same length with no
@@ -665,12 +674,12 @@ class MuseGlimmerVisionEncoder(keras.Model):
     input, or the encoder raises a `ValueError`.
 
     Traced inputs (for example under `jax.jit`) have no concrete grid
-    values. There, the caps set the sizes of padded slot buffers. A cap
-    that is `None` falls back to one masked attention over the full
-    sequence, which costs memory quadratic in the patch count. Set the
-    caps to get static shapes under tracing. Each call then reserves
-    memory for the full caps. Traced inputs skip the fit check, so a cap
-    that is too small gives incorrect output.
+    values. For these inputs, the caps set the sizes of padded slot
+    buffers. If a cap is `None`, the encoder uses one masked attention
+    over the full sequence. This attention needs memory quadratic in the
+    patch count. Set the caps to get static shapes under tracing. Each
+    call then reserves memory for the full caps. Traced inputs skip the
+    fit check. A cap that is too small gives incorrect output.
 
     Args:
         num_layers: int. Number of transformer blocks.
@@ -705,6 +714,8 @@ class MuseGlimmerVisionEncoder(keras.Model):
             `max_num_frames`. The value must be at least the largest
             per-frame patch count (`height * width`) in one call.
             Defaults to `None`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to
+            use for model computations and weights. Defaults to `None`.
     """
 
     def __init__(
@@ -810,15 +821,10 @@ class MuseGlimmerVisionEncoder(keras.Model):
             self.ln_post.build((None, self.hidden_size))
         super().build(input_shape)
 
-    def _rot_pos_emb(self, grid_thw, num_patches=None):
-        if num_patches is None:
-            grid_thw_np = ops.convert_to_numpy(grid_thw)
-            if grid_thw_np.ndim == 1:
-                grid_thw_np = grid_thw_np[np.newaxis, :]
-            num_patches = int(np.sum(np.prod(grid_thw_np, axis=-1)))
-
-        row, col, _, _, _, _ = _per_patch_coordinates(grid_thw, num_patches)
-        positions = ops.stack([col + 1, row + 1], axis=-1)
+    def _rot_pos_emb(self, coordinates):
+        positions = ops.stack(
+            [coordinates["col"] + 1, coordinates["row"] + 1], axis=-1
+        )
         freqs = self.rotary_pos_emb.get_freqs(positions)
         cos = self.rotary_pos_emb.recomposition_frequencies(ops.cos(freqs))
         sin = self.rotary_pos_emb.recomposition_frequencies(ops.sin(freqs))
@@ -884,17 +890,25 @@ class MuseGlimmerVisionEncoder(keras.Model):
             # Keras infers the output shape on torch with placeholder
             # inputs filled with ones. That `grid_thw` does not match
             # `pixel_values`, so return zeros of the output shape.
-            num_tokens = num_patches // (self.merge_size**2)
-            empty = ops.zeros((num_tokens, self.out_hidden_size))
+            # A placeholder size stands in for an unknown patch count.
+            num_tokens = (
+                1 if num_patches is None else num_patches // self.merge_size**2
+            )
+            empty = ops.zeros(
+                (num_tokens, self.out_hidden_size), dtype=self.compute_dtype
+            )
             return ops.expand_dims(empty, axis=0) if batched else empty
 
-        hidden_states = self.patch_embedder(pixel_values, grid_thw)
+        coordinates = _per_patch_coordinates(grid_thw, num_patches)
+        hidden_states = self.patch_embedder(
+            pixel_values, coordinates=coordinates
+        )
         hidden_states = self.ln_pre(hidden_states)
 
         window_patches = max(self.window_size // self.patch_size, 1)
         segment_groups = self._eager_segment_groups(grid_thw, window_patches)
         window_index, reverse_indices, window_segment_id = _window_layout(
-            grid_thw, num_patches, window_patches
+            grid_thw, coordinates, window_patches
         )
         hidden_states = ops.take(hidden_states, window_index, axis=0)
 
@@ -922,21 +936,19 @@ class MuseGlimmerVisionEncoder(keras.Model):
                 window_segment_id * window_size_val + local_rank
             )
 
-        row, col, _, w_per_patch, full_segment_id, _ = _per_patch_coordinates(
-            grid_thw, num_patches
-        )
+        full_segment_id = coordinates["frame_id"]
         frame_padded_index = None
         if max_num_frames is not None:
-            offset_in_frame = row * w_per_patch + col
+            offset_in_frame = (
+                coordinates["row"] * coordinates["width"] + coordinates["col"]
+            )
             frame_padded_index = (
                 full_segment_id * max_frame_size + offset_in_frame
             )
 
-        shuffle_index = _shuffle_index_positions(
-            grid_thw, num_patches, self.merge_size
-        )
+        shuffle_index = _shuffle_index_positions(coordinates, self.merge_size)
 
-        cos, sin = self._rot_pos_emb(grid_thw, num_patches)
+        cos, sin = self._rot_pos_emb(coordinates)
         cos = ops.take(cos, window_index, axis=0)
         sin = ops.take(sin, window_index, axis=0)
 
@@ -982,13 +994,14 @@ class MuseGlimmerVisionEncoder(keras.Model):
         return hidden_states
 
     def compute_output_spec(self, pixel_values, grid_thw=None):
+        # A batched input is flattened, so the output batch size is 1.
         if len(pixel_values.shape) == 3:
             return keras.KerasTensor(
-                shape=(pixel_values.shape[0], None, self.out_hidden_size),
-                dtype="float32",
+                shape=(1, None, self.out_hidden_size),
+                dtype=self.compute_dtype,
             )
         return keras.KerasTensor(
-            shape=(None, self.out_hidden_size), dtype="float32"
+            shape=(None, self.out_hidden_size), dtype=self.compute_dtype
         )
 
     def get_config(self):

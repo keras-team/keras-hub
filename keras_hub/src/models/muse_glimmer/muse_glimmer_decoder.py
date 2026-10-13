@@ -149,6 +149,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             use_rope=self.use_rope,
             rope_max_wavelength=self.rope_max_wavelength,
             sliding_window_size=self.sliding_window_size,
+            use_bidirectional_attention=self.use_bidirectional_attention,
             enable_qk_scale_and_gate=self.enable_qk_scale_and_gate,
             qk_norm_with_scale=self.qk_norm_with_scale,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -277,7 +278,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                     block_positions[:, None] - key_positions[None, :]
                 )
                 if self.sliding_window_size:
-                    mask_2d = position_diff <= (self.sliding_window_size - 1)
+                    mask_2d = position_diff <= self.sliding_window_size
                 else:
                     mask_2d = ops.ones_like(position_diff, dtype="bool")
                 # Cache slots below `valid_context_len` hold real,

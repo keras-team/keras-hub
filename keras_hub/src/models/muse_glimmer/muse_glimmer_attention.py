@@ -57,7 +57,11 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
             embeddings to Q/K.
         rope_max_wavelength: float. RoPE base theta.
         sliding_window_size: int or None. Sliding window size, or `None`
-            for full attention.
+            for full attention. Causal layers attend `size - 1` tokens
+            back. Bidirectional layers attend `size` tokens each side.
+        use_bidirectional_attention: bool. If `True`, the sliding window
+            radius is `sliding_window_size`, not `sliding_window_size - 1`.
+            Defaults to `False`.
         enable_qk_scale_and_gate: bool. Whether to apply the extra
             `qk_scale_factor` multiply on Q and the sigmoid output gate.
             Defaults to `True`. The assistant/drafter configuration sets
@@ -81,6 +85,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         use_rope=True,
         rope_max_wavelength=500000.0,
         sliding_window_size=None,
+        use_bidirectional_attention=False,
         enable_qk_scale_and_gate=True,
         qk_norm_with_scale=False,
         kernel_initializer="glorot_uniform",
@@ -96,6 +101,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         self.use_rope = use_rope
         self.rope_max_wavelength = rope_max_wavelength
         self.sliding_window_size = sliding_window_size
+        self.use_bidirectional_attention = use_bidirectional_attention
         self.enable_qk_scale_and_gate = enable_qk_scale_and_gate
         self.qk_norm_with_scale = qk_norm_with_scale
         self.dropout = dropout
@@ -371,22 +377,20 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
     ):
         _, query_len, key_len = ops.shape(attention_mask)
         all_ones = ops.ones((key_len, key_len), "bool")
+        radius = self.sliding_window_size - (
+            0 if self.use_bidirectional_attention else 1
+        )
         if keras.config.backend() == "tensorflow":
-            band_size = ops.minimum(key_len, self.sliding_window_size - 1)
-            band_size = ops.cast(band_size, "int32")
+            band_size = ops.cast(ops.minimum(key_len, radius), "int32")
             sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
         else:
-            sliding_mask = ops.triu(
-                all_ones, -1 * self.sliding_window_size + 1
-            ) * ops.tril(all_ones, self.sliding_window_size - 1)
-        # Query occupies the trailing `query_len` rows of the combined
-        # range whenever context injection prepends `context_len` extra key
-        # positions (no KV cache in that configuration, so
-        # `cache_update_index` is always 0 there) — mirrors the RoPE offset
-        # applied to Q in `call()`. `context_len` is 0 outside the
-        # assistant/drafter configuration, collapsing to the original
-        # cache-relative offset.
-        start = (cache_update_index + context_len, 0)
+            sliding_mask = ops.triu(all_ones, -radius) * ops.tril(
+                all_ones, radius
+            )
+        # HF numbers bidirectional queries from row 0, with no context
+        # offset. Causal layers have no context, so `context_len` is 0.
+        context_offset = 0 if self.use_bidirectional_attention else context_len
+        start = (cache_update_index + context_offset, 0)
         sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
         sliding_mask = ops.expand_dims(sliding_mask, 0)
         return ops.logical_and(attention_mask, ops.cast(sliding_mask, "bool"))
@@ -403,6 +407,9 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
                 "use_rope": self.use_rope,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "sliding_window_size": self.sliding_window_size,
+                "use_bidirectional_attention": (
+                    self.use_bidirectional_attention
+                ),
                 "enable_qk_scale_and_gate": self.enable_qk_scale_and_gate,
                 "qk_norm_with_scale": self.qk_norm_with_scale,
                 "kernel_initializer": keras.initializers.serialize(

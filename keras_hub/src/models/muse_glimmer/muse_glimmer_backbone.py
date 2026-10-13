@@ -22,36 +22,40 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
 class MuseGlimmerBackbone(Backbone):
     """MuseGlimmer core network with hyperparameters.
 
-    MuseGlimmer is a dense causal decoder-transformer (Gemma-lineage
-    normalization/softcapping, Llama3-lineage BPE tokenizer) optionally
-    fused with a windowed-attention perception encoder
+    MuseGlimmer is a dense causal decoder-transformer. It uses Gemma-lineage
+    normalization and softcapping. It uses a Llama3-lineage BPE tokenizer.
+    The backbone can fuse a windowed-attention perception encoder
     (`MuseGlimmerVisionEncoder`) for image-text-to-text generation.
 
     The text tower alternates sliding-window and full attention every 4
-    layers; full-attention layers additionally receive no rotary position
-    encoding (NoPE). Each layer applies a scaleless QK-RMSNorm plus an
-    extra `qk_scale_factor` on the query, and gates the attention output by
-    a sigmoid computed from the pre-attention normed input. When a vision
-    encoder is attached, its output passes through a double-activation
-    adapter, a projection, and a final scaleless RMSNorm before being
-    scattered into the text embedding sequence — see `modeling_muse_glimmer.py`,
+    layers. Full-attention layers receive no rotary position encoding
+    (NoPE). Each layer applies a scaleless QK-RMSNorm. Each layer also
+    applies an extra `qk_scale_factor` to the query. Each layer gates the
+    attention output with a sigmoid of the pre-attention normed input.
+
+    When a vision encoder is attached, its output passes through a
+    double-activation adapter, a projection, and a final scaleless
+    RMSNorm. The backbone then scatters the result into the text embedding
+    sequence. See `modeling_muse_glimmer.py`,
     `MuseGlimmerModel.get_image_features`.
 
-    This class also supports the DFlash speculative-decoding assistant/
-    drafter configuration (`meta-models/Muse-Glimmer-30B-assistant`, see
-    `modeling_muse_glimmer_assistant.py`) via four opt-in flags, each
-    defaulting to the main model's current behavior:
+    This class also supports the DFlash speculative-decoding assistant
+    configuration (`meta-models/Muse-Glimmer-30B-assistant`, see
+    `modeling_muse_glimmer_assistant.py`). Four opt-in flags enable it.
+    Each flag defaults to the main model behavior:
     `use_bidirectional_attention`, `context_projection_layer_ids`,
-    `use_external_embeddings`, and `enable_qk_scale_and_gate=False`. The
-    assistant configuration has no vocabulary/token embedding of its own;
-    it consumes `noise_embeds` (a denoising-block hidden-state window) and
-    `context_hidden_states` (concatenated hidden states pulled from
-    several layers of a separate, larger main model) instead of
-    `token_ids`.
+    `use_external_embeddings`, and `enable_qk_scale_and_gate=False`.
+
+    The assistant configuration has no token embedding of its own. It
+    consumes `noise_embeds` instead of `token_ids`. `noise_embeds` is a
+    window of denoising-block hidden states. The assistant also consumes
+    `context_hidden_states`. This input holds hidden states from several
+    layers of a separate, larger main model, concatenated.
 
     Args:
-        vocabulary_size: int. The size of the token vocabulary. Unused
-            when `use_external_embeddings=True`.
+        vocabulary_size: int. The size of the token vocabulary. The
+            backbone ignores this argument when
+            `use_external_embeddings=True`.
         num_layers: int. The number of transformer decoder layers.
         num_query_heads: int. The number of query attention heads.
         num_key_value_heads: int. The number of key/value attention heads.
@@ -75,48 +79,49 @@ class MuseGlimmerBackbone(Backbone):
         final_logit_softcapping: float. Softcap value `T` in
             `T * tanh(logits / T)`. Defaults to `20.0`.
         layer_types: list of str or `None`. Per-layer `"sliding_attention"`
-            or `"full_attention"`. Defaults to every 4th layer (counted
-            from the end) being full attention.
-        vision_encoder: A `MuseGlimmerVisionEncoder` instance, or `None`
-            for a text-only model.
+            or `"full_attention"`. Defaults to full attention on every
+            4th layer from the end. All other layers use sliding attention.
+        vision_encoder: MuseGlimmerVisionEncoder or None. Use `None` for a
+            text-only model.
         projector_hidden_dim: int or `None`. Intermediate/output dimension
             of the multimodal adapter. Required if `vision_encoder` is set.
         projector_hidden_act: str. Activation for the adapter and the
             top-level projection. Defaults to `"gelu"`.
         dropout: float. Dropout probability. Defaults to `0`.
-        use_bidirectional_attention: bool. Assistant/drafter configuration
-            only. If `True`, every decoder layer attends bi-directionally
-            (plus to unmasked context) instead of causally. Defaults to
-            `False`.
-        context_projection_layer_ids: list of int or `None`. Assistant/
-            drafter configuration only. When set, builds a
-            `MuseGlimmerContextProjection` sub-layer and accepts a
-            `context_hidden_states` input of shape
+        use_bidirectional_attention: bool. Assistant configuration only.
+            If `True`, every decoder layer attends to all positions
+            and to unmasked context. If `False`, the attention is causal.
+            Defaults to `False`.
+        context_projection_layer_ids: list of int or `None`. Assistant
+            configuration only. When set, the backbone builds a
+            `MuseGlimmerContextProjection` sub-layer. The backbone then
+            accepts a `context_hidden_states` input of shape
             `(batch, sequence, len(context_projection_layer_ids) *
-            hidden_dim)`, projected to `hidden_dim` and passed to every
-            decoder layer as cross-model context for K/V. Defaults to
-            `None`.
-        use_external_embeddings: bool. Assistant/drafter configuration
-            only. If `True`, skips `ReversibleEmbedding` and the
-            `token_ids` input entirely; the model instead accepts a
+            hidden_dim)`. The sub-layer projects this input to
+            `hidden_dim`. Every decoder layer receives the result as
+            cross-model context for K/V. Defaults to `None`.
+        use_external_embeddings: bool. Assistant configuration only.
+            If `True`, the backbone skips `ReversibleEmbedding` and the
+            `token_ids` input. The backbone instead accepts a
             `noise_embeds` float input of shape
-            `(batch, sequence, hidden_dim)`, fed directly into the
-            transformer stack. Defaults to `False`.
-        enable_qk_scale_and_gate: bool. Passed through to every decoder
-            layer's `MuseGlimmerTextAttention`. Defaults to `True`. The
-            assistant/drafter configuration sets this to `False`.
-        qk_norm_with_scale: bool. Passed through to every decoder layer's
-            `MuseGlimmerTextAttention`. Defaults to `False`. The
-            assistant/drafter configuration sets this to `True`.
-        use_sandwich_norm: bool. Passed through to every decoder layer.
-            If `False`, skips the two post-sublayer sandwich norms.
-            Defaults to `True`. The assistant/drafter configuration sets
+            `(batch, sequence, hidden_dim)`. The transformer stack
+            receives this input directly. Defaults to `False`.
+        enable_qk_scale_and_gate: bool. The backbone passes this value to
+            `MuseGlimmerTextAttention` in every decoder layer. Defaults to
+            `True`. The assistant configuration sets this to `False`.
+        qk_norm_with_scale: bool. The backbone passes this value to
+            `MuseGlimmerTextAttention` in every decoder layer. Defaults to
+            `False`. The assistant configuration sets this to `True`.
+        use_sandwich_norm: bool. The backbone passes this value to every
+            decoder layer. If `False`, the layer skips the two
+            post-sublayer sandwich norms. Defaults to `True`. The
+            assistant configuration sets this to `False`.
+        use_centered_norm: bool. The backbone passes this value to every
+            decoder layer. If `False`, the layer builds
+            `input_layernorm` and `pre_feedforward_layernorm` as plain
+            RMSNorm. Otherwise, they use the centered `(1 + weight)`
+            variant. Defaults to `True`. The assistant configuration sets
             this to `False`.
-        use_centered_norm: bool. Passed through to every decoder layer.
-            If `False`, builds `input_layernorm`/`pre_feedforward_layernorm`
-            as plain RMSNorm instead of the centered `(1 + weight)`
-            variant. Defaults to `True`. The assistant/drafter
-            configuration sets this to `False`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to
             use for model computations and weights.
 
@@ -178,6 +183,21 @@ class MuseGlimmerBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        if context_projection_layer_ids is not None and (
+            not use_bidirectional_attention
+        ):
+            raise ValueError(
+                "`context_projection_layer_ids` requires "
+                "`use_bidirectional_attention=True`. Received "
+                "`use_bidirectional_attention=False`. Set "
+                "`use_bidirectional_attention=True`."
+            )
+        if vision_encoder is not None and projector_hidden_dim is None:
+            raise ValueError(
+                "`vision_encoder` requires `projector_hidden_dim`. Received "
+                "`projector_hidden_dim=None`. Set `projector_hidden_dim` to "
+                "an integer."
+            )
         if layer_types is None:
             layer_types = [
                 "full_attention"

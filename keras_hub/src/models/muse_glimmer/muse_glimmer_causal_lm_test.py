@@ -289,6 +289,20 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         speculative_sampler = self.causal_lm._assisted_generate_cache[1]
         self.assertIsNone(speculative_sampler.base_sampler)
 
+    def test_generate_with_assistant_rejects_short_max_length(self):
+        assistant = self._make_assistant(block_size=6)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"], sequence_length=4
+        )
+        self.causal_lm.preprocessor = None
+        with self.assertRaisesRegex(ValueError, "at least 6"):
+            self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
+        # The failed call must restore the plain sampler.
+        self.assertIsNone(getattr(self.causal_lm, "_assistant_model", None))
+
     def test_generate_with_assistant_non_greedy(self):
         assistant = self._make_assistant(block_size=3)
         self.causal_lm.compile(sampler="top_p")

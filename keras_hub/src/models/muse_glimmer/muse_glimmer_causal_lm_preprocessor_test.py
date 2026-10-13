@@ -345,6 +345,36 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(output["image_grid_thw"], [[4, 2, 2], [2, 2, 2]])
         self.assertEqual(output["vision_indices"].shape[0], 6)
 
+    def test_generate_preprocess_with_video_fps_per_prompt(self):
+        preprocessor = self._video_preprocessor_with_frames(32)
+        video = np.zeros((8, 8, 8, 3), dtype="float32")
+        # The first prompt has two videos and the second prompt has one.
+        output = preprocessor.generate_preprocess(
+            {
+                "prompts": ["<|video|><|video|> airplane", "<|video|> airport"],
+                "videos": [video, video, video],
+                "video_fps": [1.0, 2.0],
+            }
+        )
+        self.assertAllEqual(
+            output["image_grid_thw"], [[4, 2, 2], [4, 2, 2], [2, 2, 2]]
+        )
+
+    def test_generate_preprocess_with_video_fps_per_prompt_wrong_size(self):
+        preprocessor = self._video_preprocessor_with_frames(32)
+        video = np.zeros((8, 8, 8, 3), dtype="float32")
+        with self.assertRaisesRegex(ValueError, "one value per video"):
+            preprocessor.generate_preprocess(
+                {
+                    "prompts": [
+                        "<|video|><|video|> airplane",
+                        "<|video|> airport",
+                    ],
+                    "videos": [video, video, video],
+                    "video_fps": [1.0, 2.0, 3.0, 4.0],
+                }
+            )
+
     def test_generate_preprocess_with_one_video_fps(self):
         preprocessor = self._video_preprocessor_with_frames(16)
         video = np.zeros((8, 8, 8, 3), dtype="float32")
@@ -399,6 +429,42 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
                     "prompts": ["<|video|> airplane", "<|video|> airport"],
                     "videos": np.stack([video, video]),
                     "video_fps": [[1.0, 2.0, 3.0]],
+                }
+            )
+
+    def test_call_with_different_frame_counts_raises(self):
+        preprocessor = self._video_preprocessor_with_frames(32)
+        video = np.zeros((8, 8, 8, 3), dtype="float32")
+        # 8 frames keep 8 or 4 frames at 1 or 2 fps.
+        with self.assertRaisesRegex(ValueError, "same output size"):
+            preprocessor(
+                {
+                    "prompts": ["<|video|> airplane", "<|video|> airport"],
+                    "videos": np.stack([video, video]),
+                    "video_fps": [1.0, 2.0],
+                }
+            )
+
+    def test_call_with_different_image_sizes_raises(self):
+        wide_image = np.zeros((8, 16, 3), dtype="float32")
+        with self.assertRaisesRegex(ValueError, r"same size.*\(8, 8, 3\)"):
+            self.image_preprocessor(
+                {
+                    "prompts": ["<|image|> airplane", "<|image|> airport"],
+                    "images": [self.image, wide_image],
+                }
+            )
+
+    def test_call_with_different_video_sizes_raises(self):
+        preprocessor = self._video_preprocessor_with_frames(32)
+        with self.assertRaisesRegex(ValueError, r"same size.*\(4, 8, 8, 3\)"):
+            preprocessor(
+                {
+                    "prompts": ["<|video|> airplane", "<|video|> airport"],
+                    "videos": [
+                        np.zeros((8, 8, 8, 3), dtype="float32"),
+                        np.zeros((4, 8, 8, 3), dtype="float32"),
+                    ],
                 }
             )
 

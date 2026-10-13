@@ -124,7 +124,7 @@ class MuseGlimmerTextDecoderTest(TestCase):
                 is_valid_context = (
                     key_pos <= anchor_pos or key_pos >= max_length
                 )
-                in_window = abs(q_pos - abs_key_pos) <= (window - 1)
+                in_window = abs(q_pos - abs_key_pos) <= window
                 expected[key_pos] = is_valid_context and in_window
             np.testing.assert_array_equal(mask_np[i], expected)
 

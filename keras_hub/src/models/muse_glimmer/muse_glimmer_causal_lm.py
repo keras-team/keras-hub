@@ -340,6 +340,15 @@ class MuseGlimmerCausalLM(CausalLM):
             assistant_backbone = assistant_model.backbone
             batch_size = ops.shape(token_ids)[0]
             max_length = ops.shape(token_ids)[1]
+            # The shape is a Python int unless the sequence length is
+            # dynamic. Each verify window needs `window_length` positions.
+            if isinstance(max_length, int) and max_length < window_length:
+                raise ValueError(
+                    f"`max_length` must be at least {window_length}, the "
+                    f"`block_size` of the assistant. Received "
+                    f"`max_length={max_length}`. Increase `max_length` or "
+                    "call `generate()` without `assistant_model`."
+                )
             context_dim = len(target_layer_ids) * self.backbone.hidden_dim
 
             def get_window_start(anchor):

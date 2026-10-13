@@ -506,9 +506,8 @@ def _build_assistant_target_context(
         target_out = hf_target_model(
             input_ids=input_ids, output_hidden_states=True
         )
-    # `hidden_states` is a tuple of length num_layers + 1 (index 0 is the
-    # embedding output); `target_layer_ids` indexes directly into it, per
-    # the migration report's reading of
+    # `hidden_states` has `num_layers + 1` entries. Index 0 is the
+    # embedding output. `target_layer_ids` indexes directly into it, as in
     # `MuseGlimmerAssistantContextProjection`.
     hidden_states = target_out.hidden_states
     selected = [hidden_states[i] for i in target_layer_ids]

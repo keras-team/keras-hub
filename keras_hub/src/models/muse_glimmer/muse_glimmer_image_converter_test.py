@@ -123,6 +123,39 @@ class MuseGlimmerImageConverterTest(TestCase):
         patch_dim = 2 * 3 * 4 * 4  # patch_temporal * 3 * patch_size**2
         self.assertEqual(output["patches"].shape, (num_patches, patch_dim))
 
+    def test_batched_input_raises(self):
+        converter = MuseGlimmerImageConverter(
+            patch_size=2, merge_size=1, max_image_tokens=16
+        )
+        with self.assertRaisesRegex(ValueError, "rank 3"):
+            converter(np.ones((2, 8, 8, 3), dtype="float32"))
+
+    def test_batched_input_raises_in_tf_function(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        converter = MuseGlimmerImageConverter(
+            patch_size=2, merge_size=1, max_image_tokens=16
+        )
+        with self.assertRaisesRegex(ValueError, "rank 3"):
+            tf.data.Dataset.from_tensor_slices(
+                np.ones((2, 2, 8, 8, 3), dtype="float32")
+            ).map(converter)
+
+    def test_channels_first_matches_channels_last(self):
+        kwargs = {
+            "patch_size": 2,
+            "merge_size": 1,
+            "max_image_tokens": 16,
+            "interpolation": "nearest",
+        }
+        image = np.random.uniform(0, 255, (8, 8, 3)).astype("float32")
+        expected = MuseGlimmerImageConverter(**kwargs)(image)
+        output = MuseGlimmerImageConverter(
+            data_format="channels_first", **kwargs
+        )(image.transpose(2, 0, 1))
+        self.assertAllClose(output["patches"], expected["patches"])
+        self.assertAllClose(output["grid_thw"], expected["grid_thw"])
+
     def test_serialization(self):
         converter = MuseGlimmerImageConverter(patch_size=14)
         self.run_serialization_test(converter)

@@ -22,6 +22,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionRotaryEmbedding,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    _per_patch_coordinates,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     _window_layout,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -127,7 +130,9 @@ class MuseGlimmerVisionEncoderTest(TestCase):
 
         output = ops.convert_to_numpy(
             patch_embedder._bilinear_position_embeddings(
-                np.array([[1, 5, 5]], dtype="int32"), num_patches=25
+                _per_patch_coordinates(
+                    np.array([[1, 5, 5]], dtype="int32"), num_patches=25
+                )
             )
         )[:, 0]
 
@@ -166,7 +171,9 @@ class MuseGlimmerVisionEncoderTest(TestCase):
 
     def test_rotary_positions_use_one_based_coordinates(self):
         cos, sin = self.encoder._rot_pos_emb(
-            np.array([[1, 2, 2]], dtype="int32")
+            _per_patch_coordinates(
+                np.array([[1, 2, 2]], dtype="int32"), num_patches=4
+            )
         )
         expected_positions = np.array(
             [[1, 1], [2, 1], [1, 2], [2, 2]], dtype="float32"
@@ -195,9 +202,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllClose(sin, expected_sin)
 
     def test_window_layout_pads_ragged_windows(self):
+        grid_thw = ops.convert_to_tensor(np.array([[1, 3, 5]], dtype="int32"))
         window_index, reverse_indices, window_segment_id = _window_layout(
-            ops.convert_to_tensor(np.array([[1, 3, 5]], dtype="int32")),
-            num_patches=15,
+            grid_thw,
+            _per_patch_coordinates(grid_thw, num_patches=15),
             window_patches=4,
         )
 
@@ -210,9 +218,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         self.assertAllEqual(window_segment_id, np.repeat([0, 1], [12, 3]))
 
     def test_window_layout_offsets_each_video_frame(self):
+        grid_thw = ops.convert_to_tensor(np.array([[2, 3, 5]], dtype="int32"))
         window_index, reverse_indices, window_segment_id = _window_layout(
-            ops.convert_to_tensor(np.array([[2, 3, 5]], dtype="int32")),
-            num_patches=30,
+            grid_thw,
+            _per_patch_coordinates(grid_thw, num_patches=30),
             window_patches=4,
         )
 

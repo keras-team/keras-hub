@@ -1,5 +1,6 @@
 import keras
 import numpy as np
+import pytest
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
@@ -100,3 +101,86 @@ class TestMuseGlimmerAssistantConverter(TestCase):
             backbone.transformer_layers[0]._pre_feedforward_layernorm.scale
         )
         self.assertFalse(np.allclose(ported_scale, np.zeros_like(ported_scale)))
+
+    @pytest.mark.large
+    def test_convert_weights_matches_hf(self):
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        if not hasattr(transformers, "MuseGlimmerAssistantModel"):
+            self.skipTest("transformers has no MuseGlimmerAssistantModel.")
+
+        class HFLoader:
+            """Reads weights from the HF state dict."""
+
+            def __init__(self, state_dict):
+                self.state_dict = state_dict
+
+            def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+                tensor = self.state_dict[hf_weight_key].numpy()
+                if hook_fn:
+                    tensor = hook_fn(tensor, list(keras_variable.shape))
+                keras_variable.assign(tensor)
+
+        batch_size, block_size, context_len = 2, 4, 3
+        # A small window makes the sliding mask observable.
+        hf_config = transformers.MuseGlimmerAssistantConfig(
+            vocab_size=10,
+            hidden_size=32,
+            intermediate_size=48,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=8,
+            layer_types=["sliding_attention", "full_attention"],
+            sliding_window=3,
+            target_layer_ids=[1, 3],
+            block_size=block_size,
+            rope_parameters={"rope_theta": 1e4, "rope_type": "default"},
+        )
+        torch.manual_seed(0)
+        hf_model = transformers.MuseGlimmerAssistantModel(hf_config).eval()
+        # Random norm weights make the norm mapping observable.
+        with torch.no_grad():
+            for param in hf_model.parameters():
+                if param.ndim == 1:
+                    param.copy_(torch.randn_like(param) * 0.5)
+
+        config_dict = hf_config.to_dict()
+        backbone = MuseGlimmerBackbone(
+            **convert_muse_glimmer_assistant.convert_backbone_config(
+                config_dict
+            )
+        )
+        state_dict = {
+            key: value.detach().cpu()
+            for key, value in hf_model.state_dict().items()
+        }
+        convert_muse_glimmer_assistant.convert_weights(
+            backbone, HFLoader(state_dict), config_dict
+        )
+
+        rng = np.random.default_rng(0)
+        noise_embeds = rng.standard_normal((batch_size, block_size, 32)).astype(
+            "float32"
+        )
+        context = rng.standard_normal((batch_size, context_len, 64)).astype(
+            "float32"
+        )
+        with torch.no_grad():
+            hf_output = hf_model(
+                noise_embeds=torch.from_numpy(noise_embeds),
+                context_hidden_states=torch.from_numpy(context),
+                attention_mask=torch.ones(
+                    batch_size, context_len + block_size, dtype=torch.long
+                ),
+            ).last_hidden_state.numpy()
+        keras_output = backbone(
+            {
+                "noise_embeds": noise_embeds,
+                "context_hidden_states": context,
+                "padding_mask": np.ones((batch_size, block_size), "int32"),
+            }
+        )
+        self.assertAllClose(
+            hf_output, keras.ops.convert_to_numpy(keras_output), atol=1e-3
+        )

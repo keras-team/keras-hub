@@ -73,6 +73,29 @@ def _media_per_row(media, item_rank, batched, media_name):
     return media
 
 
+def _same_size_media_python(media, item_rank, media_name):
+    """Return `media` as one NumPy array, or raise if item sizes differ."""
+    leaves = []
+
+    def visit(entry):
+        if isinstance(entry, (list, tuple)):
+            for child in entry:
+                visit(child)
+        else:
+            leaves.append(convert_to_numpy(entry))
+
+    visit(media)
+    shapes = sorted({leaf.shape[-item_rank:] for leaf in leaves})
+    if len(shapes) > 1:
+        raise ValueError(
+            f"All `{media_name}` in one call need the same size when the "
+            f"preprocessor builds training inputs. Received item shapes "
+            f"{shapes}. Use same-size {media_name}, or use "
+            "`generate_preprocess` for mixed sizes."
+        )
+    return convert_to_numpy(media)
+
+
 def _fps_per_item_python(fps, batched, batch_size, num_items):
     """Return a flat NumPy array with one frame rate per video.
 
@@ -120,7 +143,8 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
     items. `sample_weight` is zero where the label is a vision placeholder.
 
     The input dict can have a `"video_fps"` entry: one frame rate for all
-    videos, or one per prompt or per video. Without it, the video
+    videos, or one per prompt or per video. If the number of prompts equals
+    the number of videos, the values apply per video. Without it, the video
     converter uses its `source_fps`. A training batch needs the same
     frame count for all videos.
 
@@ -257,22 +281,38 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             counts.append(t * (h // merge_size) * (w // merge_size))
         return counts
 
-    def _convert_media(self, media, converter, item_rank, media_name, fps=None):
+    def _convert_media(
+        self,
+        media,
+        converter,
+        item_rank,
+        media_name,
+        fps=None,
+        items_per_prompt=None,
+    ):
         """Run `converter` on each media item separately.
 
-        `fps` is `None`, one value, or one frame rate per item. The
-        converter gets the frame rate as `source_fps`.
+        `fps` is `None`, one value, one frame rate per item, or one per
+        prompt. A per-prompt value applies to all items of that prompt,
+        as given by `items_per_prompt`. The converter gets the frame rate
+        as `source_fps`.
 
         Returns the per-item patches, the per-item `grid_thw` and the
         per-item count of merged vision tokens.
         """
         patches, grids = [], []
         items = _split_media(media, item_rank, media_name)
-        item_fps = (
-            None
-            if fps is None
-            else _fps_per_item_python(fps, False, 1, len(items))
-        )
+        item_fps = None
+        if fps is not None:
+            fps = np.asarray(convert_to_numpy(fps), dtype="float64")
+            if (
+                fps.ndim == 1
+                and items_per_prompt is not None
+                and fps.size != len(items)
+                and fps.size == len(items_per_prompt)
+            ):
+                fps = np.repeat(fps, items_per_prompt)
+            item_fps = _fps_per_item_python(fps, False, 1, len(items))
         for i, item in enumerate(items):
             item = keras.ops.convert_to_tensor(convert_to_numpy(item))
             if item_fps is None:
@@ -310,7 +350,10 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             fps,
         ) in media_entries:
             media = _media_per_row(
-                convert_to_numpy(media), item_rank, batched, media_name
+                _same_size_media_python(media, item_rank, media_name),
+                item_rank,
+                batched,
+                media_name,
             )
             if media.shape[0] != batch_size:
                 raise ValueError(
@@ -327,6 +370,16 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
                 media_name,
                 fps,
             )
+            patch_shapes = sorted({patch.shape for patch in patches})
+            if len(patch_shapes) > 1:
+                raise ValueError(
+                    f"All `{media_name}` in one call need the same output "
+                    f"size when the preprocessor builds training inputs. "
+                    f"The converter gave patch shapes {patch_shapes}. "
+                    "Different `video_fps` values can give different frame "
+                    "counts. Use `video_fps` values that give the same "
+                    "frame count, or use `generate_preprocess`."
+                )
             patch_dim = patches[0].shape[-1]
             media_outputs.append(
                 (
@@ -435,20 +488,28 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
         prompts, batched, _ = canonicalize_python_string_inputs(prompts)
 
+        tokenized = [
+            convert_to_numpy(self.tokenizer(prompt)).tolist()
+            for prompt in prompts
+        ]
         pixel_values, grid_thw = [], []
         num_tokens_per_item = {"images": [], "videos": []}
-        for media_name, media, converter, item_rank, _, fps in media_entries:
+        for (
+            media_name,
+            media,
+            converter,
+            item_rank,
+            token_id,
+            fps,
+        ) in media_entries:
+            items_per_prompt = [ids.count(token_id) for ids in tokenized]
             patches, grids, num_tokens = self._convert_media(
-                media, converter, item_rank, media_name, fps
+                media, converter, item_rank, media_name, fps, items_per_prompt
             )
             pixel_values.extend(patches)
             grid_thw.extend(grids)
             num_tokens_per_item[media_name] = num_tokens
 
-        tokenized = [
-            convert_to_numpy(self.tokenizer(prompt)).tolist()
-            for prompt in prompts
-        ]
         expanded_sequences = self._expand_vision_placeholders(
             tokenized,
             num_tokens_per_item["images"],
@@ -692,15 +753,3 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             "image_grid_thw": tf.concat(grid_thw, axis=0),
             "vision_indices": tf.concat(flat_indices, axis=0),
         }
-
-    def get_config(self):
-        config = super().get_config()
-        if self.image_converter is not None:
-            config["image_converter"] = keras.layers.serialize(
-                self.image_converter
-            )
-        if self.video_converter is not None:
-            config["video_converter"] = keras.layers.serialize(
-                self.video_converter
-            )
-        return config

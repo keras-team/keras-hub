@@ -102,7 +102,7 @@ class MuseGlimmerVideoConverter(VideoConverter):
         num_frames: int. Maximum number of sampled frames. Defaults to
             `96`.
         max_video_frame_tokens: int. Maximum merged vision tokens per
-            frame, used to derive the pixel budget. Defaults to `144`.
+            frame. Defaults to `144`.
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -135,9 +135,6 @@ class MuseGlimmerVideoConverter(VideoConverter):
         # `ImageConverter`'s own defaults.
         self.interpolation = interpolation
         self.antialias = antialias
-        self._patch_stride = patch_size * merge_size
-        self.max_pixels = max_video_frame_tokens * (self._patch_stride**2)
-        self.min_pixels = self._patch_stride**2
 
     @preprocessing_function
     def call(self, inputs, source_fps=None):
