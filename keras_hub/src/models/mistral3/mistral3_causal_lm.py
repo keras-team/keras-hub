@@ -144,11 +144,9 @@ class Mistral3CausalLM(MistralCausalLM):
         image_sizes = inputs.get("image_sizes", None)
         placeholder_indices = inputs.get("placeholder_indices", None)
 
-        # Compute image features once, at prefill, from a static (Python
-        # int, not tensor) shape check on the number of images. An unknown
-        # static shape (`None`) is treated as "no images".
+        # Compute image features once, at prefill.
         img_embeddings = None
-        if pixel_values is not None and pixel_values.shape[0]:
+        if pixel_values is not None:
             img_embeddings = self.backbone.image_feature_extractor(
                 pixel_values, image_sizes
             )

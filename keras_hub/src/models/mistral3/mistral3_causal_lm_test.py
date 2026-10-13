@@ -182,6 +182,18 @@ class Mistral3CausalLMTest(TestCase, parameterized.TestCase):
             expected_output_shape=(2, 16, self.tokenizer.vocabulary_size()),
         )
 
+    def test_vision_backbone_predict_text_only(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        outputs = causal_lm.predict(["the tin", "in the"], batch_size=2)
+        self.assertEqual(
+            outputs.shape, (2, 16, self.tokenizer.vocabulary_size())
+        )
+
+    def test_vision_backbone_call_text_only_preprocessor_output(self):
+        x, _, _ = self.preprocessor(["the tin", "in the"])
+        outputs = self.backbone(x)
+        self.assertEqual(outputs.shape, (2, 16, 16))
+
     def test_multimodal_generate(self):
         vision_encoder = Mistral3VisionEncoder(
             image_size=8,

@@ -7,15 +7,66 @@ from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     MISTRAL3_DEFAULT_SPATIAL_MERGE_SIZE,
 )
-from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
-    compute_resize_size,
-)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
 # CLIP normalization stats, in [0, 255] pixel-value units.
 _CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 _CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
+
+
+def compute_resize_size(height, width, longest_edge, patch_size):
+    """Computes the resize target for one image.
+
+    Scales `(height, width)` down (preserving aspect ratio) so its longest
+    edge is at most `longest_edge`, then rounds each dimension up to the
+    nearest multiple of `patch_size`.
+
+    Args:
+        height: int. The image's original height.
+        width: int. The image's original width.
+        longest_edge: int. The maximum allowed size of the longer side.
+        patch_size: int. The patch size each output dimension must be a
+            multiple of.
+
+    Returns:
+        `(resized_height, resized_width)` as plain Python ints.
+    """
+    ratio = max(height / longest_edge, width / longest_edge)
+    if ratio > 1:
+        height = int(height / ratio)
+        width = int(width / ratio)
+
+    resized_height = ((height - 1) // patch_size + 1) * patch_size
+    resized_width = ((width - 1) // patch_size + 1) * patch_size
+    return resized_height, resized_width
+
+
+def _compute_resize_size_tf(height, width, longest_edge, patch_size):
+    """Computes `compute_resize_size` with TensorFlow ops.
+
+    The inputs can be scalar tensors with unknown static values.
+    The computation uses `float64` to match the Python version.
+
+    Args:
+        height: scalar int tensor. The original height.
+        width: scalar int tensor. The original width.
+        longest_edge: int. The maximum allowed size of the longer side.
+        patch_size: int. The patch size each output dimension must be a
+            multiple of.
+
+    Returns:
+        `(resized_height, resized_width)` as scalar `int32` tensors.
+    """
+    height_f = tf.cast(height, "float64")
+    width_f = tf.cast(width, "float64")
+    ratio = tf.maximum(height_f / longest_edge, width_f / longest_edge)
+    needs_resize = ratio > 1.0
+    height = tf.where(needs_resize, tf.cast(height_f / ratio, "int32"), height)
+    width = tf.where(needs_resize, tf.cast(width_f / ratio, "int32"), width)
+    resized_height = ((height - 1) // patch_size + 1) * patch_size
+    resized_width = ((width - 1) // patch_size + 1) * patch_size
+    return resized_height, resized_width
 
 
 @keras_hub_export("keras_hub.layers.Mistral3ImageConverter")
@@ -28,6 +79,11 @@ class Mistral3ImageConverter(ImageConverter):
     call can resize to a different shape, resizing runs in a Python loop
     over `inputs` (a list of variable-size images) rather than through the
     base class's single-`Resizing`-layer `call()`.
+
+    The TensorFlow path (`tf.data`) resizes every image in a call to one
+    shape. A dense batch tensor has one image size, so this path needs
+    batches of same-size images. The Python path resizes each image on its
+    own and pads the batch to the largest image.
 
     Args:
         longest_edge: int. The maximum size of an image's longer side after
@@ -151,9 +207,11 @@ class Mistral3ImageConverter(ImageConverter):
             images = tf.expand_dims(images, axis=0)
 
         merge_patch_size = self.patch_size * self.spatial_merge_size
-        height, width = images.shape[1], images.shape[2]
-        resized_height, resized_width = compute_resize_size(
-            height, width, self.longest_edge, merge_patch_size
+        # Use the dynamic shape. The static height and width are `None`
+        # under `tf.data` when the images have unknown size.
+        image_shape = tf.shape(images)
+        resized_height, resized_width = _compute_resize_size_tf(
+            image_shape[1], image_shape[2], self.longest_edge, merge_patch_size
         )
         images = tf.image.resize(
             images,
@@ -168,7 +226,7 @@ class Mistral3ImageConverter(ImageConverter):
         images = tf.transpose(images, (0, 3, 1, 2))
         num_images = tf.shape(images)[0]
         image_sizes = tf.tile(
-            tf.constant([[resized_height, resized_width]], dtype="int32"),
+            tf.stack([resized_height, resized_width])[tf.newaxis, :],
             (num_images, 1),
         )
         if unbatched:

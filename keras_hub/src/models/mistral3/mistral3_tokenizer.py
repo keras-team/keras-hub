@@ -87,7 +87,7 @@ class Mistral3Tokenizer(BytePairTokenizer):
         self.control_tokens = list(control_tokens) if control_tokens else []
         self._add_special_token("<s>", "start_token")
         self._add_special_token("</s>", "end_token")
-        self.pad_token_id = 0
+        self._add_special_token("<pad>", "pad_token")
 
         # Tekken's control tokens (e.g. `"[INST]"`) occupy a reserved id
         # block outside the BPE merges; register them as unsplittable, or
@@ -198,7 +198,7 @@ class Mistral3Tokenizer(BytePairTokenizer):
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(
                 shape=output_shape,
-                default_value=getattr(self, "pad_token_id", 0),
+                default_value=self.pad_token_id,
             )
         if unbatched:
             tokens = tokens[0]

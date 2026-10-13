@@ -82,10 +82,13 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
         }
 
     def test_preprocessor_basics(self):
+        # Zero-image inputs do not batch like per-example data, so the
+        # shared helper runs without an image converter.
+        init_kwargs = {**self.init_kwargs, "image_converter": None}
         input_data = {"prompts": ["the tin", "in the"]}
         self.run_preprocessor_test(
             cls=Mistral3CausalLMPreprocessor,
-            init_kwargs=self.init_kwargs,
+            init_kwargs=init_kwargs,
             input_data=input_data,
         )
 
@@ -110,6 +113,25 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
             )
         )
         self.assertEqual(num_placeholders, 4)
+
+    def test_generate_preprocess_rejects_truncated_image_block(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        # The image block is 6 tokens. The sequence only fits part of it.
+        with self.assertRaisesRegex(ValueError, "cuts an image block"):
+            preprocessor.generate_preprocess(
+                {"prompts": "the [IMG] quick", "images": [image]},
+                sequence_length=5,
+            )
+
+    def test_call_rejects_truncated_image_block(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        with self.assertRaisesRegex(ValueError, "cuts an image block"):
+            preprocessor(
+                {"prompts": ["the [IMG] quick"], "images": [image]},
+                sequence_length=5,
+            )
 
     def test_generate_preprocess_with_images_when_tf_handle_is_none(self):
         preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
@@ -194,6 +216,13 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
         preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess("the tin")
         self.assertEqual(set(x.keys()), {"token_ids", "padding_mask"})
+
+    def test_call_text_only_adds_empty_image_inputs(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        x, _, _ = preprocessor(["the tin", "in the"])
+        self.assertEqual(ops.shape(x["pixel_values"])[0], 0)
+        self.assertEqual(ops.shape(x["image_sizes"]), (0, 2))
+        self.assertAllEqual(x["placeholder_indices"], [[-1], [-1]])
 
     def test_generate_postprocess(self):
         preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)

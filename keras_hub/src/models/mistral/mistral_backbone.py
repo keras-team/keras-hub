@@ -1,10 +1,12 @@
 import keras
 from keras import ops
 from keras.layers import ReversibleEmbedding
-from keras.layers import RMSNormalization
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.mistral.mistral_layer_norm import (
+    MistralLayerNormalization,
+)
 from keras_hub.src.models.mistral.mistral_transformer_decoder import (
     MistralTransformerDecoder,
 )
@@ -43,7 +45,7 @@ class MistralBackbone(Backbone):
         rope_max_wavelength (int, optional): The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor (float, optional): The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
+            calculation of rotary embedding. Defaults to `1.0`.
         rope_type: str, optional. The type of RoPE scaling to apply.
             Supports `"linear"` and `"yarn"`. Defaults to `"linear"`.
         beta_fast: float, optional. The YaRN beta fast parameter. Only used
@@ -168,7 +170,7 @@ class MistralBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = RMSNormalization(
+        self.layer_norm = MistralLayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",

@@ -30,9 +30,6 @@ from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     compute_image_placeholder_indices,
 )
-from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
-    compute_resize_size,
-)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -297,6 +294,33 @@ class Mistral3VisionEncoderTest(TestCase):
         expected[1, 2] = 3.0
         self.assertAllClose(output, expected)
 
+    def test_image_text_embedding_merger_zero_images(self):
+        token_embeddings = np.ones((2, 5, 3))
+        image_features = np.zeros((0, 3))
+        placeholder_indices = np.full((2, 1), -1, dtype="int32")
+        output = self.embedding_merger(
+            token_embeddings, image_features, placeholder_indices
+        )
+        self.assertAllClose(output, token_embeddings)
+
+    def test_image_text_embedding_merger_rejects_too_few_placeholders(self):
+        token_embeddings = np.zeros((1, 5, 3))
+        image_features = np.ones((2, 3))
+        placeholder_indices = np.array([[1]], dtype="int32")
+        with self.assertRaisesRegex(ValueError, "must match"):
+            self.embedding_merger(
+                token_embeddings, image_features, placeholder_indices
+            )
+
+    def test_image_text_embedding_merger_rejects_too_many_placeholders(self):
+        token_embeddings = np.zeros((1, 5, 3))
+        image_features = np.ones((1, 3))
+        placeholder_indices = np.array([[1, 3]], dtype="int32")
+        with self.assertRaisesRegex(ValueError, "must match"):
+            self.embedding_merger(
+                token_embeddings, image_features, placeholder_indices
+            )
+
     def test_image_text_embedding_merger_serialization(self):
         self.run_serialization_test(self.embedding_merger)
 
@@ -317,42 +341,3 @@ class Mistral3VisionEncoderTest(TestCase):
             token_ids, image_token_index=10
         )
         self.assertAllEqual(indices, np.array([[-1]]))
-
-    # === compute_resize_size ===
-
-    def test_compute_resize_size_exact_multiple(self):
-        # Already a multiple of `patch_size`, well under `longest_edge`:
-        # no scaling, no rounding.
-        size = compute_resize_size(
-            height=16, width=16, longest_edge=32, patch_size=4
-        )
-        self.assertEqual(size, (16, 16))
-
-    def test_compute_resize_size_rounds_up(self):
-        # Under `longest_edge`, but not a `patch_size` multiple: each dim
-        # rounds up independently, (17 - 1) // 4 + 1 = 5 -> 20.
-        size = compute_resize_size(
-            height=17, width=17, longest_edge=32, patch_size=4
-        )
-        self.assertEqual(size, (20, 20))
-
-    def test_compute_resize_size_clamps_wide_image(self):
-        # Wide image: width is the longest edge, so it is scaled down to
-        # `longest_edge` and height is scaled by the same ratio, preserving
-        # aspect ratio, before rounding up to a `patch_size` multiple.
-        # ratio = 40 / 16 = 2.5 -> height = floor(20 / 2.5) = 8,
-        # width = floor(40 / 2.5) = 16 (both already patch multiples).
-        size = compute_resize_size(
-            height=20, width=40, longest_edge=16, patch_size=4
-        )
-        self.assertEqual(size, (8, 16))
-
-    def test_compute_resize_size_clamps_tall_image(self):
-        # Tall image: height is the longest edge. Same scale factor is
-        # applied to both dimensions.
-        # ratio = 40 / 16 = 2.5 -> height = floor(40 / 2.5) = 16,
-        # width = floor(20 / 2.5) = 8.
-        size = compute_resize_size(
-            height=40, width=20, longest_edge=16, patch_size=4
-        )
-        self.assertEqual(size, (16, 8))

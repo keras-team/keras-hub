@@ -124,33 +124,6 @@ def compute_image_placeholder_indices(token_ids, image_token_index):
     return padded
 
 
-def compute_resize_size(height, width, longest_edge, patch_size):
-    """Computes the resize target for one image.
-
-    Scales `(height, width)` down (preserving aspect ratio) so its longest
-    edge is at most `longest_edge`, then rounds each dimension up to the
-    nearest multiple of `patch_size`.
-
-    Args:
-        height: int. The image's original height.
-        width: int. The image's original width.
-        longest_edge: int. The maximum allowed size of the longer side.
-        patch_size: int. The patch size each output dimension must be a
-            multiple of.
-
-    Returns:
-        `(resized_height, resized_width)` as plain Python ints.
-    """
-    ratio = max(height / longest_edge, width / longest_edge)
-    if ratio > 1:
-        height = int(height / ratio)
-        width = int(width / ratio)
-
-    resized_height = ((height - 1) // patch_size + 1) * patch_size
-    resized_width = ((width - 1) // patch_size + 1) * patch_size
-    return resized_height, resized_width
-
-
 class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
     """Scatters projected image features into image placeholder positions.
 
@@ -168,6 +141,9 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
     """
 
     def call(self, token_embeddings, image_features, placeholder_indices):
+        # A text-only batch has no image features to scatter.
+        if image_features.shape[0] == 0:
+            return token_embeddings
         batch_size = ops.shape(token_embeddings)[0]
         seq_length = ops.shape(token_embeddings)[1]
         hidden_dim = ops.shape(token_embeddings)[2]
@@ -200,6 +176,7 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
         # Row `i`'s own images sit in `image_features` at an offset equal
         # to the number of real placeholders in preceding rows.
         counts = ops.sum(ops.cast(is_valid, "int32"), axis=1)
+        self._check_feature_count(counts, image_features)
         row_starts = ops.cumsum(counts) - counts
         local_positions = ops.reshape(
             ops.arange(max_placeholders, dtype="int32"), (1, max_placeholders)
@@ -227,6 +204,24 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
             merged_embeddings,
             (batch_size, seq_length, hidden_dim),
         )
+
+    def _check_feature_count(self, counts, image_features):
+        """Raises if placeholders and image features differ in number.
+
+        The check runs only with concrete values. Under `jit` or graph
+        tracing, the count depends on data and the check is skipped.
+        """
+        try:
+            num_placeholders = int(ops.convert_to_numpy(ops.sum(counts)))
+            num_features = int(ops.shape(image_features)[0])
+        except Exception:
+            return
+        if num_placeholders != num_features:
+            raise ValueError(
+                "The number of image placeholder tokens must match the "
+                f"number of image features. Received: {num_placeholders} "
+                f"placeholder(s) and {num_features} feature(s)."
+            )
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -1050,7 +1045,7 @@ class Mistral3VisionEncoder(keras.Model):
     ):
         """Declare the output shape without tracing `call()`.
 
-        `MistralBackbone` builds this encoder into a functional model with
+        `Mistral3Backbone` builds this encoder into a functional model with
         a dynamic `pixel_values` shape; tracing `call()`'s data-dependent
         shape ops on symbolic dimensions isn't supported by the JAX
         backend's graph tracer.

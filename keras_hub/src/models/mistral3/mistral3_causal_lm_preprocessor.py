@@ -120,8 +120,9 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         return block
 
     def _tokenize_base(self, prompt):
-        """Tokenizes `prompt` whole (not split around placeholders), since
-        SentencePiece's leading-space handling differs per call.
+        """Tokenizes `prompt` whole, not split around placeholders.
+
+        The BPE merges and the split regex need the full text.
 
         Args:
             prompt: str. The raw prompt text.
@@ -306,8 +307,17 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             ]
         else:
             outputs = [token_ids, padding_mask]
+        placeholder_id = self.tokenizer.image_placeholder_token_id
+        expected = sum(ids.count(placeholder_id) for ids in tokenized)
+        found = int(np.sum(outputs[0] == placeholder_id))
+        if found != expected:
+            raise ValueError(
+                "The packed sequence cuts an image block. Expected "
+                f"{expected} image placeholder token(s), but only {found} "
+                "fit. Increase `sequence_length` or shorten the prompt."
+            )
         placeholder_indices = compute_image_placeholder_indices(
-            outputs[0], self.tokenizer.image_placeholder_token_id
+            outputs[0], placeholder_id
         )
         return outputs + [placeholder_indices]
 
@@ -387,16 +397,55 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
         }
         return keras.utils.pack_x_y_sample_weight(out_x, y, sample_weight)
 
+    def _add_empty_image_inputs(self, outputs):
+        """Adds zero-image inputs to text-only `call()` outputs.
+
+        A vision-enabled backbone requires the image inputs. A batch of
+        zero images satisfies the backbone. Without an image converter,
+        the backbone is text-only and `outputs` stay unchanged.
+
+        Args:
+            outputs: `(x, y, sample_weight)` from the text-only path.
+
+        Returns:
+            `(x, y, sample_weight)` with the image inputs added to `x`.
+        """
+        if self.image_converter is None:
+            return outputs
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(outputs)
+        token_ids = x["token_ids"]
+        patch_size = self.image_converter.patch_size
+        if tf is not None and isinstance(token_ids, tf.Tensor):
+            indices_shape = tf.concat([tf.shape(token_ids)[:-1], [1]], 0)
+            x["pixel_values"] = tf.zeros(
+                (0, 3, patch_size, patch_size), dtype="float32"
+            )
+            x["image_sizes"] = tf.zeros((0, 2), dtype="int32")
+            x["placeholder_indices"] = -tf.ones(indices_shape, dtype="int32")
+        else:
+            indices_shape = (*np.shape(token_ids)[:-1], 1)
+            x["pixel_values"] = np.zeros(
+                (0, 3, patch_size, patch_size), dtype="float32"
+            )
+            x["image_sizes"] = np.zeros((0, 2), dtype="int32")
+            x["placeholder_indices"] = -np.ones(indices_shape, dtype="int32")
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         if not isinstance(x, dict) or x.get("images") is None:
             # Mistral3 (like the HF model it wraps) supports plain text-only
-            # calls: no image inputs are added to the output in that case.
+            # calls.
             prompts = x["prompts"] if isinstance(x, dict) else x
-            return super()._call_python(
+            outputs = super()._call_python(
                 prompts,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
+            )
+            # The base class already converted its outputs. Convert the
+            # added image inputs so all values share one tensor type.
+            return convert_preprocessing_outputs_python(
+                self._add_empty_image_inputs(outputs)
             )
         outputs = self._call_multimodal(
             x, sequence_length, self._tokenize_and_pack_python
@@ -407,12 +456,13 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
         if not isinstance(x, dict) or x.get("images") is None:
             prompts = x["prompts"] if isinstance(x, dict) else x
-            return super()._call_python(
+            outputs = super()._call_python(
                 prompts,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
             )
+            return self._add_empty_image_inputs(outputs)
         return self._call_multimodal(
             x, sequence_length, self._tokenize_and_pack_tf
         )

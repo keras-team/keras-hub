@@ -228,6 +228,9 @@ def precompute_hf_outputs(hf_preset, hf_config, skip_generate=False):
     hf_model = Mistral3ForConditionalGeneration.from_pretrained(
         hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
+    # FP8 checkpoints (e.g. Ministral 3, Devstral Small 2) dequantize to
+    # bfloat16 regardless of `torch_dtype`. Cast them to match the rest.
+    hf_model = hf_model.float()
     hf_model.eval()
 
     text_results = run_hf_text_forward(
@@ -284,7 +287,7 @@ def check_param_count(keras_model, hf_results):
     print(f"\nKerasHub params: {keras_params:,}")
     print(f"HF params:       {hf_params:,}")
     np.testing.assert_equal(keras_params, hf_params)
-    print("✅ Parameter count matches.")
+    print("\n✓ Parameter count matches.")
 
 
 def test_numerics(label, keras_logits, hf_logits):
@@ -299,7 +302,7 @@ def test_numerics(label, keras_logits, hf_logits):
             keras_logits, hf_logits, atol=1e-3, rtol=1e-3
         )
         print(
-            f"✅ [{label}] Logits within 1e-3 tolerance "
+            f"✓ [{label}] Logits within 1e-3 tolerance "
             f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
         )
     except AssertionError:
@@ -308,7 +311,7 @@ def test_numerics(label, keras_logits, hf_logits):
         total = hf_logits.size
         matched_pct = 100 * (1.0 - mismatched / total)
         print(
-            f"⚠️  [{label}] Logits exceed 1e-3 tolerance — "
+            f"✗ [{label}] Logits exceed 1e-3 tolerance — "
             f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
             f"matching={matched_pct:.2f}% ({total - mismatched}/{total}).\n"
         )
@@ -358,16 +361,18 @@ def test_token_ids(label, preprocessor, prompt, hf_token_ids, image=None):
     )
     keras_token_ids = ops.convert_to_numpy(keras_inputs["token_ids"])
     np.testing.assert_array_equal(keras_token_ids, hf_token_ids)
-    print(f"✅ [{label}] Token IDs match.")
+    print(f"✓ [{label}] Token IDs match.")
 
 
 def validate_output(keras_model, hf_results, skip_generate=False):
+    print("\n--- Parameter Count ---")
     check_param_count(keras_model, hf_results)
     backbone = keras_model.backbone
     preprocessor = keras_model.preprocessor
     text_results = hf_results["text"]
     image_results = hf_results["image"]
 
+    print("\n--- Token IDs ---")
     test_token_ids("text", preprocessor, TEXT_PROMPT, text_results["token_ids"])
     test_token_ids(
         "image",
@@ -377,50 +382,37 @@ def validate_output(keras_model, hf_results, skip_generate=False):
         image=image_results["image"],
     )
 
-    # The backbone always declares `pixel_values`/`image_sizes`/
-    # `placeholder_indices` as graph inputs, so a text-only forward pass
-    # feeds it zero-length image tensors rather than omitting them.
-    # `Mistral3ImageFeatureExtractor` short-circuits on a zero-length image
-    # batch, so this is a genuine no-op through the vision encoder and
-    # image-merge layer.
-    vision_encoder = backbone.vision_encoder
-    patch_size = vision_encoder.patch_size
-    token_ids = ops.convert_to_tensor(text_results["token_ids"].astype("int32"))
-    backbone_inputs = {
-        "token_ids": token_ids,
-        "padding_mask": ops.ones_like(token_ids),
-        "pixel_values": ops.zeros(
-            (0, vision_encoder.num_channels, patch_size, patch_size),
-            dtype="float32",
-        ),
-        "image_sizes": ops.zeros((0, 2), dtype="int32"),
-        "placeholder_indices": ops.zeros((1, 0), dtype="int32"),
-    }
+    # The preprocessor adds the zero-length image inputs that the backbone
+    # declares as graph inputs. The HF token ids have no end token.
+    add_end_token = preprocessor.add_end_token
+    preprocessor.add_end_token = False
+    backbone_inputs, _, _ = preprocessor(
+        {"prompts": [TEXT_PROMPT]},
+        sequence_length=text_results["token_ids"].shape[1],
+    )
+    preprocessor.add_end_token = add_end_token
     keras_logits = run_kh_forward(backbone, backbone_inputs)
+    print("\n--- Numerics Comparison ---")
     test_numerics("text", keras_logits, text_results["logits"])
 
     # Feed HF's preprocessed `pixel_values` directly, rather than re-running
     # the Keras preprocessor, to avoid PIL vs `ops.image.resize` divergence.
     backbone_inputs = {
-        "token_ids": ops.convert_to_tensor(
-            image_results["token_ids"].astype("int32")
-        ),
-        "padding_mask": ops.convert_to_tensor(
-            image_results["padding_mask"].astype("int32")
-        ),
-        "pixel_values": ops.convert_to_tensor(image_results["pixel_values"]),
-        "image_sizes": ops.convert_to_tensor(
-            image_results["image_sizes"].astype("int32")
-        ),
-        "placeholder_indices": ops.convert_to_tensor(
-            image_results["placeholder_indices"].astype("int32")
-        ),
+        key: image_results[key]
+        for key in (
+            "token_ids",
+            "padding_mask",
+            "pixel_values",
+            "image_sizes",
+            "placeholder_indices",
+        )
     }
     keras_logits = run_kh_forward(backbone, backbone_inputs)
     test_numerics("image", keras_logits, image_results["logits"])
 
     if not skip_generate:
         keras_model.compile(sampler="greedy")
+        print("\n--- Text Generation ---")
         test_generate(
             "text",
             keras_model,
@@ -462,7 +454,7 @@ def main(_):
     print("\n-> KerasHub model loaded")
 
     validate_output(keras_model, hf_results, skip_generate=FLAGS.skip_generate)
-    print("\n✅ Tests passed!")
+    print("\n✓ Tests passed!")
 
     del keras_model
     gc.collect()
@@ -470,7 +462,7 @@ def main(_):
         f"hf://{hf_preset}", dtype="bfloat16"
     )
     keras_model.save_to_preset(f"./{preset}")
-    print("\n✅ Saved the model preset in bfloat16")
+    print("\n✓ Saved the model preset in bfloat16")
 
 
 if __name__ == "__main__":
