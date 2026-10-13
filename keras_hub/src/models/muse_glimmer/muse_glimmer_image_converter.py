@@ -1,3 +1,5 @@
+import itertools
+
 import keras
 import numpy as np
 from keras import ops
@@ -15,7 +17,8 @@ from keras_hub.src.utils.tensor_utils import tf
 def _smart_resize(height, width, patch_size, merge_size, max_tokens):
     """Select a patch grid that preserves the input aspect ratio.
 
-    `height` and `width` are Python ints. The math uses float32 NumPy.
+    `height` and `width` are Python ints. If two grids have the same aspect
+    error, the first grid in `list(set(...))` order wins.
     """
     resize_patch_size = patch_size * merge_size
     ideal_grid = np.array(
@@ -27,34 +30,32 @@ def _smart_resize(height, width, patch_size, merge_size, max_tokens):
     if ideal_grid[0] * ideal_grid[1] > max_tokens:
         ideal_grid = np.stack([limited_height, limited_height * ratio])
 
-    lower_grid = np.floor(ideal_grid)
-    upper_grid = np.ceil(ideal_grid)
-    candidates = np.array(
-        [
-            [lower_grid[0], lower_grid[1]],
-            [lower_grid[0], upper_grid[1]],
-            [upper_grid[0], lower_grid[1]],
-            [upper_grid[0], upper_grid[1]],
-        ],
-        dtype="float32",
-    )
-    valid = (
-        (candidates[:, 0] >= 1)
-        & (candidates[:, 1] >= 1)
-        & (candidates[:, 0] * candidates[:, 1] <= max_tokens)
-    )
-    if valid.any():
-        aspect_error = np.abs(
-            candidates[:, 0] / candidates[:, 1] - np.float32(height / width)
+    lower_grid = np.floor(ideal_grid).astype("int64")
+    upper_grid = np.ceil(ideal_grid).astype("int64")
+    candidates = list(
+        set(
+            itertools.product(
+                (int(lower_grid[0]), int(upper_grid[0])),
+                (int(lower_grid[1]), int(upper_grid[1])),
+            )
         )
-        aspect_error = np.where(valid, aspect_error, np.float32(1e9))
-        selected = candidates[np.argmin(aspect_error)]
-    else:
-        selected = np.maximum(np.round(ideal_grid), 1)
-    return (
-        int(selected[0]) * resize_patch_size,
-        int(selected[1]) * resize_patch_size,
     )
+    candidates = [
+        (grid_h, grid_w)
+        for grid_h, grid_w in candidates
+        if grid_h >= 1 and grid_w >= 1 and grid_h * grid_w <= max_tokens
+    ]
+    if candidates:
+        selected = min(
+            candidates,
+            key=lambda grid: abs(grid[0] / grid[1] - height / width),
+        )
+    else:
+        selected = (
+            max(int(np.round(ideal_grid[0])), 1),
+            max(int(np.round(ideal_grid[1])), 1),
+        )
+    return selected[0] * resize_patch_size, selected[1] * resize_patch_size
 
 
 def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
@@ -63,44 +64,28 @@ def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
     Use this function only when the image size is unknown until run
     time. For a static size, `_smart_resize` gives Python ints, so the
     converter outputs have static shapes.
-    """
-    resize_patch_size = tf.cast(patch_size * merge_size, "float32")
-    ideal_grid = tf.cast(tf.stack([height, width]), "float32")
-    ideal_grid = ideal_grid / resize_patch_size
-    ratio = ideal_grid[1] / ideal_grid[0]
-    limited_height = tf.sqrt(tf.cast(max_tokens, "float32") / ratio)
-    limited_grid = tf.stack([limited_height, limited_height * ratio], axis=0)
-    ideal_grid = tf.where(
-        ideal_grid[0] * ideal_grid[1] > max_tokens,
-        limited_grid,
-        ideal_grid,
-    )
 
-    lower_grid = tf.floor(ideal_grid)
-    upper_grid = tf.math.ceil(ideal_grid)
-    candidates = tf.stack(
-        [
-            tf.stack([lower_grid[0], lower_grid[1]]),
-            tf.stack([lower_grid[0], upper_grid[1]]),
-            tf.stack([upper_grid[0], lower_grid[1]]),
-            tf.stack([upper_grid[0], upper_grid[1]]),
-        ]
+    The function calls `_smart_resize` through `tf.numpy_function`. The
+    tie-break of `_smart_resize` depends on Python `set` order, and a
+    graph cannot reproduce that order. A saved graph cannot hold this
+    op, and XLA cannot compile it.
+    """
+
+    def select_grid(height, width):
+        target = _smart_resize(
+            int(height), int(width), patch_size, merge_size, max_tokens
+        )
+        return np.int32(target[0]), np.int32(target[1])
+
+    target_h, target_w = tf.numpy_function(
+        select_grid,
+        [height, width],
+        [tf.int32, tf.int32],
+        stateful=False,
     )
-    valid = (
-        (candidates[:, 0] >= 1)
-        & (candidates[:, 1] >= 1)
-        & (candidates[:, 0] * candidates[:, 1] <= max_tokens)
-    )
-    aspect_error = tf.abs(
-        candidates[:, 0] / candidates[:, 1]
-        - tf.cast(height, "float32") / tf.cast(width, "float32")
-    )
-    aspect_error = tf.where(valid, aspect_error, 1e9)
-    selected = tf.gather(candidates, tf.argmin(aspect_error))
-    fallback = tf.maximum(tf.round(ideal_grid), 1)
-    selected = tf.where(tf.reduce_any(valid), selected, fallback)
-    selected = tf.cast(selected * resize_patch_size, "int32")
-    return selected[0], selected[1]
+    target_h.set_shape([])
+    target_w.set_shape([])
+    return target_h, target_w
 
 
 def _resize(images, orig_h, orig_w, target_h, target_w, method, antialias):

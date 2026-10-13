@@ -39,6 +39,23 @@ class MuseGlimmerTokenizerTest(TestCase):
         tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
         self.assertEqual(tokenizer.end_token2_id, self.vocab["<|eot|>"])
 
+    def test_pre_tokenizer_matches_checkpoint_split(self):
+        tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
+        tokenizer._maybe_initialized_tokenizers()
+
+        def split(text):
+            pre = tokenizer._tokenizer.pre_tokenizer
+            return [piece for piece, _ in pre.pre_tokenize_str(text)]
+
+        # Two leading spaces split into one space and one word prefix.
+        self.assertEqual(split("  ab"), ["Ġ", "Ġab"])
+        # Digits group in threes.
+        self.assertEqual(split("1234567"), ["123", "456", "7"])
+        # Combining marks stay inside the word.
+        self.assertEqual(len(split("नमस्ते")), 1)
+        # Mixed-case words split at the case change.
+        self.assertEqual(split("camelCase"), ["camel", "Case"])
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             MuseGlimmerTokenizer(

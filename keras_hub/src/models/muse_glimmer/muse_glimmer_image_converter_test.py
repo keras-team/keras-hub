@@ -3,10 +3,59 @@ import numpy as np
 from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
     MuseGlimmerImageConverter,
 )
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    _smart_resize_tf,
+)
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
+
+# Expected targets of the HF `smart_resize` for `patch_size=28` and
+# `max_tokens=144`. Each (height, width) is a size where two grids have the
+# same aspect error, so the HF `set` order decides the result.
+HF_SMART_RESIZE_TIES = {
+    (143, 153): (168, 168),
+    (104, 108): (112, 112),
+    (58, 62): (84, 84),
+    (546, 28): (560, 28),
+    (805, 770): (336, 308),
+    (3842, 2034): (448, 224),
+    (1590, 3816): (224, 504),
+}
 
 
 class MuseGlimmerImageConverterTest(TestCase):
+    def test_smart_resize_matches_hf_tie_breaks(self):
+        for (height, width), expected in HF_SMART_RESIZE_TIES.items():
+            self.assertEqual(
+                _smart_resize(height, width, 14, 2, 144),
+                expected,
+                msg=f"size {(height, width)}",
+            )
+
+    def test_smart_resize_tf_matches_hf_tie_breaks(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+
+        @tf.function(
+            input_signature=[
+                tf.TensorSpec([], tf.int32),
+                tf.TensorSpec([], tf.int32),
+            ]
+        )
+        def resize(height, width):
+            return _smart_resize_tf(height, width, 14, 2, 144)
+
+        for (height, width), expected in HF_SMART_RESIZE_TIES.items():
+            target_h, target_w = resize(height, width)
+            self.assertEqual(
+                (int(target_h), int(target_w)),
+                expected,
+                msg=f"size {(height, width)}",
+            )
+
     def test_integer_inputs_round_after_resize(self):
         converter = MuseGlimmerImageConverter(
             patch_size=2,

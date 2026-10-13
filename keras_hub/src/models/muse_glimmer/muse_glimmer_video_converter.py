@@ -1,3 +1,4 @@
+import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -25,6 +26,58 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
 
+def _sample_frame_indices(
+    total_frames, num_frames, patch_temporal, fps, source_fps
+):
+    """Select frame indices as HF `sample_frames` does.
+
+    Returns `None` if the converter keeps all frames. The float32 steps
+    match `torch.linspace(...).long()` in HF.
+    """
+    count = min(int(total_frames * fps / source_fps), num_frames, total_frames)
+    # HF rounds the count down to a multiple of `patch_temporal`.
+    count = max(patch_temporal, count // patch_temporal * patch_temporal)
+    count = min(count, total_frames)
+    if count == total_frames:
+        return None
+    last = np.float32(total_frames - 1)
+    step = np.float32(last / np.float32(max(count - 1, 1)))
+    position = np.arange(count, dtype="float32")
+    values = np.where(
+        position < count // 2,
+        step * position,
+        last - step * (np.float32(count - 1) - position),
+    )
+    return values.astype("float32").astype("int32")
+
+
+def _sample_frame_indices_tf(
+    total_frames, num_frames, patch_temporal, fps, source_fps
+):
+    """Select frame indices in a TensorFlow graph.
+
+    `total_frames` is a scalar tensor. `source_fps` is a float or a scalar
+    tensor. Use this function when either value is dynamic.
+    """
+    source_fps = tf.cast(source_fps, "float64")
+    sampled = tf.cast(
+        tf.cast(total_frames, "float64") * fps / source_fps, "int32"
+    )
+    count = tf.minimum(tf.minimum(sampled, num_frames), total_frames)
+    count = tf.maximum(patch_temporal, count // patch_temporal * patch_temporal)
+    count = tf.minimum(count, total_frames)
+    last = tf.cast(total_frames - 1, "float32")
+    count_float = tf.cast(count, "float32")
+    step = last / tf.maximum(count_float - 1.0, 1.0)
+    position = tf.range(count_float)
+    values = tf.where(
+        position < tf.cast(count // 2, "float32"),
+        step * position,
+        last - step * (count_float - 1.0 - position),
+    )
+    return tf.cast(values, "int32")
+
+
 @keras_hub_export("keras_hub.layers.MuseGlimmerVideoConverter")
 class MuseGlimmerVideoConverter(VideoConverter):
     """Video preprocessor for MuseGlimmer.
@@ -33,15 +86,19 @@ class MuseGlimmerVideoConverter(VideoConverter):
     frame goes through the same patch/merge pipeline as a still image (see
     HF's `get_video_features` == `get_image_features` pass-through).
 
-    The converter does not resample frames. Pre-sample the video to the
-    target frame rate before you call the converter. The converter keeps
-    at most `num_frames` frames.
+    The converter samples about `fps` frames per second, up to
+    `num_frames`, spread evenly across the video, as HF does. A video
+    array has no frame rate, so the converter assumes `source_fps`. To
+    override it for one video, call `converter(video, source_fps=30.0)`.
 
     Args:
         patch_size: int. Spatial patch size in pixels. Defaults to `14`.
         patch_temporal: int. Temporal patch size (frames grouped per
             temporal patch). Defaults to `2`.
         merge_size: int. Spatial merge factor. Defaults to `2`.
+        fps: float. Target number of sampled frames per second of video.
+            Defaults to `2.0`.
+        source_fps: float. Frame rate of the input videos. Defaults to `24.0`.
         num_frames: int. Maximum number of sampled frames. Defaults to
             `96`.
         max_video_frame_tokens: int. Maximum merged vision tokens per
@@ -55,6 +112,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
         patch_size=14,
         patch_temporal=2,
         merge_size=2,
+        fps=2.0,
+        source_fps=24.0,
         num_frames=96,
         max_video_frame_tokens=144,
         interpolation="bilinear",
@@ -65,6 +124,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
         self.patch_size = patch_size
         self.patch_temporal = patch_temporal
         self.merge_size = merge_size
+        self.fps = fps
+        self.source_fps = source_fps
         self.num_frames = num_frames
         self.max_video_frame_tokens = max_video_frame_tokens
         # `VideoConverter` (unlike `ImageConverter`) doesn't expose these
@@ -79,14 +140,35 @@ class MuseGlimmerVideoConverter(VideoConverter):
         self.min_pixels = self._patch_stride**2
 
     @preprocessing_function
-    def call(self, inputs):
+    def call(self, inputs, source_fps=None):
+        if source_fps is None:
+            source_fps = self.source_fps
         if in_tf_function():
-            return self._call_tf(inputs)
-        return self._call_ops(inputs)
+            return self._call_tf(inputs, source_fps)
+        return self._call_ops(inputs, source_fps)
 
-    def _call_tf(self, inputs):
+    def _call_tf(self, inputs, source_fps):
         input_is_integer = tf.as_dtype(inputs.dtype).is_integer
-        video = tf.cast(inputs, "float32")[: self.num_frames]
+        video = tf.cast(inputs, "float32")
+        total_frames = video.shape[0]
+        if total_frames is None or tf.is_tensor(source_fps):
+            indices = _sample_frame_indices_tf(
+                tf.shape(video)[0],
+                self.num_frames,
+                self.patch_temporal,
+                self.fps,
+                source_fps,
+            )
+        else:
+            indices = _sample_frame_indices(
+                total_frames,
+                self.num_frames,
+                self.patch_temporal,
+                self.fps,
+                source_fps,
+            )
+        if indices is not None:
+            video = tf.gather(video, indices, axis=0)
 
         orig_h, orig_w = video.shape[1], video.shape[2]
         smart_resize = _smart_resize
@@ -163,8 +245,17 @@ class MuseGlimmerVideoConverter(VideoConverter):
         grid_thw = tf.stack([grid_t, grid_h, grid_w])
         return {"patches": patches, "grid_thw": grid_thw}
 
-    def _call_ops(self, inputs):
-        video = inputs[: self.num_frames]
+    def _call_ops(self, inputs, source_fps):
+        video = inputs
+        indices = _sample_frame_indices(
+            int(ops.shape(video)[0]),
+            self.num_frames,
+            self.patch_temporal,
+            self.fps,
+            float(source_fps),
+        )
+        if indices is not None:
+            video = ops.take(video, indices, axis=0)
 
         orig_h, orig_w = int(ops.shape(video)[1]), int(ops.shape(video)[2])
         target_h, target_w = _smart_resize(
@@ -241,6 +332,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
                 "patch_size": self.patch_size,
                 "patch_temporal": self.patch_temporal,
                 "merge_size": self.merge_size,
+                "fps": self.fps,
+                "source_fps": self.source_fps,
                 "num_frames": self.num_frames,
                 "max_video_frame_tokens": self.max_video_frame_tokens,
                 "interpolation": self.interpolation,

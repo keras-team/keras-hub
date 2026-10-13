@@ -71,21 +71,22 @@ class MuseGlimmerLayersTest(TestCase):
         )
 
     def test_interleave_embeddings(self):
-        layer = MuseGlimmerInterleaveEmbeddings(hidden_dim=4)
-        self.run_serialization_test(layer)
-        text_emb = ops.zeros((1, 6, 4))
-        vision_emb = np.ones((2, 4), dtype="float32")
-        indices = ops.convert_to_tensor([1, 3], dtype="int32")
-        result = layer(
-            image_embeddings=vision_emb,
-            text_embeddings=text_emb,
-            vision_indices=indices,
+        text_emb = np.zeros((2, 6, 4), dtype="float32")
+        expected = text_emb.copy()
+        expected[0, 1, :] = 1.0
+        expected[1, 3, :] = 1.0
+        self.run_layer_test(
+            cls=MuseGlimmerInterleaveEmbeddings,
+            init_kwargs={"hidden_dim": 4},
+            input_data={
+                "image_embeddings": np.ones((2, 1, 4), dtype="float32"),
+                "text_embeddings": text_emb,
+                "vision_indices": np.array([[1], [3]], dtype="int32"),
+            },
+            expected_output_shape=(2, 6, 4),
+            expected_output_data=expected,
+            run_precision_checks=False,
         )
-        result_np = ops.convert_to_numpy(result)
-        np.testing.assert_allclose(result_np[0, 0, :], 0.0)
-        np.testing.assert_allclose(result_np[0, 1, :], 1.0)
-        np.testing.assert_allclose(result_np[0, 2, :], 0.0)
-        np.testing.assert_allclose(result_np[0, 3, :], 1.0)
 
     def test_interleave_embeddings_2d_indices_with_batch_offset(self):
         layer = MuseGlimmerInterleaveEmbeddings(hidden_dim=4)
