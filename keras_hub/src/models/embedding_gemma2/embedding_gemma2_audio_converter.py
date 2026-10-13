@@ -7,7 +7,7 @@ from keras_hub.src.models.gemma4.gemma4_audio_converter import (
 )
 
 
-@keras_hub_export("keras_hub.models.EmbeddingGemma2AudioConverter")
+@keras_hub_export("keras_hub.layers.EmbeddingGemma2AudioConverter")
 class EmbeddingGemma2AudioConverter(Gemma4AudioConverter):
     """EmbeddingGemma2 audio converter.
 

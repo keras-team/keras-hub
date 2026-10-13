@@ -119,63 +119,18 @@ def convert_weights(backbone, loader, transformers_config):
         _convert_audio_encoder(backbone.audio_encoder, p, transformers_config)
 
 
-def _compute_scale_offset(proc_cfg, section_name):
-    """Compute KH scale/offset from HF do_rescale/do_normalize flags.
-
-    KH applies `output = input * scale + offset`; HF rescales then normalizes,
-    so `scale = rescale_factor / std` and `offset = -mean / std`.
-    """
-    if not proc_cfg["do_resize"]:
-        raise ValueError(
-            f"{section_name}: do_resize=False is not supported; the image "
-            "converter always applies aspect-ratio-preserving resize."
-        )
-    do_rescale = proc_cfg["do_rescale"]
-    do_normalize = proc_cfg["do_normalize"]
-    if not do_rescale and not do_normalize:
-        return None, None
-    rescale = proc_cfg["rescale_factor"] if do_rescale else 1.0
-    mean = proc_cfg["image_mean"] if do_normalize else [0.0, 0.0, 0.0]
-    std = proc_cfg["image_std"] if do_normalize else [1.0, 1.0, 1.0]
-    scale = [rescale / s for s in std]
-    offset = [-m / s for m, s in zip(mean, std)]
-    return scale, offset
-
-
 def load_image_converter_config(preset, transformers_config):
-    if "vision_config" not in transformers_config:
-        return None
-    vis_cfg = transformers_config["vision_config"]
-    image_processor = load_json(preset, "processor_config.json")[
-        "image_processor"
-    ]
-    scale, offset = _compute_scale_offset(image_processor, "image_processor")
-    # `image_size` is not stored in the HF config; 896 is the fixed value used
-    # by every Gemma 4 family vision checkpoint.
-    return {
-        "image_size": (896, 896),
-        "patch_size": vis_cfg["patch_size"],
-        "pooling_kernel_size": vis_cfg["pooling_kernel_size"],
-        "max_soft_tokens": image_processor["max_soft_tokens"],
-        "scale": scale,
-        "offset": offset,
-    }
+    # Same processor_config.json layout as Gemma 4.
+    return convert_gemma4.load_image_converter_config(
+        preset, transformers_config
+    )
 
 
 def load_audio_converter_config(preset, transformers_config):
-    if "audio_config" not in transformers_config:
-        return None
-    fe = load_json(preset, "processor_config.json")["feature_extractor"]
-    return {
-        "num_mels": fe["feature_size"],
-        "num_fft_bins": fe["fft_length"],
-        "stride": fe["hop_length"],
-        "sampling_rate": fe["sampling_rate"],
-        "frame_length": fe["frame_length"],
-        "max_frequency": fe["max_frequency"],
-        "min_frequency": fe["min_frequency"],
-        "mel_floor": fe["mel_floor"],
-    }
+    # Same feature_extractor section as Gemma 4.
+    return convert_gemma4.load_audio_converter_config(
+        preset, transformers_config
+    )
 
 
 def load_video_converter_config(preset, transformers_config):
@@ -183,7 +138,9 @@ def load_video_converter_config(preset, transformers_config):
     if "video_processor" not in processor_config:
         return None
     video_proc = processor_config["video_processor"]
-    scale, offset = _compute_scale_offset(video_proc, "video_processor")
+    scale, offset = convert_gemma4._compute_scale_offset(
+        video_proc, "video_processor"
+    )
     return {
         "patch_size": video_proc["patch_size"],
         "pooling_kernel_size": video_proc["pooling_kernel_size"],
@@ -228,7 +185,7 @@ def load_task_config(preset, transformers_config):
         elif pooling_config.get("pooling_mode_mean_tokens", False):
             kwargs["pooling_mode"] = "mean"
         else:
-            kwargs["pooling_mode"] = "last"
+            kwargs["pooling_mode"] = "mean"
 
     return kwargs
 

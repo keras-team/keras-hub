@@ -12,7 +12,7 @@ from keras_hub.src.models.gemma4.gemma4_video_converter import (
 )
 
 
-@keras_hub_export("keras_hub.models.EmbeddingGemma2VideoConverter")
+@keras_hub_export("keras_hub.layers.EmbeddingGemma2VideoConverter")
 class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
     """Video converter for EmbeddingGemma2.
 
@@ -50,18 +50,24 @@ class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
         self.max_frames = max_frames
 
     def _get_indices(self, total_frames):
-        """Uniform sampling if exceeding max_frames, else keep all."""
-        if total_frames <= self.max_frames:
-            return ops.arange(total_frames, dtype="int32")
+        """Uniform sampling if exceeding max_frames, else keep all.
+
+        Written without a Python branch on `total_frames` so it traces when
+        the frame count is symbolic (e.g. inside `tf.data`). With
+        `n = min(total_frames, max_frames)` the positions are
+        `floor(i * (total_frames - 1) / (n - 1))` for `i < n`, which is
+        `arange(total_frames)` when nothing is dropped and the evenly spaced
+        sample otherwise.
+        """
+        if isinstance(total_frames, int):
+            n = min(total_frames, self.max_frames)
+            denominator = max(n - 1, 1)
         else:
-            return ops.cast(
-                ops.linspace(
-                    0.0,
-                    ops.cast(total_frames - 1, "float32"),
-                    self.max_frames,
-                ),
-                "int32",
-            )
+            total_frames = ops.cast(total_frames, "int32")
+            n = ops.minimum(total_frames, self.max_frames)
+            denominator = ops.maximum(n - 1, 1)
+        positions = ops.arange(n, dtype="int32") * (total_frames - 1)
+        return ops.floor_divide(positions, denominator)
 
     def call(self, inputs):
         # Standardize inputs to list of tensors
@@ -76,8 +82,7 @@ class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
         all_pixel_position_ids = []
 
         for video in videos:
-            shape = ops.shape(video)
-            total_frames = int(shape[0])
+            total_frames = ops.shape(video)[0]
 
             indices = self._get_indices(total_frames)
             sampled_video = ops.take(video, indices, axis=0)

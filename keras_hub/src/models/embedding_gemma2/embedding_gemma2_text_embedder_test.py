@@ -149,6 +149,25 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
         norms = np.linalg.norm(output, axis=-1)
         self.assertAllClose(norms, np.ones_like(norms), atol=1e-5)
 
+    def test_output_not_normalized(self):
+        embedder = EmbeddingGemma2TextEmbedder(
+            backbone=self.backbone,
+            preprocessor=self.preprocessor,
+            normalize=False,
+        )
+        output = embedder.predict(["hello", "world"])
+        self.assertEqual(output.shape, (2, 12))
+        norms = np.linalg.norm(output, axis=-1)
+        self.assertFalse(np.allclose(norms, np.ones_like(norms), atol=1e-3))
+
+    def test_invalid_pooling_mode(self):
+        with self.assertRaises(ValueError):
+            EmbeddingGemma2TextEmbedder(
+                backbone=self.backbone,
+                preprocessor=self.preprocessor,
+                pooling_mode="cls",
+            )
+
     def test_mean_pooling_respects_mask(self):
         """Mean pooling must ignore every padded position."""
         embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)

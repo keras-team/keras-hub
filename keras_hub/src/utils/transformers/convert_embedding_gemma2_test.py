@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 import pytest
 
@@ -105,41 +106,62 @@ class ConvertEmbeddingGemma2Test(TestCase):
         # (8 // 4) * 8 = 16 input features, projected to hidden_size 32.
         self.assertEqual(tuple(input_proj.kernel.shape), (16, 32))
 
-    def test_task_config_reads_sentence_transformers_files(self):
-        # The HF checkpoint ships `modules.json` and `1_Pooling/config.json`;
-        # they must be read through the preset helpers, not `os.path`.
-        def write(preset, rel_path, payload):
-            path = os.path.join(preset, rel_path)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
-                json.dump(payload, f)
+    @mock.patch(
+        "keras_hub.src.utils.transformers.convert_embedding_gemma2.check_file_exists"
+    )
+    @mock.patch(
+        "keras_hub.src.utils.transformers.convert_embedding_gemma2.load_json"
+    )
+    def test_task_config_reads_sentence_transformers_files(
+        self, mock_load, mock_check
+    ):
+        preset = "hf://mock_preset"
 
-        preset = self.get_temp_dir()
+        # Test 1: files don't exist
+        mock_check.return_value = False
         self.assertEqual(load_task_config(preset, {}), {})
 
-        write(
-            preset,
-            "modules.json",
-            [{"type": "sentence_transformers.models.Transformer"}],
-        )
-        # EmbeddingGemma 2 spelling.
-        write(preset, "1_Pooling/config.json", {"pooling_mode": "mean"})
+        # Test 2: files exist, normalization false, pooling mean (modern)
+        mock_check.return_value = True
+
+        def mock_load_json_1(path, filename):
+            if filename == "modules.json":
+                return [{"type": "sentence_transformers.models.Transformer"}]
+            if filename == "1_Pooling/config.json":
+                return {"pooling_mode": "mean"}
+
+        mock_load.side_effect = mock_load_json_1
+
         self.assertEqual(
             load_task_config(preset, {}),
             {"normalize": False, "pooling_mode": "mean"},
         )
+        mock_check.assert_any_call(preset, "modules.json")
+        mock_check.assert_any_call(preset, "1_Pooling/config.json")
 
-        write(
-            preset,
-            "modules.json",
-            [{"type": "sentence_transformers.models.Normalize"}],
+        # Test 3: normalization true, pooling mean_tokens (legacy)
+        def mock_load_json_2(path, filename):
+            if filename == "modules.json":
+                return [{"type": "sentence_transformers.models.Normalize"}]
+            if filename == "1_Pooling/config.json":
+                return {"pooling_mode_mean_tokens": True}
+
+        mock_load.side_effect = mock_load_json_2
+
+        self.assertEqual(
+            load_task_config(preset, {}),
+            {"normalize": True, "pooling_mode": "mean"},
         )
-        # Older sentence-transformers spelling.
-        write(
-            preset,
-            "1_Pooling/config.json",
-            {"pooling_mode_mean_tokens": True},
-        )
+
+        # Test 4: default pooling_mode to mean if neither present
+        def mock_load_json_3(path, filename):
+            if filename == "modules.json":
+                return [{"type": "sentence_transformers.models.Normalize"}]
+            if filename == "1_Pooling/config.json":
+                return {}
+
+        mock_load.side_effect = mock_load_json_3
+
         self.assertEqual(
             load_task_config(preset, {}),
             {"normalize": True, "pooling_mode": "mean"},

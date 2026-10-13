@@ -1,6 +1,5 @@
 from keras import ops
 
-from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
@@ -9,7 +8,6 @@ from keras_hub.src.models.gemma4.gemma4_decoder_block import (
 )
 
 
-@keras_hub_export("keras_hub.models.EmbeddingGemma2EncoderBlock")
 class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
     """An encoder block for EmbeddingGemma2 models.
 

@@ -7,7 +7,7 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 )
 
 
-@keras_hub_export("keras_hub.models.EmbeddingGemma2ImageConverter")
+@keras_hub_export("keras_hub.layers.EmbeddingGemma2ImageConverter")
 class EmbeddingGemma2ImageConverter(Gemma4ImageConverter):
     """EmbeddingGemma2 image converter.
 

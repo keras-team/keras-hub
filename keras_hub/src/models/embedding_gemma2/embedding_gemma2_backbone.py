@@ -387,7 +387,7 @@ class EmbeddingGemma2Backbone(Backbone):
 
             # Attention is fully bidirectional, so no `vision_mask` is
             # needed to open up image spans the way Gemma 4 does.
-            x, new_cache = transformer_layer(
+            x, _ = transformer_layer(
                 x,
                 padding_mask=padding_mask_input,
                 per_layer_input=per_layer_input_i,

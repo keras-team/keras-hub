@@ -324,3 +324,85 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                     ops.convert_to_numpy(plain_out[k]),
                     ops.convert_to_numpy(ragged_out[k]),
                 )
+
+    @pytest.mark.tf_only
+    def test_tf_data_map_matches_eager(self):
+        # The TF path runs inside `tf.data.Dataset.map`, where every tensor
+        # is symbolic and the batch dim is unknown. Each modality must trace
+        # there and produce exactly the eager result.
+        import tensorflow as tf
+
+        rng = np.random.RandomState(0)
+        cases = {
+            "images": {
+                "texts": ["<|image|> a", "<|image|> b"],
+                "images": rng.uniform(0, 255, (2, 16, 16, 3)).astype("float32"),
+            },
+            "videos": {
+                "texts": ["<|video|> a", "<|video|> b"],
+                "videos": rng.uniform(0, 255, (2, 2, 16, 16, 3)).astype(
+                    "float32"
+                ),
+            },
+            "audio": {
+                "texts": ["<|audio|> a", "<|audio|> b"],
+                "audio": rng.uniform(-1, 1, (2, 320)).astype("float32"),
+            },
+        }
+        for name, inputs in cases.items():
+            eager = self.preprocessor(inputs)
+            if isinstance(eager, tuple):
+                eager = eager[0]
+            ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
+            mapped = next(iter(ds.map(self.preprocessor)))
+            if isinstance(mapped, tuple):
+                mapped = mapped[0]
+            self.assertEqual(set(mapped.keys()), set(eager.keys()), name)
+            for key in eager:
+                got = ops.convert_to_numpy(mapped[key])
+                want = ops.convert_to_numpy(eager[key])
+                if want.dtype.kind == "f":
+                    # TF picks a different STFT kernel under tracing; the
+                    # mel differs by ~1e-6 on values of order 10.
+                    self.assertAllClose(
+                        got, want, atol=1e-5, msg=f"{name}: {key}"
+                    )
+                else:
+                    self.assertAllEqual(got, want, msg=f"{name}: {key}")
+
+    def test_images_and_videos_together_raise(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        vid = np.ones((2, 16, 16, 3), dtype="float32")
+        inputs = {
+            "texts": ["<|image|> and <|video|>"],
+            "images": [img],
+            "videos": [vid],
+        }
+        # Both execution paths must reject the combination.
+        for use_tf in (False, True):
+            if use_tf and pytest.importorskip("tensorflow") is None:
+                continue
+            with mock.patch.object(
+                self.preprocessor, "_use_tf_workflow", return_value=use_tf
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "`images` and `videos` in the same call"
+                ):
+                    self.preprocessor(inputs)
+
+    def test_multiple_images_per_prompt_raise(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        two_images = np.ones((1, 2, 16, 16, 3), dtype="float32")
+        # The check runs before any converter call, so it can be exercised
+        # on both paths regardless of backend.
+        for use_tf in (False, True):
+            with mock.patch.object(
+                self.preprocessor, "_use_tf_workflow", return_value=use_tf
+            ):
+                with self.assertRaisesRegex(ValueError, "one image per prompt"):
+                    self.preprocessor({"images": two_images})
+                with self.assertRaisesRegex(ValueError, "one image per prompt"):
+                    self.preprocessor({"images": [[img, img]]})
+        # One image per prompt is still fine in both spellings.
+        self.preprocessor({"images": img})
+        self.preprocessor({"images": [img, img]})

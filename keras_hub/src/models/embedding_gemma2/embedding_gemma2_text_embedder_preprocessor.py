@@ -9,9 +9,6 @@ except ImportError:
     tf = None
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.preprocessing.multi_segment_packer import (
-    MultiSegmentPacker,
-)
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (  # noqa: E501
     EmbeddingGemma2AudioConverter,
 )
@@ -53,6 +50,11 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
     given without text gets a prompt made of its placeholder alone.
     Unbatched inputs (a single string, a rank-3 image, a rank-4 video, a
     rank-1 waveform) return unbatched outputs.
+
+    Two limits apply: one image per prompt (a rank-3 image, or a rank-4
+    batch with one image per example), and `"images"` and `"videos"` cannot
+    be combined in a single call — pass them in separate calls. Both raise a
+    `ValueError`.
 
     Python lists and NumPy arrays run through a pure-Python path that does
     not need TensorFlow; inside `tf.data` the TensorFlow path is used.
@@ -119,18 +121,36 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         self.start_of_audio_token = "<|audio>"
         self.end_of_audio_token = "<audio|>"
 
-    def build(self, input_shape):
-        self.packer = MultiSegmentPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.pad_token_id,
-            truncate=self.truncate,
-            sequence_length=self.sequence_length,
-        )
-        self.built = True
+    def _check_media_inputs(self, images, videos):
+        """Reject input combinations this preprocessor does not support.
+
+        Shared by the TF and Python paths so both raise the same error.
+        """
+        if images is not None and videos is not None:
+            raise ValueError(
+                "EmbeddingGemma2TextEmbedderPreprocessor does not support "
+                "`images` and `videos` in the same call. Pass them in "
+                "separate calls."
+            )
+
+    def _check_image_rank(self, rank, is_list_item=False):
+        """Enforce one image per prompt.
+
+        A rank-3 array is one image; a rank-4 array is a batch with one image
+        per example. Anything else (e.g. `(batch, n_images, h, w, c)`) is not
+        supported.
+        """
+        allowed = (3,) if is_list_item else (3, 4)
+        if rank not in allowed:
+            raise ValueError(
+                "EmbeddingGemma2TextEmbedderPreprocessor accepts one image "
+                "per prompt: a rank-3 image or a rank-4 batch of images. "
+                f"Received an image input of rank {rank}."
+            )
 
     def _get_vision_indices(self, vision_mask, max_tokens=None):
-        batch_size, sequence_length = vision_mask.shape
+        batch_size = tf.shape(vision_mask)[0]
+        sequence_length = tf.shape(vision_mask)[1]
 
         vision_mask_flattened = tf.reshape(vision_mask, [-1])
         vision_indices = tf.where(vision_mask_flattened)[..., 0]
@@ -174,7 +194,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         return batched_vision_indices
 
     def _get_audio_indices(self, audio_mask):
-        batch_size, sequence_length = audio_mask.shape
+        batch_size = tf.shape(audio_mask)[0]
+        sequence_length = tf.shape(audio_mask)[1]
 
         audio_mask_flattened = tf.reshape(audio_mask, [-1])
         audio_indices = tf.where(audio_mask_flattened)[..., 0]
@@ -222,6 +243,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         else:
             texts = x
             images = videos = audio = None
+        self._check_media_inputs(images, videos)
 
         batched = True
         if isinstance(texts, str):
@@ -271,42 +293,52 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         pixel_position_ids = None
 
         if self.image_converter is not None and images is not None:
-            if isinstance(images, tf.RaggedTensor):
-                images_list = [images[i] for i in range(images.shape[0])]
-            elif isinstance(images, list):
-                images_list = images
-            else:
-                if len(tf.shape(images)) == 3 and not batched:
-                    images_list = [images]
-                else:
-                    images_list = [
-                        images[i] for i in range(tf.shape(images)[0])
-                    ]
+            pooling = self.image_converter.pooling_kernel_size**2
 
-            pv_list, ppi_list, tokens_list = [], [], []
-            for img in images_list:
-                img = _to_dense_tensor(img)
-                img = tf.expand_dims(img, 0)
+            def _convert_image(img):
+                # One image -> (patches, patch_dim), (patches, 2), soft tokens.
+                img = tf.expand_dims(_to_dense_tensor(img), 0)
                 image_outputs = self.image_converter(img)
-                pv = image_outputs["pixel_values"]
-                ppi = image_outputs["pixel_position_ids"]
-                # Count non padded
-                valid_patches = tf.cast(ppi[0, :, 0] != -1, tf.int32)
-                num_patches = tf.reduce_sum(valid_patches)
-                num_soft_tokens = num_patches // (
-                    self.image_converter.pooling_kernel_size**2
+                pv = image_outputs["pixel_values"][0]
+                ppi = image_outputs["pixel_position_ids"][0]
+                valid_patches = tf.cast(ppi[:, 0] != -1, tf.int32)
+                num_soft_tokens = tf.reduce_sum(valid_patches) // pooling
+                return pv, ppi, num_soft_tokens
+
+            if isinstance(images, (list, tuple)):
+                # A Python list only exists in eager mode; a plain loop is
+                # fine and keeps per-image shapes free.
+                for img in images:
+                    self._check_image_rank(
+                        tf.convert_to_tensor(img).shape.rank
+                        if not isinstance(img, tf.RaggedTensor)
+                        else img.shape.rank,
+                        is_list_item=True,
+                    )
+                converted = [_convert_image(img) for img in images]
+                pixel_values = tf.stack([c[0] for c in converted], axis=0)
+                pixel_position_ids = tf.stack([c[1] for c in converted], axis=0)
+                num_tokens_tensor = tf.stack([c[2] for c in converted])
+            else:
+                if not isinstance(images, tf.RaggedTensor):
+                    images = tf.convert_to_tensor(images)
+                self._check_image_rank(images.shape.rank)
+                if images.shape.rank == 3 and not batched:
+                    images = tf.expand_dims(images, 0)
+                # `tf.map_fn` iterates the batch axis symbolically, so this
+                # traces inside `tf.data.Dataset.map` with an unknown batch.
+                pixel_values, pixel_position_ids, num_tokens_tensor = tf.map_fn(
+                    _convert_image,
+                    images,
+                    fn_output_signature=(
+                        tf.TensorSpec([None, None], tf.float32),
+                        tf.TensorSpec([None, 2], tf.int32),
+                        tf.TensorSpec([], tf.int32),
+                    ),
                 )
 
-                pv_list.append(pv[0])
-                ppi_list.append(ppi[0])
-                tokens_list.append(num_soft_tokens)
-
-            pixel_values = tf.stack(pv_list, axis=0)
-            pixel_position_ids = tf.stack(ppi_list, axis=0)
             pixel_values = tf.expand_dims(pixel_values, 1)
             pixel_position_ids = tf.expand_dims(pixel_position_ids, 1)
-
-            num_tokens_tensor = tf.stack(tokens_list)
 
             def _replace_image(args):
                 text, num_tokens = args
@@ -331,70 +363,58 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             )
 
         if self.video_converter is not None and videos is not None:
-            if isinstance(videos, tf.RaggedTensor):
-                videos_list = [videos[i] for i in range(videos.shape[0])]
-            elif isinstance(videos, list):
-                videos_list = videos
-            else:
-                if len(tf.shape(videos)) == 4 and not batched:
-                    videos_list = [videos]
-                else:
-                    videos_list = [
-                        videos[i] for i in range(tf.shape(videos)[0])
-                    ]
+            pooling = (
+                self.video_converter.image_converter.pooling_kernel_size**2
+            )
+            patch_dim = self.video_converter.patch_size**2 * 3
 
-            pv_list, ppi_list, tokens_list = [], [], []
-
-            for vid in videos_list:
-                vid = _to_dense_tensor(vid)
-                vid = tf.expand_dims(vid, 0)
+            def _convert_video(vid):
+                # One clip -> (frames, patches, patch_dim), (frames, patches,
+                # 2) and the per-frame soft-token counts, all ragged in
+                # `frames`.
+                vid = tf.expand_dims(_to_dense_tensor(vid), 0)
                 video_outputs = self.video_converter(vid)
                 pv = video_outputs["pixel_values"][0]
                 ppi = video_outputs["pixel_position_ids"][0]
-
                 valid_patches = tf.cast(ppi[:, :, 0] != -1, tf.int32)
-                num_patches = tf.reduce_sum(valid_patches, axis=1)
-                num_soft_tokens = num_patches // (
-                    self.video_converter.image_converter.pooling_kernel_size**2
+                num_soft_tokens = (
+                    tf.reduce_sum(valid_patches, axis=1) // pooling
+                )
+                return (
+                    tf.RaggedTensor.from_tensor(pv),
+                    tf.RaggedTensor.from_tensor(ppi),
+                    num_soft_tokens,
                 )
 
-                pv_list.append(pv)
-                ppi_list.append(ppi)
-                tokens_list.append(num_soft_tokens)
-
-            # Pad video features to maximum size so they can be stacked
-            max_frames = 0
-            max_patches = 0
-            for ppi in ppi_list:
-                max_frames = tf.maximum(max_frames, tf.shape(ppi)[0])
-                max_patches = tf.maximum(max_patches, tf.shape(ppi)[1])
-
-            padded_pv_list = []
-            padded_ppi_list = []
-
-            for pv, ppi in zip(pv_list, ppi_list):
-                frames = tf.shape(ppi)[0]
-                patches = tf.shape(ppi)[1]
-
-                pad_frames = max_frames - frames
-                pad_patches = max_patches - patches
-
-                pv = tf.pad(
-                    pv,
-                    [[0, pad_frames], [0, pad_patches], [0, 0]],
-                    constant_values=0.0,
-                )
-                ppi = tf.pad(
-                    ppi,
-                    [[0, pad_frames], [0, pad_patches], [0, 0]],
-                    constant_values=-1,
+            ragged_spec = lambda inner, dtype: tf.RaggedTensorSpec(  # noqa: E731
+                shape=[None] + inner, dtype=dtype, ragged_rank=1
+            )
+            if isinstance(videos, (list, tuple)):
+                converted = [_convert_video(vid) for vid in videos]
+                pv_ragged = tf.ragged.stack([c[0] for c in converted])
+                ppi_ragged = tf.ragged.stack([c[1] for c in converted])
+                ragged_tokens = tf.ragged.stack([c[2] for c in converted])
+            else:
+                if not isinstance(videos, tf.RaggedTensor):
+                    videos = tf.convert_to_tensor(videos)
+                if videos.shape.rank == 4 and not batched:
+                    videos = tf.expand_dims(videos, 0)
+                pv_ragged, ppi_ragged, ragged_tokens = tf.map_fn(
+                    _convert_video,
+                    videos,
+                    fn_output_signature=(
+                        ragged_spec([None, patch_dim], tf.float32),
+                        ragged_spec([None, 2], tf.int32),
+                        tf.RaggedTensorSpec(
+                            shape=[None], dtype=tf.int32, ragged_rank=0
+                        ),
+                    ),
                 )
 
-                padded_pv_list.append(pv)
-                padded_ppi_list.append(ppi)
-
-            pixel_values = tf.stack(padded_pv_list, axis=0)
-            pixel_position_ids = tf.stack(padded_ppi_list, axis=0)
+            # Pad clips to the longest one in the batch: 0.0 for pixels, -1
+            # for position ids (a padding patch), exactly as before.
+            pixel_values = pv_ragged.to_tensor(default_value=0.0)
+            pixel_position_ids = ppi_ragged.to_tensor(default_value=-1)
 
             def _replace_video(args):
                 text, tokens = args
@@ -418,10 +438,6 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                     text, re.escape(self.video_placeholder), replacement
                 )
 
-            ragged_tokens = tf.RaggedTensor.from_row_lengths(
-                values=tf.concat(tokens_list, axis=0),
-                row_lengths=tf.stack([tf.shape(t)[0] for t in tokens_list]),
-            )
             texts = tf.map_fn(
                 _replace_video,
                 (texts, ragged_tokens),
@@ -432,66 +448,61 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         audio_mel_mask = None
 
         if self.audio_converter is not None and audio is not None:
-            if isinstance(audio, tf.RaggedTensor):
-                audio_list = [audio[i] for i in range(audio.shape[0])]
-            elif isinstance(audio, list):
-                audio_list = audio
-            else:
-                if len(tf.shape(audio)) == 1 and not batched:
-                    audio_list = [audio]
-                else:
-                    audio_list = [audio[i] for i in range(tf.shape(audio)[0])]
+            stride = self.audio_converter.stride
+            num_mels = self.audio_converter.num_mels
 
-            mel_list = []
-            tokens_list = []
-            output_lengths_list = []
-            max_len = 0
-
-            for aud in audio_list:
-                len_i = tf.shape(aud)[0]
+            def _convert_audio(aud):
+                # One clip -> mel frames (ragged), its frame count and its
+                # soft-token count. Each clip is converted on its own, never
+                # zero-padded to the batch, so the mel frames match HF.
                 aud = _to_dense_tensor(aud)
-                aud = tf.expand_dims(aud, 0)
-                mel = self.audio_converter(aud)
-                mel = tf.convert_to_tensor(mel)
-                mel = mel[0]
-
+                len_i = tf.shape(aud)[0]
+                mel = tf.convert_to_tensor(
+                    self.audio_converter(tf.expand_dims(aud, 0))
+                )[0]
                 # HF derivation: left-pad 160, unfold 321, hop 160
                 # -> (len_i - 1) // hop frames.
-                output_lengths_i = tf.maximum(
-                    (len_i - 1) // self.audio_converter.stride, 0
-                )
-                output_lengths_i = tf.minimum(
-                    output_lengths_i, tf.shape(mel)[0]
-                )
-                num_audio_tokens = tf.maximum((output_lengths_i + 3) // 4, 1)
-
-                mel_list.append(mel[:output_lengths_i])
-                output_lengths_list.append(output_lengths_i)
-                tokens_list.append(num_audio_tokens)
-                max_len = tf.maximum(max_len, output_lengths_i)
-
-            padded_mel_list = []
-            mask_list = []
-            for mel, out_len in zip(mel_list, output_lengths_list):
-                pad_l = max_len - out_len
-                padded_mel = tf.pad(mel, [[0, pad_l], [0, 0]])
-                padded_mel_list.append(padded_mel)
-                mask_list.append(
-                    tf.concat(
-                        [
-                            tf.ones([out_len], dtype=tf.int32),
-                            tf.zeros([pad_l], dtype=tf.int32),
-                        ],
-                        axis=0,
-                    )
+                output_length = tf.maximum((len_i - 1) // stride, 0)
+                output_length = tf.minimum(output_length, tf.shape(mel)[0])
+                num_audio_tokens = tf.maximum((output_length + 3) // 4, 1)
+                return (
+                    tf.RaggedTensor.from_tensor(mel[:output_length]),
+                    output_length,
+                    num_audio_tokens,
                 )
 
-            audio_mel = tf.stack(padded_mel_list, axis=0)
+            if isinstance(audio, (list, tuple)):
+                converted = [_convert_audio(aud) for aud in audio]
+                mel_ragged = tf.ragged.stack([c[0] for c in converted])
+                output_lengths = tf.stack([c[1] for c in converted])
+                num_tokens_tensor = tf.stack([c[2] for c in converted])
+            else:
+                if not isinstance(audio, tf.RaggedTensor):
+                    audio = tf.convert_to_tensor(audio)
+                if audio.shape.rank == 1 and not batched:
+                    audio = tf.expand_dims(audio, 0)
+                mel_ragged, output_lengths, num_tokens_tensor = tf.map_fn(
+                    _convert_audio,
+                    audio,
+                    fn_output_signature=(
+                        tf.RaggedTensorSpec(
+                            shape=[None, num_mels],
+                            dtype=tf.float32,
+                            ragged_rank=1,
+                        ),
+                        tf.TensorSpec([], tf.int32),
+                        tf.TensorSpec([], tf.int32),
+                    ),
+                )
+
+            # Pad clips to the longest one in the batch (zeros), with a mask
+            # of ones over the real frames, exactly as before.
+            audio_mel = mel_ragged.to_tensor(default_value=0.0)
+            audio_mel_mask = tf.sequence_mask(
+                output_lengths, maxlen=tf.shape(audio_mel)[1], dtype=tf.int32
+            )
             audio_mel = tf.expand_dims(audio_mel, 1)
-            audio_mel_mask = tf.stack(mask_list, axis=0)
             audio_mel_mask = tf.expand_dims(audio_mel_mask, 1)
-
-            num_tokens_tensor = tf.stack(tokens_list)
 
             def _replace_audio(args):
                 text, num_tokens = args
@@ -621,6 +632,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         else:
             texts = x
             images = videos = audio = None
+        self._check_media_inputs(images, videos)
 
         def _to_host(value):
             # Everything below is host-side numpy. A backend tensor handed in
@@ -692,13 +704,15 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         if self.image_converter is not None and images is not None:
             if isinstance(images, (list, tuple)):
                 images_list = [np.asarray(e) for e in images]
-            elif isinstance(images, np.ndarray):
-                if len(images.shape) == 3 and not is_batched:
+                for img in images_list:
+                    self._check_image_rank(img.ndim, is_list_item=True)
+            else:
+                images = np.asarray(images)
+                self._check_image_rank(images.ndim)
+                if images.ndim == 3 and not is_batched:
                     images_list = [images]
                 else:
                     images_list = [images[i] for i in range(images.shape[0])]
-            else:
-                images_list = [np.asarray(images)]
 
             pv_list, ppi_list, tokens_list = [], [], []
 
