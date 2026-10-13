@@ -137,6 +137,13 @@ class MMBertTokenizer(BytePairTokenizer):
         # `▁` is added by the pipeline below.
         kwargs["add_prefix_space"] = False
 
+        # The byte tables are filled in by `_set_vocabulary_and_merges_tf`.
+        # They are declared here so that a tokenizer restored from a config
+        # alone, which has no vocabulary yet, exposes the same attributes as a
+        # tokenizer built from a vocabulary.
+        self.byte_to_token = None
+        self.token_to_byte = None
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
