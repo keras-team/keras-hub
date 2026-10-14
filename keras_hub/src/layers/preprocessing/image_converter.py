@@ -275,6 +275,7 @@ class ImageConverter(PreprocessingLayer):
                 "crop_to_aspect_ratio": self.crop_to_aspect_ratio,
                 "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
                 "bounding_box_format": self.bounding_box_format,
+                "data_format": self.data_format,
             }
         )
         return config

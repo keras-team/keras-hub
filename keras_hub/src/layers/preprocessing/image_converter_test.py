@@ -33,6 +33,28 @@ class ImageConverterTest(TestCase):
             expected_output=np.ones((2, 4, 4, 3)).tolist(),
         )
 
+    def test_data_format_is_serialized(self):
+        # `run_preprocessing_layer_test` compares config to config, so a key
+        # that is missing from `get_config` is missing on both sides and
+        # matches. The value only matters once the global image data format
+        # differs from the one the converter was built with.
+        converter = ImageConverter(image_size=(4, 4))
+        built = converter.data_format
+        config = converter.get_config()
+        self.assertEqual(config["data_format"], built)
+
+        original = keras.config.image_data_format()
+        other = (
+            "channels_first" if built == "channels_last" else "channels_last"
+        )
+        try:
+            keras.config.set_image_data_format(other)
+            revived = ImageConverter.from_config(config)
+            self.assertEqual(revived.data_format, built)
+            self.assertEqual(revived.resizing.data_format, built)
+        finally:
+            keras.config.set_image_data_format(original)
+
     def test_resize_simple(self):
         converter = ImageConverter(
             height=4,
