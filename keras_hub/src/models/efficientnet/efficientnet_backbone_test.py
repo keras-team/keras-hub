@@ -36,6 +36,9 @@ class EfficientNetBackboneTest(TestCase):
     def test_data_format_is_serialized(self):
         # `run_serialization_test` compares config to config, so a key that is
         # missing from `get_config` is missing on both sides and matches.
+        # The global format is not flipped here: `data_format` defaults to
+        # "channels_last", and the backbone cannot be built with
+        # "channels_first".
         backbone = EfficientNetBackbone(**self.init_kwargs)
         self.assertEqual(
             backbone.get_config()["data_format"], backbone.data_format
