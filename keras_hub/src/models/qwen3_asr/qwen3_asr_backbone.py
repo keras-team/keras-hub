@@ -76,15 +76,16 @@ class Qwen3ASRBackbone(Backbone):
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of text decoder layers.
         num_query_heads: int. The number of query attention heads for the text
-        decoder.
+            decoder.
         num_key_value_heads: int. The number of key and value attention heads
             for the text decoder.
         head_dim: int. Dimension of each attention head for the text decoder.
         hidden_dim: int. The size of the text decoder hidden dimension.
-        intermediate_dim: int. The FFN intermediate dimension for the
-        text decoder.
+        intermediate_dim: int. The FFN intermediate dimension for the text
+            decoder.
         rope_max_wavelength: int, optional. The maximum angular wavelength of
-            the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+            the sine/cosine curves, for rotary embeddings. Defaults to
+            `1000000`.
         rope_scaling_factor: float, optional. The scaling factor for
             calculation of rotary embedding. Defaults to `1.0`.
         layer_norm_epsilon: float, optional. Epsilon for the layer
@@ -94,26 +95,49 @@ class Qwen3ASRBackbone(Backbone):
             embeddings. Defaults to `True`.
         sliding_window_size: int, optional. Size of the sliding window for
             attention when enabled. Defaults to `32768`.
-
         audio_num_mel_bins: int. Number of mel bins in the input spectrogram.
-            Defaults to `128`.
-        audio_num_layers: int. Number of audio encoder layers. Defaults to `24`.
+        audio_num_layers: int. Number of audio encoder layers.
         audio_num_attention_heads: int. Number of audio encoder attention heads.
-            Defaults to `16`.
         audio_intermediate_dim: int. FFN intermediate dimension for the audio
-            encoder. Defaults to `4096`.
+            encoder.
         audio_d_model: int. Hidden dimension of the audio encoder.
-            Defaults to `1024`.
         audio_n_window: int. Half the chunk size for the audio encoder.
-            Defaults to `50`.
         audio_n_window_infer: int. Inference window size for the audio encoder.
-            Defaults to `800`.
         audio_downsample_hidden_size: int. Hidden size of conv stem in the
-            audio encoder. Defaults to `480`.
+            audio encoder.
         audio_max_position_embeddings: int. Max position embeddings for the
-            audio encoder chunk. Defaults to `13`.
+            audio encoder chunk.
         audio_token_id: int. The token ID used as a placeholder for audio
-            features. Defaults to `151676`.
+            features.
+
+    Examples:
+    ```python
+    backbone = keras_hub.models.Qwen3ASRBackbone(
+        vocabulary_size=151936,
+        num_layers=28,
+        num_query_heads=16,
+        num_key_value_heads=8,
+        head_dim=128,
+        hidden_dim=1024,
+        intermediate_dim=3072,
+        rope_max_wavelength=1000000,
+        rope_scaling_factor=1.0,
+        layer_norm_epsilon=1e-6,
+        dropout=0.0,
+        tie_word_embeddings=True,
+        sliding_window_size=32768,
+        audio_num_mel_bins=128,
+        audio_num_layers=18,
+        audio_num_attention_heads=14,
+        audio_intermediate_dim=3584,
+        audio_d_model=896,
+        audio_n_window=50,
+        audio_n_window_infer=800,
+        audio_downsample_hidden_size=480,
+        audio_max_position_embeddings=13,
+        audio_token_id=151676,
+    )
+    ```
     """
 
     def __init__(

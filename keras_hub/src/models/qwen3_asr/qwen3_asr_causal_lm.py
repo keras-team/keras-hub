@@ -20,9 +20,27 @@ class Qwen3ASRCausalLM(CausalLM):
 
     Args:
         backbone: A `keras_hub.models.Qwen3ASRBackbone` instance.
-        preprocessor: A `keras_hub.models.Qwen3ASRPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.Qwen3ASRCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
+
+    Examples:
+    ```python
+    model = keras_hub.models.Qwen3ASRCausalLM.from_preset(
+        "qwen3_asr_0.6b"
+    )
+    model.generate({
+        "prompts": " airplane",
+        "audio": np.ones((16000,), dtype="float32"),
+    })
+
+    x = {
+        "audio": np.ones((16000,), dtype="float32"),
+        "prompts": " airplane",
+        "responses": " airplane",
+    }
+    model.fit(x=x, batch_size=1)
+    ```
     """
 
     backbone_cls = Qwen3ASRBackbone

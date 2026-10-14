@@ -12,7 +12,6 @@ class Qwen3ASRAudioConverterTest(TestCase):
             cls=Qwen3ASRAudioConverter,
             init_kwargs={
                 "num_mels": 4,
-                "max_audio_length": 1,
                 "min_length": 8000,
             },
             input_data=np.ones((1, 8000), dtype="float32"),
@@ -28,13 +27,11 @@ class Qwen3ASRAudioConverterTest(TestCase):
         converter = Qwen3ASRAudioConverter(
             num_mels=128,
             sampling_rate=16000,
-            max_audio_length=30,
             n_window=50,
         )
 
         # Call with unbatched input
         output = converter(audio)
-        # The output is padded to a multiple of 100 mel frames.
         self.assertEqual(output.shape, (100, 128))
 
         # Call with batched input
@@ -43,27 +40,11 @@ class Qwen3ASRAudioConverterTest(TestCase):
         self.assertEqual(output_batched.shape, (2, 100, 128))
 
     def test_audio_shape(self):
-        converter = Qwen3ASRAudioConverter(
-            max_audio_length=30,
-            n_window=50,
-        )
+        converter = Qwen3ASRAudioConverter(n_window=50)
         self.assertEqual(converter.audio_shape(), (None, 128))
 
-        # Test with custom max_audio_length not a multiple of 100 frames.
-        # e.g., max_audio_length = 1.05s -> 16800 samples.
-        # stride = 160 -> 16800 // 160 = 105 frames.
-        # Padded to multiple of 100 -> 200 frames.
-        converter_short = Qwen3ASRAudioConverter(
-            max_audio_length=1.05,
-            n_window=50,
-        )
-        self.assertEqual(converter_short.audio_shape(), (None, 128))
-
     def test_variable_length_batched_input(self):
-        converter = Qwen3ASRAudioConverter(
-            max_audio_length=1.05,
-            n_window=50,
-        )
+        converter = Qwen3ASRAudioConverter(n_window=50)
         audio = [np.ones((16000,)), np.ones((8000,))]
 
         output = converter(audio)

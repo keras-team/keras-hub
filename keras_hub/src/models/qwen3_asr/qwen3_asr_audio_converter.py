@@ -13,7 +13,34 @@ from keras_hub.src.utils.tensor_utils import tf
 
 @keras_hub_export("keras_hub.layers.Qwen3ASRAudioConverter")
 class Qwen3ASRAudioConverter(WhisperAudioConverter):
-    """Qwen3 ASR audio converter layer."""
+    """Qwen3 ASR audio converter layer.
+
+    Converts raw waveform audio into log-mel spectrograms for the Qwen3-ASR
+    model. Short clips are padded to `min_length` before feature extraction so
+    the encoder sees a consistent chunk length. `max_audio_length` is accepted
+    for backwards compatibility only and is ignored in this implementation.
+
+    Args:
+        num_mels: int. Number of mel-frequency bins. Defaults to `128`.
+        num_fft_bins: int. Size of the Fourier transform. Defaults to `400`.
+        stride: int. Hop length in samples between STFT frames. Defaults to
+            `160`.
+        sampling_rate: int. Audio sampling rate in Hz. Defaults to `16000`.
+        max_audio_length: int, optional. Deprecated compatibility argument.
+            This implementation pads based on `min_length`, and this value is
+            ignored.
+        n_window: int. Audio chunk size half-window for token counting.
+            Defaults to `50`.
+        min_length: int. Minimum number of samples to pad to before feature
+            extraction. Defaults to `8000`.
+
+    Example:
+    ```python
+    converter = keras_hub.layers.Qwen3ASRAudioConverter()
+    audio = np.ones((16000,), dtype="float32")
+    converter(audio)
+    ```
+    """
 
     backbone_cls = Qwen3ASRBackbone
 

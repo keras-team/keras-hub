@@ -1,6 +1,5 @@
 import keras
 import numpy as np
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -309,7 +308,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         response_mask = segment_ids == 1
 
         if not is_batched:
-            reshape = ops.reshape if is_tf_tensor else np.reshape
+            reshape = tf.reshape if is_tf_tensor else np.reshape
             token_ids = reshape(token_ids, (sequence_length,))
             padding_mask = reshape(padding_mask, (sequence_length,))
             response_mask = reshape(response_mask, (sequence_length,))
