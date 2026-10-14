@@ -2,6 +2,18 @@ import keras
 from keras import ops
 
 
+def clamp_dim_to_at_least_one(dim):
+    """Clamp a static or symbolic dimension to a minimum of 1.
+
+    Python branches on a dimension raise under a TensorFlow `predict()`
+    retrace, where the dimension is a symbolic tensor; this keeps a static
+    `int` static (so it can feed `one_hot`) and clamps a tensor with `ops`.
+    """
+    if isinstance(dim, int):
+        return max(dim, 1)
+    return ops.maximum(dim, 1)
+
+
 class RMSNormalization(keras.layers.Layer):
     """RMS Normalization layer.
 
@@ -187,10 +199,11 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
         """
 
         batch_size, seq_length, embedding_dim = ops.shape(text_embeddings)
+        # No Python branch on `max_images`: under a TensorFlow `predict()`
+        # retrace it is symbolic and `if max_images == 0` raises. With no
+        # images every slice below is empty and the scatter is a no-op, so
+        # the text embeddings pass through unchanged.
         max_images = ops.shape(image_embeddings)[1]
-        if max_images == 0:
-            return text_embeddings
-
         num_patches = ops.shape(image_embeddings)[2]
 
         # Keep inputs connected even if empty to avoid Keras errors
@@ -224,8 +237,11 @@ class Gemma4InterleaveEmbeddings(keras.layers.Layer):
         # We must slice EACH frame to the correct number of tokens before
         # flattening!
         # `num_actual` is the total number of valid soft tokens across all
-        # images.
-        num_patches_per_image = num_actual // max_images
+        # images. With no images `num_actual` is 0, so clamping the divisor
+        # keeps the quotient 0 without dividing by zero.
+        num_patches_per_image = num_actual // clamp_dim_to_at_least_one(
+            max_images
+        )
         sliced_img = image_embeddings[:, :, :num_patches_per_image, :]
         flat_image_embeddings = ops.reshape(
             sliced_img,

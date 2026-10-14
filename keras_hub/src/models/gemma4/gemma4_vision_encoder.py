@@ -6,6 +6,7 @@ from keras_hub.src.models.gemma4.gemma4_decoder_block import (
     Gemma4VisionDecoderBlock,
 )
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
+from keras_hub.src.models.gemma4.gemma4_layers import clamp_dim_to_at_least_one
 
 
 @keras_hub_export("keras_hub.models.Gemma4VisionEncoder")
@@ -548,11 +549,14 @@ class Gemma4VisionAveragePooling(keras.layers.Layer):
         pass
 
     def call(self, inputs, pixel_position_ids):
+        # No Python branches on tensor dims below: under a TensorFlow
+        # `predict()` retrace the batch / image / patch dims are symbolic and
+        # `if num_patches == 0` raises. The zero-patch case (a text-only
+        # batch on a multimodal model) is handled by construction instead
+        # and yields a `(..., 0, hidden_dim)` output.
         shape = ops.shape(inputs)
         if len(shape) == 4:
             batch_size, max_images, num_patches, hidden_dim = shape
-            if max_images == 0 or num_patches == 0:
-                return inputs
             inputs = ops.reshape(
                 inputs, (batch_size * max_images, num_patches, hidden_dim)
             )
@@ -561,8 +565,6 @@ class Gemma4VisionAveragePooling(keras.layers.Layer):
             )
         else:
             batch_size, num_patches, hidden_dim = shape
-            if num_patches == 0:
-                return inputs
             max_images = 1
 
         k = self.pool_size
@@ -581,9 +583,15 @@ class Gemma4VisionAveragePooling(keras.layers.Layer):
         # `round(sqrt(280))` would get wrong (17). Images with different
         # aspect ratios need their own width. The `ops.max` call is dynamic
         # but is only used for indexing, not for slicing, so JAX JIT
-        # accepts it.
+        # accepts it. A zero row and column are padded on so the reduction is
+        # defined when there are no images or no patches (the flattened
+        # batch can be empty too); positions are >= 0, so the padding never
+        # changes a real image's maximum, and the padded row is sliced off.
+        x_positions = clamped_positions[..., 0]
+        num_rows = ops.shape(x_positions)[0]
+        padded_x_positions = ops.pad(x_positions, [[0, 1], [0, 1]])
         n_w_pooled = (
-            ops.max(clamped_positions[..., 0], axis=-1, keepdims=True) + 1
+            ops.max(padded_x_positions, axis=-1, keepdims=True)[:num_rows] + 1
         ) // k
         kernel_idxs = kernel_x + n_w_pooled * kernel_y
 
@@ -596,14 +604,19 @@ class Gemma4VisionAveragePooling(keras.layers.Layer):
         )
         inputs = inputs * (1.0 - ops.cast(is_padding, inputs.dtype))
 
-        # Use total output length for num_classes to prevent
-        # dropping valid patches!
-        weights = ops.one_hot(kernel_idxs, num_classes=output_length)
+        # Use total output length for num_classes to prevent dropping valid
+        # patches. `one_hot` needs a depth of at least 1 (torch rejects 0),
+        # so pool into `max(output_length, 1)` bins and slice back to
+        # `output_length`; with any patches present the slice is a no-op.
+        weights = ops.one_hot(
+            kernel_idxs, num_classes=clamp_dim_to_at_least_one(output_length)
+        )
         weights = ops.cast(weights, self.compute_dtype) / ops.cast(
             k_squared, self.compute_dtype
         )
 
         output = ops.matmul(ops.transpose(weights, (0, 2, 1)), inputs)
+        output = output[:, :output_length, :]
 
         # Apply root_hidden_size scaling, matching HF!
         hidden_dim = ops.shape(inputs)[-1]
