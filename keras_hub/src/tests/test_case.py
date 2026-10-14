@@ -188,6 +188,21 @@ def _dense_allclose_fn(atol, rtol):
     return compare
 
 
+def _to_host_leaf(x):
+    """Move a backend tensor leaf (e.g. a torch CUDA tensor) to NumPy.
+
+    `tf.data` cannot consume tensors that live on an accelerator. Native `tf`
+    tensors are left as is (unlike `_to_grain_leaf`), since converting a
+    `tf.RaggedTensor` yields a non-rectangular list that `from_tensor_slices`
+    rejects. Other leaves are passed through unchanged.
+    """
+    if isinstance(x, list):
+        return [_to_host_leaf(e) for e in x]
+    if ops.is_tensor(x) and not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+        return ops.convert_to_numpy(x)
+    return x
+
+
 def _to_grain_leaf(x):
     """Convert a single data leaf to a Grain friendly Python/NumPy object."""
     if tf is not None and isinstance(x, tf.RaggedTensor):
@@ -1467,6 +1482,11 @@ class TestCase(KerasTestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
+        # `tf.data` cannot consume tensors that live on an accelerator, so move
+        # them back to the host first.
+        host_data = _map_leaves(_to_host_leaf, train_data)
+        ds = tf.data.Dataset.from_tensor_slices(host_data)
+        ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
         # `tf.data` coverage is additive; the direct calls below run either way.
         ds = None

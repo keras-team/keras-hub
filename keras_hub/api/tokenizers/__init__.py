@@ -28,6 +28,9 @@ from keras_hub.src.models.clip.clip_tokenizer import (
 from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer as DebertaV3Tokenizer,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_tokenizer import (
+    DiffusionGemmaTokenizer as DiffusionGemmaTokenizer,
+)
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer as DistilBertTokenizer,
 )
@@ -79,6 +82,9 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 )
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
+)
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
+    ModernBertTokenizer as ModernBertTokenizer,
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,

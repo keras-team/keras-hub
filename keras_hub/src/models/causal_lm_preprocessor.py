@@ -133,7 +133,10 @@ class CausalLMPreprocessor(Preprocessor):
 
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
+            x,
+            sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
+            add_end_value=False,
         )
         return {
             "token_ids": token_ids,

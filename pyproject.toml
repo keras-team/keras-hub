@@ -34,7 +34,7 @@ dependencies = [
     "regex",
     "rich",
     "kagglehub!=1.0.1",
-    "kagglesdk==0.1.28",
+    "kagglesdk",
     "sentencepiece",
     "tokenizers",
     "tensorflow-text>=2.20.1;platform_system != 'Windows'",
