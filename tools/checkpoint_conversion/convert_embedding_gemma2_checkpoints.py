@@ -145,6 +145,7 @@ def validate_output(keras_model, hf_model, hf_processor, hf_tokenizer):
     print("\n=== Vision (encoder-only and end-to-end) ===", flush=True)
     diff, enc_diff = 0.0, 0.0
     mean_diff, enc_mean_diff = 0.0, 0.0
+    images, hf_single_outs = [], []
     for shape in [(224, 224, 3), (448, 256, 3)]:
         img = np.random.randint(0, 256, shape, dtype=np.uint8)
         prep = preprocessor({"images": img[None]})
@@ -153,6 +154,8 @@ def validate_output(keras_model, hf_model, hf_processor, hf_tokenizer):
             images=[[Image.fromarray(img)]], return_tensors="pt"
         )
         hf_out = _get_hf_pool(hf_model, hf_inputs)
+        images.append(img)
+        hf_single_outs.append(hf_out)
 
         d = float(np.max(np.abs(keras_out - hf_out)))
         m = float(np.mean(np.abs(keras_out - hf_out)))
@@ -189,6 +192,18 @@ def validate_output(keras_model, hf_model, hf_processor, hf_tokenizer):
 
     report("Vision_Encoder", enc_diff, enc_mean_diff, 1e-4)
     report("Vision_end_to_end", diff, mean_diff, 1e-3)
+
+    # Both aspect ratios in one batch: the pooled width is computed per
+    # image, so a mixed batch must match the one-image-per-call results.
+    prep = preprocessor({"images": images})
+    keras_mixed = _keras_embed(keras_model, prep)
+    hf_mixed = np.concatenate(hf_single_outs, axis=0)
+    report(
+        "Vision_mixed_batch",
+        float(np.max(np.abs(keras_mixed - hf_mixed))),
+        float(np.mean(np.abs(keras_mixed - hf_mixed))),
+        1e-3,
+    )
 
     # (4) Audio
     print("\n=== Audio ===", flush=True)

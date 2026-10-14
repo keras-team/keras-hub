@@ -186,6 +186,40 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
         out = ops.convert_to_numpy(embedder(inputs))
         self.assertAllClose(out[0], out[1])
 
+    def test_predict_text_then_images_then_text(self):
+        # A text-only batch followed by an image batch and back, through the
+        # public `predict()` path. On the TensorFlow backend the second call
+        # retraces with relaxed media dims, so every layer must trace with a
+        # symbolic image count (keras-hub#3152).
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
+            EmbeddingGemma2TextEmbedderPreprocessor,
+        )
+
+        # The setUp preprocessor uses `sequence_length=4`, too short for the
+        # image placeholder plus its soft tokens.
+        preprocessor = EmbeddingGemma2TextEmbedderPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            video_converter=self.video_converter,
+            sequence_length=32,
+        )
+        embedder = EmbeddingGemma2TextEmbedder(
+            backbone=self.backbone, preprocessor=preprocessor
+        )
+        img = np.ones((16, 16, 3), dtype="float32")
+        text_only = ["hello", "world"]
+        with_images = {
+            "texts": ["<|image|> hello", "<|image|> world"],
+            "images": np.stack([img, img]),
+        }
+        outputs = []
+        for inputs in (text_only, with_images, text_only):
+            outputs.append(embedder.predict(inputs, verbose=0))
+            self.assertEqual(outputs[-1].shape, (2, 12))
+        # The retrace must not change the text-only result.
+        self.assertAllClose(outputs[0], outputs[2], atol=1e-6)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
