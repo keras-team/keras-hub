@@ -58,6 +58,10 @@ TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
 
+# Allowed form for user/preset supplied config file names, e.g.
+# `"tokenizer.json"` or `"clip_l_tokenizer.json"`.
+_SAFE_CONFIG_FILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*\.json")
+
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
@@ -314,6 +318,47 @@ def check_file_exists(preset, path):
     except FileNotFoundError:
         return False
     return True
+
+
+def validate_config_file(config_file):
+    """Check that `config_file` is a plain JSON filename.
+
+    `config_file` is stored on `Tokenizer` and `Preprocessor` instances and
+    round-trips through `get_config()`, so it may come from an untrusted
+    preset. It is later joined onto a preset directory, so it must not
+    contain any path components or be an absolute path.
+
+    Args:
+        config_file: The config file name to validate.
+
+    Returns:
+        The validated `config_file`.
+
+    Raises:
+        ValueError: If `config_file` is not a plain JSON filename.
+    """
+    if not (
+        isinstance(config_file, str)
+        and _SAFE_CONFIG_FILE_RE.fullmatch(config_file)
+    ):
+        raise ValueError(
+            "`config_file` must be a plain JSON filename such as "
+            "`'tokenizer.json'`, with no directory components. "
+            f"Received: config_file={config_file!r}"
+        )
+    return config_file
+
+
+def _join_within(base_dir, *parts):
+    """Join `parts` onto `base_dir`, refusing results outside `base_dir`."""
+    base = os.path.abspath(base_dir)
+    path = os.path.abspath(os.path.join(base, *parts))
+    if os.path.commonpath([base, path]) != base:
+        raise ValueError(
+            f"Refusing to write outside the preset directory `{base_dir}`. "
+            f"Resolved path: `{path}`."
+        )
+    return path
 
 
 def _validate_backbone(preset):
@@ -881,11 +926,11 @@ class KerasPresetSaver:
     def save_tokenizer(self, tokenizer):
         config_file = TOKENIZER_CONFIG_FILE
         if hasattr(tokenizer, "config_file"):
-            config_file = tokenizer.config_file
+            config_file = validate_config_file(tokenizer.config_file)
         self._save_serialized_object(tokenizer, config_file)
         # Save assets.
         subdir = config_file.split(".")[0]
-        asset_dir = os.path.join(self.preset_dir, ASSET_DIR, subdir)
+        asset_dir = _join_within(self.preset_dir, ASSET_DIR, subdir)
         os.makedirs(asset_dir, exist_ok=True)
         tokenizer.save_assets(asset_dir)
 
@@ -922,7 +967,7 @@ class KerasPresetSaver:
     def save_preprocessor(self, preprocessor):
         config_file = PREPROCESSOR_CONFIG_FILE
         if hasattr(preprocessor, "config_file"):
-            config_file = preprocessor.config_file
+            config_file = validate_config_file(preprocessor.config_file)
         self._save_serialized_object(preprocessor, config_file)
         for layer in preprocessor._flatten_layers(include_self=False):
             if hasattr(layer, "save_to_preset"):
@@ -936,7 +981,7 @@ class KerasPresetSaver:
                 self._recursive_pop(value, key)
 
     def _save_serialized_object(self, layer, config_file):
-        config_path = os.path.join(self.preset_dir, config_file)
+        config_path = _join_within(self.preset_dir, config_file)
         config = keras.saving.serialize_keras_object(layer)
         config_to_skip = ["compile_config", "build_config"]
         for key in config_to_skip:

@@ -9,6 +9,7 @@ from keras_hub.src.utils.preset_utils import builtin_presets
 from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
+from keras_hub.src.utils.preset_utils import validate_config_file
 from keras_hub.src.utils.python_utils import classproperty
 
 
@@ -33,7 +34,9 @@ class Preprocessor(PreprocessingLayer):
     video_converter_cls = None
 
     def __init__(self, *args, **kwargs):
-        self.config_file = kwargs.pop("config_file", PREPROCESSOR_CONFIG_FILE)
+        self.config_file = validate_config_file(
+            kwargs.pop("config_file", PREPROCESSOR_CONFIG_FILE)
+        )
         super().__init__(*args, **kwargs)
         self._tokenizer = None
         self._image_converter = None

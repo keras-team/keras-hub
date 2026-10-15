@@ -12,7 +12,9 @@ from keras_hub.src.models.albert.albert_text_classifier import (
 from keras_hub.src.models.bert.bert_backbone import BertBackbone
 from keras_hub.src.models.bert.bert_tokenizer import BertTokenizer
 from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
+from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
@@ -249,3 +251,14 @@ class PresetUtilsTest(TestCase):
         with mock.patch("huggingface_hub.hf_hub_download", side_effect=error):
             with self.assertRaises(FileNotFoundError):
                 get_file("hf://username/bert_base_en", "missing.json")
+
+    @parameterized.parameters("../outside.json", "/abs/outside.json")
+    def test_config_file_outside_preset_dir(self, config_file):
+        with self.assertRaisesRegex(ValueError, "plain JSON filename"):
+            Tokenizer(config_file=config_file)
+        with self.assertRaisesRegex(ValueError, "plain JSON filename"):
+            Preprocessor(config_file=config_file)
+
+    def test_custom_config_file(self):
+        tokenizer = Tokenizer(config_file="clip_l_tokenizer.json")
+        self.assertEqual(tokenizer.config_file, "clip_l_tokenizer.json")
