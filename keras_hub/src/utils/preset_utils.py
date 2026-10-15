@@ -58,7 +58,8 @@ TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
 
-# Allowed form for user/preset supplied config file names, e.g. "tokenizer.json".
+# Allowed form for user/preset supplied config file names,
+# e.g. "tokenizer.json".
 _SAFE_CONFIG_FILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*\.json")
 
 # Weight file names.
