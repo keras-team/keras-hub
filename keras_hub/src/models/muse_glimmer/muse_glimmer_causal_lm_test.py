@@ -42,6 +42,8 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<|end_of_text|>", "<|begin_of_text|>"]
         self.vocab += ["<|finetune_right_pad|>", "<|eot|>"]
+        self.vocab += ["<|image_start|>", "<|image_end|>", "<|vid_start|>"]
+        self.vocab += ["<|vid_end|>", "<|vid_frame_separator|>"]
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = MuseGlimmerCausalLMPreprocessor(
@@ -241,6 +243,139 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             inputs, max_length=sequence_length, stop_token_ids=None
         )
         self.assertEqual(ops.shape(output["token_ids"]), (1, sequence_length))
+
+    def _multimodal_generate_inputs(
+        self, prompts, sequence_length, image_seeds=None
+    ):
+        # A 16x16 image gives 16 patches and 4 merged vision tokens. Each
+        # seed gives the same image in every call.
+        if image_seeds is None:
+            image_seeds = range(len(prompts))
+        images = [
+            np.random.default_rng(seed)
+            .uniform(0, 255, (16, 16, 3))
+            .astype("float32")
+            for seed in image_seeds
+        ]
+        return self.multimodal_preprocessor.generate_preprocess(
+            {"prompts": prompts, "images": images},
+            sequence_length=sequence_length,
+        )
+
+    def _first_image_position(self, row_token_ids):
+        tokenizer = self.multimodal_preprocessor.tokenizer
+        is_image = np.asarray(row_token_ids) == tokenizer.image_token_id
+        return int(np.flatnonzero(is_image)[0])
+
+    def test_generate_ragged_batch_with_images_matches_single_rows(self):
+        self.multimodal_causal_lm.compile(sampler="greedy")
+        prompts = ["<|image|> air", " airplane at airport at at<|image|> at"]
+        sequence_length = 16
+        batch_inputs = self._multimodal_generate_inputs(
+            prompts, sequence_length
+        )
+        row_lengths = np.sum(np.asarray(batch_inputs["padding_mask"]), axis=-1)
+        # The image of the longer row must start at or after the position
+        # where generation starts. This is the case the old code broke.
+        self.assertGreaterEqual(
+            self._first_image_position(batch_inputs["token_ids"][1]),
+            int(row_lengths.min()) - 1,
+        )
+        batch_output = self.multimodal_causal_lm.generate(
+            batch_inputs, max_length=sequence_length, stop_token_ids=None
+        )
+        for row, prompt in enumerate(prompts):
+            row_inputs = self._multimodal_generate_inputs(
+                [prompt], sequence_length, image_seeds=[row]
+            )
+            row_output = self.multimodal_causal_lm.generate(
+                row_inputs, max_length=sequence_length, stop_token_ids=None
+            )
+            self.assertAllEqual(
+                batch_output["token_ids"][row], row_output["token_ids"][0]
+            )
+
+    def test_generate_prompt_ending_in_image_tokens_uses_image_features(self):
+        self.multimodal_causal_lm.compile(sampler="greedy")
+        sequence_length = 12
+        inputs = self._multimodal_generate_inputs(
+            [" airplane<|image|>"], sequence_length
+        )
+        prompt_length = int(np.sum(np.asarray(inputs["padding_mask"])))
+        output = self.multimodal_causal_lm.generate(
+            inputs, max_length=sequence_length, stop_token_ids=None
+        )
+        # The full forward pass sees the image features at every prompt
+        # position. The first generated token must follow its last logit.
+        logits = self.multimodal_causal_lm(
+            {
+                "token_ids": ops.convert_to_tensor(inputs["token_ids"]),
+                "padding_mask": ops.convert_to_tensor(inputs["padding_mask"]),
+                "pixel_values": ops.convert_to_tensor(inputs["pixel_values"])[
+                    None
+                ],
+                "image_grid_thw": ops.convert_to_tensor(
+                    inputs["image_grid_thw"]
+                )[None],
+                "vision_indices": ops.convert_to_tensor(
+                    inputs["vision_indices"]
+                )[None],
+            }
+        )
+        last_logits = ops.convert_to_numpy(logits)[0, prompt_length - 1]
+        expected = int(np.argmax(last_logits))
+        self.assertEqual(int(output["token_ids"][0][prompt_length]), expected)
+
+    def _make_multimodal_assistant(self, block_size):
+        # The assistant uses the hidden size of the multimodal target.
+        assistant_backbone = MuseGlimmerBackbone(
+            vocabulary_size=1,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=32,
+            intermediate_dim=32,
+            head_dim=8,
+            sliding_window_size=None,
+            layer_types=["full_attention", "full_attention"],
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=[0, 1],
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            use_sandwich_norm=False,
+        )
+        return MuseGlimmerAssistantCausalLM(
+            backbone=assistant_backbone,
+            block_size=block_size,
+            mask_token_id=0,
+        )
+
+    def test_assisted_greedy_with_image_matches_plain_greedy(self):
+        self.multimodal_causal_lm.compile(sampler="greedy")
+        block_size, max_length = 4, 9
+        inputs = self._multimodal_generate_inputs(
+            [" air<|image|> at"], max_length
+        )
+        # The verify window starts at `max_length - block_size` at the
+        # latest. It must reach the image for the old code to fail.
+        last_image_position = int(
+            np.flatnonzero(
+                np.asarray(inputs["token_ids"])
+                == self.multimodal_preprocessor.tokenizer.image_token_id
+            )[-1]
+        )
+        self.assertLessEqual(max_length - block_size, last_image_position)
+        assistant = self._make_multimodal_assistant(block_size)
+        plain = self.multimodal_causal_lm.generate(
+            inputs, max_length=max_length, stop_token_ids=None
+        )
+        assisted = self.multimodal_causal_lm.generate(
+            inputs,
+            max_length=max_length,
+            stop_token_ids=None,
+            assistant_model=assistant,
+        )
+        self.assertAllEqual(assisted["token_ids"], plain["token_ids"])
 
     def test_early_stopping(self):
         call_with_cache = self.causal_lm.call_with_cache
@@ -636,6 +771,292 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         ]
         # Read the static shape. A traced tensor is out of scope here.
         self.assertEqual(seed_context.shape[1], seq_len)
+
+    def _randomize_weights(self, model, seed):
+        # Random weights make attention and RoPE matter for the output.
+        rng = np.random.default_rng(seed)
+        for variable in model.weights:
+            shape = tuple(variable.shape)
+            if len(shape) == 1:
+                value = 1.0 + 0.3 * rng.standard_normal(shape)
+            else:
+                value = rng.standard_normal(shape) / np.sqrt(shape[0])
+            variable.assign(value.astype("float32"))
+
+    def _make_random_causal_lm(self):
+        backbone = MuseGlimmerBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=4,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=16,
+            intermediate_dim=32,
+            head_dim=4,
+            sliding_window_size=3,
+            layer_types=[
+                "sliding_attention",
+                "sliding_attention",
+                "sliding_attention",
+                "full_attention",
+            ],
+        )
+        self._randomize_weights(backbone, seed=0)
+        return MuseGlimmerCausalLM(backbone=backbone, preprocessor=None)
+
+    def _make_rope_assistant(self, block_size, seed):
+        # Every assistant layer applies RoPE, so each block position gives
+        # different logits.
+        backbone = MuseGlimmerBackbone(
+            vocabulary_size=1,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=4,
+            sliding_window_size=3,
+            layer_types=["sliding_attention", "full_attention"],
+            use_bidirectional_attention=True,
+            context_projection_layer_ids=[1, 2],
+            use_external_embeddings=True,
+            enable_qk_scale_and_gate=False,
+            qk_norm_with_scale=True,
+            use_sandwich_norm=False,
+            use_centered_norm=False,
+        )
+        self._randomize_weights(backbone, seed)
+        return MuseGlimmerAssistantCausalLM(
+            backbone=backbone, block_size=block_size, mask_token_id=0
+        )
+
+    def _empty_cache(self, backbone, length):
+        return ops.zeros(
+            (
+                1,
+                backbone.num_layers,
+                2,
+                length,
+                backbone.num_key_value_heads,
+                backbone.head_dim,
+            )
+        )
+
+    def test_cached_decoding_matches_full_forward(self):
+        model = self._make_random_causal_lm()
+        seq_len = 9
+        rng = np.random.default_rng(1)
+        token_ids = rng.integers(
+            0, model.backbone.vocabulary_size, size=(1, seq_len)
+        ).astype("int32")
+        full_logits = ops.convert_to_numpy(
+            model(
+                {
+                    "token_ids": token_ids,
+                    "padding_mask": np.ones((1, seq_len), "int32"),
+                }
+            )
+        )
+        cache = self._empty_cache(model.backbone, seq_len)
+        for i in range(seq_len):
+            logits, _, cache = model.call_with_cache(
+                ops.convert_to_tensor(token_ids[:, i : i + 1]),
+                cache,
+                i,
+                padding_mask=None,
+            )
+            self.assertAllClose(
+                logits[:, 0],
+                full_logits[:, i],
+                atol=1e-4,
+                rtol=1e-4,
+                msg=f"Cached step {i} differs from the full forward pass.",
+            )
+
+    def test_cached_decoding_after_padded_prompt_matches_full_forward(self):
+        model = self._make_random_causal_lm()
+        backbone = model.backbone
+        seq_len, prompt_len = 9, 5
+        rng = np.random.default_rng(2)
+        token_ids = rng.integers(
+            0, backbone.vocabulary_size, size=(1, seq_len)
+        ).astype("int32")
+        inputs = {
+            "token_ids": token_ids,
+            "padding_mask": np.ones((1, seq_len), "int32"),
+        }
+        full_logits = ops.convert_to_numpy(model(inputs))
+        full_hidden = ops.convert_to_numpy(
+            keras.Model(backbone.input, backbone.output)(inputs)
+        )
+        # The prompt is right-padded. The padded slots hold other tokens
+        # than the later steps write.
+        padded_token_ids = token_ids.copy()
+        padded_token_ids[:, prompt_len:] = 0
+        padding_mask = np.array(
+            [[1] * prompt_len + [0] * (seq_len - prompt_len)], "int32"
+        )
+        hidden, cache = model._build_cache(
+            ops.convert_to_tensor(padded_token_ids),
+            ops.convert_to_tensor(padding_mask),
+        )
+        self.assertAllClose(
+            hidden[:, :prompt_len],
+            full_hidden[:, :prompt_len],
+            atol=1e-4,
+            rtol=1e-4,
+        )
+        for i in range(prompt_len, seq_len):
+            logits, _, cache = model.call_with_cache(
+                ops.convert_to_tensor(token_ids[:, i : i + 1]),
+                cache,
+                i,
+                padding_mask=None,
+            )
+            self.assertAllClose(
+                logits[:, 0],
+                full_logits[:, i],
+                atol=1e-4,
+                rtol=1e-4,
+                msg=f"Cached step {i} differs from the full forward pass.",
+            )
+
+    @parameterized.named_parameters(("block_size_3", 3), ("block_size_5", 5))
+    def test_drafter_follows_the_verified_prefix(self, block_size):
+        # `SpeculativeSampler` runs its loop traced on JAX, so only eager
+        # backends give concrete values for each cycle.
+        if keras.config.backend() == "jax":
+            self.skipTest("The sampler loop is traced on JAX.")
+        lm = self.causal_lm
+        self._randomize_weights(lm, seed=3)
+        assistant = self._make_rope_assistant(block_size, seed=4)
+        lm.compile(sampler="greedy", run_eagerly=True)
+        lm.preprocessor = None
+        vocab_size = lm.backbone.vocabulary_size
+        seq_len, prompt_len = 22, 4
+        rng = np.random.default_rng(5)
+        prompt_ids = {
+            "token_ids": ops.convert_to_tensor(
+                rng.integers(0, vocab_size, size=(1, seq_len)).astype("int32")
+            ),
+            "padding_mask": ops.convert_to_tensor(
+                np.array(
+                    [[1] * prompt_len + [0] * (seq_len - prompt_len)],
+                    dtype="int32",
+                )
+            ),
+        }
+        reference = ops.convert_to_numpy(
+            lm.generate(prompt_ids, stop_token_ids=None)["token_ids"]
+        )[0]
+
+        drafts, windows = [], []
+        draft_block = lm._draft_block
+        call_with_cache = lm.call_with_cache
+
+        def record_draft_block(
+            assistant_model, prompt, anchor, last_context, assistant_cache
+        ):
+            logits, new_cache = draft_block(
+                assistant_model, prompt, anchor, last_context, assistant_cache
+            )
+            drafts.append(
+                {
+                    "prompt": ops.convert_to_numpy(prompt).copy(),
+                    "anchor": int(ops.convert_to_numpy(anchor)),
+                    "logits": ops.convert_to_numpy(logits),
+                }
+            )
+            return logits, new_cache
+
+        def record_verify(*args, **kwargs):
+            # Only the verify window has `block_size` tokens. The seed call
+            # of `generate_step` covers the whole buffer.
+            if (
+                kwargs.get("target_layer_ids") is not None
+                and ops.shape(args[0])[1] == block_size
+            ):
+                windows.append(
+                    {
+                        "tokens": ops.convert_to_numpy(args[0]).copy(),
+                        "start": int(ops.convert_to_numpy(args[2])),
+                    }
+                )
+            return call_with_cache(*args, **kwargs)
+
+        with (
+            patch.object(lm, "_draft_block", record_draft_block),
+            patch.object(lm, "call_with_cache", record_verify),
+        ):
+            output = lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
+        self.assertAllEqual(output["token_ids"][0], reference)
+        self.assertGreaterEqual(len(drafts), 3)
+        self.assertEqual(len(drafts), len(windows))
+
+        num_candidates = block_size - 1
+        num_checked = 0
+        for cycle, (draft, window) in enumerate(zip(drafts, windows)):
+            anchor, prompt = draft["anchor"], draft["prompt"]
+            # The anchor token and the prefix before it are verified.
+            self.assertAllEqual(
+                prompt[0, : anchor + 1], reference[: anchor + 1]
+            )
+
+            # The drafter must match one call on the full verified prefix.
+            _, _, context = lm._build_cache(
+                ops.convert_to_tensor(prompt),
+                ops.ones((1, seq_len), dtype="int32"),
+                target_layer_ids=[1, 2],
+            )
+            noise_ids = np.zeros((1, block_size), "int32")
+            noise_ids[0, 0] = prompt[0, anchor]
+            hidden, _ = assistant.call_with_cache(
+                noise_embeds=lm.backbone.token_embedding(
+                    ops.convert_to_tensor(noise_ids)
+                ),
+                context_hidden_states=context[:, :anchor, :],
+                cache=self._empty_cache(assistant.backbone, seq_len),
+                cache_update_index=0,
+                padding_mask=ops.ones((1, block_size), dtype="int32"),
+            )
+            reference_logits = lm._apply_logit_softcap(
+                lm.backbone.token_embedding(hidden[:, 1:, :], reverse=True)
+            )
+            self.assertAllClose(
+                draft["logits"],
+                reference_logits,
+                atol=1e-4,
+                rtol=1e-4,
+                msg=f"Cycle {cycle} drafts from the wrong context.",
+            )
+
+            # A window that starts at the anchor holds the draft tokens.
+            # Candidate `i` is the argmax of block position `i`.
+            if window["start"] != anchor:
+                continue
+            drafted = window["tokens"][0, 1:]
+            self.assertAllEqual(
+                drafted,
+                np.argmax(draft["logits"][0], axis=-1),
+                msg=f"Cycle {cycle} uses the wrong block position.",
+            )
+            # The next anchor is the last verified position. The verifier
+            # accepts the draft tokens that match the plain greedy output.
+            expected = reference[anchor + 1 : anchor + 1 + num_candidates]
+            num_accepted = 0
+            for draft_token, expected_token in zip(drafted, expected):
+                if draft_token != expected_token:
+                    break
+                num_accepted += 1
+            if cycle + 1 < len(drafts):
+                self.assertEqual(
+                    drafts[cycle + 1]["anchor"],
+                    anchor + num_accepted + 1,
+                    msg=f"Cycle {cycle + 1} starts at the wrong anchor.",
+                )
+            num_checked += 1
+        self.assertGreaterEqual(num_checked, 2)
 
     @parameterized.named_parameters(
         ("text_and_vision", "text_and_vision"), ("text_only", "text_only")

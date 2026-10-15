@@ -5,6 +5,9 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    _QUERY_BLOCK_SIZE,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionAttention,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
@@ -289,6 +292,67 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             self.assertAllClose(
                 capped_output, eager_output, atol=1e-5, rtol=1e-5
             )
+
+    def test_traced_attention_over_several_blocks_matches_reference(self):
+        # More patches than one query block run in blocks. The result
+        # must match the full `(heads, N, N)` computation.
+        num_heads, head_dim = 2, 4
+        attention = MuseGlimmerVisionAttention(num_heads * head_dim, num_heads)
+        attention.build((None, num_heads * head_dim))
+        segment_lengths = [700, 900, 500]
+        num_patches = sum(segment_lengths)
+        self.assertGreater(num_patches, _QUERY_BLOCK_SIZE)
+        rng = np.random.default_rng(0)
+        q, k, v = (
+            rng.standard_normal((num_patches, num_heads, head_dim)).astype(
+                "float32"
+            )
+            for _ in range(3)
+        )
+        segment_id = np.repeat(np.arange(3), segment_lengths).astype("int32")
+
+        expected = np.zeros_like(q)
+        same_segment = segment_id[:, None] == segment_id[None, :]
+        for head in range(num_heads):
+            scores = q[:, head] @ k[:, head].T * attention._inv_scale
+            scores = np.where(same_segment, scores, -1e9)
+            scores = scores - scores.max(axis=-1, keepdims=True)
+            probs = np.exp(scores)
+            probs = probs / probs.sum(axis=-1, keepdims=True)
+            expected[:, head] = probs @ v[:, head]
+
+        backend = keras.config.backend()
+        if backend == "jax":
+            import jax
+
+            traced = jax.jit(attention._masked_full_attention)
+        elif backend == "tensorflow":
+            shape = [num_patches, num_heads, head_dim]
+            traced = tf.function(
+                attention._masked_full_attention,
+                input_signature=[
+                    tf.TensorSpec(shape, tf.float32),
+                    tf.TensorSpec(shape, tf.float32),
+                    tf.TensorSpec(shape, tf.float32),
+                    tf.TensorSpec([num_patches], tf.int32),
+                ],
+            )
+        else:
+            self.skipTest("Only JAX and TensorFlow trace the encoder.")
+        output = traced(q, k, v, segment_id)
+        self.assertAllClose(output, expected, atol=1e-5, rtol=1e-5)
+
+    def test_traced_encoder_over_several_blocks_matches_eager(self):
+        # One 48x48 grid has 2304 patches, which is more than one block.
+        traced = self._traced(self.encoder)
+        grid_thw = np.array([[1, 48, 48]], dtype="int32")
+        self.assertGreater(48 * 48, _QUERY_BLOCK_SIZE)
+        patch_dim = 2 * 3 * 2 * 2
+        pixel_values = np.random.randn(48 * 48, patch_dim).astype("float32")
+        eager_output = self.encoder(pixel_values, grid_thw)
+        self.assertAllClose(
+            traced(pixel_values, grid_thw), eager_output, atol=1e-4, rtol=1e-4
+        )
 
     def test_eager_call_groups_segments_by_length(self):
         patch_dim = 2 * 3 * 2 * 2

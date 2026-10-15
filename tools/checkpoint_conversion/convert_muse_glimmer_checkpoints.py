@@ -56,8 +56,10 @@ VIDEO_URL = (
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
 TEXT_PROMPT = "What is Keras?"
-IMAGE_PROMPT = "<|image_start|><|patch|><|image_end|>Describe this image."
-VIDEO_PROMPT = "<|vid_start|><|video|><|vid_end|>Describe this video."
+# Bare placeholders. The HF processor and the KerasHub preprocessor both
+# expand them to the full layout with the delimiter tokens.
+IMAGE_PROMPT = "<|patch|>Describe this image."
+VIDEO_PROMPT = "<|video|>Describe this video."
 
 MAX_NEW_TOKENS = 24
 
@@ -151,33 +153,31 @@ def _strip_chat_markers(text):
 def _build_hf_multimodal_inputs(
     hf_tokenizer, processor, prompt, media, modality, video_metadata=None
 ):
-    """Build HF generate() inputs for an image/video prompt."""
+    """Build HF generate() inputs for an image/video prompt.
+
+    The HF processor expands the placeholder to the full layout, with the
+    delimiter tokens and, for a video, the `Time: ...s` text. The tool
+    passes the frames that `_load_video_asset` sampled, so it turns off
+    the frame sampling of the processor.
+    """
     if modality == "image":
-        visual_inputs = processor.image_processor([media], return_tensors="pt")
-        grid_key, merge_size, placeholder = (
-            "image_grid_thw",
-            processor.image_processor.merge_size,
-            "<|patch|>",
+        processor_outputs = processor(
+            text=[prompt], images=[media], return_tensors="pt"
         )
+        keys = ("input_ids", "attention_mask", "pixel_values")
+        keys += ("image_grid_thw",)
     else:
-        visual_inputs = processor.video_processor(
-            [media],
+        processor_outputs = processor(
+            text=[prompt],
+            videos=[media],
             video_metadata=[video_metadata],
             do_sample_frames=False,
+            return_metadata=True,
             return_tensors="pt",
         )
-        grid_key, merge_size, placeholder = (
-            "video_grid_thw",
-            processor.video_processor.merge_size,
-            "<|video|>",
-        )
-    grid = visual_inputs[grid_key]
-    num_tokens = int(grid[0].prod().item()) // merge_size**2
-    expanded_prompt = prompt.replace(placeholder, placeholder * num_tokens)
-    text_inputs = hf_tokenizer([expanded_prompt], return_tensors="pt")
-    hf_inputs = {**text_inputs, **visual_inputs}
-    hf_inputs.pop("video_metadata", None)
-    return hf_inputs
+        keys = ("input_ids", "attention_mask", "pixel_values_videos")
+        keys += ("video_grid_thw",)
+    return {key: processor_outputs[key] for key in keys}
 
 
 def _precompute_multimodal_outputs(

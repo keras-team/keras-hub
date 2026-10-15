@@ -3,6 +3,14 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 
+DELIMITER_TOKENS = {
+    "image_start_token": "<|image_start|>",
+    "image_end_token": "<|image_end|>",
+    "video_start_token": "<|vid_start|>",
+    "video_end_token": "<|vid_end|>",
+    "video_separator_token": "<|vid_frame_separator|>",
+}
+
 
 class MuseGlimmerTokenizerTest(TestCase):
     def setUp(self):
@@ -15,6 +23,7 @@ class MuseGlimmerTokenizerTest(TestCase):
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<|end_of_text|>", "<|begin_of_text|>"]
         self.vocab += ["<|finetune_right_pad|>", "<|eot|>"]
+        self.vocab += list(DELIMITER_TOKENS.values())
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
@@ -46,21 +55,51 @@ class MuseGlimmerTokenizerTest(TestCase):
         self.assertIn(tokenizer.video_token_id, ids)
         self.assertIn(tokenizer.start_token_id, ids)
 
-    def test_get_config_round_trips_non_default_tokens(self):
+    def test_delimiter_ids_come_from_the_vocabulary(self):
+        tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
+        for name, token in DELIMITER_TOKENS.items():
+            self.assertEqual(getattr(tokenizer, name), token)
+            token_id = getattr(tokenizer, f"{name}_id")
+            self.assertEqual(token_id, self.vocab[token])
+            self.assertIn(token_id, tokenizer.special_token_ids)
+
+    def test_missing_delimiter_token_raises(self):
+        for name, token in DELIMITER_TOKENS.items():
+            vocab = {k: v for k, v in self.vocab.items() if k != token}
+            with self.assertRaisesRegex(ValueError, token):
+                MuseGlimmerTokenizer(vocabulary=vocab, merges=self.merges)
+
+    def test_non_default_tokens_survive_serialization(self):
+        custom = {
+            "bos_token": "<|start|>",
+            "eos_token": "<|message|>",
+            "pad_token": "<|eom|>",
+            "image_start_token": "<|a|>",
+            "image_end_token": "<|b|>",
+            "video_start_token": "<|c|>",
+            "video_end_token": "<|d|>",
+            "video_separator_token": "<|e|>",
+        }
         vocab = dict(self.vocab)
-        for token in ("<|start|>", "<|message|>", "<|eom|>"):
+        for token in custom.values():
             vocab[token] = len(vocab)
         tokenizer = MuseGlimmerTokenizer(
-            vocabulary=vocab,
-            merges=self.merges,
-            bos_token="<|start|>",
-            eos_token="<|message|>",
-            pad_token="<|eom|>",
+            vocabulary=vocab, merges=self.merges, **custom
         )
-        revived = MuseGlimmerTokenizer.from_config(tokenizer.get_config())
-        self.assertEqual(revived.start_token, "<|start|>")
-        self.assertEqual(revived.end_token, "<|message|>")
-        self.assertEqual(revived.pad_token, "<|eom|>")
+        # A tokenizer built from a config has no vocabulary, so the ids
+        # are checked here.
+        names = {
+            "bos_token": "start_token",
+            "eos_token": "end_token",
+            "pad_token": "pad_token",
+        }
+        for name, token in custom.items():
+            attribute = names.get(name, name)
+            self.assertEqual(getattr(tokenizer, attribute), token)
+            token_id = getattr(tokenizer, f"{attribute}_id")
+            self.assertEqual(token_id, vocab[token])
+        # The helper fails if `get_config` drops one of these tokens.
+        self.run_serialization_test(tokenizer)
 
     def test_pre_tokenizer_matches_checkpoint_split(self):
         tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)

@@ -1,3 +1,5 @@
+import keras
+import numpy as np
 from keras import ops
 
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
@@ -243,6 +245,79 @@ class SpeculativeSamplerTest(TestCase):
             model=object(),
         )
         self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def test_four_tuple_draft_cache_continuation(self):
+        # The 4-tuple `(draft_state, target_cache, anchor_pos, drafter_cache)`
+        # convention. After each cycle, the sampler replaces `target_cache`
+        # with the verified cache, moves `anchor_pos` to the last verified
+        # position, and replaces `draft_state` with the verify hidden state at
+        # `min_accepted`. The sampler never changes `drafter_cache`.
+        num_speculative_tokens = 3
+        target_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        draft_next_fn = self._next_fn(target_chars)
+        records = []
+
+        def verify_next(prompt, cache, index, k):
+            logits = ops.stack(
+                [
+                    target_next(prompt, cache, index + i)[0]
+                    for i in range(k + 1)
+                ],
+                axis=1,
+            )
+            # Row `j` of the hidden states is `j`, so `min_accepted` is
+            # visible in the next `draft_state`.
+            hidden = ops.broadcast_to(
+                ops.reshape(ops.cast(ops.arange(k + 1), "float32"), (1, -1, 1)),
+                (self.batch_size, k + 1, 5),
+            )
+            return logits, hidden, cache + 1
+
+        def draft_next(prompt, draft_cache, index):
+            logits, _, _ = draft_next_fn(prompt, None, index)
+            if keras.config.backend() == "torch":
+                records.append((int(ops.convert_to_numpy(index)), draft_cache))
+            return logits, ops.ones((self.batch_size, 5)), draft_cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=num_speculative_tokens, temperature=1.0
+        )
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            cache=ops.zeros((self.batch_size, 1)),
+            index=0,
+            draft_next=draft_next,
+            draft_cache=(
+                ops.zeros((self.batch_size, 1, 5)),
+                ops.zeros((self.batch_size, 1)),
+                0,
+                ops.full((self.batch_size, 1), 7.0),
+            ),
+            verify_next=verify_next,
+            model=object(),
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+        # The sampler loop is traced on JAX and TensorFlow, so only torch
+        # runs each cycle in Python and gives concrete values.
+        if keras.config.backend() != "torch":
+            return
+        cycle_starts = records[::num_speculative_tokens]
+        self.assertGreaterEqual(len(cycle_starts), 3)
+        for cycle, (index, draft_cache) in enumerate(cycle_starts):
+            draft_state, target_cache, anchor_pos, drafter_cache = draft_cache
+            self.assertAllClose(drafter_cache, np.full((1, 1), 7.0))
+            if cycle == 0:
+                continue
+            # Every draft token is right, so `min_accepted` is `k`.
+            self.assertAllClose(
+                draft_state, np.full((1, 1, 5), float(num_speculative_tokens))
+            )
+            self.assertAllClose(target_cache, np.full((1, 1), float(cycle)))
+            self.assertEqual(int(ops.convert_to_numpy(anchor_pos)), index - 1)
 
     def test_short_circuit_rejection(self):
         # If token 2 is wrong, tokens 3+ should be rejected even if correct.

@@ -90,6 +90,11 @@ class MuseGlimmerCausalLM(CausalLM):
         img_embeddings = backbone.perception_emb_norm(img_embeddings)
         return img_embeddings
 
+    def _embed_tokens(self, token_ids):
+        """Embed token ids as plain text."""
+        embeddings = self.backbone.token_embedding(token_ids)
+        return self.backbone.embed_norm(embeddings)
+
     def call_with_cache(
         self,
         token_ids,
@@ -99,10 +104,15 @@ class MuseGlimmerCausalLM(CausalLM):
         img_embeddings=None,
         vision_indices=None,
         target_layer_ids=None,
+        inputs_embeds=None,
     ):
         """Forward pass with a KV cache, for autoregressive decoding.
 
         Args:
+            inputs_embeds: optional float tensor. When given, it replaces
+                the embedding of `token_ids`, and the pass skips the vision
+                interleave. `generate_step()` uses it to keep the image
+                embeddings of prompt positions.
             target_layer_ids: optional list of int. When given, an extra
                 4th return value is produced: the concatenation of this
                 pass's hidden states at each of these layer indices. Index
@@ -115,15 +125,16 @@ class MuseGlimmerCausalLM(CausalLM):
                 `assistant_model` is attached; `None` (the default) keeps
                 the plain 3-tuple return for every other caller.
         """
-        x = self.backbone.token_embedding(token_ids)
-        x = self.backbone.embed_norm(x)
-
-        if img_embeddings is not None and vision_indices is not None:
-            x = self.backbone.interleave_embeddings(
-                image_embeddings=img_embeddings,
-                text_embeddings=x,
-                vision_indices=vision_indices,
-            )
+        if inputs_embeds is not None:
+            x = inputs_embeds
+        else:
+            x = self._embed_tokens(token_ids)
+            if img_embeddings is not None and vision_indices is not None:
+                x = self.backbone.interleave_embeddings(
+                    image_embeddings=img_embeddings,
+                    text_embeddings=x,
+                    vision_indices=vision_indices,
+                )
 
         collected_layer_outputs = {} if target_layer_ids is not None else None
 
@@ -306,12 +317,48 @@ class MuseGlimmerCausalLM(CausalLM):
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         index = ops.min(row_lengths)
 
+        # Embed the prompt once with the vision features. Every pass over a
+        # prompt position reuses these embeddings. A plain text embedding
+        # of an image position would rewrite its cached key and value.
+        prompt_embeds = None
+        if img_embeddings is not None and vision_indices is not None:
+            prompt_embeds = self.backbone.interleave_embeddings(
+                image_embeddings=img_embeddings,
+                text_embeddings=self._embed_tokens(token_ids),
+                vision_indices=vision_indices,
+            )
+
+        def embed_window(tokens, start):
+            """Return the embeddings of a window of `tokens` at `start`.
+
+            Prompt positions keep the prefill embeddings. Other positions
+            use the text embedding of the generated token.
+            """
+            if prompt_embeds is None:
+                return None
+            batch_size, length = ops.shape(tokens)[0], ops.shape(tokens)[1]
+            is_prompt = ops.slice(
+                ops.cast(padding_mask, "bool"), [0, start], [batch_size, length]
+            )
+            window = ops.slice(
+                prompt_embeds,
+                [0, start, 0],
+                [batch_size, length, self.backbone.hidden_dim],
+            )
+            return ops.where(
+                is_prompt[:, :, None], window, self._embed_tokens(tokens)
+            )
+
         def next(prompt, cache, index):
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
-                prompt, cache, cache_update_index, padding_mask=None
+                prompt,
+                cache,
+                cache_update_index,
+                padding_mask=None,
+                inputs_embeds=embed_window(prompt, cache_update_index),
             )
             return (
                 ops.squeeze(logits, axis=1),
@@ -462,6 +509,7 @@ class MuseGlimmerCausalLM(CausalLM):
                     start,
                     padding_mask=None,
                     target_layer_ids=target_layer_ids,
+                    inputs_embeds=embed_window(prompt_slice, start),
                 )
                 start_offset = ops.cast(call_index - 1, "int32") - start
                 indices = ops.arange(k + 1, dtype="int32")

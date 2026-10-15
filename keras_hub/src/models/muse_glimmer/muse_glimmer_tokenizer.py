@@ -50,6 +50,19 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
             image embeddings by the preprocessor. Defaults to `200092`.
         video_token_id: int. Placeholder token id expanded to per-frame
             video embeddings by the preprocessor. Defaults to `200091`.
+        image_start_token: str. Token before the image tokens.
+            Defaults to `"<|image_start|>"`.
+        image_end_token: str. Token after the image tokens.
+            Defaults to `"<|image_end|>"`.
+        video_start_token: str. Token before the video tokens.
+            Defaults to `"<|vid_start|>"`.
+        video_end_token: str. Token after the video tokens.
+            Defaults to `"<|vid_end|>"`.
+        video_separator_token: str. Token between the temporal groups of a
+            video. Defaults to `"<|vid_frame_separator|>"`.
+
+    The five delimiter tokens follow the Hugging Face processor layout. The
+    vocabulary must contain all of them.
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -64,6 +77,11 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         eot_token="<|eot|>",
         image_token_id=200092,
         video_token_id=200091,
+        image_start_token="<|image_start|>",
+        image_end_token="<|image_end|>",
+        video_start_token="<|vid_start|>",
+        video_end_token="<|vid_end|>",
+        video_separator_token="<|vid_frame_separator|>",
         **kwargs,
     ):
         self._add_special_token(bos_token, "start_token")
@@ -74,6 +92,11 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
             self._add_special_token(eot_token, "end_token2")
         self.image_token_id = image_token_id
         self.video_token_id = video_token_id
+        self._add_special_token(image_start_token, "image_start_token")
+        self._add_special_token(image_end_token, "image_end_token")
+        self._add_special_token(video_start_token, "video_start_token")
+        self._add_special_token(video_end_token, "video_end_token")
+        self._add_special_token(video_separator_token, "video_separator_token")
 
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
@@ -149,6 +172,11 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
                 "eot_token": self.eot_token,
                 "image_token_id": self.image_token_id,
                 "video_token_id": self.video_token_id,
+                "image_start_token": self.image_start_token,
+                "image_end_token": self.image_end_token,
+                "video_start_token": self.video_start_token,
+                "video_end_token": self.video_end_token,
+                "video_separator_token": self.video_separator_token,
             }
         )
         return config

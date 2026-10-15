@@ -7,6 +7,9 @@ from keras.src.backend.common.symbolic_scope import in_symbolic_scope
 
 from keras_hub.src.api_export import keras_hub_export
 
+# Query rows per block in the traced masked attention.
+_QUERY_BLOCK_SIZE = 2048
+
 
 def _per_patch_coordinates(grid_thw, num_patches):
     """Compute the coordinates of each patch without a Python loop.
@@ -266,26 +269,48 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
     def _masked_full_attention(self, q, k, v, segment_id):
         """Every row attends over the whole sequence, masked to its own
         segment. `segment_id`: shape `(seq_len,)`.
-        """
-        q = ops.transpose(q, (1, 0, 2))
-        k = ops.transpose(k, (1, 0, 2))
-        v = ops.transpose(v, (1, 0, 2))
 
-        scores = ops.matmul(q, ops.transpose(k, (0, 2, 1)))
-        scores = ops.cast(scores * self._inv_scale, "float32")
-        same_segment = ops.equal(
-            ops.expand_dims(segment_id, 0), ops.expand_dims(segment_id, 1)
-        )
-        mask = ops.cast(same_segment, "float32")
-        # Mask `scores` before `exp()`, not just the final probabilities,
-        # to avoid overflow from out-of-segment raw scores.
-        scores = ops.where(same_segment, scores, -1e9)
-        row_max = ops.max(scores, axis=-1, keepdims=True)
-        exp_scores = ops.exp(scores - row_max) * mask
-        probs = exp_scores / ops.sum(exp_scores, axis=-1, keepdims=True)
-        probs = ops.cast(probs, v.dtype)
-        out = ops.matmul(probs, v)
-        return ops.transpose(out, (1, 0, 2))
+        With a static `seq_len` above one block, the query rows run in
+        blocks. The score tensor then has the shape `(num_heads, block,
+        seq_len)`, not `(num_heads, seq_len, seq_len)`.
+        """
+        block = _QUERY_BLOCK_SIZE
+        seq_len = q.shape[0]
+        k_t = ops.transpose(k, (1, 2, 0))
+        v_t = ops.transpose(v, (1, 0, 2))
+
+        def attend(q_rows, segment_rows):
+            scores = ops.matmul(ops.transpose(q_rows, (1, 0, 2)), k_t)
+            scores = ops.cast(scores * self._inv_scale, "float32")
+            same_segment = ops.equal(
+                ops.expand_dims(segment_rows, 1),
+                ops.expand_dims(segment_id, 0),
+            )
+            mask = ops.cast(same_segment, "float32")
+            # Mask `scores` before `exp()`, not just the final probabilities,
+            # to avoid overflow from out-of-segment raw scores.
+            scores = ops.where(same_segment, scores, -1e9)
+            row_max = ops.max(scores, axis=-1, keepdims=True)
+            exp_scores = ops.exp(scores - row_max) * mask
+            probs = exp_scores / ops.sum(exp_scores, axis=-1, keepdims=True)
+            probs = ops.cast(probs, v.dtype)
+            return ops.transpose(ops.matmul(probs, v_t), (1, 0, 2))
+
+        if not isinstance(seq_len, int) or seq_len <= block:
+            return attend(q, segment_id)
+
+        def attend_block(i, out):
+            # The last block starts at `seq_len - block`. It overlaps the
+            # previous block and writes the same values again.
+            start = ops.minimum(i * block, seq_len - block)
+            q_rows = ops.slice(q, (start, 0, 0), (block,) + tuple(q.shape[1:]))
+            segment_rows = ops.slice(segment_id, (start,), (block,))
+            return ops.slice_update(
+                out, (start, 0, 0), attend(q_rows, segment_rows)
+            )
+
+        num_blocks = -(-seq_len // block)
+        return ops.fori_loop(0, num_blocks, attend_block, ops.zeros_like(q))
 
     def _padded_segment_attention(
         self, q, k, v, padded_index, num_slots, slot_size

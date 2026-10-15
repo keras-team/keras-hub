@@ -85,6 +85,8 @@ class NoTensorflow(unittest.TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["<|end_of_text|>", "<|begin_of_text|>", "<|eot|>"]
         vocab += ["<|finetune_right_pad|>", "<|image|>"]
+        vocab += ["<|image_start|>", "<|image_end|>", "<|vid_start|>"]
+        vocab += ["<|vid_end|>", "<|vid_frame_separator|>"]
         vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
         tokenizer = keras_hub.models.MuseGlimmerTokenizer(
             vocabulary=vocab,
