@@ -17,6 +17,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
+from keras_hub.src.utils.preset_utils import _join_within
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
 
@@ -262,3 +263,13 @@ class PresetUtilsTest(TestCase):
     def test_custom_config_file(self):
         tokenizer = Tokenizer(config_file="clip_l_tokenizer.json")
         self.assertEqual(tokenizer.config_file, "clip_l_tokenizer.json")
+
+    def test_join_within(self):
+        base_dir = self.get_temp_dir()
+        self.assertEqual(
+            _join_within(base_dir, "assets", "tokenizer"),
+            os.path.abspath(os.path.join(base_dir, "assets", "tokenizer")),
+        )
+        for parts in [("..", "outside.json"), ("/abs/outside.json",)]:
+            with self.assertRaisesRegex(ValueError, "outside the preset"):
+                _join_within(base_dir, *parts)
