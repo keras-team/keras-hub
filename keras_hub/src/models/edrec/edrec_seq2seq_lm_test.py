@@ -52,9 +52,7 @@ class EdRecSeq2SeqLMTest(TestCase):
             "decoder_token_ids": ops.zeros((2, 10), dtype="int32"),
             "decoder_padding_mask": decoder_padding_mask,
         }
-        output = seq_2_seq_lm.generate(
-            inputs, max_length=10, stop_token_ids=None
-        )
+        output = seq_2_seq_lm.generate(inputs, stop_token_ids=None)
         if isinstance(output, dict):
             output = output["decoder_token_ids"]
         self.assertEqual(output.shape, (2, 10))
@@ -66,7 +64,7 @@ class EdRecSeq2SeqLMTest(TestCase):
             "encoder_token_ids": ops.ones((2, 5), dtype="int32"),
             "encoder_padding_mask": ops.ones((2, 5), dtype="int32"),
         }
-        seq_2_seq_lm.generate(inputs, max_length=10, stop_token_ids=None)
+        seq_2_seq_lm.generate(inputs, stop_token_ids=None)
 
     @pytest.mark.large
     def test_saved_model(self):
