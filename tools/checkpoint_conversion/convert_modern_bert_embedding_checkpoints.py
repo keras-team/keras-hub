@@ -85,8 +85,10 @@ DOCUMENTS = [
 ]
 
 # Parity thresholds. Embeddings are compared at a relative scale so that the
-# same thresholds work for normalized and unnormalized checkpoints.
-MAX_RELATIVE_DIFF = 1e-3
+# same thresholds work for normalized and unnormalized checkpoints. The
+# per-example cosine check catches a single diverging embedding, which the
+# mean difference alone could hide.
+MEAN_RELATIVE_DIFF = 1e-4
 MIN_COSINE_SIMILARITY = 0.99999
 
 
@@ -136,16 +138,19 @@ def validate_output(keras_embedder, st_model, query_prefix, document_prefix):
 
     print("\n Embedding parity ")
     st_embeddings = st_model.encode(texts, convert_to_numpy=True)
-    keras_embeddings = np.asarray(keras_embedder.encode_text(texts))
+    keras_embeddings = ops.convert_to_numpy(keras_embedder.encode_text(texts))
+    abs_diff = np.abs(st_embeddings - keras_embeddings)
     scale = np.abs(st_embeddings).max()
-    max_relative_diff = np.abs(st_embeddings - keras_embeddings).max() / scale
+    mean_relative_diff = abs_diff.mean() / scale
+    max_relative_diff = abs_diff.max() / scale
     cosine = np.diag(_cosine_similarity(keras_embeddings, st_embeddings))
     print(f"Embedding shape: {keras_embeddings.shape}")
+    print(f"Mean |diff| / max |value|: {mean_relative_diff:.2e}")
     print(f"Max |diff| / max |value|: {max_relative_diff:.2e}")
     print(f"Min cosine(KerasHub, sentence-transformers): {cosine.min():.7f}")
     print(f"Norms: {np.linalg.norm(keras_embeddings, axis=-1)}")
-    if max_relative_diff > MAX_RELATIVE_DIFF:
-        print(f"❌ Relative difference exceeds {MAX_RELATIVE_DIFF}")
+    if mean_relative_diff > MEAN_RELATIVE_DIFF:
+        print(f"❌ Mean relative difference exceeds {MEAN_RELATIVE_DIFF}")
         passed = False
     if cosine.min() < MIN_COSINE_SIMILARITY:
         print(f"❌ Cosine similarity below {MIN_COSINE_SIMILARITY}")
