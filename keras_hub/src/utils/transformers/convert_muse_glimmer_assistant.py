@@ -27,7 +27,8 @@ def convert_backbone_config(transformers_config):
         "sliding_window_size": transformers_config.get("sliding_window", 2048),
         "rope_max_wavelength": rope_theta,
         "rms_norm_eps": transformers_config.get("rms_norm_eps", 1e-5),
-        "layer_types": transformers_config.get("layer_types"),
+        "layer_types": transformers_config.get("layer_types")
+        or ["sliding_attention"] * transformers_config["num_hidden_layers"],
         "use_bidirectional_attention": True,
         "context_projection_layer_ids": transformers_config["target_layer_ids"],
         "use_external_embeddings": True,

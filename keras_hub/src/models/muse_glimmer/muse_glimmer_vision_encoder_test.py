@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import numpy as np
 from keras import ops
 
@@ -28,6 +29,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     _window_layout,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class MuseGlimmerVisionEncoderTest(TestCase):
@@ -243,6 +245,24 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         encoder.set_weights(self.encoder.get_weights())
         return encoder
 
+    def _traced(self, encoder):
+        """Return a function that runs `encoder` in a real trace."""
+        patch_dim = 2 * 3 * 2 * 2
+        backend = keras.config.backend()
+        if backend == "jax":
+            import jax
+
+            return jax.jit(lambda p, g: encoder(p, g))
+        if backend == "tensorflow":
+            return tf.function(
+                lambda p, g: encoder(p, g),
+                input_signature=[
+                    tf.TensorSpec([None, patch_dim], tf.float32),
+                    tf.TensorSpec([None, 3], tf.int32),
+                ],
+            )
+        self.skipTest("Only JAX and TensorFlow trace the encoder.")
+
     def test_traced_paths_match_eager_attention(self):
         # Eager calls batch exact-length segments. Traced calls use the
         # padded buffers when the caps are set, or one masked attention
@@ -250,6 +270,8 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         capped = self._capped_encoder(
             max_num_windows=16, max_num_frames=4, max_frame_size=64
         )
+        traced_masked = self._traced(self.encoder)
+        traced_capped = self._traced(capped)
         patch_dim = 2 * 3 * 2 * 2
         # An image with ragged windows, and a two-frame video.
         for grid in ([[1, 6, 10]], [[2, 4, 6]], [[1, 6, 10], [2, 4, 6]]):
@@ -259,13 +281,8 @@ class MuseGlimmerVisionEncoderTest(TestCase):
                 "float32"
             )
             eager_output = self.encoder(pixel_values, grid_thw)
-            with patch.object(
-                MuseGlimmerVisionEncoder,
-                "_eager_segment_groups",
-                return_value=None,
-            ):
-                masked_output = self.encoder(pixel_values, grid_thw)
-                capped_output = capped(pixel_values, grid_thw)
+            masked_output = traced_masked(pixel_values, grid_thw)
+            capped_output = traced_capped(pixel_values, grid_thw)
             self.assertAllClose(
                 masked_output, eager_output, atol=1e-5, rtol=1e-5
             )
@@ -290,19 +307,34 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             for t, h, w in grid_thw.tolist()
         )
         self.assertEqual(num_windows, expected_num_windows)
+        # Count the calls of the traced-path methods. They wrap the real
+        # methods, so the real code path still runs.
+        num_calls = {"masked": 0, "padded": 0}
+        masked_attention = MuseGlimmerVisionAttention._masked_full_attention
+        padded_attention = MuseGlimmerVisionAttention._padded_segment_attention
+
+        def counting_masked(attention, *args, **kwargs):
+            num_calls["masked"] += 1
+            return masked_attention(attention, *args, **kwargs)
+
+        def counting_padded(attention, *args, **kwargs):
+            num_calls["padded"] += 1
+            return padded_attention(attention, *args, **kwargs)
+
         with (
             patch.object(
                 MuseGlimmerVisionAttention,
                 "_masked_full_attention",
-                side_effect=AssertionError("The masked path must not run."),
+                counting_masked,
             ),
             patch.object(
                 MuseGlimmerVisionAttention,
                 "_padded_segment_attention",
-                side_effect=AssertionError("The padded path must not run."),
+                counting_padded,
             ),
         ):
             self.encoder(pixel_values, grid_thw)
+        self.assertEqual(num_calls, {"masked": 0, "padded": 0})
 
     def test_padding_caps_too_small_raise(self):
         patch_dim = 2 * 3 * 2 * 2
@@ -319,6 +351,28 @@ class MuseGlimmerVisionEncoderTest(TestCase):
     def test_frame_caps_must_be_set_together(self):
         with self.assertRaises(ValueError):
             MuseGlimmerVisionEncoder(**self.init_kwargs, max_num_frames=2)
+
+    def test_block_norms_use_fixed_epsilon(self):
+        # Hugging Face applies `layer_norm_eps` to `ln_pre` and `ln_post`
+        # only. The block norms use a fixed 1e-5.
+        encoder = MuseGlimmerVisionEncoder(
+            **dict(self.init_kwargs, layer_norm_eps=1e-2)
+        )
+        self.assertEqual(encoder.ln_pre.epsilon, 1e-2)
+        self.assertEqual(encoder.ln_post.epsilon, 1e-2)
+        for block in encoder.blocks:
+            self.assertEqual(block.layer_norm_eps, 1e-5)
+
+    def test_invalid_layer_types_raise(self):
+        for layer_types in (
+            ["window_attention"],
+            ["window_attention"] * 3,
+            ["window_attention", "sliding_attention"],
+        ):
+            with self.assertRaisesRegex(ValueError, "layer_types"):
+                MuseGlimmerVisionEncoder(
+                    **dict(self.init_kwargs, layer_types=layer_types)
+                )
 
     def test_serialization(self):
         self.run_serialization_test(self.encoder)

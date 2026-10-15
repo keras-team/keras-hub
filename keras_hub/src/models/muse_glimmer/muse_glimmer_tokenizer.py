@@ -77,6 +77,15 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
 
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
+    @property
+    def special_token_ids(self):
+        """The base special token ids plus the vision placeholder ids."""
+        ids = super().special_token_ids
+        for token_id in (self.image_token_id, self.video_token_id):
+            if token_id not in ids:
+                ids.append(token_id)
+        return ids
+
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
         super()._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
         self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
@@ -134,6 +143,9 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
         config = super().get_config()
         config.update(
             {
+                "bos_token": self.start_token,
+                "eos_token": self.end_token,
+                "pad_token": self.pad_token,
                 "eot_token": self.eot_token,
                 "image_token_id": self.image_token_id,
                 "video_token_id": self.video_token_id,

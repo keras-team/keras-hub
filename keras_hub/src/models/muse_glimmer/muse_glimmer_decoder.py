@@ -29,7 +29,7 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
     `modeling_muse_glimmer.py`, `MuseGlimmerTextDecoderLayer.forward`.
 
     The assistant/drafter configuration (see
-    `modeling_muse_glimmer_assistant.py`) differs in three ways, each
+    `modeling_muse_glimmer_assistant.py`) differs in four ways, each
     controlled by an opt-in flag that defaults to the main model's current
     behavior:
     - `use_bidirectional_attention=True` replaces the causal mask with a
@@ -248,8 +248,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
             ):
                 # DFlash context caching (see `MuseGlimmerTextAttention`'s
                 # docstring): keys span the persisted context-cache buffer
-                # (one real target position per cycle, growing over the
-                # whole generation) followed by this cycle's fresh block.
+                # (the prompt context and each rewritten verify window)
+                # followed by this cycle's fresh block.
                 # Built directly over absolute positions rather than
                 # `compute_causal_mask`/`_mask_sliding_window`, which both
                 # assume a single contiguous, non-persisted key range.
@@ -281,8 +281,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                     mask_2d = position_diff <= self.sliding_window_size
                 else:
                     mask_2d = ops.ones_like(position_diff, dtype="bool")
-                # Cache slots below `valid_context_len` hold real,
-                # already-written context; later slots are unwritten.
+                # Cache slots below `valid_context_len` hold real context.
+                # The mask hides the slots at or after that length.
                 context_valid = context_positions < valid_context_len
                 block_valid = ops.ones((q_len,), dtype="bool")
                 key_valid = ops.concatenate(
@@ -294,9 +294,8 @@ class MuseGlimmerTextDecoder(keras.layers.Layer):
                     (batch_size, q_len, max_length + q_len),
                 )
                 if decoder_padding_mask is not None:
-                    # `decoder_padding_mask` covers the block only — the
-                    # cached context slot is always a single real,
-                    # unpadded position written by the caller.
+                    # `decoder_padding_mask` covers the block only. The
+                    # caller writes real, unpadded context positions.
                     padding = ops.cast(decoder_padding_mask, "bool")
                     context_padding = ops.ones(
                         (batch_size, max_length), dtype="bool"

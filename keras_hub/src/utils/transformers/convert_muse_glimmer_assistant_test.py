@@ -65,6 +65,15 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         self.assertFalse(keras_config["use_sandwich_norm"])
         self.assertFalse(keras_config["use_centered_norm"])
 
+    def test_convert_backbone_config_default_layer_types(self):
+        config = self._config()
+        del config["layer_types"]
+        config["num_hidden_layers"] = 5
+        keras_config = convert_muse_glimmer_assistant.convert_backbone_config(
+            config
+        )
+        self.assertEqual(keras_config["layer_types"], ["sliding_attention"] * 5)
+
     def test_convert_backbone_config_rope_theta_fallback(self):
         config = self._config()
         del config["rope_parameters"]
@@ -102,7 +111,6 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         )
         self.assertFalse(np.allclose(ported_scale, np.zeros_like(ported_scale)))
 
-    @pytest.mark.large
     def test_convert_weights_matches_hf(self):
         torch = pytest.importorskip("torch")
         transformers = pytest.importorskip("transformers")
@@ -139,11 +147,16 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         )
         torch.manual_seed(0)
         hf_model = transformers.MuseGlimmerAssistantModel(hf_config).eval()
-        # Random norm weights make the norm mapping observable.
+        # Random weights make every mapping observable. The default
+        # initializer is so small that attention barely changes the output.
         with torch.no_grad():
             for param in hf_model.parameters():
                 if param.ndim == 1:
-                    param.copy_(torch.randn_like(param) * 0.5)
+                    param.copy_(1.0 + 0.3 * torch.randn_like(param))
+                else:
+                    param.copy_(
+                        torch.randn_like(param) / param.shape[-1] ** 0.5
+                    )
 
         config_dict = hf_config.to_dict()
         backbone = MuseGlimmerBackbone(
@@ -182,5 +195,5 @@ class TestMuseGlimmerAssistantConverter(TestCase):
             }
         )
         self.assertAllClose(
-            hf_output, keras.ops.convert_to_numpy(keras_output), atol=1e-3
+            hf_output, keras.ops.convert_to_numpy(keras_output), atol=1e-4
         )

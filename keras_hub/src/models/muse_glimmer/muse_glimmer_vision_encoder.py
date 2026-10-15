@@ -692,7 +692,8 @@ class MuseGlimmerVisionEncoder(keras.Model):
         pos_emb_height: int. Learned position-embedding grid height.
         pos_emb_width: int. Learned position-embedding grid width.
         rope_theta: float. Axial RoPE base wavelength. Defaults to `10000.0`.
-        layer_norm_eps: float. Epsilon for all LayerNorms. Defaults to
+        layer_norm_eps: float. Epsilon for `ln_pre` and `ln_post`. The
+            block norms always use `1e-5`, like Hugging Face. Defaults to
             `1e-5`.
         layer_types: list of str or `None`. Per-layer `"window_attention"`
             or `"full_attention"`. Defaults to every 4th layer (and the
@@ -759,6 +760,15 @@ class MuseGlimmerVisionEncoder(keras.Model):
                 else "window_attention"
                 for i in range(num_layers)
             ]
+        elif len(layer_types) != num_layers or any(
+            layer_type not in ("full_attention", "window_attention")
+            for layer_type in layer_types
+        ):
+            raise ValueError(
+                "`layer_types` must have one entry per layer, each "
+                '`"full_attention"` or `"window_attention"`. Received '
+                f"`layer_types={layer_types}` for `num_layers={num_layers}`."
+            )
         self.layer_types = layer_types
         self.out_hidden_size = out_hidden_size or (hidden_size * merge_size**2)
         self.max_num_windows = max_num_windows
@@ -796,7 +806,7 @@ class MuseGlimmerVisionEncoder(keras.Model):
                 hidden_size,
                 num_heads,
                 intermediate_size,
-                layer_norm_eps=layer_norm_eps,
+                layer_norm_eps=1e-5,
                 dtype=self.dtype_policy,
                 name=f"layers_{i}",
             )
@@ -814,6 +824,8 @@ class MuseGlimmerVisionEncoder(keras.Model):
             self.patch_embedder.build((None, patch_dim))
         if not self.ln_pre.built:
             self.ln_pre.build((None, self.hidden_size))
+        if not self.rotary_pos_emb.built:
+            self.rotary_pos_emb.build(None)
         for layer in self.blocks:
             if not layer.built:
                 layer.build((None, self.hidden_size))

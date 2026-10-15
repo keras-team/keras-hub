@@ -241,6 +241,75 @@ class MuseGlimmerBackboneTest(TestCase, parameterized.TestCase):
         with self.assertRaisesRegex(ValueError, "projector_hidden_dim"):
             MuseGlimmerBackbone(**init_kwargs)
 
+    def test_invalid_layer_types_raise(self):
+        for layer_types in (
+            ["full", "sliding_attention"],
+            ["sliding_attention"],
+            ["sliding_attention"] * 3,
+        ):
+            with self.assertRaisesRegex(ValueError, "layer_types"):
+                MuseGlimmerBackbone(
+                    **dict(self.text_init_kwargs, layer_types=layer_types)
+                )
+
+    def test_query_heads_must_be_multiple_of_key_value_heads(self):
+        init_kwargs = dict(self.text_init_kwargs, num_key_value_heads=3)
+        with self.assertRaisesRegex(ValueError, "num_key_value_heads"):
+            MuseGlimmerBackbone(**init_kwargs)
+
+    def test_assistant_full_attention_layer_uses_rope(self):
+        assistant = MuseGlimmerBackbone(
+            **dict(
+                self.assistant_base_kwargs,
+                layer_types=["sliding_attention", "full_attention"],
+                use_bidirectional_attention=True,
+                context_projection_layer_ids=[0, 1],
+                use_external_embeddings=True,
+            )
+        )
+        target = MuseGlimmerBackbone(
+            **dict(
+                self.text_init_kwargs,
+                layer_types=["sliding_attention", "full_attention"],
+            )
+        )
+        self.assertTrue(
+            assistant.transformer_layers[1]._self_attention_layer.use_rope
+        )
+        self.assertFalse(
+            target.transformer_layers[1]._self_attention_layer.use_rope
+        )
+
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_quantize(self, backbone_type):
+        # `run_quantization_test` never calls `Model.quantize`, which
+        # raises on any unbuilt layer.
+        if backbone_type == "text_and_vision":
+            backbone = MuseGlimmerBackbone(**self.init_kwargs)
+            backbone(self.input_data)
+        else:
+            backbone = MuseGlimmerBackbone(**self.text_init_kwargs)
+        backbone.quantize("int8")
+
+    def test_quantized_config_round_trip(self):
+        backbone = MuseGlimmerBackbone(**self.init_kwargs)
+        backbone(self.input_data)
+        backbone.quantize("int8")
+        revived = MuseGlimmerBackbone.from_config(backbone.get_config())
+        revived.set_weights(backbone.get_weights())
+        self.assertAllClose(
+            revived(self.input_data), backbone(self.input_data), atol=1e-5
+        )
+
+    def test_dtype_reaches_vision_encoder_from_config(self):
+        config = MuseGlimmerBackbone(**self.init_kwargs).get_config()
+        config["dtype"] = "bfloat16"
+        revived = MuseGlimmerBackbone.from_config(config)
+        self.assertEqual(revived.dtype_policy.name, "bfloat16")
+        self.assertEqual(revived.vision_encoder.dtype_policy.name, "bfloat16")
+
     def test_enable_qk_scale_and_gate_false_flag(self):
         init_kwargs = dict(
             self.assistant_base_kwargs, enable_qk_scale_and_gate=False

@@ -188,9 +188,8 @@ class MuseGlimmerVideoConverter(VideoConverter):
             self.interpolation,
             self.antialias,
         )
-        # `VideoConverter` does not define `_expand_non_channel_dims` or
-        # `_convert_types`. The composed `self.image_converter` defines
-        # them and shares the same `data_format`.
+        # `VideoConverter` does not define `_convert_types`. The composed
+        # `self.image_converter` defines it.
         video = _normalize(
             video,
             self.image_converter,

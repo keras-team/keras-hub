@@ -1,8 +1,9 @@
+import gc
+import weakref
 from unittest.mock import patch
 
 import keras
 import numpy as np
-import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -283,10 +284,8 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         self.assertAllEqual(
             output["padding_mask"], reference_output["padding_mask"]
         )
-        # Assistant wiring must not leak into the model's state afterward.
-        self.assertIsNone(getattr(self.causal_lm, "_assistant_model", None))
         # A greedy target keeps greedy acceptance.
-        speculative_sampler = self.causal_lm._assisted_generate_cache[1]
+        speculative_sampler = self.causal_lm._assisted_generate_cache[2]
         self.assertIsNone(speculative_sampler.base_sampler)
 
     def test_generate_with_assistant_rejects_short_max_length(self):
@@ -296,12 +295,81 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             [" airplane at airport"], sequence_length=4
         )
         self.causal_lm.preprocessor = None
+        sampler = self.causal_lm.sampler
+        generate_function = self.causal_lm.generate_function
         with self.assertRaisesRegex(ValueError, "at least 6"):
             self.causal_lm.generate(
                 prompt_ids, stop_token_ids=None, assistant_model=assistant
             )
         # The failed call must restore the plain sampler.
-        self.assertIsNone(getattr(self.causal_lm, "_assistant_model", None))
+        self.assertIs(self.causal_lm.sampler, sampler)
+        self.assertIs(self.causal_lm.generate_function, generate_function)
+
+    def test_generate_with_invalid_assistant_raises(self):
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+
+        def generate(assistant):
+            self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
+
+        with self.assertRaisesRegex(ValueError, "block_size"):
+            generate(self._make_assistant(block_size=1))
+        no_mask_token = self._make_assistant(block_size=3)
+        no_mask_token.mask_token_id = None
+        with self.assertRaisesRegex(ValueError, "mask_token_id"):
+            generate(no_mask_token)
+        vocabulary_size = self.backbone.vocabulary_size
+        out_of_range = self._make_assistant(block_size=3)
+        out_of_range.mask_token_id = vocabulary_size
+        with self.assertRaisesRegex(ValueError, "mask_token_id"):
+            generate(out_of_range)
+        bad_layer_ids = self._make_assistant(block_size=3)
+        bad_layer_ids.backbone.context_projection_layer_ids = [1, 7]
+        with self.assertRaisesRegex(ValueError, "context_projection_layer_ids"):
+            generate(bad_layer_ids)
+        wrong_hidden_dim = self._make_assistant(block_size=3)
+        wrong_hidden_dim.backbone.hidden_dim = 16
+        with self.assertRaisesRegex(ValueError, "hidden_dim"):
+            generate(wrong_hidden_dim)
+
+    def test_target_layer_ids_match_layer_outputs(self):
+        # Id `j` is the output of decoder layer `j`. The last layer gives
+        # the final-norm output, like HF `output_hidden_states=[ids]`.
+        backbone = self.causal_lm.backbone
+        token_ids = self.input_data["token_ids"]
+        padding_mask = self.input_data["padding_mask"]
+        last_layer = backbone.num_layers - 1
+        for layer_id in range(backbone.num_layers):
+            if layer_id == last_layer:
+                output = backbone.output
+            else:
+                output = backbone.get_layer(f"transformer_layer_{layer_id}")
+                output = output.output
+            expected = keras.Model(backbone.input, output)(self.input_data)
+            _, _, target_hidden_states = self.causal_lm._build_cache(
+                token_ids, padding_mask, target_layer_ids=[layer_id]
+            )
+            self.assertAllClose(
+                target_hidden_states, expected, atol=1e-5, rtol=1e-5
+            )
+
+    def test_generate_with_beam_and_contrastive_samplers(self):
+        for sampler in ("beam", "contrastive"):
+            self.causal_lm.compile(sampler=sampler)
+            output = self.causal_lm.generate(" airplane at airport")
+            self.assertTrue(" airplane at airport" in output)
+
+    def test_text_only_predict_evaluate_fit_on_vision_model(self):
+        model = MuseGlimmerCausalLM(**self.multimodal_init_kwargs)
+        prompts = [" airplane at airport"] * 2
+        outputs = model.predict(prompts, batch_size=2, verbose=0)
+        self.assertEqual(outputs.shape[0], 2)
+        model.evaluate(x=prompts, batch_size=2, verbose=0)
+        model.fit(x=prompts, batch_size=2, epochs=1, verbose=0)
 
     def test_generate_with_assistant_non_greedy(self):
         assistant = self._make_assistant(block_size=3)
@@ -315,7 +383,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             prompt_ids, stop_token_ids=None, assistant_model=assistant
         )
         # The target sampler drives stochastic acceptance.
-        speculative_sampler = self.causal_lm._assisted_generate_cache[1]
+        speculative_sampler = self.causal_lm._assisted_generate_cache[2]
         self.assertIs(speculative_sampler.base_sampler, target_sampler)
         self.assertIs(self.causal_lm.sampler, target_sampler)
         num_prompt_tokens = int(ops.sum(prompt_ids["padding_mask"]))
@@ -341,7 +409,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         self.causal_lm.generate(
             prompt_ids, stop_token_ids=None, assistant_model=assistant
         )
-        assisted_function = self.causal_lm._assisted_generate_cache[2]
+        assisted_function = self.causal_lm._assisted_generate_cache[3]
         # Count drafter calls. A compiled backend reuses its traced graph
         # and does not call the drafter from Python again.
         with patch.object(
@@ -351,7 +419,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
                 prompt_ids, stop_token_ids=None, assistant_model=assistant
             )
         self.assertIs(
-            self.causal_lm._assisted_generate_cache[2], assisted_function
+            self.causal_lm._assisted_generate_cache[3], assisted_function
         )
         if keras.config.backend() in ("jax", "tensorflow"):
             self.assertEqual(draft_mock.call_count, 0)
@@ -363,7 +431,64 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             prompt_ids, stop_token_ids=None, assistant_model=other_assistant
         )
         self.assertIsNot(
-            self.causal_lm._assisted_generate_cache[2], assisted_function
+            self.causal_lm._assisted_generate_cache[3], assisted_function
+        )
+
+    def test_assistant_is_garbage_collected(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        assistant_ref = weakref.ref(assistant)
+        del assistant
+        gc.collect()
+        self.assertIsNone(assistant_ref())
+        # A plain call after the assisted call keeps working.
+        self.causal_lm.generate(prompt_ids, stop_token_ids=None)
+
+    def test_run_eagerly_gives_new_assisted_function(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        assisted_function = self.causal_lm._assisted_generate_cache[3]
+
+        self.causal_lm.compile(sampler="greedy", run_eagerly=True)
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertIsNot(
+            self.causal_lm._assisted_generate_cache[3], assisted_function
+        )
+
+    def test_quantized_assistant_gives_new_assisted_function(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        assisted_function = self.causal_lm._assisted_generate_cache[3]
+
+        assistant.quantize("int8")
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertIsNot(
+            self.causal_lm._assisted_generate_cache[3], assisted_function
         )
 
     def test_generate_with_assistant_does_not_track_assistant(self):
@@ -512,7 +637,6 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         # Read the static shape. A traced tensor is out of scope here.
         self.assertEqual(seed_context.shape[1], seq_len)
 
-    @pytest.mark.large
     @parameterized.named_parameters(
         ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
     )

@@ -1,10 +1,6 @@
-import itertools
-from functools import partial
-from types import SimpleNamespace
+import weakref
 
-import keras
 from keras import ops
-from keras import tree
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
@@ -109,10 +105,11 @@ class MuseGlimmerCausalLM(CausalLM):
         Args:
             target_layer_ids: optional list of int. When given, an extra
                 4th return value is produced: the concatenation of this
-                pass's hidden states at each of these layer indices (`0`
-                is the embedding output, `i` for `i >= 1` is the output of
-                decoder layer `i - 1`), matching the `target_layer_ids`
-                indexing convention of the DFlash assistant/drafter's
+                pass's hidden states at each of these layer indices. Index
+                `j` is the output of decoder layer `j`, and the last layer
+                gives the final-norm output. The indexing matches the
+                Hugging Face `output_hidden_states=target_layer_ids` call
+                that feeds the DFlash assistant's
                 `context_hidden_states` input. Used only by
                 `generate_step()`'s speculative-decoding path when an
                 `assistant_model` is attached; `None` (the default) keeps
@@ -128,9 +125,7 @@ class MuseGlimmerCausalLM(CausalLM):
                 vision_indices=vision_indices,
             )
 
-        collected_layer_outputs = (
-            {0: x} if target_layer_ids is not None else None
-        )
+        collected_layer_outputs = {} if target_layer_ids is not None else None
 
         next_cache = []
         for i in range(self.backbone.num_layers):
@@ -143,7 +138,7 @@ class MuseGlimmerCausalLM(CausalLM):
             )
             next_cache.append(layer_cache)
             if collected_layer_outputs is not None:
-                collected_layer_outputs[i + 1] = x
+                collected_layer_outputs[i] = x
         next_cache = ops.stack(next_cache, axis=1)
 
         hidden_states = x = self.backbone.layer_norm(x)
@@ -151,6 +146,12 @@ class MuseGlimmerCausalLM(CausalLM):
         logits = self._apply_logit_softcap(logits)
 
         if target_layer_ids is not None:
+            # Same indexing as Hugging Face `output_hidden_states=[ids]`:
+            # id `j` is the output of decoder layer `j`, and the last
+            # layer's entry is the final-norm output.
+            collected_layer_outputs[self.backbone.num_layers - 1] = (
+                hidden_states
+            )
             target_hidden_states = ops.concatenate(
                 [collected_layer_outputs[idx] for idx in target_layer_ids],
                 axis=-1,
@@ -259,20 +260,20 @@ class MuseGlimmerCausalLM(CausalLM):
         )
         return self._apply_logit_softcap(logits), assistant_cache
 
-    def generate_step(self, inputs, stop_token_ids=None, assistant_model=None):
+    def generate_step(self, inputs, stop_token_ids=None):
         """Run one compiled generation pass.
+
+        `generate()` attaches the assistant as `_assistant_model` for the
+        duration of one call. When it is set, the pass uses DFlash
+        speculative decoding.
 
         Args:
             inputs: dict. The preprocessed generation inputs.
             stop_token_ids: optional tuple of int. Token ids that end
                 generation.
-            assistant_model: optional
-                `keras_hub.models.MuseGlimmerAssistantCausalLM`. When set,
-                the pass uses DFlash speculative decoding. `generate()`
-                binds this argument. The model never stores the
-                assistant on `self`.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+        assistant_model = getattr(self, "_assistant_model", None)
 
         pixel_values = inputs.get("pixel_values", None)
         image_grid_thw = inputs.get("image_grid_thw", None)
@@ -321,7 +322,6 @@ class MuseGlimmerCausalLM(CausalLM):
         draft_next = None
         draft_cache = None
         verify_next = None
-        sampler_model = self
 
         # DFlash block-diffusion speculative decoding. The assistant drafts
         # the whole candidate block in one forward pass. `SpeculativeSampler`
@@ -478,19 +478,14 @@ class MuseGlimmerCausalLM(CausalLM):
                 )
                 return logits, packed_window, updated_cache
 
-            # The sampler loop reads variables through `model`. Expose the
-            # assistant variables without tracking the assistant on `self`.
-            sampler_model = SimpleNamespace(
-                trainable_variables=(
-                    self.trainable_variables
-                    + assistant_model.trainable_variables
-                ),
-                non_trainable_variables=(
-                    self.non_trainable_variables
-                    + assistant_model.non_trainable_variables
-                ),
-            )
-
+        # Only `SpeculativeSampler` accepts the draft arguments.
+        speculative_kwargs = {}
+        if assistant_model is not None:
+            speculative_kwargs = {
+                "draft_next": draft_next,
+                "draft_cache": draft_cache,
+                "verify_next": verify_next,
+            }
         token_ids = self.sampler(
             next=next,
             prompt=token_ids,
@@ -499,10 +494,8 @@ class MuseGlimmerCausalLM(CausalLM):
             mask=padding_mask,
             stop_token_ids=stop_token_ids,
             hidden_states=hidden_states,
-            model=sampler_model,
-            draft_next=draft_next,
-            draft_cache=draft_cache,
-            verify_next=verify_next,
+            model=self,
+            **speculative_kwargs,
         )
 
         if stop_token_ids is not None:
@@ -517,105 +510,39 @@ class MuseGlimmerCausalLM(CausalLM):
             padding_mask = ops.ones_like(token_ids, dtype="bool")
         return {"token_ids": token_ids, "padding_mask": padding_mask}
 
-    def _make_assisted_generate_function(self, assistant_model, sampler):
-        """Build the generate function for one assistant.
-
-        The function passes the assistant to `generate_step()` as an
-        argument. On JAX, the assistant variables go into the compiled
-        function as explicit state, like the target variables.
-        """
-        generate_step = partial(
-            self.generate_step, assistant_model=assistant_model
-        )
-        backend = keras.config.backend()
-        if backend == "torch":
-            import torch
-
-            def torch_generate_function(inputs, stop_token_ids=None):
-                with torch.no_grad():
-                    return generate_step(inputs, stop_token_ids)
-
-            return torch_generate_function
-        if backend == "tensorflow" and not self.run_eagerly:
-            import tensorflow as tf
-
-            jit_compile = getattr(self, "jit_compile", True)
-            return tf.function(generate_step, jit_compile=jit_compile)
-        if backend == "jax" and not self.run_eagerly:
-            import jax
-
-            def get_model_variables():
-                return (
-                    self.trainable_variables
-                    + self.non_trainable_variables
-                    + assistant_model.trainable_variables
-                    + assistant_model.non_trainable_variables
-                )
-
-            @partial(jax.jit, static_argnames=["stop_token_ids"])
-            def compiled_generate_function(inputs, stop_token_ids, state):
-                sampler_values, model_values = state
-                mapping = itertools.chain(
-                    zip(sampler.variables, sampler_values),
-                    zip(get_model_variables(), model_values),
-                )
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = generate_step(inputs, stop_token_ids)
-                sampler_values = []
-                for v in sampler.variables:
-                    new_v = scope.get_current_value(v)
-                    sampler_values.append(new_v if new_v is not None else v)
-                return outputs, sampler_values
-
-            def jax_generate_function(inputs, stop_token_ids=None):
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
-                state = (
-                    [v.value for v in sampler.variables],
-                    [v.value for v in get_model_variables()],
-                )
-                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                outputs, sampler_values = compiled_generate_function(
-                    inputs, stop_token_ids, state
-                )
-                for ref_v, v in zip(sampler.variables, sampler_values):
-                    ref_v.assign(v)
-                return outputs
-
-            return jax_generate_function
-        return generate_step
-
-    def _get_assisted_generate_function(self, assistant_model):
-        """Return a cached `(sampler, generate_function)` pair.
-
-        A greedy target keeps greedy acceptance. Any other compiled
-        sampler becomes the `base_sampler`, so acceptance and the bonus
-        token use stochastic rejection sampling. The cache key holds the
-        assistant identity, the block size, and the base sampler. The
-        cached function keeps both objects alive, so their ids stay
-        unique.
-        """
-        base_sampler = self.sampler
-        if isinstance(base_sampler, GreedySampler):
-            base_sampler = None
-        key = (
-            id(assistant_model),
-            assistant_model.block_size,
-            id(base_sampler),
-        )
-        cached = getattr(self, "_assisted_generate_cache", None)
-        if cached is not None and cached[0] == key:
-            return cached[1], cached[2]
-        sampler = SpeculativeSampler(
-            num_speculative_tokens=assistant_model.block_size - 1,
-            base_sampler=base_sampler,
-            temperature=getattr(self.sampler, "temperature", 1.0),
-        )
-        generate_function = self._make_assisted_generate_function(
-            assistant_model, sampler
-        )
-        self._assisted_generate_cache = (key, sampler, generate_function)
-        return sampler, generate_function
+    def _validate_assistant(self, assistant_model):
+        """Raise a `ValueError` for an assistant this model cannot use."""
+        block_size = assistant_model.block_size
+        if block_size < 2:
+            raise ValueError(
+                "The assistant `block_size` must be at least 2. Received "
+                f"`block_size={block_size}`."
+            )
+        mask_token_id = assistant_model.mask_token_id
+        vocabulary_size = self.backbone.vocabulary_size
+        if not isinstance(mask_token_id, int) or not (
+            0 <= mask_token_id < vocabulary_size
+        ):
+            raise ValueError(
+                "The assistant `mask_token_id` must be an integer in "
+                f"`[0, {vocabulary_size})`. Received "
+                f"`mask_token_id={mask_token_id}`."
+            )
+        layer_ids = assistant_model.backbone.context_projection_layer_ids
+        num_layers = self.backbone.num_layers
+        if any(not 0 <= layer_id < num_layers for layer_id in layer_ids):
+            raise ValueError(
+                "Each assistant `context_projection_layer_ids` entry must be "
+                f"in `[0, {num_layers})`. Received "
+                f"`context_projection_layer_ids={list(layer_ids)}`."
+            )
+        assistant_hidden_dim = assistant_model.backbone.hidden_dim
+        if assistant_hidden_dim != self.backbone.hidden_dim:
+            raise ValueError(
+                "The assistant `hidden_dim` must equal the `hidden_dim` of "
+                f"the target model ({self.backbone.hidden_dim}). Received "
+                f"`hidden_dim={assistant_hidden_dim}`."
+            )
 
     def _post_quantize(self, mode, **kwargs):
         super()._post_quantize(mode, **kwargs)
@@ -643,10 +570,10 @@ class MuseGlimmerCausalLM(CausalLM):
                 `num_speculative_tokens`. A greedy compiled `sampler`
                 gives greedy acceptance. Any other compiled `sampler`
                 becomes the `base_sampler` for rejection sampling. The
-                model caches the compiled function per assistant and does
-                not track the assistant weights. Defaults to `None`
-                (plain autoregressive decoding with the compiled
-                `sampler`).
+                model tracks the assistant only during the call. It keeps
+                a weak reference to the assistant and the compiled
+                function for the next call. Defaults to `None` (plain
+                autoregressive decoding with the compiled `sampler`).
         """
         if assistant_model is None:
             return super().generate(
@@ -656,20 +583,70 @@ class MuseGlimmerCausalLM(CausalLM):
                 strip_prompt=strip_prompt,
             )
 
-        speculative_sampler, generate_function = (
-            self._get_assisted_generate_function(assistant_model)
-        )
+        self._validate_assistant(assistant_model)
         original_sampler = self.sampler
         original_generate_function = self.generate_function
-        self.sampler = speculative_sampler
-        self.generate_function = generate_function
+
+        # A greedy target keeps greedy acceptance. Any other sampler is the
+        # `base_sampler` of the speculative sampler. The key holds every
+        # input that the compiled function depends on. The cached sampler
+        # keeps `base_sampler` alive, so its id stays unique.
+        base_sampler = original_sampler
+        if isinstance(base_sampler, GreedySampler):
+            base_sampler = None
+        assistant_variables = (
+            assistant_model.trainable_variables
+            + assistant_model.non_trainable_variables
+        )
+        key = (
+            assistant_model.block_size,
+            id(base_sampler),
+            self.run_eagerly,
+            getattr(self, "jit_compile", None),
+            tuple(id(variable) for variable in assistant_variables),
+        )
+        cached = getattr(self, "_assisted_generate_cache", None)
+        if (
+            cached is not None
+            and cached[0] == key
+            and (cached[1]() is assistant_model)
+        ):
+            self.sampler = cached[2]
+            self.generate_function = cached[3]
+        else:
+            self.sampler = SpeculativeSampler(
+                num_speculative_tokens=assistant_model.block_size - 1,
+                base_sampler=base_sampler,
+                temperature=getattr(original_sampler, "temperature", 1.0),
+            )
+            self.generate_function = None  # Compile a new function.
+
+        # Tracking the assistant puts its variables into the compiled
+        # function state, like the target variables.
+        assistant_was_tracked = self._tracker.is_in_store(
+            "layers", assistant_model
+        )
+        self._assistant_model = assistant_model
         try:
-            return super().generate(
+            outputs = super().generate(
                 inputs,
                 max_length=max_length,
                 stop_token_ids=stop_token_ids,
                 strip_prompt=strip_prompt,
             )
+            # A weak reference does not keep the assistant alive.
+            self._assisted_generate_cache = (
+                key,
+                weakref.ref(assistant_model),
+                self.sampler,
+                self.generate_function,
+            )
+            return outputs
         finally:
+            # Delete the attribute. Assigning `None` would keep the
+            # dependency in the TF checkpoint of the target.
+            del self._assistant_model
+            if not assistant_was_tracked:
+                self._tracker.untrack(assistant_model)
             self.sampler = original_sampler
             self.generate_function = original_generate_function

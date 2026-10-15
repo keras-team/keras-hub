@@ -2,9 +2,14 @@ from unittest.mock import patch
 
 import keras
 import numpy as np
+import pytest
+from absl.testing import parameterized
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm import (
+    MuseGlimmerCausalLM,
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_muse_glimmer
@@ -37,7 +42,7 @@ class FakeLoader:
         self.ported_keys.append(hf_weight_key)
 
 
-class TestMuseGlimmerConverter(TestCase):
+class TestMuseGlimmerConverter(TestCase, parameterized.TestCase):
     def _text_config(self):
         return {
             "vocab_size": 100,
@@ -120,7 +125,7 @@ class TestMuseGlimmerConverter(TestCase):
     def test_convert_backbone_config_text_only(self):
         transformers_config = {"text_config": self._text_config()}
         keras_config = convert_muse_glimmer.convert_backbone_config(
-            transformers_config
+            transformers_config, MuseGlimmerBackbone
         )
         self.assertEqual(keras_config["vocabulary_size"], 100)
         self.assertEqual(keras_config["hidden_dim"], 32)
@@ -145,7 +150,7 @@ class TestMuseGlimmerConverter(TestCase):
         del text_config["rope_theta"]
         text_config["rope_parameters"] = {"rope_theta": 250000.0}
         keras_config = convert_muse_glimmer.convert_backbone_config(
-            {"text_config": text_config}
+            {"text_config": text_config}, MuseGlimmerBackbone
         )
         self.assertEqual(keras_config["rope_max_wavelength"], 250000.0)
 
@@ -233,7 +238,7 @@ class TestMuseGlimmerConverter(TestCase):
             "projector_hidden_act": "gelu",
         }
         keras_config = convert_muse_glimmer.convert_backbone_config(
-            transformers_config
+            transformers_config, MuseGlimmerBackbone
         )
         self.assertIn("vision_encoder", keras_config)
         self.assertEqual(keras_config["projector_hidden_dim"], 24)
@@ -244,7 +249,7 @@ class TestMuseGlimmerConverter(TestCase):
     def test_convert_weights_text_only(self):
         transformers_config = {"text_config": self._text_config()}
         keras_config = convert_muse_glimmer.convert_backbone_config(
-            transformers_config
+            transformers_config, MuseGlimmerBackbone
         )
         backbone = MuseGlimmerBackbone(**keras_config)
         loader = FakeLoader()
@@ -259,6 +264,259 @@ class TestMuseGlimmerConverter(TestCase):
             backbone.transformer_layers[0]._input_layernorm.scale
         )
         self.assertFalse(np.allclose(ported_scale, np.zeros_like(ported_scale)))
+
+    def test_convert_weights_tied_embeddings(self):
+        transformers_config = {
+            "text_config": self._text_config(),
+            "tie_word_embeddings": True,
+        }
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            transformers_config, MuseGlimmerBackbone
+        )
+        backbone = MuseGlimmerBackbone(**keras_config)
+        loader = FakeLoader()
+        convert_muse_glimmer.convert_weights(
+            backbone, loader, transformers_config
+        )
+        self.assertNotIn("lm_head.weight", loader.ported_keys)
+        embedding_key = "model.language_model.embed_tokens.weight"
+        self.assertEqual(loader.ported_keys.count(embedding_key), 2)
+
+    def test_convert_weights_untied_embeddings_read_lm_head(self):
+        transformers_config = {"text_config": self._text_config()}
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            transformers_config, MuseGlimmerBackbone
+        )
+        backbone = MuseGlimmerBackbone(**keras_config)
+        loader = FakeLoader()
+        convert_muse_glimmer.convert_weights(
+            backbone, loader, transformers_config
+        )
+        self.assertIn("lm_head.weight", loader.ported_keys)
+
+    def _vision_config(self):
+        return {
+            "hidden_size": 16,
+            "num_attention_heads": 2,
+            "intermediate_size": 32,
+            "num_hidden_layers": 4,
+            "patch_size": 4,
+            "patch_temporal": 2,
+            "merge_size": 2,
+            "pos_emb_height": 8,
+            "pos_emb_width": 8,
+            "layer_norm_eps": 1e-5,
+            "rope_parameters": {"rope_theta": 10000.0},
+        }
+
+    def test_unsupported_options_raise(self):
+        text_overrides = [
+            (
+                "rope_type",
+                {
+                    "rope_parameters": {
+                        "rope_type": "linear",
+                        "rope_theta": 500000.0,
+                        "factor": 2.0,
+                    }
+                },
+            ),
+            ("attention_bias", {"attention_bias": True}),
+            ("hidden_activation", {"hidden_activation": "gelu"}),
+            (
+                "layer_rope_theta",
+                {"layer_rope_theta": [500000.0, 500000.0, 500000.0, 500000.0]},
+            ),
+        ]
+        for option, override in text_overrides:
+            text_config = {**self._text_config(), **override}
+            with self.assertRaisesRegex(ValueError, option):
+                convert_muse_glimmer.convert_backbone_config(
+                    {"text_config": text_config}, MuseGlimmerBackbone
+                )
+        with self.assertRaisesRegex(ValueError, "hidden_act"):
+            convert_muse_glimmer.convert_backbone_config(
+                {
+                    "text_config": self._text_config(),
+                    "vision_config": {
+                        **self._vision_config(),
+                        "hidden_act": "gelu_pytorch_tanh",
+                    },
+                    "projector_hidden_size": 24,
+                },
+                MuseGlimmerBackbone,
+            )
+
+    def test_layer_rope_theta_values_only_switch_rope(self):
+        # Hugging Face uses one rotary embedding for all layers. A nonzero
+        # `layer_rope_theta` entry only turns RoPE on.
+        text_config = {
+            **self._text_config(),
+            "layer_rope_theta": [1.0, 2.0, 3.0, 0],
+        }
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            {"text_config": text_config}, MuseGlimmerBackbone
+        )
+        self.assertEqual(keras_config["rope_max_wavelength"], 500000.0)
+
+    def test_default_layer_rope_theta_must_match_layer_types(self):
+        # The Hugging Face default NoPE layers are every 4th layer from
+        # the end. They do not follow custom `layer_types`.
+        text_config = {
+            **self._text_config(),
+            "layer_types": ["full_attention"] * 4,
+        }
+        with self.assertRaisesRegex(ValueError, "layer_rope_theta"):
+            convert_muse_glimmer.convert_backbone_config(
+                {"text_config": text_config}, MuseGlimmerBackbone
+            )
+
+    def test_vision_layer_norm_eps_is_not_an_error(self):
+        # The block norms use a fixed 1e-5, like Hugging Face. The config
+        # value applies to `ln_pre` and `ln_post`.
+        vision_config = {**self._vision_config(), "layer_norm_eps": 1e-2}
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            {
+                "text_config": self._text_config(),
+                "vision_config": vision_config,
+                "projector_hidden_size": 24,
+            },
+            MuseGlimmerBackbone,
+        )
+        encoder = keras_config["vision_encoder"]
+        self.assertEqual(encoder.ln_pre.epsilon, 1e-2)
+        self.assertEqual(encoder.blocks[0].layer_norm_eps, 1e-5)
+
+    @parameterized.named_parameters(
+        ("baseline", {}, {}),
+        # `layer_norm_eps` applies to `ln_pre` and `ln_post` only. The block
+        # norms use a fixed 1e-5.
+        ("vision_layer_norm_eps", {}, {"layer_norm_eps": 1e-2}),
+    )
+    def test_logits_match_hf(self, text_overrides, vision_overrides):
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        if not hasattr(transformers, "MuseGlimmerForConditionalGeneration"):
+            self.skipTest("transformers has no MuseGlimmer model.")
+
+        class HFLoader:
+            """Reads weights from the HF state dict."""
+
+            def __init__(self, state_dict):
+                self.state_dict = state_dict
+
+            def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+                tensor = self.state_dict[hf_weight_key].numpy()
+                if hook_fn:
+                    tensor = hook_fn(tensor, list(keras_variable.shape))
+                keras_variable.assign(tensor)
+
+        text_config = {
+            "vocab_size": 50,
+            "hidden_size": 32,
+            "intermediate_size": 48,
+            "num_hidden_layers": 4,
+            "num_attention_heads": 4,
+            "num_key_value_heads": 2,
+            "head_dim": 8,
+            "sliding_window": 3,
+            "final_logit_softcapping": 1.0,
+            "output_multiplier": 0.5,
+            "rope_parameters": {"rope_type": "default", "rope_theta": 1e4},
+            **text_overrides,
+        }
+        vision_config = {
+            "hidden_size": 16,
+            "num_attention_heads": 2,
+            "intermediate_size": 32,
+            "num_hidden_layers": 2,
+            "patch_size": 2,
+            "patch_temporal": 2,
+            "merge_size": 2,
+            "pos_emb_height": 4,
+            "pos_emb_width": 4,
+            **vision_overrides,
+        }
+        hf_config = transformers.MuseGlimmerConfig(
+            text_config=text_config,
+            vision_config=vision_config,
+            image_token_id=40,
+            out_hidden_size=64,
+            projector_hidden_size=16,
+        )
+        torch.manual_seed(0)
+        hf_model = transformers.MuseGlimmerForConditionalGeneration(
+            hf_config
+        ).eval()
+        # Random weights make every mapping observable. The default
+        # initializer is so small that most layers barely change the output.
+        with torch.no_grad():
+            for param in hf_model.parameters():
+                if param.ndim == 1:
+                    param.copy_(1.0 + 0.3 * torch.randn_like(param))
+                else:
+                    param.copy_(
+                        torch.randn_like(param) / param.shape[-1] ** 0.5
+                    )
+
+        config_dict = hf_config.to_dict()
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            config_dict, MuseGlimmerBackbone
+        )
+        backbone = MuseGlimmerBackbone(**keras_config)
+        state_dict = {
+            key: value.detach().cpu()
+            for key, value in hf_model.state_dict().items()
+        }
+        convert_muse_glimmer.convert_weights(
+            backbone, HFLoader(state_dict), config_dict
+        )
+        causal_lm = MuseGlimmerCausalLM(backbone=backbone, preprocessor=None)
+
+        rng = np.random.default_rng(0)
+        # One image of 16 patches gives 4 merged vision tokens.
+        token_ids = rng.integers(0, 30, size=(1, 10)).astype("int32")
+        token_ids[0, 2:6] = 40
+        patch_dim = 2 * 3 * 2**2
+        pixel_values = rng.standard_normal((16, patch_dim)).astype("float32")
+        grid_thw = np.array([[1, 4, 4]], dtype="int32")
+        with torch.no_grad():
+            hf_logits = hf_model(
+                input_ids=torch.from_numpy(token_ids).long(),
+                attention_mask=torch.ones(1, 10, dtype=torch.long),
+                pixel_values=torch.from_numpy(pixel_values),
+                image_grid_thw=torch.from_numpy(grid_thw).long(),
+            ).logits.numpy()
+        keras_logits = causal_lm(
+            {
+                "token_ids": token_ids,
+                "padding_mask": np.ones((1, 10), "int32"),
+                "pixel_values": pixel_values[None],
+                "image_grid_thw": grid_thw[None],
+                "vision_indices": np.array([[2, 3, 4, 5]], dtype="int32"),
+            }
+        )
+        self.assertAllClose(
+            keras.ops.convert_to_numpy(keras_logits),
+            hf_logits,
+            atol=1e-4,
+            rtol=1e-4,
+        )
+
+    def test_dtype_reaches_vision_encoder(self):
+        keras_config = convert_muse_glimmer.convert_backbone_config(
+            {
+                "text_config": self._text_config(),
+                "vision_config": self._vision_config(),
+                "projector_hidden_size": 24,
+            },
+            MuseGlimmerBackbone,
+            dtype="bfloat16",
+        )
+        self.assertEqual(keras_config["dtype"], "bfloat16")
+        self.assertEqual(
+            keras_config["vision_encoder"].dtype_policy.name, "bfloat16"
+        )
 
     def test_convert_weights_with_vision(self):
         transformers_config = {
@@ -280,7 +538,7 @@ class TestMuseGlimmerConverter(TestCase):
             "projector_hidden_act": "gelu",
         }
         keras_config = convert_muse_glimmer.convert_backbone_config(
-            transformers_config
+            transformers_config, MuseGlimmerBackbone
         )
         backbone = MuseGlimmerBackbone(**keras_config)
         loader = FakeLoader()

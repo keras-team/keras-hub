@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
@@ -141,12 +142,29 @@ class MuseGlimmerImageConverterTest(TestCase):
                 np.ones((2, 2, 8, 8, 3), dtype="float32")
             ).map(converter)
 
+    def test_smart_resize_matches_hf_float64_grids(self):
+        # Each case is `(height, width, max_tokens)` with the HF target.
+        # A float32 computation picks another grid for these sizes.
+        cases = {
+            (1472, 2783, 4096): (1288, 2464),
+            (654, 5886, 4096): (588, 5376),
+            (961, 144, 144): (840, 112),
+        }
+        for (height, width, max_tokens), expected in cases.items():
+            self.assertEqual(
+                _smart_resize(height, width, 14, 2, max_tokens),
+                expected,
+                msg=f"size {(height, width)}",
+            )
+
     def test_channels_first_matches_channels_last(self):
         kwargs = {
             "patch_size": 2,
             "merge_size": 1,
             "max_image_tokens": 16,
             "interpolation": "nearest",
+            "scale": [2 / 255.0] * 3,
+            "offset": [-1.0] * 3,
         }
         image = np.random.uniform(0, 255, (8, 8, 3)).astype("float32")
         expected = MuseGlimmerImageConverter(**kwargs)(image)
@@ -155,6 +173,42 @@ class MuseGlimmerImageConverterTest(TestCase):
         )(image.transpose(2, 0, 1))
         self.assertAllClose(output["patches"], expected["patches"])
         self.assertAllClose(output["grid_thw"], expected["grid_thw"])
+
+    def test_scalar_scale_with_channels_first(self):
+        kwargs = {
+            "patch_size": 2,
+            "merge_size": 1,
+            "max_image_tokens": 16,
+            "interpolation": "nearest",
+            "scale": 1 / 255.0,
+        }
+        image = np.random.uniform(0, 255, (8, 8, 3)).astype("float32")
+        expected = MuseGlimmerImageConverter(**kwargs)(image)
+        output = MuseGlimmerImageConverter(
+            data_format="channels_first", **kwargs
+        )(image.transpose(2, 0, 1))
+        self.assertAllClose(output["patches"], expected["patches"])
+
+    def test_global_channels_first_format(self):
+        kwargs = {
+            "patch_size": 2,
+            "merge_size": 1,
+            "max_image_tokens": 16,
+            "interpolation": "bilinear",
+            "scale": [2 / 255.0] * 3,
+            "offset": [-1.0] * 3,
+        }
+        image = np.random.uniform(0, 255, (8, 12, 3)).astype("float32")
+        expected = MuseGlimmerImageConverter(**kwargs)(image)
+        previous_format = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_first")
+        try:
+            output = MuseGlimmerImageConverter(**kwargs)(
+                image.transpose(2, 0, 1)
+            )
+        finally:
+            keras.config.set_image_data_format(previous_format)
+        self.assertAllClose(output["patches"], expected["patches"], atol=1e-5)
 
     def test_serialization(self):
         converter = MuseGlimmerImageConverter(patch_size=14)

@@ -39,6 +39,29 @@ class MuseGlimmerTokenizerTest(TestCase):
         tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
         self.assertEqual(tokenizer.end_token2_id, self.vocab["<|eot|>"])
 
+    def test_special_token_ids_include_vision_placeholders(self):
+        tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
+        ids = tokenizer.special_token_ids
+        self.assertIn(tokenizer.image_token_id, ids)
+        self.assertIn(tokenizer.video_token_id, ids)
+        self.assertIn(tokenizer.start_token_id, ids)
+
+    def test_get_config_round_trips_non_default_tokens(self):
+        vocab = dict(self.vocab)
+        for token in ("<|start|>", "<|message|>", "<|eom|>"):
+            vocab[token] = len(vocab)
+        tokenizer = MuseGlimmerTokenizer(
+            vocabulary=vocab,
+            merges=self.merges,
+            bos_token="<|start|>",
+            eos_token="<|message|>",
+            pad_token="<|eom|>",
+        )
+        revived = MuseGlimmerTokenizer.from_config(tokenizer.get_config())
+        self.assertEqual(revived.start_token, "<|start|>")
+        self.assertEqual(revived.end_token, "<|message|>")
+        self.assertEqual(revived.pad_token, "<|eom|>")
+
     def test_pre_tokenizer_matches_checkpoint_split(self):
         tokenizer = MuseGlimmerTokenizer(**self.init_kwargs)
         tokenizer._maybe_initialized_tokenizers()

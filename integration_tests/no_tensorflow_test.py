@@ -71,6 +71,51 @@ class NoTensorflow(unittest.TestCase):
         self.assertIn("pixel_values", outputs)
         self.assertIn("pixel_position_ids", outputs)
 
+    def test_muse_glimmer_generate_preprocess_works(self):
+        # The `generate()` path of the MuseGlimmer preprocessor builds the
+        # vision inputs without TensorFlow.
+        if keras.config.backend() == "openvino":
+            self.skipTest("Image ops are not supported on OpenVINO.")
+        merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab += ["<|end_of_text|>", "<|begin_of_text|>", "<|eot|>"]
+        vocab += ["<|finetune_right_pad|>", "<|image|>"]
+        vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
+        tokenizer = keras_hub.models.MuseGlimmerTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            image_token_id=vocab["<|image|>"],
+            unsplittable_tokens=["<|image|>"],
+        )
+        converter = keras_hub.layers.MuseGlimmerImageConverter(
+            patch_size=4,
+            patch_temporal=2,
+            merge_size=2,
+            max_image_tokens=64,
+            scale=1 / 255.0,
+        )
+        preprocessor = keras_hub.models.MuseGlimmerCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=converter,
+            sequence_length=8,
+        )
+        outputs = preprocessor.generate_preprocess(
+            {
+                "prompts": "<|image|> airplane",
+                "images": np.ones((8, 8, 3), dtype="float32"),
+            }
+        )
+        # An 8x8 image gives 4 patches of `2 * 3 * 4**2` values and one
+        # merged vision token.
+        self.assertEqual(np.shape(outputs["pixel_values"]), (4, 96))
+        self.assertEqual(np.shape(outputs["image_grid_thw"]), (1, 3))
+        self.assertEqual(np.shape(outputs["vision_indices"]), (1,))
+
     def test_seq_2_seq_generate_preprocess_works(self):
         # Without `decoder_text`, the empty decoder prompt is built in Python.
         merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]

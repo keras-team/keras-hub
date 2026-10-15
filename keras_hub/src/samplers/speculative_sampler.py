@@ -24,8 +24,7 @@ class SpeculativeSampler(Sampler):
          draft model itself to be autoregressive: a one-shot block drafter
          (e.g. a bidirectional block-diffusion assistant) can compute all K
          candidates in a single forward pass on its first call and simply
-         return the i-th cached candidate on each subsequent call — see
-         `MuseGlimmerCausalLM.generate_step` for this pattern.
+         return the i-th cached candidate on each subsequent call.
       2. **Verify phase**: The target model scores all K+1 positions in one
          parallel forward pass via `verify_next`.
       3. **Accept phase**: Tokens are accepted/rejected via rejection sampling
@@ -34,19 +33,17 @@ class SpeculativeSampler(Sampler):
     When `base_sampler` is provided, stochastic rejection sampling is used.
     Otherwise greedy acceptance is used.
 
-    `draft_cache` is opaque to this sampler beyond its outer tuple shape:
-    a 2-tuple `(draft_state, target_cache)`, 3-tuple
-    `(draft_state, target_cache, anchor_pos)`, or 4-tuple
-    `(draft_state, target_cache, anchor_pos, drafter_cache)` gets its
-    `target_cache` slot refreshed with the verified target cache after
-    each cycle, and for the 3-/4-tuple forms `anchor_pos` is advanced to
-    the new cycle-start position. The optional 4th element is fully
-    opaque — carried through unchanged, never inspected or modified here
-    — for a drafter that maintains its own persistent cache across
-    cycles (e.g. `MuseGlimmerCausalLM.generate_step`'s DFlash context
-    cache); `draft_next` alone is responsible for reading and updating
-    it. Any model's `draft_next`/`verify_next` closures may use this
-    convention; the sampler contains no per-model logic.
+    `draft_cache` is a tuple. The sampler reads its layout from the length:
+    a 2-tuple `(draft_state, target_cache)`, a 3-tuple
+    `(draft_state, target_cache, anchor_pos)`, or a 4-tuple
+    `(draft_state, target_cache, anchor_pos, drafter_cache)`.
+    After each cycle the sampler replaces `target_cache` with the verified
+    target cache. For the 3-tuple and 4-tuple forms, it also sets `anchor_pos`
+    to the new cycle-start position. It replaces `draft_state` with the entry
+    at position `min_accepted` of the hidden states that `verify_next`
+    returns, if `verify_next` returns hidden states. The sampler never reads
+    or changes `drafter_cache`. The `draft_next` and `verify_next` closures
+    of any model can use this layout.
 
     Args:
         num_speculative_tokens: int. Number of draft tokens per outer

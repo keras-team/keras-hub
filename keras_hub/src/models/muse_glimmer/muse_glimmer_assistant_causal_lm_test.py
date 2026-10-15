@@ -1,7 +1,6 @@
 import os
 
 import numpy as np
-import pytest
 from keras import ops
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
@@ -143,7 +142,6 @@ class MuseGlimmerAssistantCausalLMTest(TestCase):
     def test_serialization(self):
         self.run_serialization_test(self.model)
 
-    @pytest.mark.large
     def test_model_saving(self):
         import keras
 

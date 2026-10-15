@@ -33,23 +33,25 @@ def _rank(x):
 def _split_media(media, item_rank, media_name):
     """Split raw media input into a list of single items.
 
-    `media` is one item of rank `item_rank`, a batch of rank
-    `item_rank + 1`, or a list of items. Items in a list can have
-    different sizes.
+    `media` is one item of rank `item_rank`, a stack of items with one or
+    two leading axes (`(num_items, ...)` or `(batch, num_items, ...)`), or
+    a nested list of these. Items can have different sizes. The order is
+    row-major, so the i-th item goes to the i-th placeholder.
     """
     if isinstance(media, (list, tuple)):
-        if not media:
-            return []
-        if all(_rank(item) == item_rank for item in media):
-            return list(media)
+        items = []
+        for child in media:
+            items.extend(_split_media(child, item_rank, media_name))
+        return items
     rank = _rank(media)
     if rank == item_rank:
         return [media]
-    if rank == item_rank + 1:
-        return [media[i] for i in range(len(media))]
+    if rank in (item_rank + 1, item_rank + 2):
+        media = convert_to_numpy(media)
+        return list(media.reshape((-1,) + media.shape[-item_rank:]))
     raise ValueError(
         f"`{media_name}` must be one {media_name[:-1]} of rank {item_rank}, "
-        f"a batch of rank {item_rank + 1}, or a list of "
+        f"a stack of rank {item_rank + 1} or {item_rank + 2}, or a list of "
         f"{media_name}. Received rank {rank}."
     )
 
@@ -428,14 +430,67 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             indices.append(np.stack(rows).astype("int32"))
         return indices
 
+    def _patch_dim(self):
+        """Return the flat patch length of the media converter, or `None`."""
+        converter = (
+            self.image_converter
+            if self.image_converter is not None
+            else self.video_converter
+        )
+        if converter is None:
+            return None
+        return converter.patch_temporal * 3 * converter.patch_size**2
+
+    def _add_empty_media_python(self, outputs):
+        """Add empty vision inputs to text-only training outputs.
+
+        A vision-enabled backbone needs these inputs, also without media.
+        """
+        patch_dim = self._patch_dim()
+        if patch_dim is None:
+            return outputs
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(outputs)
+        batch_shape = tuple(x["token_ids"].shape[:-1])
+        x = {
+            **x,
+            "pixel_values": np.zeros(batch_shape + (0, patch_dim), "float32"),
+            "image_grid_thw": np.zeros(batch_shape + (0, 3), "int32"),
+            "vision_indices": np.zeros(batch_shape + (0,), "int32"),
+        }
+        return convert_preprocessing_outputs_python(
+            keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        )
+
+    def _add_empty_media_tf(self, outputs):
+        """TensorFlow version of `_add_empty_media_python`."""
+        patch_dim = self._patch_dim()
+        if patch_dim is None:
+            return outputs
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(outputs)
+        batch_shape = tf.shape(x["token_ids"])[:-1]
+
+        def empty(trailing_shape, dtype):
+            shape = tf.concat([batch_shape, trailing_shape], axis=0)
+            return tf.zeros(shape, dtype)
+
+        x = {
+            **x,
+            "pixel_values": empty([0, patch_dim], "float32"),
+            "image_grid_thw": empty([0, 3], "int32"),
+            "vision_indices": empty([0], "int32"),
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         prompts, media_entries = self._split_inputs(x)
         if not media_entries:
-            return super()._call_python(
-                prompts,
-                y=y,
-                sample_weight=sample_weight,
-                sequence_length=sequence_length,
+            return self._add_empty_media_python(
+                super()._call_python(
+                    prompts,
+                    y=y,
+                    sample_weight=sample_weight,
+                    sequence_length=sequence_length,
+                )
             )
         sequence_length = sequence_length or self.sequence_length
         # Pad with one extra token to account for the truncation below.
@@ -478,6 +533,22 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         index into the flattened `token_ids`.
         """
         prompts, media_entries = self._split_inputs(x)
+        # An entry with no items counts as a missing entry.
+        split_entries = []
+        for (
+            media_name,
+            media,
+            converter,
+            item_rank,
+            token_id,
+            fps,
+        ) in media_entries:
+            items = _split_media(media, item_rank, media_name)
+            if items:
+                split_entries.append(
+                    (media_name, items, converter, item_rank, token_id, fps)
+                )
+        media_entries = split_entries
         if not media_entries:
             return super()._generate_preprocess_python(
                 prompts, sequence_length=sequence_length
@@ -518,6 +589,7 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, padding_mask = self.packer(
             expanded_sequences if batched else expanded_sequences[0],
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
 
@@ -672,11 +744,13 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
         prompts, media_entries = self._split_inputs(x)
         if not media_entries:
-            return super()._call_python(
-                prompts,
-                y=y,
-                sample_weight=sample_weight,
-                sequence_length=sequence_length,
+            return self._add_empty_media_tf(
+                super()._call_python(
+                    prompts,
+                    y=y,
+                    sample_weight=sample_weight,
+                    sequence_length=sequence_length,
+                )
             )
         sequence_length = sequence_length or self.sequence_length
         # Pad with one extra token to account for the truncation below.

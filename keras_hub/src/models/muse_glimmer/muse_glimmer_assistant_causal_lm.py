@@ -36,8 +36,8 @@ class MuseGlimmerAssistantCausalLM(CausalLM):
             `use_bidirectional_attention=True`,
             `context_projection_layer_ids` set to the target model's
             `target_layer_ids`, `use_external_embeddings=True`,
-            `enable_qk_scale_and_gate=False`, and
-            `use_sandwich_norm=False`.
+            `enable_qk_scale_and_gate=False`, `qk_norm_with_scale=True`,
+            `use_sandwich_norm=False`, and `use_centered_norm=False`.
         block_size: int. Number of denoised-block positions drafted per
             forward pass. Defaults to `16`.
         mask_token_id: int. Token id used to fill the noise/mask positions

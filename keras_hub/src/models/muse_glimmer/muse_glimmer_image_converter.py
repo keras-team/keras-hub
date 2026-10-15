@@ -21,22 +21,20 @@ def _smart_resize(height, width, patch_size, merge_size, max_tokens):
     error, the first grid in `list(set(...))` order wins.
     """
     resize_patch_size = patch_size * merge_size
-    ideal_grid = np.array(
-        [height / resize_patch_size, width / resize_patch_size],
-        dtype="float32",
-    )
-    ratio = ideal_grid[1] / ideal_grid[0]
-    limited_height = np.sqrt(np.float32(max_tokens) / ratio)
-    if ideal_grid[0] * ideal_grid[1] > max_tokens:
-        ideal_grid = np.stack([limited_height, limited_height * ratio])
+    # Use Python floats (float64), like the HF `smart_resize`. A float32
+    # grid picks a different patch grid for a few sizes.
+    ideal_height = height / resize_patch_size
+    ideal_width = width / resize_patch_size
+    ratio = ideal_width / ideal_height
+    if ideal_height * ideal_width > max_tokens:
+        ideal_height = (max_tokens / ratio) ** 0.5
+        ideal_width = ideal_height * ratio
 
-    lower_grid = np.floor(ideal_grid).astype("int64")
-    upper_grid = np.ceil(ideal_grid).astype("int64")
     candidates = list(
         set(
             itertools.product(
-                (int(lower_grid[0]), int(upper_grid[0])),
-                (int(lower_grid[1]), int(upper_grid[1])),
+                (int(np.floor(ideal_height)), int(np.ceil(ideal_height))),
+                (int(np.floor(ideal_width)), int(np.ceil(ideal_width))),
             )
         )
     )
@@ -45,16 +43,11 @@ def _smart_resize(height, width, patch_size, merge_size, max_tokens):
         for grid_h, grid_w in candidates
         if grid_h >= 1 and grid_w >= 1 and grid_h * grid_w <= max_tokens
     ]
-    if candidates:
-        selected = min(
-            candidates,
-            key=lambda grid: abs(grid[0] / grid[1] - height / width),
-        )
-    else:
-        selected = (
-            max(int(np.round(ideal_grid[0])), 1),
-            max(int(np.round(ideal_grid[1])), 1),
-        )
+    if not candidates:
+        candidates = [(max(round(ideal_height), 1), max(round(ideal_width), 1))]
+    selected = min(
+        candidates, key=lambda grid: abs(grid[0] / grid[1] - height / width)
+    )
     return selected[0] * resize_patch_size, selected[1] * resize_patch_size
 
 
@@ -118,6 +111,7 @@ def _resize(images, orig_h, orig_w, target_h, target_w, method, antialias):
         size=(target_h, target_w),
         interpolation=method,
         antialias=antialias,
+        data_format="channels_last",
     )
     return images[0] if rank == 3 else images
 
@@ -176,17 +170,15 @@ def _resize_pixels_tf(
 
 
 def _normalize(images, image_converter, scale, offset, compute_dtype):
-    """Apply `scale` and `offset` with the helpers of `image_converter`."""
+    """Apply `scale` and `offset` to channels-last `images`."""
     if scale is not None:
-        scale = image_converter._expand_non_channel_dims(scale, images)
         images, scale = image_converter._convert_types(
-            images, scale, compute_dtype
+            images, np.asarray(scale), compute_dtype
         )
         images = images * scale
     if offset is not None:
-        offset = image_converter._expand_non_channel_dims(offset, images)
         images, offset = image_converter._convert_types(
-            images, offset, images.dtype
+            images, np.asarray(offset), images.dtype
         )
         images = images + offset
     return images

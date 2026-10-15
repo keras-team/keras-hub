@@ -26,7 +26,6 @@ class MuseGlimmerLayersTest(TestCase):
             ),
             expected_output_shape=(2, 3, 8),
             expected_num_trainable_weights=0,
-            run_precision_checks=False,
         )
 
     def test_scaled_rms_norm_basics(self):
@@ -38,7 +37,6 @@ class MuseGlimmerLayersTest(TestCase):
             ),
             expected_output_shape=(2, 3, 8),
             expected_num_trainable_weights=1,
-            run_precision_checks=False,
         )
 
     def test_centered_rms_norm_basics(self):
@@ -56,7 +54,6 @@ class MuseGlimmerLayersTest(TestCase):
                 ops.mean(ops.square(input_data), axis=-1, keepdims=True) + 1e-6
             ),
             expected_num_trainable_weights=1,
-            run_precision_checks=False,
         )
 
     def test_context_projection(self):
@@ -85,7 +82,6 @@ class MuseGlimmerLayersTest(TestCase):
             },
             expected_output_shape=(2, 6, 4),
             expected_output_data=expected,
-            run_precision_checks=False,
         )
 
     def test_interleave_embeddings_2d_indices_with_batch_offset(self):

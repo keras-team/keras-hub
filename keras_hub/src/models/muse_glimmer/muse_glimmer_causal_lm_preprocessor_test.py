@@ -13,6 +13,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
     MuseGlimmerVideoConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class MuseGlimmerCausalLMPreprocessorTest(TestCase):
@@ -467,6 +468,110 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase):
                     ],
                 }
             )
+
+    def test_text_only_call_adds_empty_vision_inputs(self):
+        x, y, sample_weight = self.image_preprocessor([" airplane", " airport"])
+        # An 8x8 image patch has `2 * 3 * 4**2 = 96` values.
+        self.assertEqual(tuple(x["pixel_values"].shape), (2, 0, 96))
+        self.assertEqual(tuple(x["image_grid_thw"].shape), (2, 0, 3))
+        self.assertEqual(tuple(x["vision_indices"].shape), (2, 0))
+        self.assertEqual(tuple(x["token_ids"].shape), (2, 8))
+        x, _, _ = self.image_preprocessor(" airplane")
+        self.assertEqual(tuple(x["pixel_values"].shape), (0, 96))
+        self.assertEqual(tuple(x["vision_indices"].shape), (0,))
+
+    def test_text_only_call_without_converter_has_no_vision_inputs(self):
+        x, _, _ = self.preprocessor([" airplane", " airport"])
+        self.assertEqual(sorted(x.keys()), ["padding_mask", "token_ids"])
+
+    def test_text_only_tf_data_adds_empty_vision_inputs(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        dataset = tf.data.Dataset.from_tensor_slices(
+            [" airplane", " airport"]
+        ).batch(2)
+        x, _, _ = next(iter(dataset.map(self.image_preprocessor)))
+        self.assertEqual(tuple(x["pixel_values"].shape), (2, 0, 96))
+        self.assertEqual(tuple(x["image_grid_thw"].shape), (2, 0, 3))
+        self.assertEqual(tuple(x["vision_indices"].shape), (2, 0))
+
+    def test_generate_preprocess_respects_add_start_token_false(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        preprocessor = MuseGlimmerCausalLMPreprocessor(
+            tokenizer=self.image_tokenizer,
+            sequence_length=8,
+            image_converter=self.image_converter,
+            add_start_token=False,
+        )
+        inputs = {"prompts": ["<|image|> airplane"], "images": [self.image]}
+        python_ids = preprocessor.generate_preprocess(inputs)["token_ids"]
+        self.assertNotEqual(
+            int(np.asarray(python_ids)[0, 0]),
+            self.image_tokenizer.start_token_id,
+        )
+        dataset = tf.data.Dataset.from_tensors(
+            {"prompts": ["<|image|> airplane"], "images": [self.image]}
+        )
+        tf_ids = next(iter(dataset.map(preprocessor.generate_preprocess)))[
+            "token_ids"
+        ]
+        self.assertAllEqual(python_ids, tf_ids)
+
+    def test_generate_preprocess_with_per_row_media_stack(self):
+        rows = np.stack([np.stack([self.image, self.image])] * 3)
+        output = self.image_preprocessor.generate_preprocess(
+            {
+                "prompts": ["<|image|><|image|> a"] * 3,
+                "images": rows,
+            }
+        )
+        self.assertEqual(output["image_grid_thw"].shape, (6, 3))
+        self.assertEqual(output["vision_indices"].shape, (6,))
+
+    def test_generate_preprocess_with_nested_media_lists(self):
+        wide_image = np.random.randint(0, 255, (8, 16, 3)).astype("float32")
+        output = self.image_preprocessor.generate_preprocess(
+            {
+                "prompts": ["<|image|><|image|> a", "<|image|> b"],
+                "images": [[self.image, wide_image], [self.image]],
+            }
+        )
+        self.assertAllEqual(
+            output["image_grid_thw"], [[1, 2, 2], [1, 2, 4], [1, 2, 2]]
+        )
+
+    def test_generate_preprocess_with_empty_media_is_text_only(self):
+        expected = self.image_preprocessor.generate_preprocess([" airplane"])
+        for images in (
+            [],
+            np.zeros((0, 8, 8, 3), "float32"),
+            np.zeros((1, 0, 8, 8, 3), "float32"),
+        ):
+            output = self.image_preprocessor.generate_preprocess(
+                {"prompts": [" airplane"], "images": images}
+            )
+            self.assertAllEqual(output["token_ids"], expected["token_ids"])
+            self.assertNotIn("pixel_values", output)
+
+    def test_media_with_wrong_rank_raises(self):
+        with self.assertRaisesRegex(ValueError, "Received rank"):
+            self.image_preprocessor.generate_preprocess(
+                {"prompts": ["<|image|> a"], "images": np.zeros((8, 8))}
+            )
+
+    def test_generate_postprocess_drops_vision_placeholders(self):
+        text_ids = self.image_tokenizer(" airplane at airport")
+        text_ids = [int(token_id) for token_id in np.asarray(text_ids)]
+        num_image_tokens = 4
+        token_ids = [self.image_token_id] * num_image_tokens + text_ids
+        outputs = {
+            "token_ids": np.array([token_ids], "int32"),
+            "padding_mask": np.ones((1, len(token_ids)), "bool"),
+        }
+        text = self.image_preprocessor.generate_postprocess(outputs)
+        self.assertNotIn("<|image|>", text[0])
+        self.assertEqual(text[0], " airplane at airport")
 
     def test_media_without_converter_raises(self):
         with self.assertRaisesRegex(ValueError, "no `video_converter`"):

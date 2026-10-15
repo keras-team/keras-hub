@@ -32,14 +32,13 @@ class MuseGlimmerRMSNorm(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        input_dtype = x.dtype
         x = ops.cast(x, "float32")
         mean_squared = ops.mean(ops.square(x), axis=-1, keepdims=True)
         mean_squared = mean_squared + self.eps
         x = x * ops.power(mean_squared, -0.5)
         if self.with_scale:
             x = x * ops.cast(self.scale, "float32")
-        return ops.cast(x, input_dtype)
+        return ops.cast(x, self.compute_dtype)
 
     def get_config(self):
         config = super().get_config()
@@ -71,12 +70,11 @@ class MuseGlimmerCenteredRMSNorm(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        input_dtype = x.dtype
         x = ops.cast(x, "float32")
         mean_squared = ops.mean(ops.square(x), axis=-1, keepdims=True)
         x = x * ops.rsqrt(mean_squared + self.eps)
         x = x * (1.0 + ops.cast(self.scale, "float32"))
-        return ops.cast(x, input_dtype)
+        return ops.cast(x, self.compute_dtype)
 
     def get_config(self):
         config = super().get_config()
@@ -138,7 +136,7 @@ class MuseGlimmerInterleaveEmbeddings(keras.layers.Layer):
         self, image_embeddings, text_embeddings, vision_indices
     ):
         return keras.KerasTensor(
-            shape=text_embeddings.shape, dtype=text_embeddings.dtype
+            shape=text_embeddings.shape, dtype=self.compute_dtype
         )
 
     def get_config(self):

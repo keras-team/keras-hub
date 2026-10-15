@@ -41,10 +41,11 @@ class MuseGlimmerBackbone(Backbone):
 
     This class also supports the DFlash speculative-decoding assistant
     configuration (`meta-models/Muse-Glimmer-30B-assistant`, see
-    `modeling_muse_glimmer_assistant.py`). Four opt-in flags enable it.
+    `modeling_muse_glimmer_assistant.py`). Seven opt-in flags enable it.
     Each flag defaults to the main model behavior:
     `use_bidirectional_attention`, `context_projection_layer_ids`,
-    `use_external_embeddings`, and `enable_qk_scale_and_gate=False`.
+    `use_external_embeddings`, `enable_qk_scale_and_gate`,
+    `qk_norm_with_scale`, `use_sandwich_norm`, and `use_centered_norm`.
 
     The assistant configuration has no token embedding of its own. It
     consumes `noise_embeds` instead of `token_ids`. `noise_embeds` is a
@@ -81,6 +82,8 @@ class MuseGlimmerBackbone(Backbone):
         layer_types: list of str or `None`. Per-layer `"sliding_attention"`
             or `"full_attention"`. Defaults to full attention on every
             4th layer from the end. All other layers use sliding attention.
+            Full-attention layers use NoPE (no rotary embedding) in the
+            target text tower only. Assistant layers always use RoPE.
         vision_encoder: MuseGlimmerVisionEncoder or None. Use `None` for a
             text-only model.
         projector_hidden_dim: int or `None`. Intermediate/output dimension
@@ -198,6 +201,13 @@ class MuseGlimmerBackbone(Backbone):
                 "`projector_hidden_dim=None`. Set `projector_hidden_dim` to "
                 "an integer."
             )
+        if num_query_heads % num_key_value_heads != 0:
+            raise ValueError(
+                "`num_query_heads` must be a multiple of "
+                "`num_key_value_heads`. Received "
+                f"`num_query_heads={num_query_heads}` and "
+                f"`num_key_value_heads={num_key_value_heads}`."
+            )
         if layer_types is None:
             layer_types = [
                 "full_attention"
@@ -205,6 +215,15 @@ class MuseGlimmerBackbone(Backbone):
                 else "sliding_attention"
                 for i in range(num_layers)
             ]
+        elif len(layer_types) != num_layers or any(
+            layer_type not in ("full_attention", "sliding_attention")
+            for layer_type in layer_types
+        ):
+            raise ValueError(
+                "`layer_types` must have one entry per layer, each "
+                '`"full_attention"` or `"sliding_attention"`. Received '
+                f"`layer_types={layer_types}` for `num_layers={num_layers}`."
+            )
 
         # === Layers ===
         if not use_external_embeddings:
@@ -286,8 +305,12 @@ class MuseGlimmerBackbone(Backbone):
                 rms_norm_eps=rms_norm_eps,
                 post_norm_eps=post_norm_eps,
                 qk_scale_factor=qk_scale_factor,
-                # NoPE on full-attention layers; RoPE otherwise.
-                use_rope=not is_full_attention,
+                # The target model uses NoPE on full-attention layers. The
+                # assistant applies RoPE on every layer.
+                use_rope=(
+                    not is_full_attention
+                    or context_projection_layer_ids is not None
+                ),
                 rope_max_wavelength=rope_max_wavelength,
                 sliding_window_size=(
                     None if is_full_attention else sliding_window_size
@@ -499,11 +522,16 @@ class MuseGlimmerBackbone(Backbone):
     @classmethod
     def from_config(cls, config):
         config = dict(config)
-        config.update(
-            {
-                "vision_encoder": None
-                if config["vision_encoder"] is None
-                else keras.layers.deserialize(config["vision_encoder"]),
+        vision_config = config["vision_encoder"]
+        if vision_config is not None:
+            # The nested encoder shares the backbone dtype policy, including
+            # the `DTypePolicyMap` of a quantized backbone.
+            vision_config = {
+                **vision_config,
+                "config": {
+                    **vision_config["config"],
+                    "dtype": config.get("dtype"),
+                },
             }
-        )
+            config["vision_encoder"] = keras.layers.deserialize(vision_config)
         return super().from_config(config)

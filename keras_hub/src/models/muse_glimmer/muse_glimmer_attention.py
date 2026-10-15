@@ -8,7 +8,6 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerRMSNorm,
 )
 from keras_hub.src.utils.keras_utils import clone_initializer
-from keras_hub.src.utils.tensor_utils import tf
 
 
 class MuseGlimmerTextAttention(keras.layers.Layer):
@@ -38,13 +37,13 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
 
     When `context_hidden_states` and `cache` are both provided (DFlash
     speculative decoding via `MuseGlimmerAssistantCausalLM.call_with_cache`),
-    `cache` persists ONLY the context stream — one real target position
-    written per drafting cycle at `cache_update_index` — never the noise
-    block, since the block is discarded/replaced every cycle regardless
-    of accept/reject. This lets later cycles attend back to every
-    previously-accepted context position (the real DFlash caching
-    benefit: context K/V is computed once and reused, not recomputed
-    every cycle) while the block itself is always freshly computed.
+    `cache` persists ONLY the context stream, never the noise block. The
+    block is discarded and replaced every cycle, whatever the target
+    accepts. The first call seeds the context of the whole prompt at
+    `cache_update_index=0`. Each later cycle rewrites the last verify
+    window, which holds the accepted candidates. Later cycles attend to
+    every position below the valid context length. The context K/V is
+    computed once and reused. The block is always freshly computed.
 
     Args:
         num_query_heads: int. Number of query heads.
@@ -161,6 +160,7 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name="qk_norm",
             )
+            self._qk_norm.build((None, None, self.head_dim))
 
         if self.enable_qk_scale_and_gate:
             # Per-token, head-agnostic sigmoid gate computed from the same
@@ -376,24 +376,23 @@ class MuseGlimmerTextAttention(keras.layers.Layer):
         self, attention_mask, cache_update_index=0, context_len=0
     ):
         _, query_len, key_len = ops.shape(attention_mask)
-        all_ones = ops.ones((key_len, key_len), "bool")
         radius = self.sliding_window_size - (
             0 if self.use_bidirectional_attention else 1
         )
-        if keras.config.backend() == "tensorflow":
-            band_size = ops.cast(ops.minimum(key_len, radius), "int32")
-            sliding_mask = tf.linalg.band_part(all_ones, band_size, band_size)
-        else:
-            sliding_mask = ops.triu(all_ones, -radius) * ops.tril(
-                all_ones, radius
-            )
         # HF numbers bidirectional queries from row 0, with no context
         # offset. Causal layers have no context, so `context_len` is 0.
         context_offset = 0 if self.use_bidirectional_attention else context_len
-        start = (cache_update_index + context_offset, 0)
-        sliding_mask = ops.slice(sliding_mask, start, (query_len, key_len))
+        query_positions = (
+            ops.arange(query_len, dtype="int32")
+            + cache_update_index
+            + context_offset
+        )
+        key_positions = ops.arange(key_len, dtype="int32")
+        sliding_mask = (
+            ops.abs(query_positions[:, None] - key_positions[None, :]) <= radius
+        )
         sliding_mask = ops.expand_dims(sliding_mask, 0)
-        return ops.logical_and(attention_mask, ops.cast(sliding_mask, "bool"))
+        return ops.logical_and(attention_mask, sliding_mask)
 
     def get_config(self):
         config = super().get_config()

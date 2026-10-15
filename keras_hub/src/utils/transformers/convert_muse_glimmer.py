@@ -69,9 +69,61 @@ def load_video_converter_config(preset, transformers_config):
     }
 
 
-def convert_backbone_config(transformers_config):
+def _check_supported_options(text_config, vision_config, layer_types):
+    """Raise for Hugging Face options that `MuseGlimmerBackbone` cannot run.
+
+    The Keras layers use bias-free attention, a SiLU MLP, default RoPE, and
+    RoPE on exactly the sliding-attention layers. Any other setting would
+    load without an error and then produce different logits.
+    """
+    rope_type = (text_config.get("rope_parameters") or {}).get(
+        "rope_type", "default"
+    )
+    if rope_type != "default":
+        raise ValueError(
+            f"`rope_type={rope_type!r}` is not supported. "
+            "`MuseGlimmerBackbone` only implements the default RoPE."
+        )
+    if text_config.get("attention_bias", False):
+        raise ValueError(
+            "`attention_bias=True` is not supported. The attention "
+            "projections of `MuseGlimmerBackbone` have no bias."
+        )
+    activation = text_config.get("hidden_activation", "silu")
+    if activation != "silu":
+        raise ValueError(
+            f"`hidden_activation={activation!r}` is not supported. "
+            "`MuseGlimmerBackbone` always uses `'silu'`."
+        )
+    # Hugging Face turns RoPE off on the layers where `layer_rope_theta` is
+    # 0, independent of `layer_types`. Any nonzero value turns it on, because
+    # all layers share one rotary embedding.
+    num_layers = len(layer_types)
+    layer_rope_theta = text_config.get("layer_rope_theta")
+    if layer_rope_theta is None:
+        layer_rope_theta = [
+            0 if (num_layers - 1 - i) % 4 == 0 else 1 for i in range(num_layers)
+        ]
+    expected = [layer_type != "full_attention" for layer_type in layer_types]
+    if [bool(theta) for theta in layer_rope_theta] != expected:
+        raise ValueError(
+            "`layer_rope_theta` must be 0 on every `'full_attention'` layer "
+            "and nonzero on every other layer. Received: "
+            f"layer_types={layer_types}, layer_rope_theta={layer_rope_theta}."
+        )
+    if vision_config is not None:
+        hidden_act = vision_config.get("hidden_act", "gelu")
+        if hidden_act != "gelu":
+            raise ValueError(
+                "`vision_config.hidden_act` must be `'gelu'`. Received: "
+                f"{hidden_act!r}."
+            )
+
+
+def convert_backbone_config(transformers_config, cls, **kwargs):
     text_config = transformers_config["text_config"]
     vision_config = transformers_config.get("vision_config", None)
+    dtype = kwargs.pop("dtype", None)
 
     num_layers = text_config["num_hidden_layers"]
     layer_types = text_config.get("layer_types", None)
@@ -86,6 +138,8 @@ def convert_backbone_config(transformers_config):
     rope_theta = text_config.get("rope_parameters", {}).get("rope_theta")
     if rope_theta is None:
         rope_theta = text_config["rope_theta"]
+
+    _check_supported_options(text_config, vision_config, layer_types)
 
     vision_encoder = None
     if vision_config is not None:
@@ -109,6 +163,7 @@ def convert_backbone_config(transformers_config):
             layer_norm_eps=vision_config["layer_norm_eps"],
             layer_types=vision_config.get("layer_types", None),
             out_hidden_size=out_hidden_size,
+            dtype=dtype,
         )
 
     result = {
@@ -127,6 +182,7 @@ def convert_backbone_config(transformers_config):
         "output_multiplier": text_config["output_multiplier"],
         "final_logit_softcapping": text_config["final_logit_softcapping"],
         "layer_types": layer_types,
+        "dtype": dtype,
     }
     if vision_encoder is not None:
         result["vision_encoder"] = vision_encoder
@@ -149,12 +205,15 @@ def convert_weights(backbone, loader, transformers_config):
     # to port for it — HF's `MuseGlimmerTextNormedEmbedding.embed_norm` is
     # likewise scaleless.
 
-    # LM head (untied per the config/`_tied_weights_keys` disagreement
-    # noted in the migration report; ported separately from the input
-    # embedding).
+    # LM head. Hugging Face reads `tie_word_embeddings` from the top-level
+    # config. A tied checkpoint has no `lm_head.weight` tensor, so the
+    # untied Keras head is filled from the input embedding instead.
+    tied = transformers_config.get("tie_word_embeddings", False)
     loader.port_weight(
         backbone.token_embedding.reverse_embeddings,
-        "lm_head.weight",
+        "model.language_model.embed_tokens.weight"
+        if tied
+        else "lm_head.weight",
         hook_fn=lambda x, _: np.transpose(x, axes=(1, 0)),
     )
 

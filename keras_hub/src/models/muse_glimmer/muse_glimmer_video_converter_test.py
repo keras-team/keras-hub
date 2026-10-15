@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 
 from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
@@ -112,6 +113,28 @@ class MuseGlimmerVideoConverterTest(TestCase):
             dtype="float32",
         )
         self.assertAllClose(output["patches"][0], expected_patch)
+
+    def test_global_channels_first_format(self):
+        # The converter always takes `(frames, height, width, 3)`.
+        kwargs = {
+            "patch_size": 2,
+            "patch_temporal": 2,
+            "merge_size": 1,
+            "num_frames": 2,
+            "max_video_frame_tokens": 16,
+            "interpolation": "bilinear",
+            "scale": [2 / 255.0] * 3,
+            "offset": [-1.0] * 3,
+        }
+        video = np.random.uniform(0, 255, (2, 8, 8, 3)).astype("float32")
+        expected = MuseGlimmerVideoConverter(**kwargs)(video)
+        previous_format = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_first")
+        try:
+            output = MuseGlimmerVideoConverter(**kwargs)(video)
+        finally:
+            keras.config.set_image_data_format(previous_format)
+        self.assertAllClose(output["patches"], expected["patches"], atol=1e-5)
 
     def test_convert(self):
         converter = MuseGlimmerVideoConverter(

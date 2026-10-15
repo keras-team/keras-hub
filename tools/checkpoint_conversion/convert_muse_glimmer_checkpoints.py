@@ -343,24 +343,30 @@ def test_token_ids(keras_model, hf_results, label):
     print(f" ✓ [{label}] Token IDs match.")
 
 
+# Fraction of logits allowed outside `atol=rtol=1e-3`. Text must match
+# exactly. Image and video keep a small budget for float32 rounding in the
+# vision tower.
+MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 1e-3, "VIDEO": 1e-3}
+
+
 def _report_numerics(label, keras_logits, hf_logits):
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"\nlogit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(
-            keras_logits, hf_logits, atol=1e-3, rtol=1e-3
+    tol = 1e-3 + 1e-3 * np.abs(hf_logits)
+    mismatched = int(np.sum(abs_diff > tol))
+    total = hf_logits.size
+    pct = 100.0 * (1.0 - mismatched / total)
+    print(
+        f"  [{label}] {mismatched}/{total} logits outside "
+        f"atol=1e-3, rtol=1e-3 (matching={pct:.4f}%)."
+    )
+    if mismatched / total > MAX_MISMATCH_FRACTION[label]:
+        raise AssertionError(
+            f"[{label}] logits differ from HF beyond tolerance: "
+            f"{mismatched}/{total} outside atol=1e-3, rtol=1e-3."
         )
-        print(f" ✓ [{label}] logits match within atol=1e-3, rtol=1e-3.")
-    except AssertionError:
-        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
-        mismatched = int(np.sum(abs_diff > tol))
-        total = hf_logits.size
-        pct = 100.0 * (1.0 - mismatched / total)
-        print(
-            f"[{label}] logits differ beyond tolerance — "
-            f"matching={pct:.2f}% ({total - mismatched}/{total})."
-        )
+    print(f" ✓ [{label}] logits match HF.")
 
 
 def test_numerics(keras_model, hf_results, label):
@@ -502,15 +508,14 @@ def _build_assistant_target_context(
         (1, ASSISTANT_TARGET_SEQUENCE_LENGTH),
         dtype=torch.long,
     )
+    # Match the DFlash candidate generator. A list `output_hidden_states`
+    # has no embedding entry, so id `i` is the output of decoder layer `i`,
+    # and the last layer's entry is the final-norm output.
     with torch.no_grad():
         target_out = hf_target_model(
-            input_ids=input_ids, output_hidden_states=True
+            input_ids=input_ids, output_hidden_states=list(target_layer_ids)
         )
-    # `hidden_states` has `num_layers + 1` entries. Index 0 is the
-    # embedding output. `target_layer_ids` indexes directly into it, as in
-    # `MuseGlimmerAssistantContextProjection`.
-    hidden_states = target_out.hidden_states
-    selected = [hidden_states[i] for i in target_layer_ids]
+    selected = [target_out.hidden_states[i] for i in target_layer_ids]
     context_hidden_states = torch.cat(selected, dim=-1)
     assert context_hidden_states.shape[-1] == len(target_layer_ids) * hidden_dim
     return input_ids, context_hidden_states
@@ -598,13 +603,34 @@ def _precompute_assistant_hf_outputs(
     }
 
 
-def test_assistant_generation(target_preset, kh_assistant, hf_gen_data):
+def test_assistant_generation(
+    target_preset,
+    kh_assistant,
+    hf_gen_data,
+    input_ids,
+    context_hidden_states,
+    target_layer_ids,
+):
     print("-> Loading KerasHub target model...")
     kh_target = keras_hub.models.MuseGlimmerCausalLM.from_preset(
         f"hf://{target_preset}", dtype="float32"
     )
     kh_target.compile(sampler="greedy")
-    print("\n--- Section 3: Speculative generation ---")
+    print("\n--- Section 3: Target context ---")
+    # The Keras target must select the same layers as the HF generator.
+    _, _, kh_context = kh_target._build_cache(
+        ops.convert_to_tensor(input_ids.numpy().astype(np.int32)),
+        ops.ones(tuple(input_ids.shape), dtype="int32"),
+        target_layer_ids=target_layer_ids,
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(kh_context),
+        context_hidden_states.numpy(),
+        atol=1e-3,
+        err_msg="Target context differs from the HF generator context.",
+    )
+    print("✓ Target context matches the HF generator context.")
+    print("\n--- Section 4: Speculative generation ---")
     for label, data in hf_gen_data.items():
         kh_output = kh_target.generate(
             data["kh_inputs"],
@@ -633,7 +659,7 @@ def verify_assistant_mode(preset, hf_preset):
     block_size = getattr(config, "block_size", 16)
 
     print("-> Building target context from a random token sequence...")
-    _, context_hidden_states = _build_assistant_target_context(
+    input_ids, context_hidden_states = _build_assistant_target_context(
         hf_target_model, target_layer_ids, hidden_dim
     )
     noise_embeds = torch.randn(1, block_size, hidden_dim)
@@ -709,7 +735,14 @@ def verify_assistant_mode(preset, hf_preset):
     print("✓ Hidden states within tolerance (atol=1e-3, rtol=1e-3).")
 
     if not FLAGS.skip_generation:
-        test_assistant_generation(target_preset, kh_assistant, hf_gen_data)
+        test_assistant_generation(
+            target_preset,
+            kh_assistant,
+            hf_gen_data,
+            input_ids,
+            context_hidden_states,
+            target_layer_ids,
+        )
 
     del kh_assistant
     gc.collect()
