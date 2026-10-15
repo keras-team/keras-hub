@@ -8,6 +8,7 @@ import keras
 from keras_hub.src.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 
 
 def _index_to_einsum_variable(i):
@@ -73,7 +74,7 @@ class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             query_rank - 1, bound_dims=1, output_dims=2
         )
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -86,7 +87,7 @@ class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             key_rank - 1, bound_dims=1, output_dims=2
         )
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
@@ -99,7 +100,7 @@ class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             value_rank - 1, bound_dims=1, output_dims=2
         )
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._value_dim]
@@ -125,7 +126,7 @@ class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             query_rank - 1, bound_dims=2, output_dims=len(output_shape)
         )
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             einsum_equation,
             output_shape=_get_output_shape(output_rank - 1, output_shape),
             bias_axes=bias_axes if self._use_bias else None,
