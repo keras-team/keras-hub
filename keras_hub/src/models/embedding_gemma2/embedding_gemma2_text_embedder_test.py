@@ -43,7 +43,7 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
             hidden_dim=16,
             intermediate_dim=32,
             head_dim=8,
-            pooling_kernel_size=1,
+            pool_size=1,
             output_dim=16,
         )
         audio_encoder = Gemma4AudioEncoder(
@@ -76,7 +76,6 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
             layer_types=["sliding_attention", "full_attention"],
             vision_encoder=vision_encoder,
             audio_encoder=audio_encoder,
-            num_audio_tokens_per_clip=5,
         )
 
         self.tokenizer = MockGemma4Tokenizer(add_bos=False, add_eos=False)
@@ -132,16 +131,11 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
             rtol=1e-06,
         )
 
-    def test_encode_text_mocked(self):
+    def test_encode_text(self):
         embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
-        # Mock predict to just return ones
-        from unittest import mock
-
-        with mock.patch.object(
-            embedder, "predict", return_value=np.ones((1, 12))
-        ):
-            output = embedder.encode_text("hello")
-            self.assertEqual(output.shape, (1, 12))
+        output = embedder.encode_text("hello")
+        self.assertEqual(output.shape, (1, 12))
+        self.assertAllClose(output, embedder.predict(["hello"]))
 
     def test_output_is_normalized(self):
         embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
@@ -219,6 +213,25 @@ class EmbeddingGemma2TextEmbedderTest(TestCase):
             self.assertEqual(outputs[-1].shape, (2, 12))
         # The retrace must not change the text-only result.
         self.assertAllClose(outputs[0], outputs[2], atol=1e-6)
+        # The tower must have a slot for every placeholder the preprocessor
+        # placed; with the default `pool_size=3` it emits one token for nine
+        # `<|image|>` placeholders and the image tests pass without testing
+        # the alignment.
+        prep = preprocessor(with_images)
+        placed = int(
+            (
+                ops.convert_to_numpy(prep["token_ids"])
+                == self.tokenizer.token_to_id("<|image|>")
+            ).sum(axis=1)[0]
+        )
+        slots = self.backbone.vision_encoder(
+            {
+                "pixel_values": prep["pixel_values"],
+                "pixel_position_ids": prep["pixel_position_ids"],
+            }
+        ).shape[2]
+        self.assertGreater(placed, 1)
+        self.assertGreaterEqual(slots, placed)
 
     @pytest.mark.large
     def test_saved_model(self):

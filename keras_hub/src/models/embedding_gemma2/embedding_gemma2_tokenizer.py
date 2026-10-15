@@ -5,7 +5,12 @@ from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
 from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 
 
-@keras_hub_export("keras_hub.models.EmbeddingGemma2Tokenizer")
+@keras_hub_export(
+    [
+        "keras_hub.tokenizers.EmbeddingGemma2Tokenizer",
+        "keras_hub.models.EmbeddingGemma2Tokenizer",
+    ]
+)
 class EmbeddingGemma2Tokenizer(Gemma4Tokenizer):
     """EmbeddingGemma2 tokenizer.
 

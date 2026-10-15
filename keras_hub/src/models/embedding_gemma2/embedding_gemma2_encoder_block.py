@@ -18,6 +18,11 @@ class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
     all tokens symmetrically.
     """
 
+    def __init__(self, **kwargs):
+        # EmbeddingGemma2 uses bidirectional attention.
+        kwargs["use_bidirectional_attention"] = True
+        super().__init__(**kwargs)
+
     def _compute_attention_mask(
         self,
         x,

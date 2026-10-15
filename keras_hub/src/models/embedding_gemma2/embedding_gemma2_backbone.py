@@ -78,13 +78,7 @@ class EmbeddingGemma2Backbone(Backbone):
             `None` the model processes no images.
         audio_encoder: `keras_hub.models.Gemma4AudioEncoder` or `None`. When
             `None` the model processes no audio.
-        num_audio_tokens_per_clip: int or `None`. Number of audio soft tokens
-            produced per audio clip (including zero-padded positions). When
-            `None` and `audio_encoder` is set, defaults to `750`.
         layer_norm_epsilon: float. Epsilon for all RMS norms. Defaults `1e-6`.
-        use_bidirectional_attention: bool. When `True` the model uses fully
-            bidirectional attention for ALL tokens, as required for an
-            embedding model. Defaults to `False`.
         dropout: float. Dropout probability. Defaults to `0`.
         embedding_dim: int. Output dimension of the final dense
             `embedding_projection` applied to every token's hidden state.
@@ -117,7 +111,6 @@ class EmbeddingGemma2Backbone(Backbone):
         intermediate_dim=2048,
         head_dim=256,
         embedding_dim=768,
-        use_bidirectional_attention=True,
         dtype="float32",
     )
     ```
@@ -142,9 +135,7 @@ class EmbeddingGemma2Backbone(Backbone):
         global_rope_scaling_factor=1.0,
         vision_encoder=None,
         audio_encoder=None,
-        num_audio_tokens_per_clip=None,
         layer_norm_epsilon=1e-6,
-        use_bidirectional_attention=False,
         dropout=0,
         embedding_dim=None,
         num_global_key_value_heads=None,
@@ -201,10 +192,8 @@ class EmbeddingGemma2Backbone(Backbone):
                 name="interleave_embeddings",
             )
         if audio_encoder is not None:
-            if num_audio_tokens_per_clip is None:
-                num_audio_tokens_per_clip = 750
             self.audio_interleave_embeddings = Gemma4InterleaveEmbeddings(
-                num_vision_tokens_per_image=num_audio_tokens_per_clip,
+                num_vision_tokens_per_image=0,
                 dtype=dtype,
                 name="audio_interleave_embeddings",
             )
@@ -260,7 +249,6 @@ class EmbeddingGemma2Backbone(Backbone):
                 rope_wavelength=layer_rope_wavelength,
                 rope_scaling_factor=rope_scaling_factor,
                 rope_partial_rotary_factor=layer_rope_partial,
-                use_bidirectional_attention=use_bidirectional_attention,
                 is_global_attention=is_global,
                 global_head_dim=global_head_dim,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -449,11 +437,9 @@ class EmbeddingGemma2Backbone(Backbone):
         self.global_head_dim = global_head_dim
         self.local_rope_scaling_factor = local_rope_scaling_factor
         self.global_rope_scaling_factor = global_rope_scaling_factor
-        self.use_bidirectional_attention = use_bidirectional_attention
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
         self.embedding_dim = embedding_dim
-        self.num_audio_tokens_per_clip = num_audio_tokens_per_clip
         self.num_global_key_value_heads = num_global_key_value_heads
         self.hidden_size_per_layer_input = hidden_size_per_layer_input
         self.global_rope_wavelength = global_rope_wavelength
@@ -497,8 +483,6 @@ class EmbeddingGemma2Backbone(Backbone):
                 "audio_encoder": None
                 if self.audio_encoder is None
                 else keras.layers.serialize(self.audio_encoder),
-                "num_audio_tokens_per_clip": self.num_audio_tokens_per_clip,
-                "use_bidirectional_attention": self.use_bidirectional_attention,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
                 "embedding_dim": self.embedding_dim,

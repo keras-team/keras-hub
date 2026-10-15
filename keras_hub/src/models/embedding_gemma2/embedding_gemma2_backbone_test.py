@@ -132,7 +132,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
         """Backbone with audio encoder."""
 
         input_feat_size = 8
-        num_audio_tokens_per_clip = 4
         audio_encoder = Gemma4AudioEncoder(
             input_feat_size=input_feat_size,
             hidden_size=8,
@@ -150,7 +149,6 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
         audio_init_kwargs = {
             **self.text_init_kwargs,
             "audio_encoder": audio_encoder,
-            "num_audio_tokens_per_clip": num_audio_tokens_per_clip,
         }
         # Text + audio input: N_clips=1, T=16, F=input_feat_size.
         num_clips = 1
@@ -164,7 +162,7 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
                 (self.batch_size, num_clips, T), dtype="int32"
             ),
             "audio_indices": np.zeros(
-                (self.batch_size, num_clips * num_audio_tokens_per_clip),
+                (self.batch_size, 0),
                 dtype="int32",
             ),
         }

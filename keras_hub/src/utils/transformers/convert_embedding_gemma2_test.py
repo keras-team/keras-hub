@@ -1,6 +1,6 @@
 import json
 import os
-from unittest import mock
+import tempfile
 
 import pytest
 
@@ -106,84 +106,90 @@ class ConvertEmbeddingGemma2Test(TestCase):
         # (8 // 4) * 8 = 16 input features, projected to hidden_size 32.
         self.assertEqual(tuple(input_proj.kernel.shape), (16, 32))
 
-    @mock.patch(
-        "keras_hub.src.utils.transformers.convert_embedding_gemma2.check_file_exists"
-    )
-    @mock.patch(
-        "keras_hub.src.utils.transformers.convert_embedding_gemma2.load_json"
-    )
-    def test_task_config_reads_sentence_transformers_files(
-        self, mock_load, mock_check
+    def _write_sentence_transformers_files(
+        self, modules, pooling=None, sentence_bert=None
     ):
-        preset = "hf://mock_preset"
+        """A preset directory holding real sentence-transformers files."""
+        preset = tempfile.mkdtemp(dir=self.get_temp_dir())
+        with open(os.path.join(preset, "modules.json"), "w") as f:
+            json.dump(modules, f)
+        if pooling is not None:
+            os.makedirs(os.path.join(preset, "1_Pooling"))
+            with open(os.path.join(preset, "1_Pooling/config.json"), "w") as f:
+                json.dump(pooling, f)
+        if sentence_bert is not None:
+            path = os.path.join(preset, "sentence_bert_config.json")
+            with open(path, "w") as f:
+                json.dump(sentence_bert, f)
+        return preset
 
-        # Test 1: files don't exist
-        mock_check.return_value = False
-        self.assertEqual(load_task_config(preset, {}), {})
+    def test_task_config_reads_sentence_transformers_files(self):
+        transformer = {"type": "sentence_transformers.models.Transformer"}
+        normalize = {"type": "sentence_transformers.models.Normalize"}
 
-        # Test 2: files exist, normalization false, pooling mean (modern)
-        mock_check.return_value = True
+        # No sentence-transformers files at all: nothing is overridden.
+        self.assertEqual(load_task_config(self.get_temp_dir(), {}), {})
 
-        def mock_load_json_1(path, filename):
-            if filename == "modules.json":
-                return [{"type": "sentence_transformers.models.Transformer"}]
-            if filename == "1_Pooling/config.json":
-                return {"pooling_mode": "mean"}
-
-        mock_load.side_effect = mock_load_json_1
-
+        # Modern export: `pooling_mode`, no Normalize module.
+        preset = self._write_sentence_transformers_files(
+            [transformer], pooling={"pooling_mode": "mean"}
+        )
         self.assertEqual(
             load_task_config(preset, {}),
             {"normalize": False, "pooling_mode": "mean"},
         )
-        mock_check.assert_any_call(preset, "modules.json")
-        mock_check.assert_any_call(preset, "1_Pooling/config.json")
 
-        # Test 3: normalization true, pooling mean_tokens (legacy)
-        def mock_load_json_2(path, filename):
-            if filename == "modules.json":
-                return [{"type": "sentence_transformers.models.Normalize"}]
-            if filename == "1_Pooling/config.json":
-                return {"pooling_mode_mean_tokens": True}
-
-        mock_load.side_effect = mock_load_json_2
-
+        # Legacy export: `pooling_mode_mean_tokens`, with Normalize.
+        preset = self._write_sentence_transformers_files(
+            [transformer, normalize],
+            pooling={"pooling_mode_mean_tokens": True},
+        )
         self.assertEqual(
             load_task_config(preset, {}),
             {"normalize": True, "pooling_mode": "mean"},
         )
 
-        # Test 4: default pooling_mode to mean if neither present
-        def mock_load_json_3(path, filename):
-            if filename == "modules.json":
-                return [{"type": "sentence_transformers.models.Normalize"}]
-            if filename == "1_Pooling/config.json":
-                return {}
-
-        mock_load.side_effect = mock_load_json_3
-
+        # Neither pooling key: default to mean.
+        preset = self._write_sentence_transformers_files(
+            [transformer, normalize], pooling={}
+        )
         self.assertEqual(
             load_task_config(preset, {}),
             {"normalize": True, "pooling_mode": "mean"},
         )
+
+        # `max_seq_length` becomes the preprocessor's `sequence_length`;
+        # when the file lacks it the class default stays in force.
+        preset = self._write_sentence_transformers_files(
+            [transformer], sentence_bert={"max_seq_length": 2048}
+        )
+        self.assertEqual(load_task_config(preset, {})["sequence_length"], 2048)
+        preset = self._write_sentence_transformers_files(
+            [transformer], sentence_bert={"do_lower_case": False}
+        )
+        self.assertNotIn("sequence_length", load_task_config(preset, {}))
 
     def test_backbone_config_reads_rope_and_audio_token_counts(self):
         text_cfg = _tiny_text_config()
         kwargs = convert_backbone_config({"text_config": text_cfg})
         # Absent in the HF config: keep the backbone defaults.
         self.assertEqual(kwargs["global_rope_partial_rotary_factor"], 1.0)
-        self.assertIsNone(kwargs["num_audio_tokens_per_clip"])
         text_cfg["rope_parameters"]["full_attention"][
             "partial_rotary_factor"
         ] = 0.25
-        kwargs = convert_backbone_config(
-            {"text_config": text_cfg, "audio_soft_tokens_per_image": 188}
-        )
+        kwargs = convert_backbone_config({"text_config": text_cfg})
         self.assertEqual(kwargs["global_rope_partial_rotary_factor"], 0.25)
-        self.assertEqual(kwargs["num_audio_tokens_per_clip"], 188)
 
     def test_backbone_config_reads_per_layer_config(self):
         text_cfg = _tiny_text_config()
+        # No `per_layer_config`: global layers use the base attention dims,
+        # as HF does.
+        kwargs = convert_backbone_config({"text_config": text_cfg})
+        self.assertEqual(kwargs["global_head_dim"], text_cfg["head_dim"])
+        self.assertEqual(
+            kwargs["num_global_key_value_heads"],
+            text_cfg["num_key_value_heads"],
+        )
         entry = {"head_dim": 32, "num_key_value_heads": 2}
         text_cfg["per_layer_config"] = {"1": dict(entry), "3": dict(entry)}
         kwargs = convert_backbone_config({"text_config": text_cfg})
@@ -272,3 +278,180 @@ class ConvertEmbeddingGemma2Test(TestCase):
         self.assertEqual(
             ids, [vocab["<|image|>"], vocab["<|audio|>"], vocab["<|video|>"]]
         )
+
+    @pytest.mark.large
+    def test_convert_weights_matches_tiny_hf_model(self):
+        # Build a tiny HF `EmbeddingGemma2Model` with vision and audio
+        # towers, save it, load it through the converter, and compare the
+        # per-token hidden states for text, image, audio and mixed prompts.
+        # `load_weights=False` elsewhere in this file never runs
+        # `convert_weights`; this does.
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        if not hasattr(transformers, "EmbeddingGemma2Config"):
+            self.skipTest("transformers has no EmbeddingGemma2 yet")
+        import numpy as np
+        from keras import ops
+
+        text_cfg = _tiny_text_config()
+        # The special tokens must be real vocabulary ids for the tiny model.
+        tokens = {
+            "boi_token_id": 56,
+            "eoi_token_id": 57,
+            "image_token_id": 58,
+            "video_token_id": 59,
+            "boa_token_id": 60,
+            "eoa_token_index": 61,
+            "audio_token_id": 62,
+        }
+        text_cfg["pad_token_id"] = 0
+        vision_cfg = {
+            "hidden_size": 16,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "num_key_value_heads": 1,
+            "head_dim": 8,
+            "intermediate_size": 32,
+            # Patch / pooling geometry of the released checkpoint, so the
+            # HF image processor defaults apply; only the widths are tiny.
+            "patch_size": 16,
+            "pooling_kernel_size": 3,
+            "rms_norm_eps": 1e-6,
+            "rope_parameters": {"rope_theta": 100.0},
+        }
+        audio_cfg = {
+            "hidden_size": 16,
+            "num_attention_heads": 2,
+            "num_hidden_layers": 1,
+            "attention_chunk_size": 4,
+            "attention_context_left": 5,
+            "attention_context_right": 0,
+            "attention_logit_cap": 50.0,
+            "attention_invalid_logits_value": -1e9,
+            "conv_kernel_size": 5,
+            "residual_weight": 0.5,
+            "gradient_clipping": 1e10,
+            "subsampling_conv_channels": [4, 2],
+            "output_proj_dims": 48,
+            "rms_norm_eps": 1e-6,
+        }
+        config = transformers.EmbeddingGemma2Config(
+            text_config=text_cfg,
+            vision_config=vision_cfg,
+            audio_config=audio_cfg,
+            **tokens,
+        )
+        torch.manual_seed(0)
+        hf_model = transformers.EmbeddingGemma2Model(config).eval()
+        preset = self.get_temp_dir()
+        hf_model.save_pretrained(preset)
+        backbone = EmbeddingGemma2Backbone.from_preset(preset)
+
+        rng = np.random.RandomState(0)
+        batch = 2
+        # Patches from the HF image processor go into both models, so this
+        # compares the towers and the interleave, not the two resize paths.
+        image_processor = transformers.Gemma4ImageProcessor(
+            patch_size=16, pooling_kernel_size=3, max_soft_tokens=70
+        )
+        from PIL import Image
+
+        hf_images = image_processor(
+            images=[
+                Image.fromarray(
+                    rng.randint(0, 256, (96, 96, 3), dtype=np.uint8)
+                )
+                for _ in range(batch)
+            ],
+            return_tensors="pt",
+        )
+        n_img = int(hf_images["num_soft_tokens_per_image"][0])
+        patch_dim = 3 * vision_cfg["patch_size"] ** 2
+        mel_frames, num_mels = 16, backbone.audio_encoder.input_feat_size
+        seq = n_img + 24
+        n_aud = int(
+            ops.convert_to_numpy(
+                backbone.audio_encoder(
+                    np.zeros((1, mel_frames, num_mels), "float32"),
+                    np.ones((1, mel_frames), "bool"),
+                )
+            ).shape[1]
+        )
+
+        def prompt(image=False, audio=False):
+            ids = rng.randint(1, 50, size=(seq,))
+            pos = 1
+            if image:
+                ids[pos] = tokens["boi_token_id"]
+                ids[pos + 1 : pos + 1 + n_img] = tokens["image_token_id"]
+                ids[pos + 1 + n_img] = tokens["eoi_token_id"]
+                pos += n_img + 2
+            if audio:
+                ids[pos] = tokens["boa_token_id"]
+                ids[pos + 1 : pos + 1 + n_aud] = tokens["audio_token_id"]
+                ids[pos + 1 + n_aud] = tokens["eoa_token_index"]
+            return ids
+
+        cases = {
+            "text": (False, False),
+            "image": (True, False),
+            "audio": (False, True),
+            "mixed": (True, True),
+        }
+        for name, (image, audio) in cases.items():
+            token_ids = np.stack([prompt(image, audio) for _ in range(batch)])
+            keras_inputs = {
+                "token_ids": token_ids.astype("int32"),
+                "padding_mask": np.ones_like(token_ids, dtype="int32"),
+            }
+            hf_inputs = {
+                "input_ids": torch.tensor(token_ids),
+                "attention_mask": torch.ones_like(torch.tensor(token_ids)),
+            }
+            if image:
+                pixel_values = hf_images["pixel_values"]
+                pos_ids = hf_images["image_position_ids"]
+                keras_inputs["pixel_values"] = pixel_values.numpy()[:, None]
+                keras_inputs["pixel_position_ids"] = pos_ids.numpy()[
+                    :, None
+                ].astype("int32")
+                hf_inputs["pixel_values"] = pixel_values
+                hf_inputs["image_position_ids"] = pos_ids
+            else:
+                keras_inputs["pixel_values"] = np.zeros(
+                    (batch, 0, 0, patch_dim), "float32"
+                )
+                keras_inputs["pixel_position_ids"] = np.zeros(
+                    (batch, 0, 0, 2), "int32"
+                )
+            if audio:
+                mel = rng.uniform(-1, 1, (batch, mel_frames, num_mels)).astype(
+                    "float32"
+                )
+                keras_inputs["audio_mel"] = mel[:, None]
+                keras_inputs["audio_mel_mask"] = np.ones(
+                    (batch, 1, mel_frames), "int32"
+                )
+                hf_inputs["input_features"] = torch.tensor(mel)
+                hf_inputs["input_features_mask"] = torch.ones(
+                    (batch, mel_frames), dtype=torch.bool
+                )
+            else:
+                keras_inputs["audio_mel"] = np.zeros(
+                    (batch, 0, 1, num_mels), "float32"
+                )
+                keras_inputs["audio_mel_mask"] = np.zeros(
+                    (batch, 0, 1), "int32"
+                )
+            img_id, aud_id = tokens["image_token_id"], tokens["audio_token_id"]
+            keras_inputs["vision_indices"] = np.stack(
+                [np.flatnonzero(row == img_id) for row in token_ids]
+            ).astype("int32")
+            keras_inputs["audio_indices"] = np.stack(
+                [np.flatnonzero(row == aud_id) for row in token_ids]
+            ).astype("int32")
+
+            keras_out = ops.convert_to_numpy(backbone(keras_inputs))
+            with torch.no_grad():
+                hf_out = hf_model(**hf_inputs).last_hidden_state.numpy()
+            self.assertAllClose(keras_out, hf_out, atol=1e-5, msg=name)

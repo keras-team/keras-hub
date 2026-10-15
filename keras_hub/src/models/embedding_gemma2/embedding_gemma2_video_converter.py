@@ -22,6 +22,11 @@ class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
     Unlike `Gemma4VideoConverter` which always samples exactly `num_frames`,
     this converter keeps all frames up to `max_frames`. If the video exceeds
     `max_frames`, it uniformly samples `max_frames` frames.
+
+    This converter does not sample by frame rate. The Hugging Face processor
+    first samples one frame per second when the video has `fps` metadata. To
+    get the same frames, decode the video at 1 frame per second before calling
+    this layer.
     """
 
     backbone_cls = EmbeddingGemma2Backbone

@@ -24,8 +24,11 @@ def convert_backbone_config(transformers_config):
             transformers_config["audio_config"], text_cfg
         )
     per_layer_config = text_cfg.get("per_layer_config", {})
-    global_head_dim = 512
-    num_global_kv = 1
+    # Without `per_layer_config`, HF gives every layer the base `head_dim`
+    # and KV-head count; the released checkpoint overrides the global
+    # layers below.
+    global_head_dim = text_cfg["head_dim"]
+    num_global_kv = text_cfg["num_key_value_heads"]
     # HF keys `per_layer_config` by layer index; the backbone takes a single
     # global head_dim / KV-head count, so every entry must agree.
     global_entries = [
@@ -68,10 +71,6 @@ def convert_backbone_config(transformers_config):
         "global_rope_partial_rotary_factor": rope["full_attention"].get(
             "partial_rotary_factor", 1.0
         ),
-        "num_audio_tokens_per_clip": transformers_config.get(
-            "audio_soft_tokens_per_image"
-        ),
-        "use_bidirectional_attention": True,
     }
 
 
@@ -186,6 +185,12 @@ def load_task_config(preset, transformers_config):
             kwargs["pooling_mode"] = "mean"
         else:
             kwargs["pooling_mode"] = "mean"
+
+    sentence_bert_config_file = "sentence_bert_config.json"
+    if check_file_exists(preset, sentence_bert_config_file):
+        sentence_bert_config = load_json(preset, sentence_bert_config_file)
+        if "max_seq_length" in sentence_bert_config:
+            kwargs["sequence_length"] = sentence_bert_config["max_seq_length"]
 
     return kwargs
 

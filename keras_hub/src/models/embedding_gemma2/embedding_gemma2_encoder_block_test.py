@@ -17,7 +17,6 @@ class EmbeddingGemma2EncoderBlockTest(TestCase):
             "use_sliding_window_attention": True,
             "sliding_window_size": 2,
             "is_global_attention": False,
-            "use_bidirectional_attention": True,
         }
         self.input_data = ops.ones((2, 6, 16))
         self.padding_mask = ops.array(

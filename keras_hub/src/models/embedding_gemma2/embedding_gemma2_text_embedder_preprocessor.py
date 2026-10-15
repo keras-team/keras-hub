@@ -68,7 +68,10 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         video_converter: An `EmbeddingGemma2VideoConverter`, or `None` to
             disable video inputs.
         sequence_length: int. Length every packed sequence is padded or
-            truncated to. Defaults to `512`.
+            truncated to. Image, video and audio soft tokens count against
+            it (up to `max_soft_tokens` per image or video frame, and up to
+            750 per 30 s audio clip), and a `ValueError` is raised when
+            packing would truncate any of them. Defaults to `512`.
         truncate: string. The truncation algorithm of
             `keras_hub.layers.MultiSegmentPacker`. Defaults to
             `"round_robin"`.
@@ -133,6 +136,196 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 "separate calls."
             )
 
+    @property
+    def _placeholders(self):
+        """`(modality, placeholder)` pairs, in HF prompt order."""
+        return (
+            ("image", self.image_placeholder),
+            ("video", self.video_placeholder),
+            ("audio", self.audio_placeholder),
+        )
+
+    def _expected_placeholder_counts(self, texts, is_tf):
+        """Occurrences of each placeholder in every (un-expanded) text.
+
+        Returns a dict modality -> int32 vector of shape `(batch,)`.
+        """
+        counts = {}
+        for mod, ph in self._placeholders:
+            if is_tf:
+                counts[mod] = tf.cast(
+                    tf.strings.split(texts, sep=ph).row_lengths() - 1,
+                    tf.int32,
+                )
+            else:
+                counts[mod] = np.array(
+                    [t.count(ph) for t in texts], dtype="int32"
+                )
+        return counts
+
+    def _check_media_counts(self, expected, media_lens, is_tf):
+        """HF-style `validate_inputs`, for one media item per prompt.
+
+        For every modality that is passed, there must be one item per text
+        and exactly one placeholder in each text; a placeholder for a
+        modality that is not passed is an error. Python raises `ValueError`;
+        the TF path asserts with the same messages.
+        """
+        for mod, _ in self._placeholders:
+            exp = expected[mod]
+            m_len = media_lens.get(mod)
+            if m_len is not None:
+                one_each = (
+                    f"Each text must contain exactly 1 {mod} placeholder."
+                )
+                same_batch = f"Batch size of texts and {mod} must match."
+                if is_tf:
+                    tf.debugging.assert_equal(
+                        exp, tf.ones_like(exp), message=one_each
+                    )
+                    tf.debugging.assert_equal(
+                        tf.shape(exp)[0], m_len, message=same_batch
+                    )
+                else:
+                    if np.any(exp != 1):
+                        raise ValueError(one_each)
+                    if len(exp) != m_len:
+                        raise ValueError(same_batch)
+            else:
+                msg = f"Found {mod} placeholder but no media was provided."
+                if is_tf:
+                    tf.debugging.assert_equal(
+                        exp, tf.zeros_like(exp), message=msg
+                    )
+                elif np.any(exp > 0):
+                    raise ValueError(msg)
+
+    def _build_truncation_error_msg(self, modality, seq_len):
+        return (
+            f"The {modality} soft tokens do not fit in "
+            f"`sequence_length={seq_len}`: media soft tokens count against "
+            "`sequence_length`, and packing truncated some of them. Increase "
+            "`sequence_length` or shorten the text / media."
+        )
+
+    def _check_truncation(self, expected, token_ids, sequence_length, is_tf):
+        """Every soft token of the expanded prompt must survive packing.
+
+        `expected` is `_expected_placeholder_counts` of the expanded texts,
+        i.e. the soft-token count per modality; fewer of them in the packed
+        `token_ids` means the packer truncated media tokens.
+        """
+        for mod, ph in self._placeholders:
+            exp = expected[mod]
+            msg = self._build_truncation_error_msg(mod, sequence_length)
+            placeholder_id = self.tokenizer.token_to_id(ph)
+            if is_tf:
+                kept = tf.math.reduce_sum(
+                    tf.cast(token_ids == placeholder_id, tf.int32), axis=1
+                )
+                tf.debugging.assert_greater_equal(kept, exp, message=msg)
+            else:
+                kept = (token_ids == placeholder_id).sum(axis=1)
+                if np.any(kept < exp):
+                    raise ValueError(msg)
+
+    def _build_default_texts(self, has_images, has_videos, has_audio):
+        """Prompt used when `texts` is `None`.
+
+        Matches the Hugging Face processor: one placeholder per present
+        modality, in the order images, videos, audio, joined by a space.
+        """
+        prompts = []
+        if has_images:
+            prompts.append(self.image_placeholder)
+        if has_videos:
+            prompts.append(self.video_placeholder)
+        if has_audio:
+            prompts.append(self.audio_placeholder)
+        return " ".join(prompts)
+
+    # Rank of one un-batched item per modality: an image, a clip, a waveform.
+    _SINGLE_ITEM_RANK = {"image": 3, "video": 4, "audio": 1}
+
+    def _media_batch_sizes(self, media, is_tf):
+        """Number of items per modality, and whether any is a bare item.
+
+        Args:
+            media: dict modality -> list / array / tensor or `None`.
+            is_tf: whether the values are TF tensors.
+
+        Returns:
+            `(media_lens, any_single)`. `media_lens` maps each present
+            modality to its item count (a Python int, or a scalar tensor on
+            the TF path when the batch axis is symbolic). `any_single` is
+            `True` when a modality was given as one bare item (rank-3 image,
+            rank-4 video, rank-1 waveform), which the caller wraps into a
+            one-item batch.
+        """
+        media_lens = {}
+        any_single = False
+        for mod, value in media.items():
+            if value is None:
+                continue
+            if isinstance(value, (list, tuple)):
+                media_lens[mod] = len(value)
+                continue
+            if not is_tf:
+                value = np.asarray(value)
+            # Works for numpy arrays, `tf.Tensor` and `tf.RaggedTensor`.
+            rank = len(value.shape)
+            if rank == self._SINGLE_ITEM_RANK[mod]:
+                media_lens[mod] = 1
+                any_single = True
+            elif is_tf:
+                media_lens[mod] = tf.shape(value)[0]
+            else:
+                media_lens[mod] = value.shape[0]
+        return media_lens, any_single
+
+    def _check_same_batch_size(self, media_lens, is_tf):
+        """All present modalities must have the same number of items."""
+        sizes = list(media_lens.values())
+        msg = (
+            "Received inconsistently sized modality batches when `texts` is "
+            f"None: {sorted(media_lens)} must all have the same length."
+        )
+        for other in sizes[1:]:
+            if is_tf and not (
+                isinstance(sizes[0], int) and isinstance(other, int)
+            ):
+                tf.debugging.assert_equal(sizes[0], other, message=msg)
+            elif sizes[0] != other:
+                raise ValueError(msg)
+        return sizes[0]
+
+    def _frame_layout(self, frame_counts_per_row):
+        """The one layout rule for `vision_indices` / `audio_indices`.
+
+        Every row gets `num_frames_max * width` columns: the most frames any
+        row has, times the most soft tokens any single frame has. Frame `f`
+        of a row occupies columns `[f * width, (f + 1) * width)`, real
+        positions first, then `0`. `Gemma4InterleaveEmbeddings` keeps the
+        first `width` tower slots of every frame and pairs them with these
+        columns in order, so the pairing is per frame and never depends on
+        the other rows in the batch. `_python_indices` applies this rule
+        directly; `_get_placeholder_indices` reproduces it with ragged tensors.
+
+        Args:
+            frame_counts_per_row: list (rows) of lists (frames) of soft-token
+                counts.
+
+        Returns:
+            `(num_frames_max, width)`.
+        """
+        num_frames_max = max(
+            (len(row) for row in frame_counts_per_row), default=0
+        )
+        width = max(
+            (max(row) if row else 0 for row in frame_counts_per_row), default=0
+        )
+        return num_frames_max, width
+
     def _check_image_rank(self, rank, is_list_item=False):
         """Enforce one image per prompt.
 
@@ -148,83 +341,67 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 f"Received an image input of rank {rank}."
             )
 
-    def _get_vision_indices(self, vision_mask, max_tokens=None):
-        batch_size = tf.shape(vision_mask)[0]
-        sequence_length = tf.shape(vision_mask)[1]
+    def _get_placeholder_indices(self, mask):
+        """Frame-major placeholder positions, TF twin of `_python_indices`.
 
-        vision_mask_flattened = tf.reshape(vision_mask, [-1])
-        vision_indices = tf.where(vision_mask_flattened)[..., 0]
-        vision_indices = tf.cast(vision_indices, dtype=tf.int32)
+        Used for images, video frames and audio clips alike: a contiguous
+        run of placeholders is one frame (one image, one video frame or one
+        audio clip).
 
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(vision_mask, dtype=vision_indices.dtype), axis=1
-        )
+        Each row is laid out as `num_frames_max` blocks of `width` columns,
+        where `width` is the largest soft-token count of any frame in the
+        batch (see `_frame_layout`). Block `f` of a row holds that frame's
+        placeholder positions first and `0` after, so that slot `i` of frame
+        `f` from the vision tower always pairs with column `f * width + i`
+        in `Gemma4InterleaveEmbeddings`, whatever the other rows contain.
+        Column `0` is harmless: the interleave layer restores position 0.
 
-        batched_vision_indices = tf.RaggedTensor.from_row_lengths(
-            values=vision_indices,
-            row_lengths=row_lengths,
-        )
+        Frames are separated by the `<image|><|image>` wrapper tokens, so a
+        gap larger than 1 between consecutive placeholder positions marks a
+        frame boundary. A row boundary cannot produce a gap of exactly 1,
+        because position 0 of every row is the start token.
+        """
+        batch_size = tf.shape(mask)[0]
+        sequence_length = tf.shape(mask)[1]
 
-        to_subtract = tf.math.scalar_mul(
-            scalar=tf.cast(sequence_length, dtype=tf.int32),
-            x=tf.range(
-                start=0,
-                limit=tf.cast(batch_size, dtype=tf.int32),
-                dtype=tf.int32,
-            ),
-        )
-        to_subtract = tf.expand_dims(to_subtract, axis=-1)
-        batched_vision_indices = tf.math.subtract(
-            batched_vision_indices, to_subtract
-        )
+        mask_flattened = tf.reshape(mask, [-1])
+        indices = tf.where(mask_flattened)[..., 0]
+        indices = tf.cast(indices, dtype=tf.int32)
 
-        batched_vision_indices = batched_vision_indices.to_tensor(
-            default_value=0
-        )
-
-        if max_tokens is not None:
-            # Pad or truncate to max_tokens.
-            current_tokens = tf.shape(batched_vision_indices)[1]
-            pad_amount = tf.maximum(0, max_tokens - current_tokens)
-            batched_vision_indices = tf.pad(
-                batched_vision_indices, [[0, 0], [0, pad_amount]]
+        def _compute():
+            diffs = indices[1:] - indices[:-1]
+            is_new_frame = tf.concat([[True], diffs > 1], axis=0)
+            frame_ids = tf.cumsum(tf.cast(is_new_frame, tf.int32)) - 1
+            frame_lengths = tf.math.segment_sum(
+                tf.ones_like(indices), frame_ids
             )
-            batched_vision_indices = batched_vision_indices[:, :max_tokens]
 
-        return batched_vision_indices
+            row_indices = indices // sequence_length
+            frame_starts = tf.where(is_new_frame)[..., 0]
+            frame_rows = tf.gather(row_indices, frame_starts)
+            frames_per_row = tf.math.bincount(
+                frame_rows, minlength=batch_size, maxlength=batch_size
+            )
+            local_indices = indices - row_indices * sequence_length
 
-    def _get_audio_indices(self, audio_mask):
-        batch_size = tf.shape(audio_mask)[0]
-        sequence_length = tf.shape(audio_mask)[1]
+            # (batch, frames, width) with zeros where a frame is narrower
+            # than `width` or a row has fewer frames than `num_frames_max`.
+            frames = tf.RaggedTensor.from_row_lengths(
+                values=local_indices, row_lengths=frame_lengths
+            )
+            rows = tf.RaggedTensor.from_row_lengths(
+                values=frames, row_lengths=frames_per_row
+            )
+            padded = rows.to_tensor(default_value=0)
+            num_frames_max = tf.shape(padded)[1]
+            width = tf.shape(padded)[2]
+            return tf.reshape(padded, [batch_size, num_frames_max * width])
 
-        audio_mask_flattened = tf.reshape(audio_mask, [-1])
-        audio_indices = tf.where(audio_mask_flattened)[..., 0]
-        audio_indices = tf.cast(audio_indices, dtype=tf.int32)
-
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(audio_mask, dtype=audio_indices.dtype), axis=1
+        return tf.cond(
+            tf.math.equal(tf.shape(indices)[0], 0),
+            lambda: tf.zeros([batch_size, 0], dtype=tf.int32),
+            _compute,
         )
-
-        batched_audio_indices = tf.RaggedTensor.from_row_lengths(
-            values=audio_indices,
-            row_lengths=row_lengths,
-        )
-
-        to_subtract = tf.math.scalar_mul(
-            scalar=tf.cast(sequence_length, dtype=tf.int32),
-            x=tf.range(
-                start=0,
-                limit=tf.cast(batch_size, dtype=tf.int32),
-                dtype=tf.int32,
-            ),
-        )
-        to_subtract = tf.expand_dims(to_subtract, axis=-1)
-        batched_audio_indices = tf.math.subtract(
-            batched_audio_indices, to_subtract
-        )
-
-        batched_audio_indices = batched_audio_indices.to_tensor(default_value=0)
-        return batched_audio_indices
 
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
@@ -253,40 +430,26 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             batched = False
             texts = tf.expand_dims(texts, axis=0)
 
+        media_lens, any_single = self._media_batch_sizes(
+            {"image": images, "video": videos, "audio": audio}, is_tf=True
+        )
         if texts is None:
-            # Media only: one placeholder prompt per example. A single
-            # rank-3 image, rank-4 video or rank-1 waveform is one example,
-            # exactly as in `_call_python`.
-            batched = True
-            if images is not None:
-                if isinstance(images, list):
-                    b = len(images)
-                elif len(images.shape) == 3:
-                    batched = False
-                    b = 1
-                else:
-                    b = tf.shape(images)[0]
-                texts = tf.repeat(tf.constant(self.image_placeholder), b)
-            elif videos is not None:
-                if isinstance(videos, list):
-                    b = len(videos)
-                elif len(videos.shape) == 4:
-                    batched = False
-                    b = 1
-                else:
-                    b = tf.shape(videos)[0]
-                texts = tf.repeat(tf.constant(self.video_placeholder), b)
-            elif audio is not None:
-                if isinstance(audio, list):
-                    b = len(audio)
-                elif len(audio.shape) == 1:
-                    batched = False
-                    b = 1
-                else:
-                    b = tf.shape(audio)[0]
-                texts = tf.repeat(tf.constant(self.audio_placeholder), b)
+            # Media only: one placeholder prompt per example, built from
+            # every present modality. A single rank-3 image, rank-4 video or
+            # rank-1 waveform is one example, exactly as in `_call_python`.
+            batched = not any_single
+            if media_lens:
+                b = self._check_same_batch_size(media_lens, is_tf=True)
+                default_prompt = self._build_default_texts(
+                    images is not None, videos is not None, audio is not None
+                )
+                texts = tf.repeat(tf.constant(default_prompt), b)
             else:
                 texts = tf.constant([""])
+            expected_counts = self._expected_placeholder_counts(texts, True)
+        else:
+            expected_counts = self._expected_placeholder_counts(texts, True)
+            self._check_media_counts(expected_counts, media_lens, True)
 
         # Vision handling
         pixel_values = None
@@ -323,7 +486,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 if not isinstance(images, tf.RaggedTensor):
                     images = tf.convert_to_tensor(images)
                 self._check_image_rank(images.shape.rank)
-                if images.shape.rank == 3 and not batched:
+                if images.shape.rank == 3:
                     images = tf.expand_dims(images, 0)
                 # `tf.map_fn` iterates the batch axis symbolically, so this
                 # traces inside `tf.data.Dataset.map` with an unknown batch.
@@ -397,7 +560,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             else:
                 if not isinstance(videos, tf.RaggedTensor):
                     videos = tf.convert_to_tensor(videos)
-                if videos.shape.rank == 4 and not batched:
+                if videos.shape.rank == 4:
                     videos = tf.expand_dims(videos, 0)
                 pv_ragged, ppi_ragged, ragged_tokens = tf.map_fn(
                     _convert_video,
@@ -456,7 +619,9 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 # soft-token count. Each clip is converted on its own, never
                 # zero-padded to the batch, so the mel frames match HF.
                 aud = _to_dense_tensor(aud)
-                len_i = tf.shape(aud)[0]
+                len_i = tf.minimum(
+                    tf.shape(aud)[0], self.audio_converter.num_samples
+                )
                 mel = tf.convert_to_tensor(
                     self.audio_converter(tf.expand_dims(aud, 0))
                 )[0]
@@ -479,7 +644,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             else:
                 if not isinstance(audio, tf.RaggedTensor):
                     audio = tf.convert_to_tensor(audio)
-                if audio.shape.rank == 1 and not batched:
+                if audio.shape.rank == 1:
                     audio = tf.expand_dims(audio, 0)
                 mel_ragged, output_lengths, num_tokens_tensor = tf.map_fn(
                     _convert_audio,
@@ -526,6 +691,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 fn_output_signature=tf.string,
             )
 
+        # Soft-token counts of the expanded prompts; packing must keep all.
+        expanded_counts = self._expected_placeholder_counts(texts, True)
         token_ids = self.tokenizer(texts)
         token_ids, segment_ids = self.packer(
             token_ids,
@@ -534,6 +701,9 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             add_end_value=True,
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
+        self._check_truncation(
+            expanded_counts, token_ids, sequence_length, True
+        )
 
         batch_size = tf.shape(token_ids)[0]
 
@@ -549,7 +719,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                     token_ids
                     == self.tokenizer.token_to_id(self.video_placeholder),
                 )
-            vision_indices = self._get_vision_indices(vision_mask)
+            vision_indices = self._get_placeholder_indices(vision_mask)
             vision_indices = tf.cast(vision_indices, "int32")
         elif (
             self.image_converter is not None or self.video_converter is not None
@@ -570,7 +740,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             audio_mask = token_ids == self.tokenizer.token_to_id(
                 self.audio_placeholder
             )
-            audio_indices = self._get_audio_indices(audio_mask)
+            audio_indices = self._get_placeholder_indices(audio_mask)
             audio_indices = tf.cast(audio_indices, "int32")
         elif self.audio_converter is not None:
             input_feat_size = self.audio_converter.num_mels
@@ -603,22 +773,40 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         return keras.utils.pack_x_y_sample_weight(output, y, sample_weight)
 
     def _python_indices(self, token_ids, placeholder_ids):
-        """Numpy twin of `_get_vision_indices` / `_get_audio_indices`.
+        """Numpy twin of `_get_placeholder_indices`.
 
         Args:
             token_ids: int numpy array of shape `(batch, seq)`.
             placeholder_ids: the token ids that mark a soft-token slot.
 
         Returns:
-            int32 `(batch, max_tokens)` positions of the placeholder tokens,
-            right-padded with 0 to the longest row, exactly like the TF path.
+            int32 `(batch, num_frames_max * width)` positions laid out
+            frame-major: block `f` of each row holds frame `f`'s placeholder
+            positions first and `0` after, with `(num_frames_max, width)`
+            from `_frame_layout`. Contiguous placeholder runs are frames (the
+            `<image|><|image>` wrappers separate them), so a single image or
+            audio clip is one frame. Identical to the TF path.
         """
         mask = np.isin(token_ids, list(placeholder_ids))
-        counts = mask.sum(axis=1)
-        max_len = int(counts.max()) if counts.size else 0
-        indices = np.zeros((token_ids.shape[0], max_len), dtype="int32")
-        for row, (m, n) in enumerate(zip(mask, counts)):
-            indices[row, :n] = np.flatnonzero(m)
+        batch_size = mask.shape[0]
+
+        # Per row: the length of every contiguous run of placeholders.
+        frame_counts = []
+        for row in mask:
+            padded = np.concatenate([[False], row, [False]])
+            edges = np.flatnonzero(padded[1:] != padded[:-1])
+            frame_counts.append((edges[1::2] - edges[::2]).tolist())
+
+        num_frames_max, width = self._frame_layout(frame_counts)
+        indices = np.zeros((batch_size, num_frames_max * width), dtype="int32")
+        for r, row in enumerate(mask):
+            positions = np.flatnonzero(row)
+            start = 0
+            for f, count in enumerate(frame_counts[r]):
+                indices[r, f * width : f * width + count] = positions[
+                    start : start + count
+                ]
+                start += count
         return indices
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
@@ -650,6 +838,9 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         videos = _to_host(videos)
         audio = _to_host(audio)
 
+        media_lens, any_single = self._media_batch_sizes(
+            {"image": images, "video": videos, "audio": audio}, is_tf=False
+        )
         if texts is not None:
             texts, is_batched, outer_shape = canonicalize_python_string_inputs(
                 texts
@@ -659,43 +850,22 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                     "EmbeddingGemma2TextEmbedderPreprocessor does not "
                     "support rank>=2 text inputs."
                 )
+            expected_counts = self._expected_placeholder_counts(texts, False)
+            self._check_media_counts(expected_counts, media_lens, False)
         else:
-            is_batched = True
-            if images is not None:
-                if isinstance(images, (list, tuple)):
-                    b = len(images)
-                else:
-                    images = np.asarray(images)
-                    if len(images.shape) == 3:
-                        is_batched = False
-                        b = 1
-                    else:
-                        b = images.shape[0]
-                texts = [self.image_placeholder] * b
-            elif videos is not None:
-                if isinstance(videos, (list, tuple)):
-                    b = len(videos)
-                else:
-                    videos = np.asarray(videos)
-                    if len(videos.shape) == 4:
-                        is_batched = False
-                        b = 1
-                    else:
-                        b = videos.shape[0]
-                texts = [self.video_placeholder] * b
-            elif audio is not None:
-                if isinstance(audio, (list, tuple)):
-                    b = len(audio)
-                else:
-                    audio = np.asarray(audio)
-                    if len(audio.shape) == 1:
-                        is_batched = False
-                        b = 1
-                    else:
-                        b = audio.shape[0]
-                texts = [self.audio_placeholder] * b
+            # Media only: one placeholder prompt per example, built from
+            # every present modality. A single rank-3 image, rank-4 video or
+            # rank-1 waveform is one example.
+            is_batched = not any_single
+            if media_lens:
+                b = self._check_same_batch_size(media_lens, is_tf=False)
+                default_prompt = self._build_default_texts(
+                    images is not None, videos is not None, audio is not None
+                )
+                texts = [default_prompt] * b
             else:
                 texts = [""]
+            expected_counts = self._expected_placeholder_counts(texts, False)
 
         # Vision handling
         pixel_values = None
@@ -709,7 +879,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             else:
                 images = np.asarray(images)
                 self._check_image_rank(images.ndim)
-                if images.ndim == 3 and not is_batched:
+                if images.ndim == 3:
                     images_list = [images]
                 else:
                     images_list = [images[i] for i in range(images.shape[0])]
@@ -751,7 +921,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             if isinstance(videos, (list, tuple)):
                 videos_list = [np.asarray(e) for e in videos]
             elif isinstance(videos, np.ndarray):
-                if len(videos.shape) == 4 and not is_batched:
+                if len(videos.shape) == 4:
                     videos_list = [videos]
                 else:
                     videos_list = [videos[i] for i in range(videos.shape[0])]
@@ -829,7 +999,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             if isinstance(audio, (list, tuple)):
                 audio_list = [np.asarray(e) for e in audio]
             elif isinstance(audio, np.ndarray):
-                if len(audio.shape) == 1 and not is_batched:
+                if len(audio.shape) == 1:
                     audio_list = [audio]
                 else:
                     audio_list = [audio[i] for i in range(audio.shape[0])]
@@ -843,7 +1013,7 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
 
             for aud in audio_list:
                 aud_arr = np.array(aud)
-                len_i = aud_arr.shape[0]
+                len_i = min(aud_arr.shape[0], self.audio_converter.num_samples)
                 aud_arr = np.expand_dims(aud_arr, axis=0)
                 mel = self.audio_converter(aud_arr)
                 mel = keras.ops.convert_to_numpy(mel)[0]
@@ -889,6 +1059,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 )
                 texts[i] = texts[i].replace(self.audio_placeholder, replacement)
 
+        # Soft-token counts of the expanded prompts; packing must keep all.
+        expanded_counts = self._expected_placeholder_counts(texts, False)
         token_ids = self.tokenizer(texts)
         token_ids, _ = self.packer(
             token_ids,
@@ -900,6 +1072,9 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
         # tensor); everything below is host-side numpy.
         token_ids = keras.ops.convert_to_numpy(token_ids)
         padding_mask = token_ids != self.tokenizer.pad_token_id
+        self._check_truncation(
+            expanded_counts, token_ids, sequence_length, False
+        )
 
         batch_size = token_ids.shape[0]
 
