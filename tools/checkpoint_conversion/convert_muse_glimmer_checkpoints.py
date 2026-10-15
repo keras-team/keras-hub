@@ -309,11 +309,11 @@ def _build_keras_multimodal_inputs(keras_model, result):
         grid_thw = grid_thw[np.newaxis, ...]
 
     return {
-        "token_ids": ops.convert_to_tensor(token_ids),
-        "padding_mask": ops.convert_to_tensor(result["attention_mask"]),
-        "pixel_values": ops.convert_to_tensor(pixel_values),
-        "image_grid_thw": ops.convert_to_tensor(grid_thw),
-        "vision_indices": ops.convert_to_tensor(vision_indices),
+        "token_ids": token_ids,
+        "padding_mask": result["attention_mask"],
+        "pixel_values": pixel_values,
+        "image_grid_thw": grid_thw,
+        "vision_indices": vision_indices,
     }
 
 
@@ -371,23 +371,9 @@ def _report_numerics(label, keras_logits, hf_logits):
 
 def test_numerics(keras_model, hf_results, label):
     if label == "TEXT":
-        hf_ids = hf_results["text_token_ids"]
-        token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
-        padding_mask = ops.ones_like(token_ids)
-        model_inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
-        batch_size = ops.shape(token_ids)[0]
-        vision_encoder = keras_model.backbone.vision_encoder
-        patch_dim = (
-            vision_encoder.patch_temporal * 3 * vision_encoder.patch_size**2
-        )
-        model_inputs.update(
-            {
-                "pixel_values": ops.zeros(
-                    (batch_size, 0, patch_dim), dtype="float32"
-                ),
-                "image_grid_thw": ops.zeros((batch_size, 0, 3), dtype="int32"),
-                "vision_indices": ops.zeros((batch_size, 0), dtype="int32"),
-            }
+        model_inputs, _, _ = keras_model.preprocessor(
+            [TEXT_PROMPT],
+            sequence_length=hf_results["text_token_ids"].shape[1],
         )
         with torch.no_grad():
             keras_logits = ops.convert_to_numpy(
@@ -472,7 +458,6 @@ def _load_hf_assistant_models(hf_preset):
         target_preset,
         device_map="cpu",
         torch_dtype=torch.float32,
-        attn_implementation="eager",
         force_download=False,
     )
     hf_target_model.eval()
@@ -619,7 +604,7 @@ def test_assistant_generation(
     print("\n--- Section 3: Target context ---")
     # The Keras target must select the same layers as the HF generator.
     _, _, kh_context = kh_target._build_cache(
-        ops.convert_to_tensor(input_ids.numpy().astype(np.int32)),
+        input_ids.numpy().astype(np.int32),
         ops.ones(tuple(input_ids.shape), dtype="int32"),
         target_layer_ids=target_layer_ids,
     )
@@ -710,12 +695,8 @@ def verify_assistant_mode(preset, hf_preset):
         dtype="float32",
     )
     kh_out, _ = kh_assistant.call_with_cache(
-        noise_embeds=ops.convert_to_tensor(
-            noise_embeds.numpy(), dtype="float32"
-        ),
-        context_hidden_states=ops.convert_to_tensor(
-            context_hidden_states.numpy(), dtype="float32"
-        ),
+        noise_embeds=noise_embeds.numpy(),
+        context_hidden_states=context_hidden_states.numpy(),
         cache=assistant_cache,
         cache_update_index=0,
     )
@@ -770,7 +751,6 @@ def main(_):
         hf_preset,
         device_map="cpu",
         torch_dtype=torch.float32,
-        attn_implementation="eager",
     )
     hf_model.eval()
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)

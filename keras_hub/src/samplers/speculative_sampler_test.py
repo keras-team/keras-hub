@@ -2,6 +2,7 @@ import keras
 import numpy as np
 from keras import ops
 
+import keras_hub
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.tests.test_case import TestCase
 
@@ -180,6 +181,76 @@ class SpeculativeSamplerTest(TestCase):
         output_str = self.join_as_string(output)
         self.assertEqual(output_str, ["aaaaaaaa", "aaaaaaaa"])
 
+    def test_ragged_batch_keeps_prompt_tokens(self):
+        batch_size = 2
+        length = 10
+        z = self.char_lookup["z"]
+        # Row 0 has a 2-token prompt. Row 1 has a 6-token prompt.
+        prompt = np.full((batch_size, length), z, dtype="int32")
+        prompt[1, :6] = [self.char_lookup[c] for c in "qrstuv"]
+        mask = np.zeros((batch_size, length), dtype=bool)
+        mask[0, :2] = True
+        mask[1, :6] = True
+
+        def next_fn(prompt, cache, index):
+            logits = (
+                ops.one_hot(ops.zeros((batch_size,), dtype="int32"), 26) * 1e9
+            )
+            return logits, ops.ones([batch_size, 5]), cache
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3)
+        output = ops.convert_to_numpy(
+            sampler(
+                next=next_fn,
+                prompt=ops.array(prompt),
+                index=2,
+                mask=ops.array(mask),
+                draft_next=next_fn,
+            )
+        )
+        self.assertAllEqual(output[mask], prompt[mask])
+        self.assertAllEqual(output[~mask], np.zeros(int((~mask).sum())))
+
+    def test_ragged_batch_counts_forced_prompt_positions_as_matched(self):
+        if keras.config.backend() == "jax":
+            self.skipTest("JAX traces the sampler loop once.")
+        batch_size = 2
+        length = 12
+        z = self.char_lookup["z"]
+        # Row 0 has a 2-token prompt. Row 1 has an 8-token prompt.
+        prompt = np.full((batch_size, length), z, dtype="int32")
+        prompt[1, :8] = [self.char_lookup[c] for c in "qrstuvwx"]
+        mask = np.zeros((batch_size, length), dtype=bool)
+        mask[0, :2] = True
+        mask[1, :8] = True
+        num_draft_calls = [0]
+
+        def next_fn(prompt, cache, index):
+            logits = (
+                ops.one_hot(ops.zeros((batch_size,), dtype="int32"), 26) * 1e9
+            )
+            return logits, ops.ones([batch_size, 5]), cache
+
+        def counting_draft_next(prompt, cache, index):
+            num_draft_calls[0] += 1
+            return next_fn(prompt, cache, index)
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3)
+        output = ops.convert_to_numpy(
+            sampler(
+                next=next_fn,
+                prompt=ops.array(prompt),
+                index=2,
+                mask=ops.array(mask),
+                draft_next=counting_draft_next,
+            )
+        )
+        self.assertAllEqual(output[mask], prompt[mask])
+        # The draft and the target agree on every free position. Without
+        # forced positions, the prompt of row 1 slows each cycle to one token.
+        num_cycles = num_draft_calls[0] // 3
+        self.assertLessEqual(num_cycles, 3)
+
     def test_one_shot_block_draft_next(self):
         # Some draft models (e.g. a bidirectional block-diffusion drafter)
         # produce every candidate from a single forward pass rather than
@@ -338,3 +409,81 @@ class SpeculativeSamplerTest(TestCase):
         output_str = self.join_as_string(output)
         self.assertTrue(output_str[0].startswith("ab"))
         self.assertEqual(output_str[0][2], "c")
+
+    def test_top_k_one_matches_target_sampler(self):
+        # With `k=1`, the target distribution is a point mass, so a wrong
+        # draft must never change the output.
+        target_chars = list("abcdefghijkl")
+        draft_chars = list("abxdefzhijkl")
+
+        def soft_next(chars):
+            fn = self._next_fn(chars)
+
+            def next_fn(prompt, cache, index):
+                logits, hidden, cache = fn(prompt, cache, index)
+                return logits * 1e-9 + 2.0, hidden, cache
+
+            return next_fn
+
+        # Logits are 3.0 at the chosen character and 2.0 elsewhere.
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=3,
+            base_sampler=keras_hub.samplers.TopKSampler(k=1, seed=1),
+            seed=2,
+        )
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        for _ in range(5):
+            output = sampler(
+                next=soft_next(target_chars),
+                prompt=prompt,
+                index=0,
+                draft_next=soft_next(draft_chars),
+            )
+            self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def _sample_first_token(self, base_sampler, draft_token, p):
+        batch, k, length = 2000, 2, 4
+        target_logits = np.log(np.asarray(p, "float32"))
+        vocab = len(p)
+        p_logits = ops.convert_to_tensor(
+            np.broadcast_to(target_logits, (batch, k + 1, vocab)).copy()
+        )
+        q_logits = ops.convert_to_tensor(
+            np.broadcast_to(np.eye(vocab)[draft_token] * 10.0, (batch, vocab))
+            .astype("float32")
+            .copy()
+        )
+
+        def draft_next(prompt, draft_cache, index):
+            return q_logits, ops.zeros((batch, 1)), draft_cache
+
+        def verify_next(prompt, cache, index, num_tokens):
+            return p_logits, cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=k, base_sampler=base_sampler, seed=3
+        )
+        output = sampler(
+            next=None,
+            prompt=ops.zeros((batch, length), "int32"),
+            index=1,
+            draft_next=draft_next,
+            verify_next=verify_next,
+        )
+        tokens = ops.convert_to_numpy(output)[:, 1]
+        return np.bincount(tokens, minlength=vocab) / batch
+
+    def test_stochastic_matches_target_distribution(self):
+        p = [0.1, 0.2, 0.3, 0.4]
+        freq = self._sample_first_token(
+            keras_hub.samplers.RandomSampler(seed=1), draft_token=1, p=p
+        )
+        self.assertLess(0.5 * np.abs(freq - np.array(p)).sum(), 0.05)
+
+    def test_stochastic_applies_top_k_to_target(self):
+        p = [0.1, 0.2, 0.3, 0.4]
+        freq = self._sample_first_token(
+            keras_hub.samplers.TopKSampler(k=2, seed=1), draft_token=1, p=p
+        )
+        expected = np.array([0.0, 0.0, 3 / 7, 4 / 7])
+        self.assertLess(0.5 * np.abs(freq - expected).sum(), 0.05)

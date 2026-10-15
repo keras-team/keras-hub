@@ -28,6 +28,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionEncoder,
 )
+from keras_hub.src.samplers.top_k_sampler import TopKSampler
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -423,6 +424,29 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         speculative_sampler = self.causal_lm._assisted_generate_cache[2]
         self.assertIsNone(speculative_sampler.base_sampler)
 
+    def test_generate_with_assistant_ragged_batch_keeps_prompt(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport", " airplane"]
+        )
+        self.causal_lm.preprocessor = None
+        reference_output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None
+        )
+        output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertAllEqual(output["token_ids"], reference_output["token_ids"])
+        # The prompt tokens of each row stay unchanged.
+        prompt_mask = ops.convert_to_numpy(prompt_ids["padding_mask"]) > 0
+        self.assertAllEqual(
+            np.where(prompt_mask, ops.convert_to_numpy(output["token_ids"]), 0),
+            np.where(
+                prompt_mask, ops.convert_to_numpy(prompt_ids["token_ids"]), 0
+            ),
+        )
+
     def test_generate_with_assistant_rejects_short_max_length(self):
         assistant = self._make_assistant(block_size=6)
         self.causal_lm.compile(sampler="greedy")
@@ -530,6 +554,25 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             tuple(ops.shape(output["token_ids"])),
             tuple(ops.shape(prompt_ids["token_ids"])),
         )
+
+    def test_generate_with_assistant_top_k_one_matches_plain(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler=TopKSampler(k=1))
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport", " airplane"]
+        )
+        self.causal_lm.preprocessor = None
+        reference_output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None
+        )
+        # Each assisted call must give the plain output.
+        for _ in range(3):
+            output = self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
+            )
+            self.assertAllEqual(
+                output["token_ids"], reference_output["token_ids"]
+            )
 
     def test_generate_with_assistant_reuses_compiled_function(self):
         assistant = self._make_assistant(block_size=3)

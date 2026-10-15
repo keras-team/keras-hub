@@ -333,10 +333,9 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
             )
 
         def to_blocks(x):
-            x = ops.reshape(
+            return ops.reshape(
                 x, (num_slots, slot_size, self.num_heads, self.head_dim)
             )
-            return ops.transpose(x, (0, 2, 1, 3))
 
         q_pad = to_blocks(scatter_pad(q))
         k_pad = to_blocks(scatter_pad(k))
@@ -348,18 +347,9 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         )
         valid_key = ops.reshape(valid, (num_slots, 1, 1, slot_size)) > 0
 
-        scores = ops.matmul(q_pad, ops.transpose(k_pad, (0, 1, 3, 2)))
-        scores = ops.cast(scores * self._inv_scale, "float32")
-        scores = ops.where(valid_key, scores, -1e9)
-        row_max = ops.max(scores, axis=-1, keepdims=True)
-        exp_scores = ops.exp(scores - row_max) * ops.cast(valid_key, "float32")
-
-        probs = exp_scores / ops.maximum(
-            ops.sum(exp_scores, axis=-1, keepdims=True), 1e-9
+        out_pad = ops.dot_product_attention(
+            q_pad, k_pad, v_pad, mask=valid_key, scale=self._inv_scale
         )
-        probs = ops.cast(probs, v.dtype)
-        out_pad = ops.matmul(probs, v_pad)
-        out_pad = ops.transpose(out_pad, (0, 2, 1, 3))
         out_pad = ops.reshape(
             out_pad, (padded_len, self.num_heads, self.head_dim)
         )
@@ -370,8 +360,8 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
 
         `segment_order` is `(order, inverse_order)` and `groups` lists
         `(num_segments, length)`, both from `_group_segments`. Each group
-        batches the segments of one length. The result is bitwise equal
-        to HF's per-segment eager attention.
+        batches the segments of one length. Each group runs
+        `ops.dot_product_attention`.
         """
         order, inverse_order = segment_order
         q, k, v = (ops.take(x, order, axis=0) for x in (q, k, v))
@@ -381,21 +371,17 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
             end = start + count * length
 
             def to_blocks(x):
-                x = ops.reshape(
+                return ops.reshape(
                     x[start:end],
                     (count, length, self.num_heads, self.head_dim),
                 )
-                return ops.transpose(x, (0, 2, 1, 3))
 
-            q_blocks, k_blocks, v_blocks = (
+            out = ops.dot_product_attention(
                 to_blocks(q),
                 to_blocks(k),
                 to_blocks(v),
+                scale=self._inv_scale,
             )
-            scores = ops.matmul(q_blocks, ops.transpose(k_blocks, (0, 1, 3, 2)))
-            scores = ops.cast(scores * self._inv_scale, "float32")
-            probs = ops.cast(ops.softmax(scores, axis=-1), v.dtype)
-            out = ops.transpose(ops.matmul(probs, v_blocks), (0, 2, 1, 3))
             outputs.append(
                 ops.reshape(
                     out, (count * length, self.num_heads, self.head_dim)
