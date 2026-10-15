@@ -745,6 +745,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         response_mask = segment_ids == 1

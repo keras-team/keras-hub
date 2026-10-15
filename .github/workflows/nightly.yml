@@ -35,7 +35,7 @@ jobs:
         id: pip-cache
         run: |
           python -m pip install --upgrade pip setuptools
-          echo "::set-output name=dir::$(pip cache dir)"
+          echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
       - name: pip cache
         # zizmor: ignore[cache-poisoning]
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
