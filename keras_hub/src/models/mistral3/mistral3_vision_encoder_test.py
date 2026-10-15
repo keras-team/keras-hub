@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
@@ -184,6 +185,13 @@ class Mistral3VisionEncoderTest(TestCase):
 
     def test_encoder_serialization(self):
         self.run_serialization_test(self.vision_encoder)
+        # A callable activation takes a different `get_config()` branch. The
+        # encoder also builds the MLP and encoder layer with it.
+        self.run_serialization_test(
+            Mistral3VisionEncoder(
+                **self.encoder_init_kwargs, activation=keras.activations.relu
+            )
+        )
 
     def test_encoder_saved_model(self):
         pixel_values = np.random.rand(
@@ -234,6 +242,17 @@ class Mistral3VisionEncoderTest(TestCase):
 
     def test_multimodal_projector_serialization(self):
         self.run_serialization_test(self.projector)
+        # A callable activation takes a different `get_config()` branch.
+        self.run_serialization_test(
+            Mistral3MultiModalProjector(
+                vision_hidden_dim=self.hidden_dim,
+                text_hidden_dim=self.text_hidden_dim,
+                spatial_merge_size=self.spatial_merge_size,
+                patch_size=self.patch_size,
+                image_size=self.image_size,
+                projector_hidden_act=keras.activations.relu,
+            )
+        )
 
     # === Image feature extractor (encoder + projector, end to end) ===
 
@@ -250,6 +269,11 @@ class Mistral3VisionEncoderTest(TestCase):
         # zero-padded tail), not sliced to the valid count: 2 images *
         # (4//2) * (4//2) = 8 windows.
         self.assertEqual(output.shape, (8, self.text_hidden_dim))
+
+    def test_image_feature_extractor_serialization(self):
+        self.run_serialization_test(
+            Mistral3ImageFeatureExtractor(self.vision_encoder, self.projector)
+        )
 
     def test_image_feature_extractor_rejects_unsupported_layer(self):
         with self.assertRaises(NotImplementedError):
@@ -303,20 +327,11 @@ class Mistral3VisionEncoderTest(TestCase):
         )
         self.assertAllClose(output, token_embeddings)
 
-    def test_image_text_embedding_merger_rejects_too_few_placeholders(self):
-        token_embeddings = np.zeros((1, 5, 3))
-        image_features = np.ones((2, 3))
-        placeholder_indices = np.array([[1]], dtype="int32")
-        with self.assertRaisesRegex(ValueError, "must match"):
-            self.embedding_merger(
-                token_embeddings, image_features, placeholder_indices
-            )
-
     def test_image_text_embedding_merger_rejects_too_many_placeholders(self):
         token_embeddings = np.zeros((1, 5, 3))
         image_features = np.ones((1, 3))
         placeholder_indices = np.array([[1, 3]], dtype="int32")
-        with self.assertRaisesRegex(ValueError, "must match"):
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
             self.embedding_merger(
                 token_embeddings, image_features, placeholder_indices
             )

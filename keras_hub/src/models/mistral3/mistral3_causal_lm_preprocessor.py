@@ -385,8 +385,14 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             )
         )
         if not batched:
-            token_ids, padding_mask, y, sample_weight = self._squeeze_batch(
-                [token_ids, padding_mask, y, sample_weight]
+            (
+                token_ids,
+                padding_mask,
+                y,
+                sample_weight,
+                placeholder_indices,
+            ) = self._squeeze_batch(
+                [token_ids, padding_mask, y, sample_weight, placeholder_indices]
             )
         out_x = {
             "token_ids": token_ids,
@@ -495,8 +501,8 @@ class Mistral3CausalLMPreprocessor(CausalLMPreprocessor):
             prompts, image_sizes, sequence_length, add_labels=False
         )
         if not batched:
-            token_ids, padding_mask = self._squeeze_batch(
-                [token_ids, padding_mask]
+            token_ids, padding_mask, placeholder_indices = self._squeeze_batch(
+                [token_ids, padding_mask, placeholder_indices]
             )
         return {
             "token_ids": token_ids,

@@ -188,13 +188,18 @@ class Mistral3Backbone(Backbone):
             name="sequence_output_layernorm",
         )
         text_only_model = vision_encoder is None
+        if not text_only_model and multimodal_projector is None:
+            raise ValueError(
+                "`multimodal_projector` must be provided when "
+                "`vision_encoder` is not `None`."
+            )
         self.vision_encoder = vision_encoder
         self.multimodal_projector = multimodal_projector
-        self.image_text_embedding_merger = Mistral3ImageTextEmbeddingMerger(
-            dtype=dtype,
-            name="image_text_embedding_merger",
-        )
         if not text_only_model:
+            self.image_text_embedding_merger = Mistral3ImageTextEmbeddingMerger(
+                dtype=dtype,
+                name="image_text_embedding_merger",
+            )
             self.image_feature_extractor = Mistral3ImageFeatureExtractor(
                 vision_encoder,
                 multimodal_projector,

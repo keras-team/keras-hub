@@ -91,6 +91,30 @@ class Mistral3ImageFeatureExtractor(keras.layers.Layer):
             dtype=self.compute_dtype,
         )
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vision_encoder": keras.layers.serialize(self.vision_encoder),
+                "multimodal_projector": keras.layers.serialize(
+                    self.multimodal_projector
+                ),
+                "vision_feature_layer": self.vision_feature_layer,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        config = dict(config)
+        config["vision_encoder"] = keras.layers.deserialize(
+            config["vision_encoder"]
+        )
+        config["multimodal_projector"] = keras.layers.deserialize(
+            config["multimodal_projector"]
+        )
+        return super().from_config(config)
+
 
 def compute_image_placeholder_indices(token_ids, image_token_index):
     """Compute per-example image placeholder positions for `token_ids`.
@@ -206,19 +230,21 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
         )
 
     def _check_feature_count(self, counts, image_features):
-        """Raises if placeholders and image features differ in number.
+        """Raises if placeholders outnumber image features.
 
-        The check runs only with concrete values. Under `jit` or graph
-        tracing, the count depends on data and the check is skipped.
+        The patch merger pads features to the largest image in the batch.
+        The feature count can exceed the placeholder count. The
+        preprocessor checks exact counts. The check runs only with
+        concrete values. Under `jit` or graph tracing, the check is skipped.
         """
         try:
             num_placeholders = int(ops.convert_to_numpy(ops.sum(counts)))
             num_features = int(ops.shape(image_features)[0])
         except Exception:
             return
-        if num_placeholders != num_features:
+        if num_placeholders > num_features:
             raise ValueError(
-                "The number of image placeholder tokens must match the "
+                "The number of image placeholder tokens must not exceed the "
                 f"number of image features. Received: {num_placeholders} "
                 f"placeholder(s) and {num_features} feature(s)."
             )
@@ -590,7 +616,11 @@ class Mistral3VisionMLP(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "activation": self.activation,
+                "activation": (
+                    keras.activations.serialize(self.activation)
+                    if callable(self.activation)
+                    else self.activation
+                ),
             }
         )
         return config
@@ -708,7 +738,11 @@ class Mistral3VisionEncoderLayer(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "head_dim": self.head_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "activation": self.activation,
+                "activation": (
+                    keras.activations.serialize(self.activation)
+                    if callable(self.activation)
+                    else self.activation
+                ),
                 "dropout": self.dropout,
             }
         )
@@ -1072,7 +1106,11 @@ class Mistral3VisionEncoder(keras.Model):
                 "intermediate_dim": self.intermediate_dim,
                 "rope_theta": self.rope_theta,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "activation": self.activation,
+                "activation": (
+                    keras.activations.serialize(self.activation)
+                    if callable(self.activation)
+                    else self.activation
+                ),
                 "attention_dropout": self.attention_dropout,
             }
         )
@@ -1387,7 +1425,11 @@ class Mistral3MultiModalProjector(keras.layers.Layer):
                 "patch_size": self.patch_size,
                 "image_size": self.image_size,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "projector_hidden_act": self.projector_hidden_act,
+                "projector_hidden_act": (
+                    keras.activations.serialize(self.projector_hidden_act)
+                    if callable(self.projector_hidden_act)
+                    else self.projector_hidden_act
+                ),
                 "multimodal_projector_bias": (self.multimodal_projector_bias),
             }
         )

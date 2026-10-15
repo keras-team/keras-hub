@@ -114,6 +114,26 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
         )
         self.assertEqual(num_placeholders, 4)
 
+    def test_unbatched_generate_preprocess_squeezes_placeholder_indices(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        x = preprocessor.generate_preprocess(
+            {"prompts": "the [IMG] quick", "images": [image]}
+        )
+        self.assertEqual(len(np.shape(x["token_ids"])), 1)
+        self.assertEqual(len(np.shape(x["placeholder_indices"])), 1)
+
+    def test_unbatched_call_squeezes_placeholder_indices(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        x, y, sample_weight = preprocessor(
+            {"prompts": "the [IMG] quick", "images": [image]}
+        )
+        self.assertEqual(len(np.shape(x["token_ids"])), 1)
+        self.assertEqual(len(np.shape(x["placeholder_indices"])), 1)
+        self.assertEqual(len(np.shape(y)), 1)
+        self.assertEqual(len(np.shape(sample_weight)), 1)
+
     def test_generate_preprocess_rejects_truncated_image_block(self):
         preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
         image = np.zeros((8, 8, 3), dtype="float32")

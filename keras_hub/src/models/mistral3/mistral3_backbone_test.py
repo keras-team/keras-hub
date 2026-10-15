@@ -163,6 +163,49 @@ class Mistral3BackboneTest(TestCase, parameterized.TestCase):
             (2, 9, self.text_init_kwargs["hidden_dim"]),
         )
 
+    def _mixed_size_input_data(self, token_rows):
+        token_ids = ops.array(token_rows, dtype="int32")
+        placeholder_indices = compute_image_placeholder_indices(
+            token_ids, image_token_index=self.image_token_index
+        )
+        return {
+            "token_ids": token_ids,
+            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "pixel_values": ops.convert_to_tensor(
+                np.random.rand(2, 3, 8, 8).astype("float32")
+            ),
+            "image_sizes": ops.array([[8, 8], [4, 4]], dtype="int32"),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
+        }
+
+    def test_mixed_image_sizes(self):
+        # 4 + 1 placeholders, but the merger pads to 8 feature rows.
+        input_data = self._mixed_size_input_data(
+            [[9, 9, 9, 9, 3], [9, 3, 3, 3, 3]]
+        )
+        model = Mistral3Backbone(**self.init_kwargs)
+        output = model(input_data)
+        hidden_dim = self.text_init_kwargs["hidden_dim"]
+        self.assertEqual(tuple(ops.shape(output)), (2, 5, hidden_dim))
+
+    def test_too_many_placeholders_raises(self):
+        # 10 placeholders, but only 8 feature rows.
+        input_data = self._mixed_size_input_data(
+            [[9, 9, 9, 9, 9], [9, 9, 9, 9, 9]]
+        )
+        model = Mistral3Backbone(**self.init_kwargs)
+        with self.assertRaisesRegex(ValueError, "must not exceed"):
+            model(input_data)
+
+    def test_vision_encoder_without_projector_raises(self):
+        init_kwargs = {
+            k: v
+            for k, v in self.init_kwargs.items()
+            if k != "multimodal_projector"
+        }
+        with self.assertRaisesRegex(ValueError, "multimodal_projector"):
+            Mistral3Backbone(**init_kwargs)
+
     def test_num_parameters(self):
         model = Mistral3Backbone(**self.init_kwargs)
         self.assertEqual(model.count_params(), 4016)
