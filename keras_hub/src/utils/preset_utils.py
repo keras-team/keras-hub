@@ -58,8 +58,7 @@ TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
 
-# Allowed form for user/preset supplied config file names, e.g.
-# `"tokenizer.json"` or `"clip_l_tokenizer.json"`.
+# Allowed form for user/preset supplied config file names, e.g. "tokenizer.json".
 _SAFE_CONFIG_FILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*\.json")
 
 # Weight file names.
@@ -323,10 +322,8 @@ def check_file_exists(preset, path):
 def validate_config_file(config_file):
     """Check that `config_file` is a plain JSON filename.
 
-    `config_file` is stored on `Tokenizer` and `Preprocessor` instances and
-    round-trips through `get_config()`, so it may come from an untrusted
-    preset. It is later joined onto a preset directory, so it must not
-    contain any path components or be an absolute path.
+    Only bare filenames like `tokenizer.json` are allowed: letters, digits,
+    `_` and `-`, ending in `.json`, with no directories.
 
     Args:
         config_file: The config file name to validate.
