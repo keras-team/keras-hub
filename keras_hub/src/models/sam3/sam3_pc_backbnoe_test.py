@@ -10,6 +10,7 @@ from keras_hub.src.models.sam3.sam3_pc_backbone import (
 from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_vision_encoder import SAM3VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class SAM3PromptableConceptBackboneTest(TestCase):
@@ -103,4 +104,7 @@ class SAM3PromptableConceptBackboneTest(TestCase):
                 "presence_logits": (self.batch_size, 1),
                 "semantic_segs": (self.batch_size, output_size, output_size, 1),
             },
+            # `ops.cond` compiles both branches, and the quantized one fails
+            # to compile on GPU. Keep the check everywhere else.
+            run_quantization_check=not running_on_gpu(),
         )
