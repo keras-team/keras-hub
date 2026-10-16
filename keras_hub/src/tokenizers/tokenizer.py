@@ -11,6 +11,7 @@ from keras_hub.src.utils.preset_utils import find_subclass
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import get_preset_loader
 from keras_hub.src.utils.preset_utils import get_preset_saver
+from keras_hub.src.utils.preset_utils import validate_config_file
 from keras_hub.src.utils.python_utils import classproperty
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
@@ -66,7 +67,9 @@ class Tokenizer(PreprocessingLayer):
     backbone_cls = None
 
     def __init__(self, *args, **kwargs):
-        self.config_file = kwargs.pop("config_file", TOKENIZER_CONFIG_FILE)
+        self.config_file = validate_config_file(
+            kwargs.pop("config_file", TOKENIZER_CONFIG_FILE)
+        )
         super().__init__(*args, **kwargs)
         self.file_assets = None
 
