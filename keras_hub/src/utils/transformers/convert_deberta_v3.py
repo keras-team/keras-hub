@@ -17,34 +17,49 @@ def _validate_config(transformers_config):
     relative embeddings, no absolute position embeddings, no conv layer).
     """
     errors = []
-    if not transformers_config.get("relative_attention", False):
+    # HF configs may omit keys or set them to `null`, so fall back to
+    # defaults with `or` rather than relying on `dict.get` defaults alone.
+    if not transformers_config.get("relative_attention"):
         errors.append("`relative_attention` must be `True`")
-    if transformers_config.get("position_buckets", -1) <= 0:
+    if (transformers_config.get("position_buckets") or -1) <= 0:
         errors.append("`position_buckets` must be > 0")
-    if not transformers_config.get("share_att_key", False):
+    if not transformers_config.get("share_att_key"):
         errors.append("`share_att_key` must be `True`")
     if transformers_config.get("position_biased_input", True):
         errors.append("`position_biased_input` must be `False`")
-    if transformers_config.get("conv_kernel_size", 0) > 0:
+    if (transformers_config.get("conv_kernel_size") or 0) > 0:
         errors.append("`conv_kernel_size` must be 0 (no conv layer)")
-    norm_rel_ebd = transformers_config.get("norm_rel_ebd", "none")
+    norm_rel_ebd = transformers_config.get("norm_rel_ebd") or "none"
     if "layer_norm" not in [x.strip() for x in norm_rel_ebd.split("|")]:
         errors.append("`norm_rel_ebd` must include `'layer_norm'`")
-    pos_att_type = transformers_config.get("pos_att_type", [])
+    pos_att_type = transformers_config.get("pos_att_type") or []
     if isinstance(pos_att_type, str):
         pos_att_type = pos_att_type.split("|")
     pos_att_type = {x.strip().lower() for x in pos_att_type}
     if pos_att_type != {"p2c", "c2p"}:
         errors.append("`pos_att_type` must be `'p2c|c2p'`")
-    embedding_size = transformers_config.get(
-        "embedding_size", transformers_config["hidden_size"]
-    )
-    if embedding_size != transformers_config["hidden_size"]:
+    hidden_size = transformers_config["hidden_size"]
+    embedding_size = transformers_config.get("embedding_size") or hidden_size
+    if embedding_size != hidden_size:
         errors.append("`embedding_size` must equal `hidden_size`")
-    if transformers_config.get("type_vocab_size", 0) > 0:
+    if (transformers_config.get("type_vocab_size") or 0) > 0:
         errors.append("`type_vocab_size` must be 0")
-    if transformers_config.get("hidden_act", "gelu") != "gelu":
+    if (transformers_config.get("hidden_act") or "gelu") != "gelu":
         errors.append("`hidden_act` must be `'gelu'`")
+    # `DebertaV3Backbone` hard-codes the layer norm epsilon to 1e-7.
+    if not np.isclose(transformers_config.get("layer_norm_eps") or 1e-7, 1e-7):
+        errors.append("`layer_norm_eps` must be 1e-7")
+    # HF buckets relative positions with `max_relative_positions` (falling
+    # back to `max_position_embeddings` when < 1); KerasHub always uses
+    # `max_position_embeddings`.
+    max_relative_positions = transformers_config.get("max_relative_positions")
+    if (max_relative_positions or -1) >= 1 and max_relative_positions != (
+        transformers_config["max_position_embeddings"]
+    ):
+        errors.append(
+            "`max_relative_positions` must be < 1 or equal "
+            "`max_position_embeddings`"
+        )
     if errors:
         raise ValueError(
             "This `deberta-v2` checkpoint uses a configuration that is not "
