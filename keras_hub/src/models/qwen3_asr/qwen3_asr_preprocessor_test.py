@@ -12,6 +12,7 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Qwen3ASRPreprocessorTest(TestCase):
@@ -19,6 +20,17 @@ class Qwen3ASRPreprocessorTest(TestCase):
         token_length = _get_audio_token_length(np.array([50]), n_window=25)
 
         self.assertEqual(token_length.tolist(), [7])
+
+    def test_audio_token_length_supports_numpy_and_tf(self):
+        audio_lengths = np.array([0, 1, 99, 100, 101, 200], dtype="int32")
+        expected = np.array([0, 1, 13, 13, 14, 26], dtype="int32")
+
+        numpy_result = _get_audio_token_length(audio_lengths)
+        self.assertAllEqual(numpy_result, expected)
+
+        if tf is not None:
+            tf_result = _get_audio_token_length(tf.constant(audio_lengths))
+            self.assertAllEqual(tf_result, expected)
 
     def setUp(self):
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
@@ -172,6 +184,8 @@ class Qwen3ASRPreprocessorTest(TestCase):
 
         self.assertEqual(len(output["audio_mask"].shape), 2)
         self.assertEqual(output["audio_mask"].shape[0], 1)
+        self.assertTrue(ops.is_tensor(output["audio_mel"]))
+        self.assertTrue(ops.is_tensor(output["audio_mask"]))
 
     def test_generate_preprocess(self):
         input_data = {
@@ -200,6 +214,26 @@ class Qwen3ASRPreprocessorTest(TestCase):
                 dtype=bool,
             ),
         )
+
+    def test_audio_placeholder_is_replaced_in_place(self):
+        prompt = "transcribe this: <audio> now"
+        audio = np.ones((16000,), dtype="float32")
+        preprocessor = Qwen3ASRPreprocessor(**self.init_kwargs)
+        output = preprocessor.generate_preprocess(
+            {"prompts": [prompt], "audio": [audio]}
+        )
+
+        formatted_prompt = prompt.replace(
+            "<audio>",
+            "<|audio_start|>" + "<|audio_pad|>" * 13 + "<|audio_end|>",
+        )
+        expected_token_ids = ops.convert_to_numpy(
+            self.tokenizer(formatted_prompt)
+        )
+        token_ids = ops.convert_to_numpy(output["token_ids"])[0]
+        padding_mask = ops.convert_to_numpy(output["padding_mask"])[0]
+
+        self.assertAllEqual(token_ids[padding_mask], expected_token_ids)
 
     def test_short_audio_uses_padded_audio_token_count(self):
         preprocessor = Qwen3ASRPreprocessor(**self.init_kwargs)

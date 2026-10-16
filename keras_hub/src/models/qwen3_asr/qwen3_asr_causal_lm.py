@@ -25,21 +25,33 @@ class Qwen3ASRCausalLM(CausalLM):
             inputs should be preprocessed before calling the model.
 
     Examples:
+
+    Load a pretrained model and transcribe audio with `generate()`:
+
     ```python
+    import numpy as np
+
     model = keras_hub.models.Qwen3ASRCausalLM.from_preset(
         "qwen3_asr_0.6b"
     )
-    model.generate({
-        "prompts": " airplane",
-        "audio": np.ones((16000,), dtype="float32"),
-    })
+    audio = np.ones((16000,), dtype="float32")
+    model.generate({"prompts": " transcribe", "audio": audio})
+    ```
+
+    Fine-tune on audio, prompts, and reference transcriptions with `fit()`:
+
+    ```python
+    import numpy as np
 
     x = {
-        "audio": np.ones((16000,), dtype="float32"),
-        "prompts": " airplane",
-        "responses": " airplane",
+        "audio": np.ones((2, 16000), dtype="float32"),
+        "prompts": [" transcribe", " transcribe"],
+        "responses": ["spoken words one", "spoken words two"],
     }
-    model.fit(x=x, batch_size=1)
+    model = keras_hub.models.Qwen3ASRCausalLM.from_preset(
+        "qwen3_asr_0.6b"
+    )
+    model.fit(x=x, batch_size=2)
     ```
     """
 

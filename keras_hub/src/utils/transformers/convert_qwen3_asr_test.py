@@ -65,6 +65,7 @@ class TestQwen3ASRConverter(TestCase):
             encoder_ffn_dim=16,
             d_model=16,
             n_window=50,
+            n_window_infer=200,
             max_position_embeddings=13,
             downsample_hidden_size=4,
             output_dim=16,
@@ -86,23 +87,30 @@ class TestQwen3ASRConverter(TestCase):
             hf_model.save_pretrained(preset_dir)
             keras_model = Qwen3ASRBackbone.from_preset(preset_dir)
 
-        # Inputs
-        batch_size = 1
-        audio_len = 100  # 1 chunk
-        audio_token_len = 13  # output of audio encoder for 1 chunk
-
+        # Two clips span multiple inference windows and have different lengths.
+        batch_size = 2
+        audio_lens = [250, 400]
+        max_audio_len = max(audio_lens)
         np.random.seed(0)
-        audio_mel_keras = np.random.rand(batch_size, audio_len, 20).astype(
+        audio_mel_keras = np.random.rand(batch_size, max_audio_len, 20).astype(
             "float32"
         )
         audio_mel_hf = np.transpose(audio_mel_keras, (0, 2, 1))
-        audio_mask = np.ones((batch_size, audio_len), dtype="int32")
+        audio_mask = np.zeros((batch_size, max_audio_len), dtype="int32")
+        for i, audio_len in enumerate(audio_lens):
+            audio_mask[i, :audio_len] = 1
 
-        # 1 start token, 13 audio tokens, 1 end token
-        token_ids = np.array(
-            [[1] + [audio_token_id] * audio_token_len + [2]], dtype="int32"
-        )
-        padding_mask = np.ones_like(token_ids)
+        audio_token_lens = [33, 52]
+        token_sequences = [
+            [1] + [audio_token_id] * token_len + [2]
+            for token_len in audio_token_lens
+        ]
+        max_token_len = max(map(len, token_sequences))
+        token_ids = np.zeros((batch_size, max_token_len), dtype="int32")
+        padding_mask = np.zeros_like(token_ids)
+        for i, token_sequence in enumerate(token_sequences):
+            token_ids[i, : len(token_sequence)] = token_sequence
+            padding_mask[i, : len(token_sequence)] = 1
 
         # Keras forward
         keras_inputs = {

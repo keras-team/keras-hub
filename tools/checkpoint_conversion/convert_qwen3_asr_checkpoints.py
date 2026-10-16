@@ -60,38 +60,8 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
         add_generation_prompt=True,
         tokenize=False,
     )
-    hf_inputs = hf_processor(
-        text=chat_prompt,
-        audio=audio_data,
-        sampling_rate=sample_rate,
-        return_tensors="pt",
-        padding="longest",
-    )
-
     audio_placeholder = "<|audio_start|><|audio_pad|><|audio_end|>"
     keras_prompt = chat_prompt.replace(audio_placeholder, "<audio>")
-    keras_inputs = {"audio": audio_data, "prompts": keras_prompt}
-    preprocessed = keras_hub_model.preprocessor.generate_preprocess(
-        keras_inputs, sequence_length=256
-    )
-    keras_token_ids = ops.convert_to_numpy(preprocessed["token_ids"])
-    prompt_len = int(ops.sum(ops.cast(preprocessed["padding_mask"], "int32")))
-    hf_attention_mask = hf_inputs.attention_mask[0].bool()
-    hf_token_ids = hf_inputs.input_ids[0][hf_attention_mask].cpu().numpy()
-
-    if not np.array_equal(keras_token_ids[:prompt_len], hf_token_ids):
-        raise ValueError("KerasHub and HF prompt token IDs do not match.")
-
-    keras_mel = ops.convert_to_numpy(preprocessed["audio_mel"])
-    hf_mel = hf_inputs.input_features[0].transpose(0, 1).cpu().numpy()
-    hf_mel_length = int(hf_inputs.input_features_mask[0].sum())
-    mel_diff = np.max(np.abs(keras_mel - hf_mel[:hf_mel_length]))
-    print(f"-> Preprocessing mel max abs diff: {mel_diff:.6g}")
-    if mel_diff > 1e-3:
-        raise ValueError(
-            f"KerasHub and HF mel features differ by {mel_diff:.6g}."
-        )
-
     keras_parameter_count = keras_hub_model.count_params()
     hf_parameter_count = sum(
         parameter.numel() for parameter in hf_model.parameters()
@@ -103,39 +73,126 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     if keras_parameter_count != hf_parameter_count:
         raise ValueError("KerasHub and HF parameter counts do not match.")
 
-    hf_batch = {
-        "token_ids": hf_inputs.input_ids.to(device),
-        "padding_mask": hf_inputs.attention_mask.to(device),
-        "audio_mel": hf_inputs.input_features.transpose(1, 2).to(device),
-        "audio_mask": hf_inputs.input_features_mask.to(device),
-    }
-    old_preprocessor = keras_hub_model.preprocessor
-    keras_hub_model.preprocessor = None
-    keras_logits = keras_hub_model(hf_batch, training=False)
-    keras_hub_model.preprocessor = old_preprocessor
-    hf_logits = hf_model(**hf_inputs.to(device)).logits
-    keras_logits = ops.convert_to_numpy(keras_logits)
-    hf_logits = hf_logits.detach().cpu().numpy()
     audio_token_ids = [
         keras_hub_tokenizer.vocabulary[token]
         for token in ("<|audio_start|>", "<|audio_pad|>", "<|audio_end|>")
     ]
-    text_positions = ~np.isin(
-        hf_inputs.input_ids[0].cpu().numpy(), audio_token_ids
-    )
-    logits_diff = np.max(
-        np.abs(keras_logits[:, text_positions] - hf_logits[:, text_positions])
-    )
-    print(f"-> Logits max abs diff: {logits_diff:.6g}")
-    if logits_diff > 1e-3:
-        raise ValueError(f"KerasHub and HF logits differ by {logits_diff:.6g}.")
+    short_audio = audio_data[: int(0.4 * sample_rate)]
+    long_audio_samples = int(31 * sample_rate)
+    long_audio = np.tile(
+        audio_data,
+        int(np.ceil(long_audio_samples / len(audio_data))),
+    )[:long_audio_samples]
+    audio_cases = [
+        ("LibriSpeech", audio_data),
+        ("short (<0.5s)", short_audio),
+        ("long (>30s)", long_audio),
+    ]
+
+    original_hf_inputs = None
+    original_keras_inputs = None
+    original_prompt_len = None
+    for case_name, case_audio in audio_cases:
+        hf_inputs = hf_processor(
+            text=chat_prompt,
+            audio=case_audio,
+            sampling_rate=sample_rate,
+            return_tensors="pt",
+            padding="longest",
+        )
+        sequence_length = hf_inputs.input_ids.shape[-1] + 128
+        keras_inputs = {"audio": [case_audio], "prompts": [keras_prompt]}
+        preprocessed = keras_hub_model.preprocessor.generate_preprocess(
+            keras_inputs, sequence_length=sequence_length
+        )
+
+        keras_token_ids = ops.convert_to_numpy(preprocessed["token_ids"])[0]
+        keras_padding_mask = ops.convert_to_numpy(preprocessed["padding_mask"])[
+            0
+        ].astype(bool)
+        hf_attention_mask = hf_inputs.attention_mask[0].bool()
+        hf_token_ids = hf_inputs.input_ids[0][hf_attention_mask].cpu().numpy()
+        if not np.array_equal(
+            keras_token_ids[keras_padding_mask], hf_token_ids
+        ):
+            raise ValueError(
+                f"KerasHub and HF prompt token IDs do not match for "
+                f"{case_name} audio."
+            )
+
+        keras_audio_mask = ops.convert_to_numpy(preprocessed["audio_mask"])[0]
+        keras_mel_length = int(np.sum(keras_audio_mask))
+        hf_mel_length = int(hf_inputs.input_features_mask[0].sum())
+        if keras_mel_length != hf_mel_length:
+            raise ValueError(
+                f"KerasHub and HF audio mask lengths do not match for "
+                f"{case_name} audio: {keras_mel_length} vs {hf_mel_length}."
+            )
+
+        keras_mel = ops.convert_to_numpy(preprocessed["audio_mel"])[0]
+        hf_mel = hf_inputs.input_features[0].transpose(0, 1).cpu().numpy()
+        mel_diff = np.max(
+            np.abs(keras_mel[:keras_mel_length] - hf_mel[:hf_mel_length])
+        )
+        print(f"-> {case_name} preprocessing mel max abs diff: {mel_diff:.6g}")
+        if mel_diff > 1e-3:
+            raise ValueError(
+                f"KerasHub and HF mel features differ for {case_name} audio "
+                f"by {mel_diff:.6g}."
+            )
+
+        keras_backbone_inputs = {
+            key: preprocessed[key]
+            for key in (
+                "token_ids",
+                "padding_mask",
+                "audio_mel",
+                "audio_mask",
+            )
+        }
+        keras_hidden_states = keras_hub_model.backbone(
+            keras_backbone_inputs, training=False
+        )
+        keras_logits = keras_hub_model.backbone.token_embedding(
+            keras_hidden_states, reverse=True
+        )
+        with torch.no_grad():
+            hf_logits = hf_model(**hf_inputs.to(device)).logits
+
+        keras_logits = ops.convert_to_numpy(keras_logits)[0]
+        hf_logits = hf_logits[0].detach().cpu().numpy()
+        hf_token_ids_all = hf_inputs.input_ids[0].cpu().numpy()
+        valid_text_positions = hf_inputs.attention_mask[0].cpu().numpy().astype(
+            bool
+        ) & ~np.isin(hf_token_ids_all, audio_token_ids)
+        keras_logits = keras_logits[: hf_logits.shape[0]]
+        logits_diff = np.max(
+            np.abs(
+                keras_logits[valid_text_positions]
+                - hf_logits[valid_text_positions]
+            )
+        )
+        print(f"-> {case_name} logits max abs diff: {logits_diff:.6g}")
+        if logits_diff > 1e-3:
+            raise ValueError(
+                f"KerasHub and HF logits differ for {case_name} audio by "
+                f"{logits_diff:.6g}."
+            )
+
+        if case_name == "LibriSpeech":
+            original_hf_inputs = hf_inputs
+            original_keras_inputs = {
+                "audio": audio_data,
+                "prompts": keras_prompt,
+            }
+            original_prompt_len = int(np.sum(keras_padding_mask))
 
     stop_ids = [keras_hub_tokenizer.end_token_id]
     if hasattr(keras_hub_tokenizer, "end_token2_id"):
         stop_ids.append(keras_hub_tokenizer.end_token2_id)
     keras_output_text = keras_hub_model.generate(
-        keras_inputs,
-        max_length=prompt_len + 20,
+        original_keras_inputs,
+        max_length=original_prompt_len + 20,
         stop_token_ids=stop_ids,
     )
     keras_output_text = str(keras_output_text)
@@ -144,13 +201,13 @@ def test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_processor):
     ].strip()
 
     hf_outputs = hf_model.generate(
-        input_ids=hf_inputs.input_ids.to(device),
-        input_features=hf_inputs.input_features.to(device),
-        input_features_mask=hf_inputs.input_features_mask.to(device),
+        input_ids=original_hf_inputs.input_ids.to(device),
+        input_features=original_hf_inputs.input_features.to(device),
+        input_features_mask=original_hf_inputs.input_features_mask.to(device),
         max_new_tokens=20,
         do_sample=False,
     )
-    hf_new_tokens = hf_outputs[0, hf_inputs.input_ids.shape[-1] :]
+    hf_new_tokens = hf_outputs[0, original_hf_inputs.input_ids.shape[-1] :]
     hf_output_text = hf_processor.tokenizer.decode(
         hf_new_tokens, skip_special_tokens=True
     ).strip()

@@ -60,6 +60,13 @@ class Qwen3ASRBackboneTest(TestCase):
             variable_length_data=[self.input_data],
         )
 
+    def test_audio_dimensions_are_required(self):
+        init_kwargs = self.init_kwargs.copy()
+        del init_kwargs["audio_d_model"]
+
+        with self.assertRaisesRegex(TypeError, "audio_d_model"):
+            Qwen3ASRBackbone(**init_kwargs)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(

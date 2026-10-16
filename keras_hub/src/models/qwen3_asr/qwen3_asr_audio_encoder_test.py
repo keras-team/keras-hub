@@ -75,3 +75,22 @@ class Qwen3ASRAudioEncoderTest(TestCase):
             expected_num_trainable_weights=4,
             expected_num_non_trainable_weights=0,
         )
+
+    def test_projector_layers_exist_before_build_and_config_round_trip(self):
+        d_model = 32
+        output_dim = 64
+        projector = Qwen3ASRMultiModalProjector(
+            d_model=d_model,
+            output_dim=output_dim,
+        )
+
+        self.assertIsNotNone(projector.linear_1)
+        self.assertIsNotNone(projector.linear_2)
+        self.assertEqual(projector.linear_1.units, d_model)
+
+        restored = Qwen3ASRMultiModalProjector.from_config(
+            projector.get_config()
+        )
+        self.assertEqual(restored.d_model, d_model)
+        self.assertEqual(restored.linear_1.units, d_model)
+        self.assertEqual(restored.linear_2.units, output_dim)
