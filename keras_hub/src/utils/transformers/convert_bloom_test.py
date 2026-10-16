@@ -73,4 +73,14 @@ class TestTask(TestCase):
         self.assertEqual(config["hidden_dim"], 1024)
         self.assertEqual(config["intermediate_dim"], 4096)
 
+    def test_convert_backbone_config_missing_fields(self):
+        with self.assertRaisesRegex(ValueError, "vocab_size"):
+            convert_bloom.convert_backbone_config(
+                {"n_layer": 2, "n_head": 2, "hidden_size": 8}
+            )
+        with self.assertRaisesRegex(ValueError, "hidden_size"):
+            convert_bloom.convert_backbone_config(
+                {"vocab_size": 10, "n_layer": 2, "n_head": 2}
+            )
+
     # TODO: compare numerics with huggingface model

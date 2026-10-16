@@ -19,12 +19,30 @@ def convert_backbone_config(transformers_config):
     num_layers = transformers_config.get(
         "n_layer", transformers_config.get("num_hidden_layers")
     )
-    intermediate_dim = transformers_config.get("n_inner", None)
+    vocabulary_size = transformers_config.get("vocab_size")
+
+    missing = [
+        name
+        for name, value in [
+            ("hidden_size/n_embed", hidden_size),
+            ("n_head/num_attention_heads", num_heads),
+            ("n_layer/num_hidden_layers", num_layers),
+            ("vocab_size", vocabulary_size),
+        ]
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            "The BLOOM `config.json` is missing required fields: "
+            f"{', '.join(missing)}."
+        )
+
+    intermediate_dim = transformers_config.get("n_inner")
     if intermediate_dim is None:
         intermediate_dim = hidden_size * 4
 
     return {
-        "vocabulary_size": transformers_config["vocab_size"],
+        "vocabulary_size": vocabulary_size,
         "num_layers": num_layers,
         "num_heads": num_heads,
         "hidden_dim": hidden_size,
@@ -198,10 +216,16 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
-    vocab = tokenizer_config["model"]["vocab"]
-    merges = tokenizer_config["model"]["merges"]
+    model_config = tokenizer_config.get("model") or {}
+    vocab = model_config.get("vocab")
+    merges = model_config.get("merges") or []
 
-    if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
+    if vocab is None:
+        raise ValueError("The BLOOM `tokenizer.json` is missing `model.vocab`.")
+
+    # Newer `tokenizers` versions store merges as `[a, b]` pairs rather
+    # than `"a b"` strings.
+    if merges and isinstance(merges[0], (list, tuple)) and len(merges[0]) == 2:
         merges = [" ".join(merge) for merge in merges]
 
     return cls(
