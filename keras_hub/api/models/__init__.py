@@ -587,6 +587,12 @@ from keras_hub.src.models.modern_bert.modern_bert_text_classifier import (
 from keras_hub.src.models.modern_bert.modern_bert_text_classifier_preprocessor import (
     ModernBertTextClassifierPreprocessor as ModernBertTextClassifierPreprocessor,
 )
+from keras_hub.src.models.modern_bert.modern_bert_text_embedder import (
+    ModernBertTextEmbedder as ModernBertTextEmbedder,
+)
+from keras_hub.src.models.modern_bert.modern_bert_text_embedder_preprocessor import (
+    ModernBertTextEmbedderPreprocessor as ModernBertTextEmbedderPreprocessor,
+)
 from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer as ModernBertTokenizer,
 )
