@@ -8,6 +8,8 @@ shipped next to the diffusers folders on the Hub (e.g.
 `double_blocks.*`, `single_blocks.*` and `final_layer`.
 """
 
+import numpy as np
+
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
 
 try:
@@ -230,3 +232,169 @@ def convert_weights(backbone, loader, hf_config):
         "final_layer.adaLN_modulation.1",
     )
     _port_dense(loader, backbone.final_layer.linear, "final_layer.linear")
+
+
+# === VAE (`AutoencoderKLFlux2`, diffusers layout) ===
+
+
+def convert_vae_config(hf_vae_config):
+    """Convert a diffusers `AutoencoderKLFlux2` config to `Flux2VAE` kwargs."""
+    unsupported = {
+        "norm_num_groups": (hf_vae_config.get("norm_num_groups", 32), 32),
+        "act_fn": (hf_vae_config.get("act_fn", "silu"), "silu"),
+        "mid_block_add_attention": (
+            hf_vae_config.get("mid_block_add_attention", True),
+            True,
+        ),
+        "use_quant_conv": (hf_vae_config.get("use_quant_conv", True), True),
+        "use_post_quant_conv": (
+            hf_vae_config.get("use_post_quant_conv", True),
+            True,
+        ),
+    }
+    for key, (value, expected) in unsupported.items():
+        if value != expected:
+            raise ValueError(
+                f"`Flux2VAE` only supports `{key}={expected!r}`. "
+                f"Received: {key}={value!r}"
+            )
+    patch_size = hf_vae_config.get("patch_size", [2, 2])
+    if isinstance(patch_size, (list, tuple)):
+        if len(set(patch_size)) != 1:
+            raise ValueError(
+                f"Only square patches are supported. Received: {patch_size}"
+            )
+        patch_size = patch_size[0]
+    filters = list(
+        hf_vae_config.get("block_out_channels", [128, 256, 512, 512])
+    )
+    decoder_filters = list(
+        hf_vae_config.get("decoder_block_out_channels") or filters
+    )
+    layers_per_block = hf_vae_config.get("layers_per_block", 2)
+    return {
+        "encoder_num_filters": filters,
+        "encoder_num_blocks": [layers_per_block] * len(filters),
+        # diffusers lists decoder stages from the highest resolution;
+        # `VAEDecoder` starts from the lowest.
+        "decoder_num_filters": decoder_filters[::-1],
+        # diffusers' decoder stages have one more ResNet block.
+        "decoder_num_blocks": [layers_per_block + 1] * len(decoder_filters),
+        "latent_channels": hf_vae_config.get("latent_channels", 32),
+        "patch_size": patch_size,
+        "batch_norm_epsilon": hf_vae_config.get("batch_norm_eps", 1e-4),
+        "input_channels": hf_vae_config.get("in_channels", 3),
+        "output_channels": hf_vae_config.get("out_channels", 3),
+    }
+
+
+def _port_conv2d(loader, conv, prefix):
+    """PyTorch `[out, in, kh, kw]` -> Keras `[kh, kw, in, out]`."""
+    loader.port_weight(
+        conv.kernel,
+        f"{prefix}.weight",
+        hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
+    )
+    loader.port_weight(conv.bias, f"{prefix}.bias")
+
+
+def _port_linear_as_conv2d(loader, conv, prefix):
+    """diffusers' VAE attention uses `nn.Linear`; KerasHub uses 1x1 convs."""
+    loader.port_weight(
+        conv.kernel, f"{prefix}.weight", hook_fn=lambda x, _: x.T[None, None]
+    )
+    loader.port_weight(conv.bias, f"{prefix}.bias")
+
+
+def _port_group_norm(loader, norm, prefix):
+    loader.port_weight(norm.gamma, f"{prefix}.weight")
+    loader.port_weight(norm.beta, f"{prefix}.bias")
+
+
+def _port_vae_resnet(loader, block, prefix):
+    _port_group_norm(loader, block.norm1, f"{prefix}.norm1")
+    _port_conv2d(loader, block.conv1, f"{prefix}.conv1")
+    _port_group_norm(loader, block.norm2, f"{prefix}.norm2")
+    _port_conv2d(loader, block.conv2, f"{prefix}.conv2")
+    if block.has_residual_projection:
+        _port_conv2d(
+            loader, block.residual_projection, f"{prefix}.conv_shortcut"
+        )
+
+
+def _port_vae_attention(loader, attention, prefix):
+    _port_group_norm(loader, attention.group_norm, f"{prefix}.group_norm")
+    _port_linear_as_conv2d(loader, attention.query_conv2d, f"{prefix}.to_q")
+    _port_linear_as_conv2d(loader, attention.key_conv2d, f"{prefix}.to_k")
+    _port_linear_as_conv2d(loader, attention.value_conv2d, f"{prefix}.to_v")
+    _port_linear_as_conv2d(
+        loader, attention.output_conv2d, f"{prefix}.to_out.0"
+    )
+
+
+def convert_vae_weights(vae, loader):
+    """Map diffusers `AutoencoderKLFlux2` weights into a `Flux2VAE`.
+
+    Unlike the LDM single-file layout used for Stable Diffusion 3, diffusers
+    numbers decoder stages from the lowest resolution (`up_blocks.0`), which
+    is also `VAEDecoder`'s order, and its mid-block attention uses linear
+    projections.
+    """
+    encoder = vae.encoder
+    _port_conv2d(loader, encoder.input_projection, "encoder.conv_in")
+    block_index = 0
+    for i, _ in enumerate(encoder.stackwise_num_filters):
+        for j in range(encoder.stackwise_num_blocks[i]):
+            _port_vae_resnet(
+                loader,
+                encoder.blocks[block_index],
+                f"encoder.down_blocks.{i}.resnets.{j}",
+            )
+            block_index += 1
+        if i != len(encoder.stackwise_num_filters) - 1:
+            # `downsamples` alternates `ZeroPadding2D` and `Conv2D`.
+            _port_conv2d(
+                loader,
+                encoder.downsamples[2 * i + 1],
+                f"encoder.down_blocks.{i}.downsamplers.0.conv",
+            )
+    _port_vae_resnet(loader, encoder.mid_block_0, "encoder.mid_block.resnets.0")
+    _port_vae_attention(
+        loader, encoder.mid_attention, "encoder.mid_block.attentions.0"
+    )
+    _port_vae_resnet(loader, encoder.mid_block_1, "encoder.mid_block.resnets.1")
+    _port_group_norm(loader, encoder.output_norm, "encoder.conv_norm_out")
+    _port_conv2d(loader, encoder.output_projection, "encoder.conv_out")
+
+    _port_conv2d(loader, vae.quant_conv, "quant_conv")
+    _port_conv2d(loader, vae.post_quant_conv, "post_quant_conv")
+
+    decoder = vae.decoder
+    _port_conv2d(loader, decoder.input_projection, "decoder.conv_in")
+    _port_vae_resnet(loader, decoder.mid_block_0, "decoder.mid_block.resnets.0")
+    _port_vae_attention(
+        loader, decoder.mid_attention, "decoder.mid_block.attentions.0"
+    )
+    _port_vae_resnet(loader, decoder.mid_block_1, "decoder.mid_block.resnets.1")
+    block_index = 0
+    for i, _ in enumerate(decoder.stackwise_num_filters):
+        for j in range(decoder.stackwise_num_blocks[i]):
+            _port_vae_resnet(
+                loader,
+                decoder.blocks[block_index],
+                f"decoder.up_blocks.{i}.resnets.{j}",
+            )
+            block_index += 1
+        if i != len(decoder.stackwise_num_filters) - 1:
+            # `upsamples` alternates `UpSampling2D` and `Conv2D`.
+            _port_conv2d(
+                loader,
+                decoder.upsamples[2 * i + 1],
+                f"decoder.up_blocks.{i}.upsamplers.0.conv",
+            )
+    _port_group_norm(loader, decoder.output_norm, "decoder.conv_norm_out")
+    _port_conv2d(loader, decoder.output_projection, "decoder.conv_out")
+
+    normalization = vae.latent_normalization
+    loader.port_weight(normalization.moving_mean, "bn.running_mean")
+    loader.port_weight(normalization.moving_variance, "bn.running_var")

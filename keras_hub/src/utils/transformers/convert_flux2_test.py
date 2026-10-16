@@ -5,6 +5,7 @@ import pytest
 from safetensors.numpy import save_file
 
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
+from keras_hub.src.models.flux2.flux2_vae import Flux2VAE
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_flux2
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
@@ -332,3 +333,236 @@ class ConvertFlux2PresetTest(TestCase):
         as many parameters as `flux-2-klein-4b.safetensors`."""
         backbone = Flux2Backbone(**convert_flux2.convert_backbone_config({}))
         self.assertEqual(backbone.count_params(), 3_875_544_576)
+
+
+# A tiny `AutoencoderKLFlux2`. GroupNorm uses 32 groups, so widths are
+# multiples of 32; distinct stage widths catch a reversed decoder.
+VAE_CHANNELS = [32, 64]
+VAE_LAYERS_PER_BLOCK = 1
+VAE_LATENT_CHANNELS = 4
+VAE_CONFIG = {
+    "block_out_channels": VAE_CHANNELS,
+    "layers_per_block": VAE_LAYERS_PER_BLOCK,
+    "latent_channels": VAE_LATENT_CHANNELS,
+    "patch_size": [2, 2],
+}
+
+
+def _build_fake_vae_checkpoint():
+    """Synthesize `AutoencoderKLFlux2` weights in the diffusers layout."""
+    tensors = {}
+
+    def conv(prefix, out_channels, in_channels, kernel_size):
+        shape = (out_channels, in_channels, kernel_size, kernel_size)
+        tensors[f"{prefix}.weight"] = _tensor(*shape)
+        tensors[f"{prefix}.bias"] = _tensor(out_channels) + 0.25
+
+    def norm(prefix, channels):
+        tensors[f"{prefix}.weight"] = _tensor(channels) + 1.0
+        tensors[f"{prefix}.bias"] = _tensor(channels)
+
+    def resnet(prefix, in_channels, out_channels):
+        norm(f"{prefix}.norm1", in_channels)
+        conv(f"{prefix}.conv1", out_channels, in_channels, 3)
+        norm(f"{prefix}.norm2", out_channels)
+        conv(f"{prefix}.conv2", out_channels, out_channels, 3)
+        if in_channels != out_channels:
+            conv(f"{prefix}.conv_shortcut", out_channels, in_channels, 1)
+
+    def mid_block(prefix, channels):
+        resnet(f"{prefix}.mid_block.resnets.0", channels, channels)
+        attention = f"{prefix}.mid_block.attentions.0"
+        norm(f"{attention}.group_norm", channels)
+        for name in ("to_q", "to_k", "to_v", "to_out.0"):
+            tensors[f"{attention}.{name}.weight"] = _tensor(channels, channels)
+            tensors[f"{attention}.{name}.bias"] = _tensor(channels)
+        resnet(f"{prefix}.mid_block.resnets.1", channels, channels)
+
+    latent = VAE_LATENT_CHANNELS
+    conv("encoder.conv_in", VAE_CHANNELS[0], 3, 3)
+    in_channels = VAE_CHANNELS[0]
+    for i, channels in enumerate(VAE_CHANNELS):
+        for j in range(VAE_LAYERS_PER_BLOCK):
+            resnet(
+                f"encoder.down_blocks.{i}.resnets.{j}", in_channels, channels
+            )
+            in_channels = channels
+        if i < len(VAE_CHANNELS) - 1:
+            conv(
+                f"encoder.down_blocks.{i}.downsamplers.0.conv",
+                *[channels] * 2,
+                3,
+            )
+    mid_block("encoder", VAE_CHANNELS[-1])
+    norm("encoder.conv_norm_out", VAE_CHANNELS[-1])
+    conv("encoder.conv_out", 2 * latent, VAE_CHANNELS[-1], 3)
+    conv("quant_conv", 2 * latent, 2 * latent, 1)
+    conv("post_quant_conv", latent, latent, 1)
+
+    # diffusers' decoder stages run from the lowest resolution up.
+    decoder_channels = VAE_CHANNELS[::-1]
+    conv("decoder.conv_in", decoder_channels[0], latent, 3)
+    mid_block("decoder", decoder_channels[0])
+    in_channels = decoder_channels[0]
+    for i, channels in enumerate(decoder_channels):
+        for j in range(VAE_LAYERS_PER_BLOCK + 1):
+            resnet(f"decoder.up_blocks.{i}.resnets.{j}", in_channels, channels)
+            in_channels = channels
+        if i < len(decoder_channels) - 1:
+            conv(f"decoder.up_blocks.{i}.upsamplers.0.conv", *[channels] * 2, 3)
+    norm("decoder.conv_norm_out", decoder_channels[-1])
+    conv("decoder.conv_out", 3, decoder_channels[-1], 3)
+
+    tensors["bn.running_mean"] = _tensor(4 * latent) - 0.5
+    tensors["bn.running_var"] = _tensor(4 * latent) + 1.0
+    tensors["bn.num_batches_tracked"] = np.array(0, dtype="int64")
+    return tensors
+
+
+class _TrackingLoader(SafetensorLoader):
+    """Records which tensors were read and which variables were written."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.used = set()
+        self.assigned = {}
+
+    def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+        super().port_weight(keras_variable, hf_weight_key, hook_fn)
+        self.used.add(hf_weight_key)
+        entry = self.assigned.setdefault(
+            id(keras_variable), [keras_variable.path, 0]
+        )
+        entry[1] += 1
+
+
+def _to_keras_conv(weight):
+    """PyTorch `[out, in, kh, kw]` -> Keras `[kh, kw, in, out]`."""
+    return weight.transpose(2, 3, 1, 0)
+
+
+class ConvertFlux2VAETest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.tensors = _build_fake_vae_checkpoint()
+        self.preset_dir = self.get_temp_dir()
+        save_file(
+            self.tensors, os.path.join(self.preset_dir, "model.safetensors")
+        )
+
+    def _convert(self):
+        vae = Flux2VAE(**convert_flux2.convert_vae_config(VAE_CONFIG))
+        with _TrackingLoader(self.preset_dir) as loader:
+            convert_flux2.convert_vae_weights(vae, loader)
+        return vae, loader
+
+    def test_klein_vae_config(self):
+        config = convert_flux2.convert_vae_config(
+            {
+                "act_fn": "silu",
+                "batch_norm_eps": 1e-4,
+                "block_out_channels": [128, 256, 512, 512],
+                "latent_channels": 32,
+                "layers_per_block": 2,
+                "mid_block_add_attention": True,
+                "norm_num_groups": 32,
+                "patch_size": [2, 2],
+                "use_post_quant_conv": True,
+                "use_quant_conv": True,
+            }
+        )
+        self.assertEqual(config["encoder_num_filters"], [128, 256, 512, 512])
+        self.assertEqual(config["encoder_num_blocks"], [2, 2, 2, 2])
+        self.assertEqual(config["decoder_num_filters"], [512, 512, 256, 128])
+        self.assertEqual(config["decoder_num_blocks"], [3, 3, 3, 3])
+        self.assertEqual(config["latent_channels"], 32)
+        self.assertEqual(config["patch_size"], 2)
+        self.assertEqual(config["batch_norm_epsilon"], 1e-4)
+
+    def test_decoder_block_out_channels(self):
+        config = convert_flux2.convert_vae_config(
+            {**VAE_CONFIG, "decoder_block_out_channels": [64, 128]}
+        )
+        self.assertEqual(config["encoder_num_filters"], [32, 64])
+        self.assertEqual(config["decoder_num_filters"], [128, 64])
+
+    def test_rejects_unsupported_vae_config(self):
+        with self.assertRaisesRegex(ValueError, "norm_num_groups"):
+            convert_flux2.convert_vae_config(
+                {**VAE_CONFIG, "norm_num_groups": 16}
+            )
+        with self.assertRaisesRegex(ValueError, "use_quant_conv"):
+            convert_flux2.convert_vae_config(
+                {**VAE_CONFIG, "use_quant_conv": False}
+            )
+        with self.assertRaisesRegex(ValueError, "square"):
+            convert_flux2.convert_vae_config(
+                {**VAE_CONFIG, "patch_size": [2, 1]}
+            )
+
+    def test_weights_are_complete_and_one_to_one(self):
+        vae, loader = self._convert()
+        never = [w.path for w in vae.weights if id(w) not in loader.assigned]
+        twice = [path for path, n in loader.assigned.values() if n > 1]
+        # `num_batches_tracked` is a training counter with no Keras use.
+        unused = set(self.tensors) - loader.used - {"bn.num_batches_tracked"}
+        self.assertEqual(never, [])
+        self.assertEqual(twice, [])
+        self.assertEqual(unused, set())
+        self.assertEqual(
+            vae.count_params(),
+            sum(
+                t.size
+                for k, t in self.tensors.items()
+                if k != "bn.num_batches_tracked"
+            ),
+        )
+
+    def test_conv_and_attention_layouts(self):
+        vae, _ = self._convert()
+        self.assertAllClose(
+            vae.encoder.input_projection.kernel,
+            _to_keras_conv(self.tensors["encoder.conv_in.weight"]),
+        )
+        self.assertAllClose(
+            vae.quant_conv.kernel,
+            _to_keras_conv(self.tensors["quant_conv.weight"]),
+        )
+        # diffusers' attention uses `nn.Linear`; KerasHub uses 1x1 convs.
+        self.assertAllClose(
+            vae.decoder.mid_attention.query_conv2d.kernel,
+            self.tensors["decoder.mid_block.attentions.0.to_q.weight"].T[
+                None, None
+            ],
+        )
+
+    def test_decoder_stage_order(self):
+        # diffusers' `up_blocks.0` is the lowest resolution, which is also
+        # the first `VAEDecoder` stack: no reversal (unlike the LDM layout).
+        vae, _ = self._convert()
+        blocks = vae.decoder.blocks
+        self.assertAllClose(
+            blocks[0].conv1.kernel,
+            _to_keras_conv(
+                self.tensors["decoder.up_blocks.0.resnets.0.conv1.weight"]
+            ),
+        )
+        self.assertAllClose(
+            blocks[2].residual_projection.kernel,
+            _to_keras_conv(
+                self.tensors[
+                    "decoder.up_blocks.1.resnets.0.conv_shortcut.weight"
+                ]
+            ),
+        )
+
+    def test_latent_statistics(self):
+        vae, _ = self._convert()
+        self.assertAllClose(
+            vae.latent_normalization.moving_mean,
+            self.tensors["bn.running_mean"],
+        )
+        self.assertAllClose(
+            vae.latent_normalization.moving_variance,
+            self.tensors["bn.running_var"],
+        )
