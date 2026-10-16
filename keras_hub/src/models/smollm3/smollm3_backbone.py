@@ -52,6 +52,10 @@ class SmolLM3Backbone(Backbone):
         partial_rotary_factor: float. The percentage of hidden dimensions to
             rotate in RoPE. A value of 1.0 rotates all dimensions, while values
             less than 1.0 only rotate a subset.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
 
@@ -106,12 +110,14 @@ class SmolLM3Backbone(Backbone):
         max_position_embeddings,
         rope_theta,
         partial_rotary_factor,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            dtype=dtype,
             name="token_embedding",
         )
         self.transformer_layers = []
@@ -131,12 +137,14 @@ class SmolLM3Backbone(Backbone):
                 max_position_embeddings=max_position_embeddings,
                 rope_theta=rope_theta,
                 partial_rotary_factor=partial_rotary_factor,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
 
         self.norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="sequence_output_layernorm",
         )
 
@@ -165,6 +173,7 @@ class SmolLM3Backbone(Backbone):
                 "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
+            dtype=dtype,
             **kwargs,
         )
 
