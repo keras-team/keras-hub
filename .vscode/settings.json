@@ -3,5 +3,11 @@
     "python.formatting.provider": "black",
     "editor.rulers": [
         80
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /Users/suhanaaa/keras-hub && python3 - <<'PY'\nimport numpy as np\nfrom keras_hub\\.src\\.models\\.qwen3_asr\\.qwen3_asr_audio_converter import Qwen3ASRAudioConverter\nfrom keras_hub\\.src\\.models\\.qwen3_asr\\.qwen3_asr_preprocessor import Qwen3ASRPreprocessor\nfrom keras_hub\\.src\\.models\\.qwen3_asr\\.qwen3_asr_tokenizer import Qwen3ASRTokenizer\n\nmerges = \\[\"Ġ a\", \"Ġ t\", \"Ġ i\", \"Ġ b\", \"a i\", \"p l\", \"n e\"\\]\nvocab = \\[\\]\nfor merge in merges:\n    a, b = merge\\.split\\(' '\\)\n    vocab\\.extend\\(\\[a, b, a \\+ b\\]\\)\nvocab \\+= \\[\n    \"<\\|audio_pad\\|>\", \"<\\|audio_info\\|>\", \"<\\|im_end\\|>\", \"<\\|endoftext\\|>\",\n    \"<\\|im_start\\|>\", \"<\\|audio_start\\|>\", \"<\\|audio_end\\|>\", \"<asr_text>\"\n\\]\nvocab = sorted\\(set\\(vocab\\)\\)\nvocab = dict\\(\\(token, i\\) for i, token in enumerate\\(vocab\\)\\)\n\ntokenizer = Qwen3ASRTokenizer\\(vocabulary=vocab, merges=merges\\)\naudio_converter = Qwen3ASRAudioConverter\\(max_audio_length=1\\.05\\)\npreprocessor = Qwen3ASRPreprocessor\\(tokenizer=tokenizer, audio_converter=audio_converter, sequence_length=40\\)\nfor input_data in \\[\n    \\{\"prompts\": \\[\" airplane at airport\"\\], \"audio\": \\[np\\.ones\\(\\(16000,\\), dtype='float32'\\)\\]\\},\n    \\{\"prompts\": \\[\" airplane at airport\"\\], \"audio\": \\[np\\.ones\\(\\(4800,\\), dtype='float32'\\)\\]\\},\n    \\{\"prompts\": \\[\"\"\\], \"audio\": \\[np\\.ones\\(\\(4800,\\), dtype='float32'\\)\\]\\},\n\\]:\n    out = preprocessor\\(input_data\\)\n    print\\('INPUT', input_data\\)\n    print\\('token_ids', out\\[0\\]\\['token_ids'\\]\\)\n    print\\('padding_mask', out\\[0\\]\\['padding_mask'\\]\\)\n    print\\('labels', out\\[1\\]\\)\n    print\\('sw', out\\[2\\]\\)\n    print\\('---'\\)\n\nprint\\('generate preprocess'\\)\nout = preprocessor\\.generate_preprocess\\(\\{\"prompts\": \" airplane\", \"audio\": np\\.ones\\(\\(16000,\\), dtype='float32'\\)\\}\\)\nprint\\(out\\['token_ids'\\]\\)\nprint\\(out\\['padding_mask'\\]\\)\nPY$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 
 import keras
@@ -94,6 +95,76 @@ class NoTensorflow(unittest.TestCase):
         self.assertEqual(np.shape(batched["decoder_token_ids"]), (1, 8))
         unbatched = preprocessor.generate_preprocess(" airplane at airport")
         self.assertEqual(np.shape(unbatched["decoder_token_ids"]), (8,))
+
+    def test_qwen3_asr_generate_works(self):
+        merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocabulary = list("abcdefghijklmnopqrstuvwxyzĠĊ")
+        for merge in merges:
+            left, right = merge.split(" ")
+            vocabulary.extend([left, right, left + right])
+        vocabulary += [
+            "<|audio_pad|>",
+            "<|audio_info|>",
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|audio_start|>",
+            "<|audio_end|>",
+        ]
+        vocabulary = {
+            token: index for index, token in enumerate(sorted(set(vocabulary)))
+        }
+
+        tokenizer = keras_hub.models.Qwen3ASRTokenizer(
+            vocabulary=vocabulary,
+            merges=merges,
+        )
+        audio_converter = keras_hub.layers.Qwen3ASRAudioConverter(
+            min_length=8000
+        )
+        preprocessor = keras_hub.models.Qwen3ASRCausalLMPreprocessor(
+            tokenizer=tokenizer,
+            audio_converter=audio_converter,
+            sequence_length=40,
+        )
+        backbone = keras_hub.models.Qwen3ASRBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            head_dim=4,
+            hidden_dim=8,
+            intermediate_dim=16,
+            audio_num_mel_bins=128,
+            audio_num_layers=1,
+            audio_num_attention_heads=2,
+            audio_intermediate_dim=16,
+            audio_d_model=8,
+            audio_n_window=50,
+            audio_downsample_hidden_size=4,
+            audio_max_position_embeddings=13,
+            audio_token_id=vocabulary["<|audio_pad|>"],
+        )
+        model = keras_hub.models.Qwen3ASRCausalLM(
+            backbone=backbone,
+            preprocessor=preprocessor,
+        )
+
+        with tempfile.TemporaryDirectory() as preset_dir:
+            model.save_to_preset(preset_dir)
+            loaded_model = keras_hub.models.Qwen3ASRCausalLM.from_preset(
+                preset_dir
+            )
+            output = loaded_model.generate(
+                {
+                    "prompts": " airplane",
+                    "audio": np.zeros((16000,), dtype="float32"),
+                },
+                max_length=20,
+            )
+
+        self.assertIsInstance(output, str)
 
     def test_tf_only_layer_errors(self):
         # Layers that can only run on the TensorFlow path raise an informative

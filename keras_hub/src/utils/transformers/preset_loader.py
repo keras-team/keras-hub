@@ -33,6 +33,7 @@ from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
+from keras_hub.src.utils.transformers import convert_qwen3_asr
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_roberta
@@ -107,6 +108,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_asr":
+            self.converter = convert_qwen3_asr
         elif model_type == "qwen3_5_moe":
             self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
