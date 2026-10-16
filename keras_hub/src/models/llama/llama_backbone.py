@@ -5,7 +5,6 @@ from keras.layers import ReversibleEmbedding
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.llama.llama_decoder import LlamaTransformerDecoder
-from keras_hub.src.models.llama.llama_layernorm import LlamaLayerNorm
 
 
 def _llama_kernel_initializer(stddev=0.02):
@@ -137,7 +136,7 @@ class LlamaBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = LlamaLayerNorm(
+        self.layer_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",

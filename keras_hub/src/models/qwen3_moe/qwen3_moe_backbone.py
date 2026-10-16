@@ -7,7 +7,6 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_moe.qwen3_moe_decoder import (
     Qwen3MoeTransformerDecoder,
 )
-from keras_hub.src.models.qwen3_moe.qwen3_moe_layernorm import Qwen3MoeLayerNorm
 
 
 def _qwen3_moe_kernel_initializer(stddev=0.02):
@@ -155,7 +154,7 @@ class Qwen3MoeBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.layer_norm = Qwen3MoeLayerNorm(
+        self.layer_norm = keras.layers.RMSNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="sequence_output_layernorm",

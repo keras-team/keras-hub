@@ -8,7 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.qwen.qwen_attention import QwenAttention
-from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -93,7 +92,7 @@ class QwenTransformerDecoder(keras.layers.Layer):
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = QwenLayerNorm(
+        self._self_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="self_attention_layernorm",
@@ -139,7 +138,7 @@ class QwenTransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = QwenLayerNorm(
+        self._feedforward_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="feedforward_layernorm",
