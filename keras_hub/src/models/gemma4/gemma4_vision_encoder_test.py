@@ -16,6 +16,7 @@ from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionPatchEmbedder,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma4VisionEncoderTest(TestCase):
@@ -198,10 +199,13 @@ class Gemma4VisionEncoderTest(TestCase):
             outputs = [encoder.predict(x, verbose=0) for x in order]
             shapes = sorted(tuple(o.shape) for o in outputs)
             self.assertEqual(shapes, [(2, 0, 0, 8), (2, 1, 4, 8)])
-            # The retraced graph must compute the same values as eager.
+            # The retraced graph must compute the same values as eager. On
+            # GPU the XLA-compiled `predict()` and eager paths drift by up to
+            # ~1.2e-3 (TF32 matmuls on the L4 runner); CPU keeps 1e-5.
             traced = outputs[0 if order[0] is with_images else 1]
             eager = ops.convert_to_numpy(encoder(with_images))
-            self.assertAllClose(traced, eager, atol=1e-5)
+            tol = 5e-3 if running_on_gpu() else 1e-5
+            self.assertAllClose(traced, eager, atol=tol)
 
     @pytest.mark.tf_only
     def test_average_pooling_3d_predict_retrace(self):
