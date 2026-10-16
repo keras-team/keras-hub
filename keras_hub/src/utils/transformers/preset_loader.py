@@ -21,6 +21,7 @@ from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gemma4_assistant
+from keras_hub.src.utils.transformers import convert_gemma4_unified
 from keras_hub.src.utils.transformers import convert_gpt2
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
@@ -80,7 +81,9 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
-        elif model_type == "gemma4_assistant":
+        elif model_type == "gemma4_unified":
+            self.converter = convert_gemma4_unified
+        elif model_type in ("gemma4_assistant", "gemma4_unified_assistant"):
             self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
             self.converter = convert_gpt2
@@ -155,7 +158,10 @@ class TransformersPresetLoader(PresetLoader):
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
         is_classifier = issubclass(cls, ImageClassifier)
-        is_assistant = architecture == "Gemma4AssistantForCausalLM"
+        is_assistant = architecture in (
+            "Gemma4AssistantForCausalLM",
+            "Gemma4UnifiedAssistantForCausalLM",
+        )
         # `convert_head` is only defined for task-specific heads (e.g.
         # ModernBERT's MaskedLM prediction head). Gate on the task class
         # itself, not just on whether the converter happens to define
@@ -202,6 +208,17 @@ class TransformersPresetLoader(PresetLoader):
                 self.preset, self.config
             )
             if config is not None:
+                # For unified models, use the unified image converter.
+                model_type = self.config.get("model_type", "")
+                if model_type.startswith("gemma4_unified"):
+                    from keras_hub.src.models.gemma4_unified.gemma4_unified_image_converter import (  # noqa: E501
+                        Gemma4UnifiedImageConverter,
+                    )
+
+                    # Override the caller's cls: unified models use a
+                    # different converter that merges teacher patches,
+                    # which the standard Gemma4ImageConverter does not do.
+                    cls = Gemma4UnifiedImageConverter
                 return cls(**{**config, **kwargs})
         # TODO: set image size for pali gemma checkpoints.
         return None
@@ -212,6 +229,13 @@ class TransformersPresetLoader(PresetLoader):
                 self.preset, self.config
             )
             if config is not None:
+                model_type = self.config.get("model_type", "")
+                if model_type.startswith("gemma4_unified"):
+                    from keras_hub.src.models.gemma4_unified.gemma4_unified_audio_converter import (  # noqa: E501
+                        Gemma4UnifiedAudioConverter,
+                    )
+
+                    cls = Gemma4UnifiedAudioConverter
                 return cls(**{**config, **kwargs})
         return None
 
