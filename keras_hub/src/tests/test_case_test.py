@@ -1,7 +1,5 @@
 import collections
-import os
-import subprocess
-import sys
+import random
 import unittest
 from types import MappingProxyType
 from unittest import mock
@@ -31,6 +29,19 @@ class AssertionsTest(TestCase):
             [[9, 10, 11, 12], [9, 12]], [[9, 10, 11, 12], [9, 12]]
         )
         self.assertAllClose([[1.0, 2.0], [3.0]], [[1.0, 2.0], [3.0]])
+        self.assertAllEqual(((1, 2), (3,)), [[1, 2], [3]])
+        self.assertAllEqual([np.array([1, 2]), np.array([3])], [[1, 2], [3]])
+        self.assertAllEqual([[True, False]], [[1, 0]])
+
+    def test_ragged_lists_detect_shape_shift(self):
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], [3]], [[1], [2, 3]])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose([[1.0, 2.0], [3.0]], [[1.0], [2.0, 3.0]])
+
+    def test_ragged_fast_path_reports_exact_location(self):
+        with self.assertRaisesRegex(AssertionError, r"at \[1\]"):
+            self.assertAllEqual([[1, 2], [3, 4, 5]], [[1, 2], [9, 4, 5]])
 
     def test_ragged_lists_detect_mismatch(self):
         with self.assertRaises(AssertionError):
@@ -289,112 +300,101 @@ class TestCaseTest(TestCase):
     def test_setup_with_empty_tensorflow(self):
         """Pin the `setUp` guard against a partly uninstalled TensorFlow.
 
-        A leftover empty `tensorflow/` directory imports as a PEP 420
-        namespace package: the import succeeds, the module has no
-        attributes, and Keras' `LazyModule.available` still reports True, so
-        `set_random_seed` raises `AttributeError` on `tf.random`.
-
-        A real directory cannot reproduce that while TensorFlow is installed
-        -- a namespace portion does not terminate the import search, so the
-        regular package wins -- hence the planted module below, in a
-        subprocess so it cannot leak into the rest of the session.
+        keras#23713 fixed `LazyModule.available`; the test now exercises the
+        fallback directly because the environment that used to trigger it no
+        longer exists on Keras >= 3.16, while 3.15 still needs the guard. The
+        fallback ensures that `np.random` and `torch` get reseeded even when
+        `tf` fails.
         """
-        script = """
-import importlib.machinery
-import random
-import sys
-import types
-import unittest
 
-import numpy as np
+        def raise_attribute_error(*args, **kwargs):
+            raise AttributeError(
+                "module 'tensorflow' has no attribute 'random'"
+            )
 
-# `origin=None` mirrors a PEP 420 namespace package. A bare ModuleType with
-# `__spec__ = None` is not equivalent: on torch it makes `find_spec` raise
-# `ValueError: tensorflow.__spec__ is None`, a different failure.
-_tf_proxy = types.ModuleType("tensorflow")
-_tf_proxy.__spec__ = importlib.machinery.ModuleSpec(
-    "tensorflow", loader=None, origin=None
-)
-sys.modules["tensorflow"] = _tf_proxy
+        with mock.patch(
+            "keras.utils.set_random_seed", side_effect=raise_attribute_error
+        ):
+            with mock.patch("keras_hub.src.tests.test_case.tf", None):
+                self.setUp()
 
-import keras
+                # Test random is seeded
+                first_random = random.random()
+                first_np = float(np.random.rand())
+                if keras.config.backend() == "torch":
+                    import torch
 
-# Liveness check: prove the environment really is broken before testing the
-# guard against it. If this stops raising, the guard is no longer exercised
-# and the test must fail rather than pass for free.
-try:
-    keras.utils.set_random_seed(87654321)
-except AttributeError:
-    pass
-else:
-    raise AssertionError(
-        "Precondition not met: set_random_seed did not raise, so the "
-        "attribute-less TensorFlow was not picked up by Keras."
-    )
+                    first_torch = float(torch.rand(1))
 
-from keras_hub.src.tests.test_case import TestCase
+                self.setUp()
 
+                second_random = random.random()
+                second_np = float(np.random.rand())
+                if keras.config.backend() == "torch":
+                    import torch
 
-def _draw():
-    values = [random.random(), float(np.random.rand())]
-    if keras.config.backend() == "torch":
-        import torch
+                    second_torch = float(torch.rand(1))
 
-        values.append(float(torch.rand(1)))
-    return values
+                self.assertEqual(
+                    first_random, second_random, "setUp did not reseed random"
+                )
+                self.assertEqual(
+                    first_np, second_np, "setUp did not reseed np.random"
+                )
 
+                if keras.config.backend() == "torch":
+                    self.assertEqual(
+                        first_torch, second_torch, "setUp did not reseed torch"
+                    )
 
-class DummyTest(TestCase):
-    def test_setup_reseeds_under_broken_tensorflow(self):
-        # Two `setUp` calls must draw the same values. That is what fails if
-        # the fallback swallows the error without reseeding torch.
-        self.setUp()
-        first = _draw()
-        self.setUp()
-        second = _draw()
-        # Bare `assert` is stripped under `PYTHONOPTIMIZE`, which the parent
-        # propagates via `os.environ.copy()`. Use real assertions.
-        self.assertEqual(first, second, "setUp did not reseed")
-        if keras.config.backend() == "torch":
-            import torch
+    def test_run_task_test_tf_none(self):
+        @keras.saving.register_keras_serializable(package="TestDummy")
+        class DummyPreprocessor(keras.layers.Layer):
+            def call(self, *args, **kwargs):
+                return ({"inputs": ops.ones((2, 1))}, ops.ones((2, 1)), None)
 
-            # `torch.manual_seed` is the only statement the fallback
-            # actually replays, so pin it directly.
-            self.assertEqual(torch.initial_seed(), 87654321)
+            def get_config(self):
+                return super().get_config()
 
+        @keras.saving.register_keras_serializable(package="TestDummy")
+        class DummyTask(keras.Model):
+            def __init__(self, **kwargs):
+                kwargs.pop("compile", None)
+                inputs = {"inputs": keras.Input(shape=(1,))}
+                super().__init__(
+                    inputs=inputs, outputs=inputs["inputs"], **kwargs
+                )
+                self.preprocessor = DummyPreprocessor()
 
-if __name__ == '__main__':
-    unittest.main()
-"""
-        if not sys.executable:
-            self.skipTest("sys.executable is not available.")
-        tmpdir = self.get_temp_dir()
-        script_path = os.path.join(tmpdir, "test_dummy.py")
-        with open(script_path, "w") as f:
-            f.write(script)
+            def compile(self, **kwargs):
+                self.compiled = True
+                # `super().compile()` adds state that `get_config()` doesn't
+                # restore, failing the `dir()` check in
+                # `run_serialization_test`.
 
-        env = os.environ.copy()
-        wt_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../../..")
-        )
-        # Joining with an empty existing value would leave a trailing
-        # separator, which puts the CWD on the child's `sys.path`.
-        existing = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = (
-            wt_path + os.pathsep + existing if existing else wt_path
-        )
+            def fit(self, *args, **kwargs):
+                if getattr(self, "compiled", False) is False:
+                    raise ValueError("You must call `compile`")
 
-        result = subprocess.run(
-            [sys.executable, script_path],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        # Pin that the child ran the one test, rather than trusting the
-        # exit code alone to tell us the body executed.
-        self.assertIn("Ran 1 test", result.stderr)
+            def predict(self, x, **kwargs):
+                return ops.ones((2, 1))
+
+            def get_config(self):
+                return super().get_config()
+
+        with mock.patch("keras_hub.src.tests.test_case.tf", None):
+            self.run_task_test(
+                cls=DummyTask,
+                init_kwargs={},
+                train_data=(
+                    {"inputs": ops.ones((2, 1))},
+                    ops.ones((2, 1)),
+                    None,
+                ),
+                expected_output_shape=(2, 1),
+                batch_size=2,
+                compile_kwargs={"optimizer": "sgd", "loss": "mse"},
+            )
 
     def test_setup_propagates_unrelated_attribute_error(self):
         """The guard must not swallow an unrelated `AttributeError`.

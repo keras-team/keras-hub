@@ -22,6 +22,8 @@ from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import tf
 
+_TEST_SEED = 87654321
+
 
 def convert_to_comparible_type(x):
     """Convert tensors to comparable types.
@@ -72,7 +74,34 @@ def _as_dense_array(x):
     return x
 
 
-def _compare_structures(x1, x2, compare_dense, msg, path):
+def _is_leaf(x):
+    if isinstance(x, (str, bytes)):
+        return True
+    try:
+        if np.ndim(x) == 0:
+            return True
+    except ValueError:
+        pass
+    if not hasattr(x, "__len__"):
+        return True
+    return False
+
+
+def _is_1d_row(row):
+    if isinstance(row, np.ndarray) and row.ndim == 1:
+        return True
+    if isinstance(row, (list, tuple)):
+        return True
+    return False
+
+
+def _format_failure(err_msg, msg, path):
+    where = f" at {path}" if path else ""
+    detail = f"\n{msg}" if msg else ""
+    return f"{err_msg}{where}.{detail}"
+
+
+def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
     """Recursively compare two structures, one dense leaf at a time.
 
     `keras.src.testing.TestCase` compares with `np.array(x)`, which raises on
@@ -80,8 +109,11 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
     constantly. This walks both structures instead, and only calls
     `compare_dense` once it reaches a pair of dense, array-able leaves.
     """
-    where = f" at {path}" if path else ""
-    detail = f"\n{msg}" if msg else ""
+
+    def _raise(err_msg):
+        if not raise_errors:
+            return False
+        raise AssertionError(_format_failure(err_msg, msg, path))
 
     if (
         tf is not None
@@ -91,13 +123,10 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
         is_ragged_1 = isinstance(x1, tf.RaggedTensor)
         is_ragged_2 = isinstance(x2, tf.RaggedTensor)
         if is_ragged_1 != is_ragged_2:
-            raise AssertionError(
-                f"Structures differ{where}: ragged vs dense.{detail}"
-            )
+            return _raise("Structures differ: ragged vs dense")
         if is_ragged_1 and x1.ragged_rank != x2.ragged_rank:
-            raise AssertionError(
-                f"ragged_rank differs{where}: {x1.ragged_rank} vs "
-                f"{x2.ragged_rank}.{detail}"
+            return _raise(
+                f"ragged_rank differs: {x1.ragged_rank} vs {x2.ragged_rank}"
             )
 
     x1 = convert_to_comparible_type(x1)
@@ -105,10 +134,8 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
 
     if x1 is None or x2 is None:
         if x1 is not None or x2 is not None:
-            raise AssertionError(
-                f"Structures differ{where}: {x1} vs {x2}.{detail}"
-            )
-        return
+            return _raise(f"Structures differ: {x1} vs {x2}")
+        return True
 
     if hasattr(x1, "_asdict"):
         x1 = x1._asdict()
@@ -121,69 +148,103 @@ def _compare_structures(x1, x2, compare_dense, msg, path):
         if not isinstance(x1, collections.abc.Mapping) or not isinstance(
             x2, collections.abc.Mapping
         ):
-            raise AssertionError(
-                f"Structures differ{where}: {type(x1)} vs {type(x2)}.{detail}"
-            )
+            return _raise(f"Structures differ: {type(x1)} vs {type(x2)}")
         if x1.keys() != x2.keys():
-            raise AssertionError(
-                f"Dict keys differ{where}: {list(x1.keys())} vs "
-                f"{list(x2.keys())}.{detail}"
+            return _raise(
+                f"Dict keys differ: {list(x1.keys())} vs {list(x2.keys())}"
             )
         for key in x1:
-            _compare_structures(
-                x1[key], x2[key], compare_dense, msg, f"{path}[{key!r}]"
-            )
-        return
+            if not _compare_structures(
+                x1[key],
+                x2[key],
+                compare_dense,
+                msg,
+                f"{path}[{key!r}]",
+                raise_errors,
+            ):
+                return False
+        return True
     dense1, dense2 = _as_dense_array(x1), _as_dense_array(x2)
     if dense1 is not None and dense2 is not None:
-        compare_dense(dense1, dense2, f"{msg or ''}{where}")
-        return
+        return compare_dense(dense1, dense2, msg, path, raise_errors)
 
-    # At least one side is jagged or a leaf.
-    def is_leaf(x):
-        if isinstance(x, (str, bytes)):
-            return True
-        try:
-            if np.ndim(x) == 0:
-                return True
-        except ValueError:
-            pass
-        if not hasattr(x, "__len__"):
-            return True
-        return False
-
-    if is_leaf(x1) or is_leaf(x2):
+    if _is_leaf(x1) or _is_leaf(x2):
         try:
             is_equal = bool(x1 == x2)
         except (ValueError, TypeError):
             is_equal = False
         if not is_equal:
-            raise AssertionError(f"Values differ{where}: {x1} vs {x2}.{detail}")
-        return
+            return _raise(f"Values differ: {x1} vs {x2}")
+        return True
 
     if len(x1) != len(x2):
-        raise AssertionError(
-            f"Lengths differ{where}: {len(x1)} vs {len(x2)}.{detail}"
-        )
+        return _raise(f"Lengths differ: {len(x1)} vs {len(x2)}")
+
+    # Fast path for jagged lists: compares lengths and attempts a flat
+    # np.concatenate per side. Mismatches fall through to the per-row walk so
+    # the reported path stays exact.
+    if isinstance(x1, (list, tuple)) and isinstance(x2, (list, tuple)) and x1:
+        if all(_is_1d_row(r) for r in x1) and all(_is_1d_row(r) for r in x2):
+            if all(len(r1) == len(r2) for r1, r2 in zip(x1, x2)):
+                try:
+                    concat1 = np.concatenate(x1)
+                    concat2 = np.concatenate(x2)
+                    if (
+                        concat1.ndim == 1
+                        and concat2.ndim == 1
+                        and concat1.dtype.kind != "O"
+                        and concat2.dtype.kind != "O"
+                    ):
+                        try:
+                            res = compare_dense(
+                                concat1,
+                                concat2,
+                                msg,
+                                path,
+                                raise_errors=True,
+                            )
+                            if res:
+                                return True
+                        except AssertionError:
+                            pass
+                except ValueError:
+                    pass
+
     for i, (e1, e2) in enumerate(zip(x1, x2)):
-        _compare_structures(e1, e2, compare_dense, msg, f"{path}[{i}]")
+        if not _compare_structures(
+            e1, e2, compare_dense, msg, f"{path}[{i}]", raise_errors
+        ):
+            return False
+    return True
 
 
 def _dense_allclose_fn(atol, rtol):
-    def compare(x1, x2, msg):
+    def compare(x1, x2, msg, path, raise_errors=True):
         if x1.shape != x2.shape:
+            if not raise_errors:
+                return False
             raise AssertionError(
-                f"Shapes differ: {x1.shape} vs {x2.shape}.\n{msg or ''}"
+                _format_failure(
+                    f"Shapes differ: {x1.shape} vs {x2.shape}", msg, path
+                )
             )
-        if atol is None and rtol is None:
-            np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
-        elif x1.dtype.kind == "U" or x2.dtype.kind == "U":
-            # Strings have no tolerance; compare them exactly.
-            np.testing.assert_array_equal(x1, x2, err_msg=msg or "")
-        else:
-            np.testing.assert_allclose(
-                x1, x2, atol=atol, rtol=rtol, err_msg=msg or ""
+        try:
+            if atol is None and rtol is None:
+                np.testing.assert_array_equal(x1, x2, err_msg="")
+            elif x1.dtype.kind == "U" or x2.dtype.kind == "U":
+                # Strings have no tolerance; compare them exactly.
+                np.testing.assert_array_equal(x1, x2, err_msg="")
+            else:
+                np.testing.assert_allclose(
+                    x1, x2, atol=atol, rtol=rtol, err_msg=""
+                )
+        except AssertionError as e:
+            if not raise_errors:
+                return False
+            raise AssertionError(
+                f"{_format_failure('Values differ', msg, path)}\n{str(e)}"
             )
+        return True
 
     return compare
 
@@ -315,7 +376,7 @@ class TestCase(KerasTestCase):
     def setUp(self):
         super().setUp()
         try:
-            keras.utils.set_random_seed(87654321)
+            keras.utils.set_random_seed(_TEST_SEED)
         except AttributeError:
             # A partly uninstalled TensorFlow makes Keras' `tf.available`
             # true, so `set_random_seed` raises on `tf.random`.
@@ -325,17 +386,24 @@ class TestCase(KerasTestCase):
             # the suite would otherwise run silently unseeded.
             #
             # This repairs `setUp` only. Other `tf.available` call sites in
-            # Keras Core still fail in that environment, notably
+            # Keras Core fail the same way in that environment, notably
             # `serialization_lib`, which `run_serialization_test` reaches.
-            # Tracked upstream as keras-team/keras#23709.
+            #
+            # TODO(keras>=3.16): delete this whole `except` block and the two
+            # tests that pin it (`test_setup_with_empty_tensorflow`,
+            # `test_setup_propagates_unrelated_attribute_error`). Keras fixed
+            # the root cause in keras-team/keras#23713 -- `LazyModule` now
+            # treats a namespace package as unavailable -- which ships in
+            # 3.16. Until that is KerasHub's minimum, Keras 3.15 still raises
+            # here.
             if tf is not None:
                 raise
-            random.seed(87654321)
-            np.random.seed(87654321)
+            random.seed(_TEST_SEED)
+            np.random.seed(_TEST_SEED)
             if keras.config.backend() == "torch":
                 import torch
 
-                torch.manual_seed(87654321)
+                torch.manual_seed(_TEST_SEED)
 
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
         if x1.__class__.__name__ == "_MetricDict":
@@ -356,9 +424,10 @@ class TestCase(KerasTestCase):
         _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
 
     def assertNotAllEqual(self, x1, x2, msg=None):
-        try:
-            self.assertAllEqual(x1, x2)
-        except AssertionError:
+        is_equal = _compare_structures(
+            x1, x2, _dense_allclose_fn(None, None), msg, "", raise_errors=False
+        )
+        if not is_equal:
             return
         raise AssertionError(
             f"The two values are equal at all elements.\n{msg or ''}"
@@ -1482,18 +1551,14 @@ class TestCase(KerasTestCase):
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        # `tf.data` cannot consume tensors that live on an accelerator, so move
-        # them back to the host first.
-        host_data = _map_leaves(_to_host_leaf, train_data)
-        ds = tf.data.Dataset.from_tensor_slices(host_data)
-        ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
         # `tf.data` coverage is additive; the direct calls below run either way.
         ds = None
         if tf is not None:
-            ds = tf.data.Dataset.from_tensor_slices(train_data).batch(
-                batch_size
-            )
+            # `tf.data` cannot consume tensors that live on an accelerator, so
+            # move them back to the host first.
+            host_data = _map_leaves(_to_host_leaf, train_data)
+            ds = tf.data.Dataset.from_tensor_slices(host_data).batch(batch_size)
 
         # Test: the tree struct output by the
         # preprocessor must match what model expects.
@@ -1509,14 +1574,15 @@ class TestCase(KerasTestCase):
         if expected_output_shape is not None:
             output_shape = tree.map_structure(lambda x: x.shape, output)
             self.assertAllClose(output_shape, expected_output_shape)
-        # With a dataset.
-        output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
-        # With split preprocessing.
-        task.preprocessor = None
-        output_split = task.predict(ds.map(preprocessor))
-        task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
+        if ds is not None:
+            # With a dataset.
+            output_ds = task.predict(ds)
+            self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
+            # With split preprocessing.
+            task.preprocessor = None
+            output_split = task.predict(ds.map(preprocessor))
+            task.preprocessor = preprocessor
+            self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)
