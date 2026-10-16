@@ -6,11 +6,7 @@ from keras_hub.src.models.text_to_image_preprocessor import (
     TextToImagePreprocessor,
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 # The Qwen3 chat template for a single user turn, rendered with
 # `add_generation_prompt=True, enable_thinking=False`, exactly as
