@@ -17,6 +17,7 @@ from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_flux
+from keras_hub.src.utils.transformers import convert_flux2
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
@@ -75,6 +76,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_diffusion_gemma
         elif model_type in ("flux", "flux_text_to_image"):
             self.converter = convert_flux
+        elif model_type == "flux2":
+            self.converter = convert_flux2
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
         elif model_type in ("gemma3", "gemma3_text"):
