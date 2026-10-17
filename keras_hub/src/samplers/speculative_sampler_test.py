@@ -1,5 +1,8 @@
+import keras
+import numpy as np
 from keras import ops
 
+import keras_hub
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.tests.test_case import TestCase
 
@@ -178,6 +181,215 @@ class SpeculativeSamplerTest(TestCase):
         output_str = self.join_as_string(output)
         self.assertEqual(output_str, ["aaaaaaaa", "aaaaaaaa"])
 
+    def test_ragged_batch_keeps_prompt_tokens(self):
+        batch_size = 2
+        length = 10
+        z = self.char_lookup["z"]
+        # Row 0 has a 2-token prompt. Row 1 has a 6-token prompt.
+        prompt = np.full((batch_size, length), z, dtype="int32")
+        prompt[1, :6] = [self.char_lookup[c] for c in "qrstuv"]
+        mask = np.zeros((batch_size, length), dtype=bool)
+        mask[0, :2] = True
+        mask[1, :6] = True
+
+        def next_fn(prompt, cache, index):
+            logits = (
+                ops.one_hot(ops.zeros((batch_size,), dtype="int32"), 26) * 1e9
+            )
+            return logits, ops.ones([batch_size, 5]), cache
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3)
+        output = ops.convert_to_numpy(
+            sampler(
+                next=next_fn,
+                prompt=ops.array(prompt),
+                index=2,
+                mask=ops.array(mask),
+                draft_next=next_fn,
+            )
+        )
+        self.assertAllEqual(output[mask], prompt[mask])
+        self.assertAllEqual(output[~mask], np.zeros(int((~mask).sum())))
+
+    def test_ragged_batch_counts_forced_prompt_positions_as_matched(self):
+        if keras.config.backend() == "jax":
+            self.skipTest("JAX traces the sampler loop once.")
+        batch_size = 2
+        length = 12
+        z = self.char_lookup["z"]
+        # Row 0 has a 2-token prompt. Row 1 has an 8-token prompt.
+        prompt = np.full((batch_size, length), z, dtype="int32")
+        prompt[1, :8] = [self.char_lookup[c] for c in "qrstuvwx"]
+        mask = np.zeros((batch_size, length), dtype=bool)
+        mask[0, :2] = True
+        mask[1, :8] = True
+        num_draft_calls = [0]
+
+        def next_fn(prompt, cache, index):
+            logits = (
+                ops.one_hot(ops.zeros((batch_size,), dtype="int32"), 26) * 1e9
+            )
+            return logits, ops.ones([batch_size, 5]), cache
+
+        def counting_draft_next(prompt, cache, index):
+            num_draft_calls[0] += 1
+            return next_fn(prompt, cache, index)
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3)
+        output = ops.convert_to_numpy(
+            sampler(
+                next=next_fn,
+                prompt=ops.array(prompt),
+                index=2,
+                mask=ops.array(mask),
+                draft_next=counting_draft_next,
+            )
+        )
+        self.assertAllEqual(output[mask], prompt[mask])
+        # The draft and the target agree on every free position. Without
+        # forced positions, the prompt of row 1 slows each cycle to one token.
+        num_cycles = num_draft_calls[0] // 3
+        self.assertLessEqual(num_cycles, 3)
+
+    def test_one_shot_block_draft_next(self):
+        # Some draft models (e.g. a bidirectional block-diffusion drafter)
+        # produce every candidate from a single forward pass rather than
+        # autoregressively. `draft_next` is still called once per candidate
+        # by this sampler, so such a model can compute the whole block on
+        # its first call within a cycle and serve cached slices on the
+        # rest of that cycle's calls (a plain Python-level memo, safe
+        # because a cycle's `for i in range(k)` calls happen within one
+        # `body()` invocation) — this is the pattern
+        # `MuseGlimmerCausalLM.generate_step` uses for its DFlash
+        # assistant. Verify correctness of that pattern here with a plain
+        # (non-model-specific) closure; per-cycle call-count savings are
+        # only observable once `generate_step` runs inside a compiled
+        # `generate_function` trace, not via a bare `sampler(...)` call
+        # like this test makes, so this test checks output correctness
+        # only.
+        target_chars = list("abcdefghijkl")
+        draft_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        block_logits = ops.one_hot(
+            ops.array([self.char_lookup[c] for c in draft_chars[:3]]),
+            self.vocab_size,
+        )
+
+        def one_shot_draft_next(prompt, draft_cache, index):
+            anchor_pos = draft_cache
+            position = ops.minimum(ops.maximum(index - anchor_pos - 1, 0), 2)
+            logits = ops.take(block_logits, position, axis=0) * 1e9
+            hidden_states = ops.ones([self.batch_size, 5])
+            return logits, hidden_states, draft_cache
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3, temperature=1.0)
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            index=0,
+            draft_next=one_shot_draft_next,
+            draft_cache=-1,
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def test_generic_draft_cache_continuation(self):
+        # The 3-tuple `(draft_state, target_cache, anchor_pos)` convention
+        # for refreshing `draft_cache` after each cycle is generic — it
+        # must not require the model passed via `model=` to be any
+        # particular class.
+        target_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        draft_next = self._next_fn(target_chars)
+
+        sampler = SpeculativeSampler(num_speculative_tokens=3, temperature=1.0)
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        initial_hidden = ops.zeros((self.batch_size, 1, 4))
+        initial_target_cache = ops.zeros((self.batch_size, 1))
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            cache=initial_target_cache,
+            index=0,
+            draft_next=draft_next,
+            draft_cache=(initial_hidden, initial_target_cache, 0),
+            model=object(),
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def test_four_tuple_draft_cache_continuation(self):
+        # The 4-tuple `(draft_state, target_cache, anchor_pos, drafter_cache)`
+        # convention. After each cycle, the sampler replaces `target_cache`
+        # with the verified cache, moves `anchor_pos` to the last verified
+        # position, and replaces `draft_state` with the verify hidden state at
+        # `min_accepted`. The sampler never changes `drafter_cache`.
+        num_speculative_tokens = 3
+        target_chars = list("abcdefghijkl")
+        target_next = self._next_fn(target_chars)
+        draft_next_fn = self._next_fn(target_chars)
+        records = []
+
+        def verify_next(prompt, cache, index, k):
+            logits = ops.stack(
+                [
+                    target_next(prompt, cache, index + i)[0]
+                    for i in range(k + 1)
+                ],
+                axis=1,
+            )
+            # Row `j` of the hidden states is `j`, so `min_accepted` is
+            # visible in the next `draft_state`.
+            hidden = ops.broadcast_to(
+                ops.reshape(ops.cast(ops.arange(k + 1), "float32"), (1, -1, 1)),
+                (self.batch_size, k + 1, 5),
+            )
+            return logits, hidden, cache + 1
+
+        def draft_next(prompt, draft_cache, index):
+            logits, _, _ = draft_next_fn(prompt, None, index)
+            if keras.config.backend() == "torch":
+                records.append((int(ops.convert_to_numpy(index)), draft_cache))
+            return logits, ops.ones((self.batch_size, 5)), draft_cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=num_speculative_tokens, temperature=1.0
+        )
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        output = sampler(
+            next=target_next,
+            prompt=prompt,
+            cache=ops.zeros((self.batch_size, 1)),
+            index=0,
+            draft_next=draft_next,
+            draft_cache=(
+                ops.zeros((self.batch_size, 1, 5)),
+                ops.zeros((self.batch_size, 1)),
+                0,
+                ops.full((self.batch_size, 1), 7.0),
+            ),
+            verify_next=verify_next,
+            model=object(),
+        )
+        self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+        # The sampler loop is traced on JAX and TensorFlow, so only torch
+        # runs each cycle in Python and gives concrete values.
+        if keras.config.backend() != "torch":
+            return
+        cycle_starts = records[::num_speculative_tokens]
+        self.assertGreaterEqual(len(cycle_starts), 3)
+        for cycle, (index, draft_cache) in enumerate(cycle_starts):
+            draft_state, target_cache, anchor_pos, drafter_cache = draft_cache
+            self.assertAllClose(drafter_cache, np.full((1, 1), 7.0))
+            if cycle == 0:
+                continue
+            # Every draft token is right, so `min_accepted` is `k`.
+            self.assertAllClose(
+                draft_state, np.full((1, 1, 5), float(num_speculative_tokens))
+            )
+            self.assertAllClose(target_cache, np.full((1, 1), float(cycle)))
+            self.assertEqual(int(ops.convert_to_numpy(anchor_pos)), index - 1)
+
     def test_short_circuit_rejection(self):
         # If token 2 is wrong, tokens 3+ should be rejected even if correct.
         target_chars = list("abcdefghijkl")
@@ -197,3 +409,81 @@ class SpeculativeSamplerTest(TestCase):
         output_str = self.join_as_string(output)
         self.assertTrue(output_str[0].startswith("ab"))
         self.assertEqual(output_str[0][2], "c")
+
+    def test_top_k_one_matches_target_sampler(self):
+        # With `k=1`, the target distribution is a point mass, so a wrong
+        # draft must never change the output.
+        target_chars = list("abcdefghijkl")
+        draft_chars = list("abxdefzhijkl")
+
+        def soft_next(chars):
+            fn = self._next_fn(chars)
+
+            def next_fn(prompt, cache, index):
+                logits, hidden, cache = fn(prompt, cache, index)
+                return logits * 1e-9 + 2.0, hidden, cache
+
+            return next_fn
+
+        # Logits are 3.0 at the chosen character and 2.0 elsewhere.
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=3,
+            base_sampler=keras_hub.samplers.TopKSampler(k=1, seed=1),
+            seed=2,
+        )
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        for _ in range(5):
+            output = sampler(
+                next=soft_next(target_chars),
+                prompt=prompt,
+                index=0,
+                draft_next=soft_next(draft_chars),
+            )
+            self.assertEqual(self.join_as_string(output), ["abcdefghijkl"])
+
+    def _sample_first_token(self, base_sampler, draft_token, p):
+        batch, k, length = 2000, 2, 4
+        target_logits = np.log(np.asarray(p, "float32"))
+        vocab = len(p)
+        p_logits = ops.convert_to_tensor(
+            np.broadcast_to(target_logits, (batch, k + 1, vocab)).copy()
+        )
+        q_logits = ops.convert_to_tensor(
+            np.broadcast_to(np.eye(vocab)[draft_token] * 10.0, (batch, vocab))
+            .astype("float32")
+            .copy()
+        )
+
+        def draft_next(prompt, draft_cache, index):
+            return q_logits, ops.zeros((batch, 1)), draft_cache
+
+        def verify_next(prompt, cache, index, num_tokens):
+            return p_logits, cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=k, base_sampler=base_sampler, seed=3
+        )
+        output = sampler(
+            next=None,
+            prompt=ops.zeros((batch, length), "int32"),
+            index=1,
+            draft_next=draft_next,
+            verify_next=verify_next,
+        )
+        tokens = ops.convert_to_numpy(output)[:, 1]
+        return np.bincount(tokens, minlength=vocab) / batch
+
+    def test_stochastic_matches_target_distribution(self):
+        p = [0.1, 0.2, 0.3, 0.4]
+        freq = self._sample_first_token(
+            keras_hub.samplers.RandomSampler(seed=1), draft_token=1, p=p
+        )
+        self.assertLess(0.5 * np.abs(freq - np.array(p)).sum(), 0.05)
+
+    def test_stochastic_applies_top_k_to_target(self):
+        p = [0.1, 0.2, 0.3, 0.4]
+        freq = self._sample_first_token(
+            keras_hub.samplers.TopKSampler(k=2, seed=1), draft_token=1, p=p
+        )
+        expected = np.array([0.0, 0.0, 3 / 7, 4 / 7])
+        self.assertLess(0.5 * np.abs(freq - expected).sum(), 0.05)

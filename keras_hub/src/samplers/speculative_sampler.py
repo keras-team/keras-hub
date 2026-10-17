@@ -19,7 +19,12 @@ class SpeculativeSampler(Sampler):
         (https://arxiv.org/abs/2211.17192) (Leviathan et al., 2022)
 
     The algorithm follows three phases per outer iteration:
-      1. **Draft phase**: The draft model auto-regressively generates K tokens.
+      1. **Draft phase**: `draft_next` is called K times in sequence to
+         produce K candidate tokens. Nothing about this phase requires the
+         draft model itself to be autoregressive: a one-shot block drafter
+         (e.g. a bidirectional block-diffusion assistant) can compute all K
+         candidates in a single forward pass on its first call and simply
+         return the i-th cached candidate on each subsequent call.
       2. **Verify phase**: The target model scores all K+1 positions in one
          parallel forward pass via `verify_next`.
       3. **Accept phase**: Tokens are accepted/rejected via rejection sampling
@@ -27,6 +32,18 @@ class SpeculativeSampler(Sampler):
 
     When `base_sampler` is provided, stochastic rejection sampling is used.
     Otherwise greedy acceptance is used.
+
+    `draft_cache` is a tuple. The sampler reads its layout from the length:
+    a 2-tuple `(draft_state, target_cache)`, a 3-tuple
+    `(draft_state, target_cache, anchor_pos)`, or a 4-tuple
+    `(draft_state, target_cache, anchor_pos, drafter_cache)`.
+    After each cycle the sampler replaces `target_cache` with the verified
+    target cache. For the 3-tuple and 4-tuple forms, it also sets `anchor_pos`
+    to the new cycle-start position. It replaces `draft_state` with the entry
+    at position `min_accepted` of the hidden states that `verify_next`
+    returns, if `verify_next` returns hidden states. The sampler never reads
+    or changes `drafter_cache`. The `draft_next` and `verify_next` closures
+    of any model can use this layout.
 
     Args:
         num_speculative_tokens: int. Number of draft tokens per outer
@@ -123,10 +140,9 @@ class SpeculativeSampler(Sampler):
 
             # ── Phase 1: Draft K tokens ───────────────────────────────────
             # Run the draft model K times autoregressively. Collect draft
-            # token ids and probabilities for the accept step.
+            # token ids for the accept step.
             current_prompt = prompt
             draft_ids_list = []
-            draft_probs_list = []
 
             for i in range(k):
                 # Clamp the index to [0, max_length - 1] for safety.
@@ -136,8 +152,7 @@ class SpeculativeSampler(Sampler):
                 logits, _, current_draft_cache = draft_next(
                     current_prompt, current_draft_cache, safe_idx
                 )
-                # Apply temperature to get q_probs for the acceptance ratio
-                # p(x)/q(x).  Temperature comes from base_sampler when set.
+                # Apply temperature before the draft argmax.
                 if self.base_sampler is not None:
                     dt = getattr(self.base_sampler, "temperature", 1.0)
                     probs = ops.softmax(
@@ -165,11 +180,9 @@ class SpeculativeSampler(Sampler):
                     current_prompt, [0, safe_idx], next_token[:, None]
                 )
                 draft_ids_list.append(next_token)
-                draft_probs_list.append(probs)
 
-            # Stack: (batch, k), (batch, k, vocab)
+            # Stack: (batch, k)
             draft_ids = ops.stack(draft_ids_list, axis=1)
-            q_probs = ops.stack(draft_probs_list, axis=1)
 
             # ── Phase 2: Verify with target model ─────────────────────────
             verify_hidden_states = None
@@ -207,27 +220,30 @@ class SpeculativeSampler(Sampler):
 
             # target_logits: (batch, k+1, vocab)
             target_probs = self.compute_probabilities(target_logits)
+            if self.base_sampler is not None:
+                target_probs = self._filter_probabilities(target_probs)
             # p_probs: (batch, k, vocab)  — the K verification distributions
             p_probs = target_probs[:, :k, :]
 
             # Refresh the target cache in draft_cache so the next draft cycle
-            # uses the updated K/V entries. Supports 2-tuple and 3-tuple forms.
-            from keras_hub.src.models.gemma4.gemma4_causal_lm import (
-                Gemma4CausalLM,
-            )
-
-            is_gemma4 = isinstance(model, Gemma4CausalLM)
+            # uses the updated K/V entries. Supports any model whose
+            # draft_cache is a 2-tuple `(draft_state, target_cache)`, a
+            # 3-tuple `(draft_state, target_cache, anchor_pos)`, or a
+            # 4-tuple `(draft_state, target_cache, anchor_pos, drafter_cache)`
+            # — the tuple shape alone identifies the convention, so no
+            # per-model check is needed. The optional 4th element is
+            # opaque to this sampler (e.g. a drafter's own persistent
+            # cache, entirely managed by that model's own `draft_next`);
+            # it is carried through unchanged here.
             if (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 2
             ):
                 current_draft_cache = (current_draft_cache[0], updated_cache)
             elif (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and has_cache
                 and isinstance(draft_cache, tuple)
                 and len(draft_cache) == 3
@@ -237,19 +253,28 @@ class SpeculativeSampler(Sampler):
                     updated_cache,
                     current_draft_cache[2],
                 )
+            elif (
+                has_draft_cache
+                and has_cache
+                and isinstance(draft_cache, tuple)
+                and len(draft_cache) == 4
+            ):
+                current_draft_cache = (
+                    current_draft_cache[0],
+                    updated_cache,
+                    current_draft_cache[2],
+                    current_draft_cache[3],
+                )
 
             # ── Phase 3: Accept / reject via rejection sampling ───────────
             if self.base_sampler is not None:
                 # Stochastic acceptance (Leviathan et al., 2022 Algorithm 1).
-                # For each draft position i:
-                #   Accept token t_i if Uniform(0,1) < p(t_i) / q(t_i).
+                # The draft token is deterministic, so q is a point mass.
+                # Accept token t_i if Uniform(0,1) < p(t_i) / q(t_i) = p(t_i).
                 gather_idx = ops.expand_dims(
                     ops.cast(draft_ids, "int32"), axis=-1
                 )
                 p_target = ops.take_along_axis(p_probs, gather_idx, axis=-1)[
-                    :, :, 0
-                ]
-                q_draft = ops.take_along_axis(q_probs, gather_idx, axis=-1)[
                     :, :, 0
                 ]
 
@@ -258,13 +283,28 @@ class SpeculativeSampler(Sampler):
                     seed=self.seed_generator,
                     dtype="float32",
                 )
-                matches = (r * q_draft) < p_target
+                matches = r < p_target
             else:
                 # Greedy acceptance: token matches if argmax(p) == draft_id.
                 target_tokens = ops.cast(
                     ops.argmax(p_probs, axis=-1), prompt.dtype
                 )
                 matches = ops.equal(draft_ids, target_tokens)
+
+            # A prompt position of a longer row is forced. The draft keeps the
+            # prompt token there, so the position counts as matched.
+            draft_positions = ops.cast(index, "int32") + ops.arange(
+                k, dtype="int32"
+            )
+            forced = ops.logical_and(
+                ops.take(
+                    ops.cast(mask, "bool"),
+                    ops.minimum(draft_positions, max_length - 1),
+                    axis=1,
+                ),
+                (draft_positions < max_length)[None, :],
+            )
+            matches = ops.logical_or(matches, forced)
 
             # Compute the prefix of accepted tokens (all must match up to i).
             # num_accepted[b] = length of the accepted prefix for item b.
@@ -299,11 +339,10 @@ class SpeculativeSampler(Sampler):
             safe_bonus_idx = ops.minimum(bonus_idx, max_length - 1)
 
             if self.base_sampler is not None:
-                # Residual distribution for rejected positions:
-                #   p_bonus = max(0, p_target - q_draft) / Z
-                # When all K tokens were accepted, sample from p_target
-                # directly (no residual needed).
-                # Use ops.gather with scalar min_accepted to stay in-graph.
+                # Residual distribution for a rejected position. The draft
+                # is a point mass, so the residual is p with the rejected
+                # draft token removed. When all K tokens are accepted, sample
+                # from p directly.
                 gather_bonus = ops.expand_dims(
                     ops.broadcast_to(
                         ops.expand_dims(min_accepted, axis=0),
@@ -318,43 +357,30 @@ class SpeculativeSampler(Sampler):
                 gather_bonus_b = ops.broadcast_to(
                     gather_bonus, (batch_size, 1, vocab)
                 )
-
                 p_b = ops.take_along_axis(target_probs, gather_bonus_b, axis=1)[
                     :, 0, :
                 ]
 
-                # Clamp to avoid negative probabilities from floating-point
-                # error.
                 safe_q_idx = ops.minimum(
                     ops.cast(min_accepted, "int32"),
                     ops.cast(k - 1, "int32"),
                 )
-                gather_q = ops.expand_dims(
-                    ops.broadcast_to(
-                        ops.expand_dims(safe_q_idx, axis=0), (batch_size,)
-                    ),
-                    axis=-1,
+                rejected_ids = ops.take(draft_ids, safe_q_idx, axis=1)
+                rejected_onehot = ops.one_hot(
+                    ops.cast(rejected_ids, "int32"), vocab, dtype=p_b.dtype
                 )
-                gather_q = ops.expand_dims(gather_q, axis=-1)
-                gather_q_b = ops.broadcast_to(gather_q, (batch_size, 1, vocab))
-                q_b = ops.take_along_axis(q_probs, gather_q_b, axis=1)[:, 0, :]
+                res_probs = p_b * (1.0 - rejected_onehot)
+                res_sum = ops.sum(res_probs, axis=-1, keepdims=True)
+                res_probs = ops.where(
+                    res_sum > 0.0,
+                    res_probs / ops.maximum(res_sum, 1e-30),
+                    p_b,
+                )
 
                 all_accepted = ops.equal(min_accepted, ops.cast(k, "int32"))
-                res_probs = ops.maximum(
-                    ops.cast(0.0, p_b.dtype),
-                    ops.cast(p_b, p_b.dtype) - ops.cast(q_b, p_b.dtype),
-                )
-                res_sum = ops.sum(res_probs, axis=-1, keepdims=True) + ops.cast(
-                    1e-7, res_probs.dtype
-                )
-                res_probs = res_probs / res_sum
-
-                # When all K tokens accepted, fall through to p_b directly.
-                # all_accepted is a scalar bool; ops.where broadcasts it
-                # over (batch, vocab) without needing explicit indexing.
                 bonus_probs = ops.where(all_accepted, p_b, res_probs)
 
-                # Gumbel-max trick for differentiable argmax sampling.
+                # Gumbel-max trick. Zero-probability tokens never win.
                 uniform_noise = random.uniform(
                     shape=ops.shape(bonus_probs),
                     seed=self.seed_generator,
@@ -363,14 +389,13 @@ class SpeculativeSampler(Sampler):
                 gumbel = -ops.log(
                     -ops.log(uniform_noise + ops.cast(1e-7, "float32"))
                 )
-                bonus_token = ops.argmax(
-                    ops.log(
-                        ops.cast(bonus_probs, "float32")
-                        + ops.cast(1e-7, "float32")
-                    )
-                    + gumbel,
-                    axis=-1,
+                bonus_probs = ops.cast(bonus_probs, "float32")
+                log_probs = ops.where(
+                    bonus_probs > 0.0,
+                    ops.log(ops.maximum(bonus_probs, 1e-30)),
+                    -1e30,
                 )
+                bonus_token = ops.argmax(log_probs + gumbel, axis=-1)
             else:
                 # Greedy bonus: argmax of the target distribution at position
                 # min_accepted.
@@ -394,7 +419,16 @@ class SpeculativeSampler(Sampler):
             bonus_token = ops.cast(bonus_token, prompt.dtype)
             existing_bonus = final_prompt[:, safe_bonus_idx]
             in_bounds = ops.cast(bonus_idx < max_length, "bool")
-            bonus_token = ops.where(in_bounds, bonus_token, existing_bonus)
+            # Keep prompt tokens of rows that are still inside their prompt.
+            keep_existing = ops.logical_or(
+                ops.logical_not(in_bounds), mask[:, safe_bonus_idx]
+            )
+            # Keep the accepted draft of rows that accepted more than the
+            # batch minimum.
+            keep_existing = ops.logical_or(
+                keep_existing, num_accepted > min_accepted
+            )
+            bonus_token = ops.where(keep_existing, existing_bonus, bonus_token)
             final_prompt = ops.slice_update(
                 final_prompt, [0, safe_bonus_idx], bonus_token[:, None]
             )
@@ -405,13 +439,15 @@ class SpeculativeSampler(Sampler):
                 ops.cast(max_length, "int32"),
             )
 
-            # Update fixed_pos to the new cycle-start position (new_index - 1)
-            # so the next cycle's draft steps share the correct RoPE anchor.
+            # Update anchor_pos to the new cycle-start position
+            # (new_index - 1) so the next cycle's draft steps share the
+            # correct positional anchor. Applies to both the 3-tuple and
+            # 4-tuple draft_cache forms; a 4th element (e.g. a drafter's
+            # own persistent cache) is carried through unchanged.
             if (
-                is_gemma4
-                and has_draft_cache
+                has_draft_cache
                 and isinstance(current_draft_cache, tuple)
-                and len(current_draft_cache) == 3
+                and len(current_draft_cache) in (3, 4)
             ):
                 # Seed the next draft cycle with the target's hidden state
                 # at the accepted position:
@@ -429,7 +465,7 @@ class SpeculativeSampler(Sampler):
                     new_seed_hidden,
                     current_draft_cache[1],
                     new_index - ops.cast(1, "int32"),
-                )
+                ) + current_draft_cache[3:]
 
             return (
                 final_prompt,
@@ -446,6 +482,30 @@ class SpeculativeSampler(Sampler):
             model=model,
         )
         return prompt
+
+    def _filter_probabilities(self, probs):
+        """Apply the top-k and top-p of `base_sampler` to `probs`."""
+        k = getattr(self.base_sampler, "k", None)
+        p = getattr(self.base_sampler, "p", None)
+        if k is None and p is None:
+            return probs
+        vocab = probs.shape[-1]
+        cutoff = vocab if k is None else min(k, vocab)
+        sorted_probs, _ = ops.top_k(probs, k=cutoff, sorted=True)
+        if p is None:
+            keep = ops.ones_like(sorted_probs, dtype="bool")
+        else:
+            cumulative = ops.cumsum(sorted_probs, axis=-1)
+            keep = cumulative <= p
+            # Include the first token that exceeds `p`.
+            keep = ops.concatenate(
+                [ops.ones_like(keep[..., :1]), keep[..., :-1]], axis=-1
+            )
+        threshold = ops.min(
+            ops.where(keep, sorted_probs, 2.0), axis=-1, keepdims=True
+        )
+        probs = ops.where(probs >= threshold, probs, 0.0)
+        return probs / ops.sum(probs, axis=-1, keepdims=True)
 
     def get_config(self):
         base_sampler_config = None
