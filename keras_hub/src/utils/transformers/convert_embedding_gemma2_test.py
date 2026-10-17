@@ -23,7 +23,13 @@ from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
     convert_tokenizer,
 )
 from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
+    load_preprocessor_config,
+)
+from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
     load_task_config,
+)
+from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
+    load_video_converter_config,
 )
 
 
@@ -47,6 +53,25 @@ def _tiny_text_config():
             "sliding_attention": {"rope_theta": 10000.0},
             "full_attention": {"rope_theta": 1000000.0},
         },
+    }
+
+
+def _get_tokenizer_dict():
+    base = ["<pad>", "<eos>", "<bos>", "<unk>", "<", "|", ">", "i", "m"]
+    base += ["a", "g", "e", "u", "d", "o", "v", "▁", "<|image>"]
+    base += ["<|image|>", "<image|>", "<|audio>", "<|audio|>"]
+    base += ["<audio|>", "<|video|>"]
+    # byte_fallback protos must carry all 256 byte pieces.
+    base += [f"<0x{i:02X}>" for i in range(256)]
+    vocab = {tok: i for i, tok in enumerate(base)}
+    added = [
+        {"id": vocab[t], "content": t, "special": True}
+        for t in base
+        if t.startswith("<") and t.endswith(">") and len(t) > 1
+    ]
+    return {
+        "model": {"vocab": vocab, "merges": []},
+        "added_tokens": added,
     }
 
 
@@ -123,7 +148,30 @@ class ConvertEmbeddingGemma2Test(TestCase):
                 json.dump(sentence_bert, f)
         return preset
 
-    def test_task_config_reads_sentence_transformers_files(self):
+    def _write_tiny_hf_preset(self, processor_config=None, sentence_bert=None):
+        preset = tempfile.mkdtemp(dir=self.get_temp_dir())
+        with open(os.path.join(preset, "config.json"), "w") as f:
+            json.dump(
+                {
+                    "model_type": "embedding_gemma2",
+                    "architectures": ["EmbeddingGemma2Model"],
+                    "text_config": _tiny_text_config(),
+                },
+                f,
+            )
+        with open(os.path.join(preset, "tokenizer.json"), "w") as f:
+            json.dump(_get_tokenizer_dict(), f)
+        if processor_config is not None:
+            with open(os.path.join(preset, "processor_config.json"), "w") as f:
+                json.dump(processor_config, f)
+        if sentence_bert is not None:
+            with open(
+                os.path.join(preset, "sentence_bert_config.json"), "w"
+            ) as f:
+                json.dump(sentence_bert, f)
+        return preset
+
+    def test_reads_sentence_transformers_files(self):
         transformer = {"type": "sentence_transformers.models.Transformer"}
         normalize = {"type": "sentence_transformers.models.Normalize"}
 
@@ -163,11 +211,15 @@ class ConvertEmbeddingGemma2Test(TestCase):
         preset = self._write_sentence_transformers_files(
             [transformer], sentence_bert={"max_seq_length": 2048}
         )
-        self.assertEqual(load_task_config(preset, {})["sequence_length"], 2048)
+        self.assertEqual(
+            load_preprocessor_config(preset, {})["sequence_length"], 2048
+        )
         preset = self._write_sentence_transformers_files(
             [transformer], sentence_bert={"do_lower_case": False}
         )
-        self.assertNotIn("sequence_length", load_task_config(preset, {}))
+        self.assertEqual(
+            load_preprocessor_config(preset, {})["sequence_length"], 512
+        )
 
     def test_backbone_config_reads_rope_and_audio_token_counts(self):
         text_cfg = _tiny_text_config()
@@ -252,32 +304,48 @@ class ConvertEmbeddingGemma2Test(TestCase):
     def test_tokenizer_added_tokens_are_atomic(self):
         # Tier 1 parity found `<|image|>` tokenizing as `<`,`|`,`image`,`|>`.
         # HF matches added_tokens before BPE, so they must survive as one id.
-        base = ["<pad>", "<eos>", "<bos>", "<unk>", "<", "|", ">", "i", "m"]
-        base += ["a", "g", "e", "u", "d", "o", "v", "▁", "<|image>"]
-        base += ["<|image|>", "<image|>", "<|audio>", "<|audio|>"]
-        base += ["<audio|>", "<|video|>"]
-        # byte_fallback protos must carry all 256 byte pieces.
-        base += [f"<0x{i:02X}>" for i in range(256)]
-        vocab = {tok: i for i, tok in enumerate(base)}
-        added = [
-            {"id": vocab[t], "content": t, "special": True}
-            for t in base
-            if t.startswith("<") and t.endswith(">") and len(t) > 1
-        ]
+        tokenizer_dict = _get_tokenizer_dict()
+        vocab = tokenizer_dict["model"]["vocab"]
         preset = self.get_temp_dir()
         with open(os.path.join(preset, "tokenizer.json"), "w") as f:
-            json.dump(
-                {
-                    "model": {"vocab": vocab, "merges": []},
-                    "added_tokens": added,
-                },
-                f,
-            )
+            json.dump(tokenizer_dict, f)
         tokenizer = convert_tokenizer(EmbeddingGemma2Tokenizer, preset)
         ids = [int(t) for t in tokenizer("<|image|><|audio|><|video|>")]
         self.assertEqual(
             ids, [vocab["<|image|>"], vocab["<|audio|>"], vocab["<|video|>"]]
         )
+
+    def test_preprocessor_reads_max_seq_length(self):
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
+            EmbeddingGemma2TextEmbedderPreprocessor,
+        )
+
+        preset = self._write_tiny_hf_preset(
+            processor_config={}, sentence_bert={"max_seq_length": 256}
+        )
+        prep = EmbeddingGemma2TextEmbedderPreprocessor.from_preset(preset)
+        self.assertEqual(prep.sequence_length, 256)
+        embedder = EmbeddingGemma2TextEmbedder.from_preset(
+            preset, load_weights=False
+        )
+        self.assertEqual(embedder.preprocessor.sequence_length, 256)
+
+    def test_preprocessor_from_preset_without_processor_config(self):
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
+            EmbeddingGemma2TextEmbedderPreprocessor,
+        )
+
+        preset = self._write_tiny_hf_preset(processor_config=None)
+        self.assertIsNone(load_video_converter_config(preset, {}))
+        # A vision model whose export lacks processor_config.json must also
+        # degrade to None, not raise.
+        self.assertIsNone(
+            load_video_converter_config(preset, {"vision_config": {}})
+        )
+        prep = EmbeddingGemma2TextEmbedderPreprocessor.from_preset(preset)
+        self.assertIsNone(prep.video_converter)
+        self.assertIsNone(prep.image_converter)
+        self.assertIsNone(prep.audio_converter)
 
     @pytest.mark.large
     def test_convert_weights_matches_tiny_hf_model(self):

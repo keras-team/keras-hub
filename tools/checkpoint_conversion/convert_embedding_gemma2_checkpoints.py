@@ -161,11 +161,11 @@ def validate_output(keras_model, hf_model, hf_processor, hf_tokenizer):
     # cosine ~0.9998), so the end-to-end rows are gated on cosine.
     min_cosine, enc_diff = 1.0, 0.0
     enc_mean_diff = 0.0
-    photo = np.array(
-        Image.open("keras_hub/src/tests/test_data/test_image.jpg").convert(
-            "RGB"
-        )
+    photo_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "../../keras_hub/src/tests/test_data/test_image.jpg",
     )
+    photo = np.array(Image.open(photo_path).convert("RGB"))
     images, hf_single_outs = [], []
     for img in [
         np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8),

@@ -133,6 +133,10 @@ def load_audio_converter_config(preset, transformers_config):
 
 
 def load_video_converter_config(preset, transformers_config):
+    if "vision_config" not in transformers_config or not check_file_exists(
+        preset, "processor_config.json"
+    ):
+        return None
     processor_config = load_json(preset, "processor_config.json")
     if "video_processor" not in processor_config:
         return None
@@ -151,9 +155,14 @@ def load_video_converter_config(preset, transformers_config):
 
 
 def load_preprocessor_config(preset, transformers_config):
-    return {
-        "sequence_length": 512,
-    }
+    # The sentence-transformers export may set `max_seq_length`; otherwise
+    # keep the preprocessor default.
+    sentence_bert_config_file = "sentence_bert_config.json"
+    if check_file_exists(preset, sentence_bert_config_file):
+        sentence_bert_config = load_json(preset, sentence_bert_config_file)
+        if "max_seq_length" in sentence_bert_config:
+            return {"sequence_length": sentence_bert_config["max_seq_length"]}
+    return {"sequence_length": 512}
 
 
 def load_task_config(preset, transformers_config):
@@ -185,12 +194,6 @@ def load_task_config(preset, transformers_config):
             kwargs["pooling_mode"] = "mean"
         else:
             kwargs["pooling_mode"] = "mean"
-
-    sentence_bert_config_file = "sentence_bert_config.json"
-    if check_file_exists(preset, sentence_bert_config_file):
-        sentence_bert_config = load_json(preset, sentence_bert_config_file)
-        if "max_seq_length" in sentence_bert_config:
-            kwargs["sequence_length"] = sentence_bert_config["max_seq_length"]
 
     return kwargs
 
