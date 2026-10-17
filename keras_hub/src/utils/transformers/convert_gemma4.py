@@ -100,13 +100,25 @@ def load_audio_converter_config(preset, transformers_config):
     }
 
 
+def _load_video_processor_section(preset, transformers_config):
+    """Return the `video_processor` section of processor_config.json, or None.
+
+    Text-only (`gemma4_text`) checkpoints have no `vision_config` and ship no
+    processor_config.json, so like `load_image_converter_config` this must
+    return None instead of raising `FileNotFoundError`.
+    """
+    if "vision_config" not in transformers_config:
+        return None
+    processor_config = load_json(preset, "processor_config.json")
+    return processor_config.get("video_processor")
+
+
 def load_video_converter_config(preset, transformers_config):
     """Return Gemma4VideoConverter kwargs, or None if not a video model."""
-    processor_config = load_json(preset, "processor_config.json")
-    if "video_processor" not in processor_config:
+    video_proc = _load_video_processor_section(preset, transformers_config)
+    if video_proc is None:
         return None
 
-    video_proc = processor_config["video_processor"]
     scale, offset = _compute_scale_offset(video_proc, "video_processor")
 
     return {
@@ -121,11 +133,9 @@ def load_video_converter_config(preset, transformers_config):
 
 def load_preprocessor_config(preset, transformers_config):
     """Return extra Gemma4CausalLMPreprocessor kwargs from processor_config."""
-    processor_config = load_json(preset, "processor_config.json")
-    if "video_processor" not in processor_config:
+    video_proc = _load_video_processor_section(preset, transformers_config)
+    if video_proc is None:
         return {}
-
-    video_proc = processor_config["video_processor"]
     # do_sample_frames=True means the processor samples num_frames from the
     # full video. KH's VideoConverter always samples; if this flag is ever
     # False, frames are expected to be pre-sampled by the caller and num_frames
