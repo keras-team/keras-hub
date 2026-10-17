@@ -16,6 +16,7 @@ from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
 )
 from keras_hub.src.models.text_embedder import TextEmbedder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.transformers.convert_embedding_gemma2 import (
     convert_backbone_config,
 )
@@ -522,4 +523,7 @@ class ConvertEmbeddingGemma2Test(TestCase):
             keras_out = ops.convert_to_numpy(backbone(keras_inputs))
             with torch.no_grad():
                 hf_out = hf_model(**hf_inputs).last_hidden_state.numpy()
-            self.assertAllClose(keras_out, hf_out, atol=1e-5, msg=name)
+            # On GPU the Keras model runs matmuls in TF32 while HF runs in full
+            # fp32 on CPU, leaving hidden states up to ~1.7e-3 apart.
+            atol = 5e-3 if running_on_gpu() else 1e-5
+            self.assertAllClose(keras_out, hf_out, atol=atol, msg=name)

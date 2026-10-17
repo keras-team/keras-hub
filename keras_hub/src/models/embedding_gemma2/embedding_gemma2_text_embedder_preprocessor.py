@@ -412,6 +412,14 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 t = t.to_tensor()
             return tf.convert_to_tensor(t)
 
+        def _to_host(t):
+            # Eager converters return backend tensors; on torch-GPU those are
+            # CUDA tensors that tf.* ops cannot ingest. Move them to CPU. Graph
+            # mode tf tensors are untouched because is_tensor is False.
+            if keras.config.backend() == "torch" and keras.ops.is_tensor(t):
+                return t.cpu()
+            return t
+
         if isinstance(x, dict):
             texts = x.get("texts", None)
             images = x.get("images", None)
@@ -462,8 +470,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 # One image -> (patches, patch_dim), (patches, 2), soft tokens.
                 img = tf.expand_dims(_to_dense_tensor(img), 0)
                 image_outputs = self.image_converter(img)
-                pv = image_outputs["pixel_values"][0]
-                ppi = image_outputs["pixel_position_ids"][0]
+                pv = _to_host(image_outputs["pixel_values"][0])
+                ppi = _to_host(image_outputs["pixel_position_ids"][0])
                 valid_patches = tf.cast(ppi[:, 0] != -1, tf.int32)
                 num_soft_tokens = tf.reduce_sum(valid_patches) // pooling
                 return pv, ppi, num_soft_tokens
@@ -537,8 +545,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 # `frames`.
                 vid = tf.expand_dims(_to_dense_tensor(vid), 0)
                 video_outputs = self.video_converter(vid)
-                pv = video_outputs["pixel_values"][0]
-                ppi = video_outputs["pixel_position_ids"][0]
+                pv = _to_host(video_outputs["pixel_values"][0])
+                ppi = _to_host(video_outputs["pixel_position_ids"][0])
                 valid_patches = tf.cast(ppi[:, :, 0] != -1, tf.int32)
                 num_soft_tokens = (
                     tf.reduce_sum(valid_patches, axis=1) // pooling
@@ -622,9 +630,8 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 len_i = tf.minimum(
                     tf.shape(aud)[0], self.audio_converter.num_samples
                 )
-                mel = tf.convert_to_tensor(
-                    self.audio_converter(tf.expand_dims(aud, 0))
-                )[0]
+                mel_outputs = self.audio_converter(tf.expand_dims(aud, 0))
+                mel = tf.convert_to_tensor(_to_host(mel_outputs))[0]
                 # HF derivation: left-pad 160, unfold 321, hop 160
                 # -> (len_i - 1) // hop frames.
                 output_length = tf.maximum((len_i - 1) // stride, 0)
