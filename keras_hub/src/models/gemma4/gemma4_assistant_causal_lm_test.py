@@ -100,7 +100,7 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
         self.assertEqual(ops.shape(logits), (batch_size, 1, 256))
         self.assertEqual(ops.shape(next_hidden), (batch_size, 1, 16))
 
-    def _create_target_model(self):
+    def _create_target_model(self, final_logit_soft_cap=None):
         target_backbone = Gemma4Backbone(
             vocabulary_size=256,
             num_layers=6,
@@ -118,14 +118,18 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
                 "sliding_attention",
                 "full_attention",
             ],
+            final_logit_soft_cap=final_logit_soft_cap,
         )
         return Gemma4CausalLM(
             preprocessor=None,
             backbone=target_backbone,
         )
 
-    def test_speculative_generate(self):
-        target_model = self._create_target_model()
+    @parameterized.named_parameters(
+        ("no_soft_cap", None), ("final_logit_soft_cap", 30.0)
+    )
+    def test_speculative_generate(self, final_logit_soft_cap):
+        target_model = self._create_target_model(final_logit_soft_cap)
 
         batch_size = 1
         seq_len = 5

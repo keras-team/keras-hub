@@ -45,6 +45,11 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
+        final_logit_cap: Deprecated. `None` or float. The final logit soft-cap
+            is applied by the backbone's `token_embedding`, configured through
+            `Gemma4Backbone(final_logit_soft_cap=...)`. This argument is
+            accepted only so that existing presets keep loading, and must be
+            `None` or equal to `backbone.final_logit_soft_cap`.
 
     Examples:
 
@@ -104,20 +109,31 @@ class Gemma4CausalLM(CausalLM):
         final_logit_cap=None,
         **kwargs,
     ):
+        # `backbone.token_embedding(..., reverse=True)` already applies
+        # `final_logit_soft_cap`, so a task-level cap would apply it twice.
+        # Older presets still store `final_logit_cap` in `task.json`, always
+        # equal to the backbone cap, so it is accepted and ignored.
+        if (
+            final_logit_cap is not None
+            and final_logit_cap != backbone.final_logit_soft_cap
+        ):
+            raise ValueError(
+                "`final_logit_cap` is deprecated. The final logit soft-cap "
+                "is applied by the backbone; set it with "
+                "`Gemma4Backbone(final_logit_soft_cap=...)` instead. "
+                f"Received: final_logit_cap={final_logit_cap}, "
+                "backbone.final_logit_soft_cap="
+                f"{backbone.final_logit_soft_cap}."
+            )
+
         # === Layers ===
         self.preprocessor = preprocessor
         self.backbone = backbone
-        self.final_logit_cap = final_logit_cap
 
         # === Functional Model ===
         inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
-
-        if final_logit_cap is not None:
-            outputs = outputs / final_logit_cap
-            outputs = ops.tanh(outputs)
-            outputs = outputs * final_logit_cap
 
         super().__init__(
             inputs=inputs,
@@ -353,10 +369,6 @@ class Gemma4CausalLM(CausalLM):
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-        if self.final_logit_cap is not None:
-            logits = logits / self.final_logit_cap
-            logits = ops.tanh(logits)
-            logits = logits * self.final_logit_cap
         return logits, hidden_states, cache
 
     def _build_cache(
@@ -401,15 +413,6 @@ class Gemma4CausalLM(CausalLM):
             cache_update_mask=None,
         )
         return hidden_states, cache
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "final_logit_cap": self.final_logit_cap,
-            }
-        )
-        return config
 
     def generate_step(self, inputs, stop_token_ids=None):
         """A compilable generation function for a single batch of inputs.
@@ -625,10 +628,12 @@ class Gemma4CausalLM(CausalLM):
                     target_kv_source_full_idx=_target_kv_src_full_idx,
                     target_kv_source_local_idx=_target_kv_src_local_idx,
                 )
-                # Apply the same final logit soft-cap as the target model so
-                # that draft and verify logits are on the same scale.
-                if self.final_logit_cap is not None:
-                    cap = ops.cast(self.final_logit_cap, logits.dtype)
+                # The assistant returns uncapped logits. Apply the target
+                # backbone's final logit soft-cap so that draft and verify
+                # logits are on the same scale.
+                final_logit_soft_cap = self.backbone.final_logit_soft_cap
+                if final_logit_soft_cap is not None:
+                    cap = ops.cast(final_logit_soft_cap, logits.dtype)
                     logits = ops.tanh(logits / cap) * cap
                 return (
                     ops.squeeze(logits, axis=1),
