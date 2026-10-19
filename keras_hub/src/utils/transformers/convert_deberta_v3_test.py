@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -62,12 +64,26 @@ class DebertaV3ConverterTest(TestCase):
             self._v3_config(pos_att_type=["p2c", "c2p"])
         )
 
+    def test_convert_deberta_v2_backbone_config(self):
+        # Original DeBERTa-v2 checkpoints (e.g. `microsoft/deberta-v2-xlarge`)
+        # add a convolution block after the first transformer layer.
+        keras_config = convert_deberta_v3.convert_backbone_config(
+            self._v3_config(conv_kernel_size=3, conv_act="gelu")
+        )
+        self.assertEqual(keras_config["conv_kernel_size"], 3)
+        self.assertEqual(keras_config["conv_activation"], "gelu")
+        self.assertEqual(keras_config["conv_groups"], 1)
+        # HF falls back to `tanh` when `conv_act` is not set.
+        keras_config = convert_deberta_v3.convert_backbone_config(
+            self._v3_config(conv_kernel_size=3)
+        )
+        self.assertEqual(keras_config["conv_activation"], "tanh")
+
     def test_unsupported_config_raises(self):
-        # DeBERTa-v2 style checkpoints (e.g. `microsoft/deberta-v2-xlarge`)
-        # use a conv layer which `DebertaV3Backbone` does not implement.
+        # Even kernels can't keep the sequence length with symmetric padding.
         with self.assertRaisesRegex(ValueError, "conv_kernel_size"):
             convert_deberta_v3.convert_backbone_config(
-                self._v3_config(conv_kernel_size=3)
+                self._v3_config(conv_kernel_size=2)
             )
         with self.assertRaisesRegex(ValueError, "position_biased_input"):
             convert_deberta_v3.convert_backbone_config(
@@ -102,6 +118,58 @@ class DebertaV3ConverterTest(TestCase):
             convert_deberta_v3.convert_backbone_config(
                 self._v3_config(pos_att_type=None)
             )
+
+    def test_deberta_v2_numerics(self):
+        """Convert a small random DeBERTa-v2 model (with the convolution block)
+        and compare it with `transformers.DebertaV2Model`."""
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        torch.manual_seed(0)
+        hf_config = transformers.DebertaV2Config(
+            vocab_size=64,
+            hidden_size=32,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            intermediate_size=64,
+            max_position_embeddings=32,
+            type_vocab_size=0,
+            relative_attention=True,
+            position_buckets=8,
+            norm_rel_ebd="layer_norm",
+            share_att_key=True,
+            pos_att_type="p2c|c2p",
+            position_biased_input=False,
+            layer_norm_eps=1e-7,
+            conv_kernel_size=3,
+            conv_act="gelu",
+        )
+        hf_model = transformers.DebertaV2Model(hf_config).eval()
+        with torch.no_grad():
+            for param in hf_model.parameters():
+                param.add_(torch.randn_like(param) * 0.05)
+        preset_dir = os.path.join(self.get_temp_dir(), "deberta_v2")
+        hf_model.save_pretrained(preset_dir, safe_serialization=True)
+
+        token_ids = np.array(
+            [[1, 5, 9, 17, 33, 2, 0, 0], [1, 3, 4, 5, 6, 7, 8, 2]],
+            dtype="int32",
+        )
+        padding_mask = (token_ids != 0).astype("int32")
+        with torch.no_grad():
+            expected = hf_model(
+                input_ids=torch.from_numpy(token_ids).long(),
+                attention_mask=torch.from_numpy(padding_mask).long(),
+            ).last_hidden_state.numpy()
+
+        backbone = Backbone.from_preset(preset_dir)
+        self.assertIsInstance(backbone, DebertaV3Backbone)
+        self.assertEqual(backbone.conv_kernel_size, 3)
+        output = backbone.predict(
+            {"token_ids": token_ids, "padding_mask": padding_mask}
+        )
+        real = padding_mask.astype(bool)
+        mean_diff = np.mean(np.abs(output[real] - expected[real]))
+        self.assertLess(mean_diff, 1e-4)
 
     @pytest.mark.large
     def test_convert_preset(self):

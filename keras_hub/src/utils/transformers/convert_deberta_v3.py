@@ -9,12 +9,15 @@ backbone_cls = DebertaV3Backbone
 
 
 def _validate_config(transformers_config):
-    """Raise a clear error for DeBERTa-v2 variants KerasHub can't represent.
+    """Raise a clear error for `deberta-v2` configs KerasHub can't represent.
 
-    HF uses the `deberta-v2` model type for both DeBERTa-v2 and DeBERTa-v3
-    checkpoints. `DebertaV3Backbone` only implements the DeBERTa-v3 flavour
-    (shared attention keys, bucketed relative positions, layer-normed
-    relative embeddings, no absolute position embeddings, no conv layer).
+    HF uses the `deberta-v2` model type for both DeBERTa-v2 (e.g.
+    `microsoft/deberta-v2-xlarge`) and DeBERTa-v3 checkpoints. Both use shared
+    attention keys, bucketed relative positions, layer-normed relative
+    embeddings and no absolute position embeddings; DeBERTa-v2 additionally
+    has a convolution block, which `DebertaV3Backbone` supports through
+    `conv_kernel_size`. Other variants (e.g. randomly configured test models)
+    are rejected.
     """
     errors = []
     # HF configs may omit keys or set them to `null`, so fall back to
@@ -27,8 +30,9 @@ def _validate_config(transformers_config):
         errors.append("`share_att_key` must be `True`")
     if transformers_config.get("position_biased_input", True):
         errors.append("`position_biased_input` must be `False`")
-    if (transformers_config.get("conv_kernel_size") or 0) > 0:
-        errors.append("`conv_kernel_size` must be 0 (no conv layer)")
+    conv_kernel_size = transformers_config.get("conv_kernel_size") or 0
+    if conv_kernel_size > 0 and conv_kernel_size % 2 == 0:
+        errors.append("`conv_kernel_size` must be odd")
     norm_rel_ebd = transformers_config.get("norm_rel_ebd") or "none"
     if "layer_norm" not in [x.strip() for x in norm_rel_ebd.split("|")]:
         errors.append("`norm_rel_ebd` must include `'layer_norm'`")
@@ -63,8 +67,7 @@ def _validate_config(transformers_config):
     if errors:
         raise ValueError(
             "This `deberta-v2` checkpoint uses a configuration that is not "
-            "supported by `DebertaV3Backbone` (only DeBERTa-v3 style "
-            "checkpoints are supported). Unsupported settings: "
+            "supported by `DebertaV3Backbone`. Unsupported settings: "
             + "; ".join(errors)
             + "."
         )
@@ -72,7 +75,7 @@ def _validate_config(transformers_config):
 
 def convert_backbone_config(transformers_config):
     _validate_config(transformers_config)
-    return {
+    config = {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
         "num_heads": transformers_config["num_attention_heads"],
@@ -82,6 +85,15 @@ def convert_backbone_config(transformers_config):
         "max_sequence_length": transformers_config["max_position_embeddings"],
         "bucket_size": transformers_config["position_buckets"],
     }
+    conv_kernel_size = transformers_config.get("conv_kernel_size") or 0
+    if conv_kernel_size > 0:
+        # Original DeBERTa-v2 checkpoints (e.g. `deberta-v2-xlarge`) add a
+        # convolution block. HF defaults to `tanh` and 1 group when unset.
+        config["conv_kernel_size"] = conv_kernel_size
+        conv_act = transformers_config.get("conv_act") or "tanh"
+        config["conv_activation"] = conv_act
+        config["conv_groups"] = transformers_config.get("conv_groups") or 1
+    return config
 
 
 def convert_weights(backbone, loader, transformers_config):
@@ -122,6 +134,29 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.relative_embeddings.layer_norm.beta,
         hf_weight_key="encoder.LayerNorm.bias",
     )
+
+    # Convolution block of the original DeBERTa-v2 checkpoints.
+    if backbone.conv_layer is not None:
+        conv = backbone.conv_layer
+        loader.port_weight(
+            keras_variable=conv.conv.kernel,
+            hf_weight_key="encoder.conv.conv.weight",
+            # PyTorch `(out, in / groups, kernel)` -> Keras
+            # `(kernel, in / groups, out)`.
+            hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor, (2, 1, 0)),
+        )
+        loader.port_weight(
+            keras_variable=conv.conv.bias,
+            hf_weight_key="encoder.conv.conv.bias",
+        )
+        loader.port_weight(
+            keras_variable=conv.layer_norm.gamma,
+            hf_weight_key="encoder.conv.LayerNorm.weight",
+        )
+        loader.port_weight(
+            keras_variable=conv.layer_norm.beta,
+            hf_weight_key="encoder.conv.LayerNorm.bias",
+        )
 
     # Encoder layers.
     for i in range(backbone.num_layers):
