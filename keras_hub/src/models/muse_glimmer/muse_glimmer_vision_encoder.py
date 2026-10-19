@@ -299,18 +299,22 @@ class MuseGlimmerVisionAttention(keras.layers.Layer):
         if not isinstance(seq_len, int) or seq_len <= block:
             return attend(q, segment_id)
 
-        def attend_block(i, out):
-            # The last block starts at `seq_len - block`. It overlaps the
-            # previous block and writes the same values again.
-            start = ops.minimum(i * block, seq_len - block)
-            q_rows = ops.slice(q, (start, 0, 0), (block,) + tuple(q.shape[1:]))
-            segment_rows = ops.slice(segment_id, (start,), (block,))
-            return ops.slice_update(
-                out, (start, 0, 0), attend(q_rows, segment_rows)
-            )
-
+        # `ops.map` stacks the block outputs, so the loop is differentiable
+        # on every backend. The pad rows attend like the last real row.
+        # The final slice removes them.
         num_blocks = -(-seq_len // block)
-        return ops.fori_loop(0, num_blocks, attend_block, ops.zeros_like(q))
+        pad = num_blocks * block - seq_len
+        q_blocks = ops.reshape(
+            ops.pad(q, [(0, pad), (0, 0), (0, 0)]),
+            (num_blocks, block) + tuple(q.shape[1:]),
+        )
+        segment_rows = ops.reshape(
+            ops.concatenate([segment_id, ops.repeat(segment_id[-1:], pad)]),
+            (num_blocks, block),
+        )
+        out = ops.map(lambda rows: attend(*rows), (q_blocks, segment_rows))
+        out = ops.reshape(out, (num_blocks * block,) + tuple(q.shape[1:]))
+        return out[:seq_len]
 
     def _padded_segment_attention(
         self, q, k, v, padded_index, num_slots, slot_size

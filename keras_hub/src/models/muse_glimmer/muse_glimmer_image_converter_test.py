@@ -174,6 +174,29 @@ class MuseGlimmerImageConverterTest(TestCase):
         self.assertAllClose(output["patches"], expected["patches"])
         self.assertAllClose(output["grid_thw"], expected["grid_thw"])
 
+    def test_channels_first_in_tf_data(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        kwargs = {
+            "patch_size": 2,
+            "merge_size": 1,
+            "max_image_tokens": 16,
+            "interpolation": "nearest",
+            "scale": [2 / 255.0] * 3,
+            "offset": [-1.0] * 3,
+        }
+        image = np.random.uniform(0, 255, (8, 8, 3)).astype("float32")
+        expected = MuseGlimmerImageConverter(**kwargs)(image)
+        converter = MuseGlimmerImageConverter(
+            data_format="channels_first", **kwargs
+        )
+        dataset = tf.data.Dataset.from_tensors(image.transpose(2, 0, 1)).map(
+            converter
+        )
+        output = next(iter(dataset))
+        self.assertAllClose(output["patches"], expected["patches"])
+        self.assertAllClose(output["grid_thw"], expected["grid_thw"])
+
     def test_scalar_scale_with_channels_first(self):
         kwargs = {
             "patch_size": 2,

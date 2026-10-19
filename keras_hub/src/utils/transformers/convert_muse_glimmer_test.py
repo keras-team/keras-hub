@@ -388,12 +388,37 @@ class TestMuseGlimmerConverter(TestCase, parameterized.TestCase):
         self.assertEqual(encoder.blocks[0].layer_norm_eps, 1e-5)
 
     @parameterized.named_parameters(
-        ("baseline", {}, {}),
+        ("baseline", {}, {}, {}),
         # `layer_norm_eps` applies to `ln_pre` and `ln_post` only. The block
         # norms use a fixed 1e-5.
-        ("vision_layer_norm_eps", {}, {"layer_norm_eps": 1e-2}),
+        ("vision_layer_norm_eps", {}, {"layer_norm_eps": 1e-2}, {}),
+        # Every config value differs from the `MuseGlimmerBackbone` default,
+        # so a dropped or misrouted config mapping changes the logits.
+        (
+            "non_default_config",
+            {
+                "rms_norm_eps": 1e-2,
+                "post_norm_eps": 1e-3,
+                "qk_scale_factor": 1.7,
+                "rope_parameters": {
+                    "rope_type": "default",
+                    "rope_theta": 777.0,
+                },
+            },
+            {
+                "rope_parameters": {"rope_type": "axial", "rope_theta": 123.0},
+                "layer_types": ["full_attention", "window_attention"],
+                # A 4x4 grid on a 2x2 table: the position embedding is
+                # interpolated and the window layer has four windows.
+                "pos_emb_height": 2,
+                "pos_emb_width": 2,
+            },
+            {"projector_hidden_act": "silu"},
+        ),
     )
-    def test_logits_match_hf(self, text_overrides, vision_overrides):
+    def test_logits_match_hf(
+        self, text_overrides, vision_overrides, top_overrides
+    ):
         torch = pytest.importorskip("torch")
         transformers = pytest.importorskip("transformers")
         if not hasattr(transformers, "MuseGlimmerForConditionalGeneration"):
@@ -443,6 +468,7 @@ class TestMuseGlimmerConverter(TestCase, parameterized.TestCase):
             image_token_id=40,
             out_hidden_size=64,
             projector_hidden_size=16,
+            **top_overrides,
         )
         torch.manual_seed(0)
         hf_model = transformers.MuseGlimmerForConditionalGeneration(

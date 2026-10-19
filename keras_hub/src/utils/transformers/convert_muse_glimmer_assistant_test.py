@@ -83,6 +83,25 @@ class TestMuseGlimmerAssistantConverter(TestCase):
         )
         self.assertEqual(keras_config["rope_max_wavelength"], 250000.0)
 
+    def test_convert_backbone_config_rejects_rope_type(self):
+        for rope_type in ("linear", "yarn"):
+            config = self._config()
+            config["rope_parameters"]["rope_type"] = rope_type
+            with self.assertRaisesRegex(ValueError, "rope_type"):
+                convert_muse_glimmer_assistant.convert_backbone_config(config)
+
+    def test_convert_backbone_config_rejects_hidden_act(self):
+        config = self._config()
+        config["hidden_act"] = "gelu"
+        with self.assertRaisesRegex(ValueError, "hidden_act"):
+            convert_muse_glimmer_assistant.convert_backbone_config(config)
+
+    def test_convert_backbone_config_accepts_default_options(self):
+        config = self._config()
+        config["rope_parameters"]["rope_type"] = "default"
+        config["hidden_act"] = "silu"
+        convert_muse_glimmer_assistant.convert_backbone_config(config)
+
     def test_convert_task_config(self):
         kwargs = convert_muse_glimmer_assistant.convert_task_config(
             self._config()
@@ -143,7 +162,7 @@ class TestMuseGlimmerAssistantConverter(TestCase):
             sliding_window=3,
             target_layer_ids=[1, 3],
             block_size=block_size,
-            rope_parameters={"rope_theta": 1e4, "rope_type": "default"},
+            rope_parameters={"rope_theta": 777.0, "rope_type": "default"},
         )
         torch.manual_seed(0)
         hf_model = transformers.MuseGlimmerAssistantModel(hf_config).eval()

@@ -610,6 +610,19 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
             self.assertAllEqual(output["token_ids"], expected["token_ids"])
             self.assertNotIn("pixel_values", output)
 
+    def test_call_with_empty_media_is_text_only(self):
+        prompts = [" airplane", " airport"]
+        expected_x, expected_y, _ = self.image_preprocessor(prompts)
+        for images in ([], np.zeros((2, 0, 8, 8, 3), "float32")):
+            x, y, _ = self.image_preprocessor(
+                {"prompts": prompts, "images": images}
+            )
+            self.assertAllEqual(x["token_ids"], expected_x["token_ids"])
+            self.assertAllEqual(y, expected_y)
+            self.assertEqual(tuple(x["pixel_values"].shape), (2, 0, 96))
+            self.assertEqual(tuple(x["image_grid_thw"].shape), (2, 0, 3))
+            self.assertEqual(tuple(x["vision_indices"].shape), (2, 0))
+
     def test_media_with_wrong_rank_raises(self):
         with self.assertRaisesRegex(ValueError, "Received rank"):
             self.image_preprocessor.generate_preprocess(

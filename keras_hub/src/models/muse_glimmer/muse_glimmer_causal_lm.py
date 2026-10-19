@@ -1,5 +1,6 @@
 import weakref
 
+import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -11,7 +12,10 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor impor
     MuseGlimmerCausalLMPreprocessor,
 )
 from keras_hub.src.samplers.greedy_sampler import GreedySampler
+from keras_hub.src.samplers.random_sampler import RandomSampler
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
+from keras_hub.src.samplers.top_k_sampler import TopKSampler
+from keras_hub.src.samplers.top_p_sampler import TopPSampler
 from keras_hub.src.utils.tensor_utils import any_equal
 
 
@@ -337,14 +341,24 @@ class MuseGlimmerCausalLM(CausalLM):
             if prompt_embeds is None:
                 return None
             batch_size, length = ops.shape(tokens)[0], ops.shape(tokens)[1]
+            prompt_batch_size = ops.shape(prompt_embeds)[0]
             is_prompt = ops.slice(
-                ops.cast(padding_mask, "bool"), [0, start], [batch_size, length]
+                ops.cast(padding_mask, "bool"),
+                [0, start],
+                [prompt_batch_size, length],
             )
             window = ops.slice(
                 prompt_embeds,
                 [0, start, 0],
-                [batch_size, length, self.backbone.hidden_dim],
+                [prompt_batch_size, length, self.backbone.hidden_dim],
             )
+            # Beam and contrastive search repeat every row. Map each
+            # repeated row back to its prompt row.
+            source_row = ops.arange(batch_size) // (
+                batch_size // prompt_batch_size
+            )
+            is_prompt = ops.take(is_prompt, source_row, axis=0)
+            window = ops.take(window, source_row, axis=0)
             return ops.where(
                 is_prompt[:, :, None], window, self._embed_tokens(tokens)
             )
@@ -592,6 +606,20 @@ class MuseGlimmerCausalLM(CausalLM):
                 f"`hidden_dim={assistant_hidden_dim}`."
             )
 
+    def get_quantization_layer_structure(self, mode):
+        if mode not in ["gptq", "awq"]:
+            return None
+
+        # The first block reads the normed embedding, not the raw embedding.
+        backbone = self.backbone
+        token_ids = keras.Input(shape=(None,), dtype="int32")
+        x = backbone.embed_norm(backbone.token_embedding(token_ids))
+        pre_processor = keras.Model(inputs=token_ids, outputs=x)
+        return {
+            "pre_block_layers": [pre_processor],
+            "sequential_blocks": backbone.transformer_layers,
+        }
+
     def _post_quantize(self, mode, **kwargs):
         super()._post_quantize(mode, **kwargs)
         # The cached assisted function holds the old target variables.
@@ -642,6 +670,13 @@ class MuseGlimmerCausalLM(CausalLM):
         base_sampler = original_sampler
         if isinstance(base_sampler, GreedySampler):
             base_sampler = None
+        elif not isinstance(
+            base_sampler, (RandomSampler, TopKSampler, TopPSampler)
+        ):
+            raise ValueError(
+                "`assistant_model` supports the greedy, random, top-k and "
+                f"top-p samplers. Received: sampler={original_sampler}."
+            )
         assistant_variables = (
             assistant_model.trainable_variables
             + assistant_model.non_trainable_variables
@@ -654,28 +689,36 @@ class MuseGlimmerCausalLM(CausalLM):
             tuple(id(variable) for variable in assistant_variables),
         )
         cached = getattr(self, "_assisted_generate_cache", None)
-        if (
-            cached is not None
-            and cached[0] == key
-            and (cached[1]() is assistant_model)
-        ):
-            self.sampler = cached[2]
-            self.generate_function = cached[3]
-        else:
-            self.sampler = SpeculativeSampler(
-                num_speculative_tokens=assistant_model.block_size - 1,
-                base_sampler=base_sampler,
-                temperature=getattr(original_sampler, "temperature", 1.0),
-            )
-            self.generate_function = None  # Compile a new function.
-
-        # Tracking the assistant puts its variables into the compiled
-        # function state, like the target variables.
         assistant_was_tracked = self._tracker.is_in_store(
             "layers", assistant_model
         )
-        self._assistant_model = assistant_model
         try:
+            if (
+                cached is not None
+                and cached[0] == key
+                and (cached[1]() is assistant_model)
+            ):
+                self.sampler = cached[2]
+                self.generate_function = cached[3]
+            else:
+                self.sampler = SpeculativeSampler(
+                    num_speculative_tokens=assistant_model.block_size - 1,
+                    base_sampler=base_sampler,
+                    temperature=getattr(original_sampler, "temperature", 1.0),
+                )
+                self.generate_function = None  # Compile a new function.
+
+            # Tracking the assistant puts its variables into the compiled
+            # function state, like the target variables. `Model.quantize`
+            # leaves the tracker locked. Unlock it for the assignment, so a
+            # quantized target can track the assistant.
+            tracker_was_locked = self._tracker.locked
+            self._tracker.unlock()
+            try:
+                self._assistant_model = assistant_model
+            finally:
+                if tracker_was_locked:
+                    self._tracker.lock()
             outputs = super().generate(
                 inputs,
                 max_length=max_length,
@@ -693,8 +736,11 @@ class MuseGlimmerCausalLM(CausalLM):
         finally:
             # Delete the attribute. Assigning `None` would keep the
             # dependency in the TF checkpoint of the target.
-            del self._assistant_model
-            if not assistant_was_tracked:
+            if hasattr(self, "_assistant_model"):
+                del self._assistant_model
+            if not assistant_was_tracked and self._tracker.is_in_store(
+                "layers", assistant_model
+            ):
                 self._tracker.untrack(assistant_model)
             self.sampler = original_sampler
             self.generate_function = original_generate_function

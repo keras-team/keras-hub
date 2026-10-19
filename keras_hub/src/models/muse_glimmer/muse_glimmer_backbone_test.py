@@ -13,6 +13,9 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_layers import (
     MuseGlimmerRMSNorm,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    _QUERY_BLOCK_SIZE,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -156,6 +159,29 @@ class MuseGlimmerBackboneTest(TestCase, parameterized.TestCase):
                 atol=1e-4,
                 rtol=1e-4,
             )
+
+    def test_fit_with_images_over_one_query_block(self):
+        # The patches fill more than one query block of the traced masked
+        # attention. Training must differentiate through the blocks.
+        model = MuseGlimmerBackbone(**self.init_kwargs)
+        grid = 2 * int(np.ceil(np.sqrt(_QUERY_BLOCK_SIZE + 1) / 2))
+        num_patches = grid * grid
+        self.assertGreater(num_patches, _QUERY_BLOCK_SIZE)
+        num_tokens = num_patches // 4
+        seq_len = num_tokens + 4
+        x = {
+            "token_ids": np.ones((1, seq_len), dtype="int32"),
+            "padding_mask": np.ones((1, seq_len), dtype="int32"),
+            "pixel_values": np.random.randn(1, num_patches, 24).astype(
+                "float32"
+            ),
+            "image_grid_thw": np.array([[[1, grid, grid]]], dtype="int32"),
+            "vision_indices": np.arange(2, 2 + num_tokens, dtype="int32")[None],
+        }
+        y = np.zeros((1, seq_len, 32), dtype="float32")
+        model.compile(optimizer="sgd", loss="mse")
+        history = model.fit(x, y, batch_size=1, epochs=1, verbose=0)
+        self.assertTrue(np.isfinite(history.history["loss"][0]))
 
     def test_assistant_backbone_basics(self):
         # All five opt-in flags combined, mirroring

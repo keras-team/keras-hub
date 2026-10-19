@@ -302,16 +302,27 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         inputs = self._multimodal_generate_inputs(
             [" airplane<|image|>"], sequence_length
         )
-        prompt_length = int(np.sum(np.asarray(inputs["padding_mask"])))
+        # The layout ends with the image end token. Cut the prompt after the
+        # last image token, so that the first generated token follows an
+        # image token.
+        image_token_id = self.multimodal_preprocessor.tokenizer.image_token_id
+        token_ids = np.asarray(inputs["token_ids"])
+        prompt_length = (
+            int(np.flatnonzero(token_ids[0] == image_token_id)[-1]) + 1
+        )
+        padding_mask = np.zeros_like(np.asarray(inputs["padding_mask"]))
+        padding_mask[:, :prompt_length] = 1
+        inputs = {**inputs, "padding_mask": padding_mask}
         output = self.multimodal_causal_lm.generate(
             inputs, max_length=sequence_length, stop_token_ids=None
         )
         # The full forward pass sees the image features at every prompt
-        # position. The first generated token must follow its last logit.
+        # position. Each generated token must follow its last logit.
+        generated = ops.convert_to_numpy(output["token_ids"])
         logits = self.multimodal_causal_lm(
             {
-                "token_ids": ops.convert_to_tensor(inputs["token_ids"]),
-                "padding_mask": ops.convert_to_tensor(inputs["padding_mask"]),
+                "token_ids": ops.convert_to_tensor(generated),
+                "padding_mask": ops.ones((1, sequence_length), dtype="int32"),
                 "pixel_values": ops.convert_to_tensor(inputs["pixel_values"])[
                     None
                 ],
@@ -323,9 +334,12 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
                 )[None],
             }
         )
-        last_logits = ops.convert_to_numpy(logits)[0, prompt_length - 1]
-        expected = int(np.argmax(last_logits))
-        self.assertEqual(int(output["token_ids"][0][prompt_length]), expected)
+        logits = ops.convert_to_numpy(logits)[0]
+        for position in range(prompt_length, sequence_length):
+            self.assertEqual(
+                int(generated[0][position]),
+                int(np.argmax(logits[position - 1])),
+            )
 
     def _make_multimodal_assistant(self, block_size):
         # The assistant uses the hidden size of the multimodal target.
@@ -353,10 +367,13 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
 
     def test_assisted_greedy_with_image_matches_plain_greedy(self):
         self.multimodal_causal_lm.compile(sampler="greedy")
-        block_size, max_length = 4, 9
+        block_size, max_length = 5, 11
         inputs = self._multimodal_generate_inputs(
             [" air<|image|> at"], max_length
         )
+        # The prompt must leave room to generate tokens.
+        prompt_length = int(np.sum(np.asarray(inputs["padding_mask"])))
+        self.assertLess(prompt_length, max_length)
         # The verify window starts at `max_length - block_size` at the
         # latest. It must reach the image for the old code to fail.
         last_image_position = int(
@@ -456,6 +473,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         self.causal_lm.preprocessor = None
         sampler = self.causal_lm.sampler
         generate_function = self.causal_lm.generate_function
+        num_weights = len(self.causal_lm.weights)
         with self.assertRaisesRegex(ValueError, "at least 6"):
             self.causal_lm.generate(
                 prompt_ids, stop_token_ids=None, assistant_model=assistant
@@ -463,6 +481,63 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         # The failed call must restore the plain sampler.
         self.assertIs(self.causal_lm.sampler, sampler)
         self.assertIs(self.causal_lm.generate_function, generate_function)
+        # The failed call must not leave the assistant attached to the model.
+        self.assertEqual(len(self.causal_lm.weights), num_weights)
+        self.assertFalse(hasattr(self.causal_lm, "_assistant_model"))
+
+    def test_generate_with_assistant_on_quantized_target(self):
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy")
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"], sequence_length=16
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.causal_lm.quantize("int8")
+        # The compiled assisted function holds the old target variables.
+        self.assertIsNone(self.causal_lm._assisted_generate_cache)
+        reference_output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None
+        )
+        output = self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertAllEqual(output["token_ids"], reference_output["token_ids"])
+
+    def test_generate_with_assistant_rejects_beam_and_contrastive(self):
+        assistant = self._make_assistant(block_size=3)
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        for sampler in ("beam", "contrastive"):
+            self.causal_lm.compile(sampler=sampler)
+            original_sampler = self.causal_lm.sampler
+            with self.assertRaisesRegex(ValueError, "top-p samplers"):
+                self.causal_lm.generate(
+                    prompt_ids, stop_token_ids=None, assistant_model=assistant
+                )
+            self.assertIs(self.causal_lm.sampler, original_sampler)
+
+    def test_get_quantization_layer_structure(self):
+        structure = self.causal_lm.get_quantization_layer_structure("gptq")
+        self.assertLen(structure["pre_block_layers"], 1)
+        self.assertEqual(
+            structure["sequential_blocks"],
+            self.causal_lm.backbone.transformer_layers,
+        )
+        # The first block reads the normed embedding.
+        backbone = self.causal_lm.backbone
+        token_ids = self.input_data["token_ids"]
+        expected = backbone.embed_norm(backbone.token_embedding(token_ids))
+        self.assertAllClose(
+            structure["pre_block_layers"][0](token_ids), expected
+        )
+        self.assertIsNone(
+            self.causal_lm.get_quantization_layer_structure("int8")
+        )
 
     def test_generate_with_invalid_assistant_raises(self):
         prompt_ids = self.preprocessor.generate_preprocess(
@@ -521,6 +596,15 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             self.causal_lm.compile(sampler=sampler)
             output = self.causal_lm.generate(" airplane at airport")
             self.assertTrue(" airplane at airport" in output)
+
+    def test_generate_with_beam_and_contrastive_samplers_with_image(self):
+        inputs = self._multimodal_generate_inputs([" airplane<|image|>"], 12)
+        for sampler in ("beam", "contrastive"):
+            self.multimodal_causal_lm.compile(sampler=sampler)
+            output = self.multimodal_causal_lm.generate(
+                inputs, max_length=12, stop_token_ids=None
+            )
+            self.assertEqual(ops.shape(output["token_ids"]), (1, 12))
 
     def test_text_only_predict_evaluate_fit_on_vision_model(self):
         model = MuseGlimmerCausalLM(**self.multimodal_init_kwargs)
@@ -642,6 +726,28 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         assisted_function = self.causal_lm._assisted_generate_cache[3]
 
         self.causal_lm.compile(sampler="greedy", run_eagerly=True)
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        self.assertIsNot(
+            self.causal_lm._assisted_generate_cache[3], assisted_function
+        )
+
+    def test_jit_compile_gives_new_assisted_function(self):
+        if keras.config.backend() == "torch":
+            self.skipTest("Torch does not jit compile the generate function.")
+        assistant = self._make_assistant(block_size=3)
+        self.causal_lm.compile(sampler="greedy", jit_compile=True)
+        prompt_ids = self.preprocessor.generate_preprocess(
+            [" airplane at airport"]
+        )
+        self.causal_lm.preprocessor = None
+        self.causal_lm.generate(
+            prompt_ids, stop_token_ids=None, assistant_model=assistant
+        )
+        assisted_function = self.causal_lm._assisted_generate_cache[3]
+
+        self.causal_lm.compile(sampler="greedy", jit_compile=False)
         self.causal_lm.generate(
             prompt_ids, stop_token_ids=None, assistant_model=assistant
         )

@@ -98,7 +98,11 @@ class MuseGlimmerTokenizerTest(TestCase):
             self.assertEqual(getattr(tokenizer, attribute), token)
             token_id = getattr(tokenizer, f"{attribute}_id")
             self.assertEqual(token_id, vocab[token])
-        # The helper fails if `get_config` drops one of these tokens.
+        # A config round trip must keep every token. The helper below cannot
+        # see a dropped key, because the revived config misses it as well.
+        revived = MuseGlimmerTokenizer.from_config(tokenizer.get_config())
+        for name, token in custom.items():
+            self.assertEqual(getattr(revived, names.get(name, name)), token)
         self.run_serialization_test(tokenizer)
 
     def test_pre_tokenizer_matches_checkpoint_split(self):

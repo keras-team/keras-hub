@@ -487,3 +487,104 @@ class SpeculativeSamplerTest(TestCase):
         )
         expected = np.array([0.0, 0.0, 3 / 7, 4 / 7])
         self.assertLess(0.5 * np.abs(freq - expected).sum(), 0.05)
+
+    def test_stochastic_bonus_token_stays_in_top_k_with_large_vocab(self):
+        # `uniform + 1e-7` rounds to 1.0 in float32 for the largest uniform
+        # values. A Gumbel-max draw then lets a masked token win.
+        batch, k, length, vocab, top = 4, 3, 6, 200_000, 5
+        logits = np.zeros((batch, k + 1, vocab), "float32")
+        logits[..., :top] = 1.0
+        p_logits = ops.convert_to_tensor(logits)
+        q_logits = ops.zeros((batch, vocab))
+
+        def draft_next(prompt, draft_cache, index):
+            return q_logits, ops.zeros((batch, 1)), draft_cache
+
+        def verify_next(prompt, cache, index, num_tokens):
+            return p_logits, cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=k,
+            base_sampler=keras_hub.samplers.TopKSampler(k=top, seed=1),
+            seed=2,
+        )
+        for _ in range(30):
+            output = sampler(
+                next=None,
+                prompt=ops.zeros((batch, length), "int32"),
+                index=1,
+                draft_next=draft_next,
+                verify_next=verify_next,
+            )
+            self.assertTrue(np.all(ops.convert_to_numpy(output) < top))
+
+    def test_stop_token_in_uncommitted_draft_does_not_end_the_loop(self):
+        # Row 0 accepts the drafts [1, 2, STOP] in the first cycle. Row 1
+        # rejects its first draft and commits STOP. The loop advances by one
+        # position. The stop token of row 0 is a draft at position 3 that
+        # the next cycles verify again. It must not end the loop. Cycle 2
+        # rejects the draft of row 0 at position 2, so the old STOP no longer
+        # follows its prefix. Cycle 3 replaces it.
+        length, vocab, stop = 6, 5, 4
+        drafts = ops.convert_to_tensor([0, 1, 2, stop, 3, 3], "int32")
+        # `targets[cycle][row]` holds the target token of each of the
+        # k + 1 verified positions that start at index `cycle`.
+        targets = np.full((length, 2, 4), 3, "int32")
+        targets[1] = [[1, 2, stop, 0], [stop, 2, stop, 3]]
+        targets[2] = [[0, 3, 3, 3], [2, stop, 3, 3]]
+        targets[3] = [[3, 3, 3, 3], [stop, 3, 3, 3]]
+        targets = ops.convert_to_tensor(targets)
+
+        def draft_next(prompt, draft_cache, index):
+            token = ops.take(drafts, index)
+            logits = ops.one_hot(ops.broadcast_to(token, (2,)), vocab) * 1e9
+            return logits, ops.zeros((2, 1)), draft_cache
+
+        def verify_next(prompt, cache, index, num_tokens):
+            logits = ops.one_hot(ops.take(targets, index, axis=0), vocab)
+            return logits * 1e9, cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=3,
+            base_sampler=keras_hub.samplers.RandomSampler(seed=1),
+        )
+        mask = np.zeros((2, length), bool)
+        mask[:, 0] = True
+        output = ops.convert_to_numpy(
+            sampler(
+                next=None,
+                prompt=ops.zeros((2, length), "int32"),
+                index=1,
+                mask=ops.convert_to_tensor(mask),
+                stop_token_ids=[stop],
+                draft_next=draft_next,
+                verify_next=verify_next,
+            )
+        )
+        self.assertEqual(output[1, 1], stop)
+        self.assertAllEqual(output[0], [0, 1, 0, 3, 3, 3])
+
+    def test_top_k_keeps_exactly_k_tokens_with_ties(self):
+        probs = ops.convert_to_tensor(
+            np.array([[0.3, 0.2, 0.2, 0.2, 0.05, 0.05]], "float32")
+        )
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=1,
+            base_sampler=keras_hub.samplers.TopKSampler(k=2),
+        )
+        filtered = ops.convert_to_numpy(sampler._filter_probabilities(probs))
+        # The lowest index of the tied tokens stays, like the plain sampler.
+        self.assertAllClose(filtered, [[0.6, 0.4, 0.0, 0.0, 0.0, 0.0]])
+
+    def test_top_p_keeps_the_nucleus_with_ties(self):
+        probs = ops.convert_to_tensor(
+            np.array([[0.3, 0.2, 0.2, 0.2, 0.05, 0.05]], "float32")
+        )
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=1,
+            base_sampler=keras_hub.samplers.TopPSampler(p=0.6),
+        )
+        filtered = ops.convert_to_numpy(sampler._filter_probabilities(probs))
+        # 0.3 + 0.2 = 0.5 is below 0.6. The next token crosses 0.6.
+        expected = [[0.3 / 0.7, 0.2 / 0.7, 0.2 / 0.7, 0.0, 0.0, 0.0]]
+        self.assertAllClose(filtered, expected)

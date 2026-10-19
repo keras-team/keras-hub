@@ -245,6 +245,14 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             )
         return x["prompts"], media_entries
 
+    def _drop_empty_media(self, media_entries):
+        """Drop the media entries with no items, like missing entries."""
+        return [
+            entry
+            for entry in media_entries
+            if _split_media(entry[1], entry[3], entry[0])
+        ]
+
     # === Python path ===
 
     def _compute_vision_indices(self, token_ids):
@@ -460,6 +468,7 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
         shape `(batch_size, num_items, 3)`.
         """
         prompts, media_entries = self._split_inputs(x)
+        media_entries = self._drop_empty_media(media_entries)
         prompts, batched, _ = canonicalize_python_string_inputs(prompts)
         batch_size = len(prompts)
 
@@ -605,6 +614,7 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         prompts, media_entries = self._split_inputs(x)
+        media_entries = self._drop_empty_media(media_entries)
         if not media_entries:
             return self._add_empty_media_python(
                 super()._call_python(

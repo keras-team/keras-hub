@@ -7,8 +7,32 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
 backbone_cls = MuseGlimmerBackbone
 
 
+def _check_supported_options(transformers_config):
+    """Raise for Hugging Face options that `MuseGlimmerBackbone` cannot run.
+
+    The assistant layers use the default RoPE and a SiLU MLP. Any other
+    setting would load without an error and then produce different hidden
+    states.
+    """
+    rope_type = (transformers_config.get("rope_parameters") or {}).get(
+        "rope_type", "default"
+    )
+    if rope_type != "default":
+        raise ValueError(
+            f"`rope_type={rope_type!r}` is not supported. "
+            "`MuseGlimmerBackbone` only implements the default RoPE."
+        )
+    activation = transformers_config.get("hidden_act", "silu")
+    if activation != "silu":
+        raise ValueError(
+            f"`hidden_act={activation!r}` is not supported. "
+            "`MuseGlimmerBackbone` always uses `'silu'`."
+        )
+
+
 def convert_backbone_config(transformers_config):
     """Map the assistant's config.json -> `MuseGlimmerBackbone` kwargs."""
+    _check_supported_options(transformers_config)
     rope_theta = transformers_config.get("rope_parameters", {}).get(
         "rope_theta"
     )

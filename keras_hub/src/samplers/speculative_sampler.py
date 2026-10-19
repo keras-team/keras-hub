@@ -128,7 +128,12 @@ class SpeculativeSampler(Sampler):
         def cond(prompt, cache, draft_cache, index):
             if stop_token_ids is None:
                 return index < max_length
-            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
+            # Only committed positions count. The draft tokens after `index`
+            # are not final.
+            committed = (ops.arange(max_length, dtype="int32") < index)[None, :]
+            end_tokens = any_equal(
+                prompt, stop_token_ids, ops.logical_and(~mask, committed)
+            )
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_and(
                 ops.logical_not(ops.all(prompt_done)),
@@ -380,22 +385,19 @@ class SpeculativeSampler(Sampler):
                 all_accepted = ops.equal(min_accepted, ops.cast(k, "int32"))
                 bonus_probs = ops.where(all_accepted, p_b, res_probs)
 
-                # Gumbel-max trick. Zero-probability tokens never win.
-                uniform_noise = random.uniform(
-                    shape=ops.shape(bonus_probs),
-                    seed=self.seed_generator,
-                    dtype="float32",
-                )
-                gumbel = -ops.log(
-                    -ops.log(uniform_noise + ops.cast(1e-7, "float32"))
-                )
+                # Zero-probability tokens never win.
                 bonus_probs = ops.cast(bonus_probs, "float32")
                 log_probs = ops.where(
                     bonus_probs > 0.0,
                     ops.log(ops.maximum(bonus_probs, 1e-30)),
                     -1e30,
                 )
-                bonus_token = ops.argmax(log_probs + gumbel, axis=-1)
+                bonus_token = ops.squeeze(
+                    random.categorical(
+                        log_probs, 1, seed=self.seed_generator, dtype="int32"
+                    ),
+                    axis=-1,
+                )
             else:
                 # Greedy bonus: argmax of the target distribution at position
                 # min_accepted.
@@ -504,7 +506,16 @@ class SpeculativeSampler(Sampler):
         threshold = ops.min(
             ops.where(keep, sorted_probs, 2.0), axis=-1, keepdims=True
         )
-        probs = ops.where(probs >= threshold, probs, 0.0)
+        # Tokens above the threshold stay. Of the tokens that tie with the
+        # threshold, keep only as many as the sorted cut keeps, lowest index
+        # first, like the rank-based cut of the plain samplers.
+        above = probs > threshold
+        tied = probs == threshold
+        num_keep = ops.sum(ops.cast(keep, "int32"), axis=-1, keepdims=True)
+        num_above = ops.sum(ops.cast(above, "int32"), axis=-1, keepdims=True)
+        tie_rank = ops.cumsum(ops.cast(tied, "int32"), axis=-1)
+        keep_tied = ops.logical_and(tied, tie_rank <= num_keep - num_above)
+        probs = ops.where(ops.logical_or(above, keep_tied), probs, 0.0)
         return probs / ops.sum(probs, axis=-1, keepdims=True)
 
     def get_config(self):
