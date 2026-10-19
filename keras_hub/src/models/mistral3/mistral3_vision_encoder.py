@@ -3,6 +3,7 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 MISTRAL3_DEFAULT_SPATIAL_MERGE_SIZE = 2
 
@@ -469,6 +470,32 @@ class Mistral3VisionAttention(keras.layers.Layer):
 
         return ops.transpose(x, (0, 2, 1, 3))
 
+    def _compute_attention(self, q, k, v, attention_mask, training):
+        """Unfused attention. Returns `[B, H, S, D]`."""
+        # [B, H, S, D] @ [B, H, D, S]
+        attention_scores = ops.matmul(
+            q,
+            ops.transpose(k, (0, 1, 3, 2)),
+        )
+        attention_scores = attention_scores * self.scaling
+
+        # HF explicitly performs softmax in float32. Mask after the upcast
+        # so the float32 minimum is exact for every compute dtype.
+        attention_scores = ops.cast(attention_scores, "float32")
+        if attention_mask is not None:
+            attention_scores = ops.where(
+                attention_mask,
+                attention_scores,
+                ops.cast(-3.4028234663852886e38, "float32"),
+            )
+        attention_scores = ops.softmax(attention_scores, axis=-1)
+        attention_scores = ops.cast(attention_scores, q.dtype)
+        attention_scores = self.attention_dropout(
+            attention_scores,
+            training=training,
+        )
+        return ops.matmul(attention_scores, v)
+
     def call(
         self,
         inputs,
@@ -483,47 +510,21 @@ class Mistral3VisionAttention(keras.layers.Layer):
         cos, sin = position_embeddings
         q, k = _apply_rotary_pos_emb(q, k, cos, sin)
 
-        # [B, H, S, D] @ [B, H, D, S]
-        attention_scores = ops.matmul(
-            q,
-            ops.transpose(k, (0, 1, 3, 2)),
-        )
-
-        attention_scores = attention_scores * self.scaling
-
-        if attention_mask is not None:
-            attention_scores = attention_scores + attention_mask
-
-        # HF explicitly performs softmax in float32.
-        attention_scores = ops.cast(
-            attention_scores,
-            "float32",
-        )
-
-        attention_scores = ops.softmax(
-            attention_scores,
-            axis=-1,
-        )
-
-        attention_scores = ops.cast(
-            attention_scores,
-            q.dtype,
-        )
-
-        attention_scores = self.attention_dropout(
-            attention_scores,
-            training=training,
-        )
-
-        attention_output = ops.matmul(
-            attention_scores,
-            v,
-        )
-
-        attention_output = ops.transpose(
-            attention_output,
-            (0, 2, 1, 3),
-        )
+        if fused_attention_op_available() and (
+            not training or self.dropout == 0
+        ):
+            attention_output = ops.dot_product_attention(
+                ops.transpose(q, (0, 2, 1, 3)),
+                ops.transpose(k, (0, 2, 1, 3)),
+                ops.transpose(v, (0, 2, 1, 3)),
+                mask=attention_mask,
+                scale=self.scaling,
+            )
+        else:
+            attention_output = self._compute_attention(
+                q, k, v, attention_mask, training
+            )
+            attention_output = ops.transpose(attention_output, (0, 2, 1, 3))
 
         attention_output = ops.reshape(
             attention_output,
@@ -847,17 +848,18 @@ class Mistral3VisionEncoder(keras.Model):
             layer.build((None, None, self.hidden_dim))
         self.built = True
 
-    def _create_position_ids_for_images(
-        self,
-        image_sizes,
-        max_patch_height,
-        max_patch_width,
+    def _compute_patch_scatter_target(
+        self, image_sizes, max_patch_height, max_patch_width
     ):
-        """Create mesh-grid position IDs matching the compacted layout.
+        """Compute the compacted slot of every canvas patch.
 
-        Mirrors `_extract_patch_sequences`'s compaction (see that method for
-        why a cumulative-sum rank is used instead of `ops.nonzero`) so
-        position IDs line up with the patches they belong to.
+        Valid patches get their cumulative-sum rank. Padding patches get
+        the out-of-range slot `capacity`. Uses a cumulative-sum rank instead
+        of `ops.nonzero`, since `nonzero`'s output shape depends on tensor
+        values and breaks `jax.jit` tracing.
+
+        Returns:
+            A tuple `(scatter_target, capacity)`.
         """
         image_sizes = ops.cast(image_sizes, "int32")
         patch_heights = image_sizes[:, 0] // self.patch_size
@@ -866,16 +868,6 @@ class Mistral3VisionEncoder(keras.Model):
 
         height_indices = ops.arange(max_patch_height, dtype="int32")
         width_indices = ops.arange(max_patch_width, dtype="int32")
-        height_grid = ops.expand_dims(height_indices, axis=1)
-        width_grid = ops.expand_dims(width_indices, axis=0)
-        position_grid = (
-            height_grid * (self.image_size // self.patch_size) + width_grid
-        )
-        position_grid = ops.broadcast_to(
-            position_grid,
-            (num_images, max_patch_height, max_patch_width),
-        )
-
         height_valid = ops.expand_dims(
             ops.expand_dims(height_indices, axis=0)
             < ops.expand_dims(patch_heights, axis=1),
@@ -886,14 +878,39 @@ class Mistral3VisionEncoder(keras.Model):
             < ops.expand_dims(patch_widths, axis=1),
             axis=1,
         )
-        valid_patches = ops.logical_and(height_valid, width_valid)
-        position_grid = ops.reshape(position_grid, (-1,))
-        valid_patches = ops.reshape(valid_patches, (-1,))
+        valid_patches = ops.reshape(
+            ops.logical_and(height_valid, width_valid), (-1,)
+        )
 
         capacity = num_images * max_patch_height * max_patch_width
         valid_int = ops.cast(valid_patches, "int32")
         rank = ops.cumsum(valid_int) - valid_int
-        scatter_target = ops.where(valid_patches, rank, capacity)
+        return ops.where(valid_patches, rank, capacity), capacity
+
+    def _create_position_ids_for_images(
+        self,
+        num_images,
+        max_patch_height,
+        max_patch_width,
+        scatter_target,
+        capacity,
+    ):
+        """Create mesh-grid position IDs matching the compacted layout.
+
+        `scatter_target` comes from `_compute_patch_scatter_target`, so
+        position IDs line up with the patches they belong to.
+        """
+        height_indices = ops.arange(max_patch_height, dtype="int32")
+        width_indices = ops.arange(max_patch_width, dtype="int32")
+        position_grid = ops.expand_dims(height_indices, axis=1) * (
+            self.image_size // self.patch_size
+        ) + ops.expand_dims(width_indices, axis=0)
+        position_grid = ops.broadcast_to(
+            position_grid,
+            (num_images, max_patch_height, max_patch_width),
+        )
+        position_grid = ops.reshape(position_grid, (-1,))
+
         buffer = ops.zeros((capacity + 1,), dtype="int32")
         buffer = ops.scatter_update(
             buffer,
@@ -902,8 +919,8 @@ class Mistral3VisionEncoder(keras.Model):
         )
         return buffer[:capacity]
 
-    def _create_block_attention_mask(self, patch_counts, dtype, capacity):
-        """Create a block-diagonal mask over the padded, compacted layout.
+    def _create_block_attention_mask(self, patch_counts, capacity):
+        """Create a boolean block-diagonal mask over the compacted layout.
 
         `patch_counts` gives each image's real patch count; slots at or
         past `sum(patch_counts)` are the tail padding produced by
@@ -911,7 +928,7 @@ class Mistral3VisionEncoder(keras.Model):
         (`num_images`) so they never attend to, or are attended to by, a
         real patch. Computes each slot's image ID via a cumulative-sum
         comparison rather than `ops.repeat(..., patch_counts)` (see
-        `_extract_patch_sequences` for why).
+        `_compute_patch_scatter_target` for why).
         """
         patch_counts = ops.cast(patch_counts, "int32")
         num_images = ops.shape(patch_counts)[0]
@@ -937,21 +954,7 @@ class Mistral3VisionEncoder(keras.Model):
             ops.expand_dims(image_ids, axis=0),
             ops.expand_dims(image_ids, axis=1),
         )
-
-        dtype = keras.backend.standardize_dtype(dtype)
-        if dtype == "float16":
-            mask_value = -65504.0
-        elif dtype == "bfloat16":
-            mask_value = -3.38953139e38
-        else:
-            mask_value = -3.4028234663852886e38
-
-        mask = ops.where(
-            same_block,
-            ops.zeros_like(ops.cast(same_block, dtype)),
-            ops.cast(mask_value, dtype),
-        )
-        return ops.expand_dims(ops.expand_dims(mask, axis=0), axis=0)
+        return ops.expand_dims(ops.expand_dims(same_block, axis=0), axis=0)
 
     def _normalize_image_sizes(self, image_sizes, num_images, height, width):
         """Normalize image sizes as an integer tensor."""
@@ -966,44 +969,16 @@ class Mistral3VisionEncoder(keras.Model):
 
         return ops.cast(image_sizes, "int32")
 
-    def _extract_patch_sequences(self, patch_embeds, image_sizes):
+    def _extract_patch_sequences(self, patch_embeds, scatter_target, capacity):
         """Compact per-image patches into cumsum-offset order, tail-padded.
 
         Output has the same row count as the input
         (`num_images * max_patch_height * max_patch_width`): valid patches
         move to the front, in per-image row-major order (the layout
-        `Mistral3PatchMerger` expects), remainder zeroed. Uses a
-        cumulative-sum rank instead of `ops.nonzero`, since `nonzero`'s
-        output shape depends on tensor values and breaks `jax.jit` tracing.
+        `Mistral3PatchMerger` expects), remainder zeroed.
         """
-        image_sizes = ops.cast(image_sizes, "int32")
-        patch_heights = image_sizes[:, 0] // self.patch_size
-        patch_widths = image_sizes[:, 1] // self.patch_size
-        num_images = ops.shape(patch_embeds)[0]
-        max_patch_height = ops.shape(patch_embeds)[1]
-        max_patch_width = ops.shape(patch_embeds)[2]
         hidden_dim = ops.shape(patch_embeds)[-1]
-
-        height_indices = ops.arange(max_patch_height, dtype="int32")
-        width_indices = ops.arange(max_patch_width, dtype="int32")
-        height_valid = ops.expand_dims(
-            ops.expand_dims(height_indices, axis=0)
-            < ops.expand_dims(patch_heights, axis=1),
-            axis=2,
-        )
-        width_valid = ops.expand_dims(
-            ops.expand_dims(width_indices, axis=0)
-            < ops.expand_dims(patch_widths, axis=1),
-            axis=1,
-        )
-        valid_patches = ops.logical_and(height_valid, width_valid)
         patch_embeds = ops.reshape(patch_embeds, (-1, hidden_dim))
-        valid_patches = ops.reshape(valid_patches, (-1,))
-
-        capacity = num_images * max_patch_height * max_patch_width
-        valid_int = ops.cast(valid_patches, "int32")
-        rank = ops.cumsum(valid_int) - valid_int
-        scatter_target = ops.where(valid_patches, rank, capacity)
         buffer = ops.zeros((capacity + 1, hidden_dim), patch_embeds.dtype)
         buffer = ops.scatter_update(
             buffer,
@@ -1034,17 +1009,26 @@ class Mistral3VisionEncoder(keras.Model):
             height=ops.shape(pixel_values)[1],
             width=ops.shape(pixel_values)[2],
         )
+        num_images = ops.shape(pixel_values)[0]
+        scatter_target, capacity = self._compute_patch_scatter_target(
+            image_sizes,
+            max_patch_height,
+            max_patch_width,
+        )
         patch_embeds = self._extract_patch_sequences(
             patch_embeds,
-            image_sizes,
+            scatter_target,
+            capacity,
         )
         patch_embeds = ops.expand_dims(patch_embeds, axis=0)
         patch_embeds = self.ln_pre(patch_embeds)
 
         position_ids = self._create_position_ids_for_images(
-            image_sizes,
+            num_images,
             max_patch_height,
             max_patch_width,
+            scatter_target,
+            capacity,
         )
         position_ids = ops.expand_dims(position_ids, axis=0)
         cos, sin = self.patch_positional_embedding(
@@ -1055,12 +1039,8 @@ class Mistral3VisionEncoder(keras.Model):
         patch_counts = (image_sizes[:, 0] // self.patch_size) * (
             image_sizes[:, 1] // self.patch_size
         )
-        capacity = (
-            ops.shape(pixel_values)[0] * max_patch_height * max_patch_width
-        )
         attention_mask = self._create_block_attention_mask(
             patch_counts,
-            patch_embeds.dtype,
             capacity,
         )
 
@@ -1250,14 +1230,8 @@ class Mistral3PatchMerger(keras.layers.Layer):
             ],
             axis=1,
         )
-        patches = ops.take(image_features, patch_indices, axis=0)
-        patches = ops.transpose(patches, (0, 2, 1))
-        patches = ops.reshape(
-            patches,
-            (-1, self.hidden_dim * merge_size * merge_size),
-        )
-        merged_all = self.merging_layer(patches)
-
+        # Compact the valid windows' indices first, so the gather and the
+        # `merging_layer` matmul run on `capacity` rows, not `num_tokens`.
         valid_int = ops.cast(valid_windows, "int32")
         rank = ops.cumsum(valid_int) - valid_int
         capacity = (
@@ -1266,14 +1240,31 @@ class Mistral3PatchMerger(keras.layers.Layer):
             * (max_patch_width // merge_size)
         )
         scatter_target = ops.where(valid_windows, rank, capacity)
-        buffer = ops.zeros((capacity + 1, self.hidden_dim), merged_all.dtype)
-        buffer = ops.scatter_update(
-            buffer,
-            ops.expand_dims(scatter_target, axis=1),
-            merged_all,
+        index_buffer = ops.zeros(
+            (capacity + 1, merge_size * merge_size), dtype="int32"
         )
-        merged_padded = buffer[:capacity]
+        index_buffer = ops.scatter_update(
+            index_buffer,
+            ops.expand_dims(scatter_target, axis=1),
+            patch_indices,
+        )
+        valid_patch_indices = index_buffer[:capacity]
+
+        patches = ops.take(image_features, valid_patch_indices, axis=0)
+        patches = ops.transpose(patches, (0, 2, 1))
+        patches = ops.reshape(
+            patches,
+            (capacity, self.hidden_dim * merge_size * merge_size),
+        )
+        merged = self.merging_layer(patches)
+
         valid_count = ops.sum(valid_int)
+        is_valid_output = ops.expand_dims(
+            ops.arange(capacity, dtype="int32") < valid_count, axis=1
+        )
+        merged_padded = ops.where(
+            is_valid_output, merged, ops.zeros_like(merged)
+        )
         return merged_padded, valid_count
 
     def get_config(self):
