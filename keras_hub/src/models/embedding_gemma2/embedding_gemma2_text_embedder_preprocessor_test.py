@@ -605,13 +605,6 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
     def test_preprocessor_batched_vs_per_image(self):
         import unittest.mock
 
-        from keras_hub.src.models.embedding_gemma2 import (
-            embedding_gemma2_image_converter,
-        )
-        EmbeddingGemma2ImageConverter = (
-            embedding_gemma2_image_converter.EmbeddingGemma2ImageConverter
-        )
-
         original_call = EmbeddingGemma2ImageConverter.call
         call_count = [0]
 
