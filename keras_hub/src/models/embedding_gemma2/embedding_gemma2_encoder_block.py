@@ -8,6 +8,39 @@ from keras_hub.src.models.gemma4.gemma4_decoder_block import (
 )
 
 
+def compute_embedding_gemma2_attention_masks(
+    x, padding_mask, sliding_window_size
+):
+    decoder_mask = merge_padding_and_attention_mask(
+        inputs=x, padding_mask=padding_mask, attention_mask=None
+    )
+
+    batch_size = ops.shape(x)[0]
+    input_length = ops.shape(x)[1]
+
+    # Bidirectional attention only
+    mask_1 = decoder_mask
+    if mask_1 is None:
+        # Attend to everything by default if no padding
+        full_mask = ops.ones(
+            (batch_size, input_length, input_length), dtype="bool"
+        )
+    else:
+        full_mask = ops.cast(mask_1, "bool")
+        query_mask = ops.expand_dims(ops.cast(padding_mask, "bool"), axis=-1)
+        full_mask = ops.logical_and(full_mask, query_mask)
+
+    # Sliding-window layers use a symmetric, *inclusive* window, matching
+    # HF `masking_utils.sliding_window_bidirectional_overlay`
+    # (`abs(q_idx - kv_idx) <= sliding_window`).
+    i = ops.expand_dims(ops.arange(input_length, dtype="int32"), axis=1)
+    j = ops.expand_dims(ops.arange(input_length, dtype="int32"), axis=0)
+    window_mask = ops.abs(i - j) <= sliding_window_size
+    sliding_mask = full_mask & window_mask
+
+    return full_mask, sliding_mask
+
+
 class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
     """An encoder block for EmbeddingGemma2 models.
 
@@ -31,34 +64,9 @@ class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
         cache,
         cache_update_index,
     ):
-        decoder_mask = merge_padding_and_attention_mask(
-            inputs=x, padding_mask=padding_mask, attention_mask=None
+        full_mask, sliding_mask = compute_embedding_gemma2_attention_masks(
+            x, padding_mask, self.sliding_window_size
         )
-
-        batch_size = ops.shape(x)[0]
-        input_length = ops.shape(x)[1]
-
-        # Bidirectional attention only
-        mask_1 = decoder_mask
-        if mask_1 is None:
-            # Attend to everything by default if no padding
-            mask = ops.ones(
-                (batch_size, input_length, input_length), dtype="bool"
-            )
-        else:
-            mask = ops.cast(mask_1, "bool")
-            query_mask = ops.expand_dims(
-                ops.cast(padding_mask, "bool"), axis=-1
-            )
-            mask = ops.logical_and(mask, query_mask)
-
-        # Sliding-window layers use a symmetric, *inclusive* window, matching
-        # HF `masking_utils.sliding_window_bidirectional_overlay`
-        # (`abs(q_idx - kv_idx) <= sliding_window`).
         if self.use_sliding_window_attention and not self.is_global_attention:
-            i = ops.expand_dims(ops.arange(input_length), axis=1)
-            j = ops.expand_dims(ops.arange(input_length), axis=0)
-            window_mask = ops.abs(i - j) <= self.sliding_window_size
-            mask = mask & window_mask
-
-        return mask
+            return sliding_mask
+        return full_mask

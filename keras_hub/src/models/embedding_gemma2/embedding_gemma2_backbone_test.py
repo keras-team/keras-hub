@@ -250,3 +250,43 @@ class EmbeddingGemma2BackboneTest(TestCase, parameterized.TestCase):
                 preset=preset,
                 input_data=self.text_backbone_input_data,
             )
+
+    def test_blocks_do_not_compute_masks_per_forward(self):
+        from unittest.mock import patch
+
+        from keras_hub.src.models.embedding_gemma2 import (
+            embedding_gemma2_backbone,
+        )
+
+        EncoderBlock = embedding_gemma2_backbone.EmbeddingGemma2EncoderBlock
+        original = EncoderBlock._compute_attention_mask
+        with patch.object(
+            embedding_gemma2_backbone.EmbeddingGemma2EncoderBlock,
+            "_compute_attention_mask",
+            autospec=True,
+            side_effect=original,
+        ) as mock_block_compute:
+            backbone = EmbeddingGemma2Backbone(**self.text_init_kwargs)
+            backbone(self.text_backbone_input_data)
+            self.assertEqual(mock_block_compute.call_count, 0)
+
+    def test_masks_computed_once_per_forward(self):
+        from unittest.mock import patch
+
+        from keras_hub.src.models.embedding_gemma2 import (
+            embedding_gemma2_backbone,
+        )
+
+        with patch.object(
+            embedding_gemma2_backbone,
+            "compute_embedding_gemma2_attention_masks",
+            wraps=embedding_gemma2_backbone.compute_embedding_gemma2_attention_masks,
+        ) as mock_helper:
+            backbone = EmbeddingGemma2Backbone(**self.text_init_kwargs)
+            # How many times the functional build traces the helper is a
+            # backend detail (torch traces it once more than jax and tf).
+            # What matters is the eager forward: exactly one call per
+            # forward for the whole backbone, never one per block.
+            mock_helper.reset_mock()
+            backbone(self.text_backbone_input_data)
+            self.assertEqual(mock_helper.call_count, 1)

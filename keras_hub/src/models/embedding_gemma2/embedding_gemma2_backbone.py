@@ -8,10 +8,24 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_encoder_block import (  # noqa: E501
     EmbeddingGemma2EncoderBlock,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_encoder_block import (  # noqa: E501
+    compute_embedding_gemma2_attention_masks,
+)
 from keras_hub.src.models.gemma4.gemma4_layers import (
     Gemma4InterleaveEmbeddings,  # noqa: E501
 )
 from keras_hub.src.models.gemma4.gemma4_layers import RMSNormalization
+
+
+class _ComputeMasks(keras.layers.Layer):
+    def __init__(self, sliding_window_size, **kwargs):
+        super().__init__(**kwargs)
+        self.sliding_window_size = sliding_window_size
+
+    def call(self, x, padding_mask):
+        return compute_embedding_gemma2_attention_masks(
+            x, padding_mask, self.sliding_window_size
+        )
 
 
 @keras_hub_export("keras_hub.models.EmbeddingGemma2Backbone")
@@ -365,6 +379,13 @@ class EmbeddingGemma2Backbone(Backbone):
             per_layer_proj_flat = None
 
         # Decoder layers.
+        mask_layer = _ComputeMasks(
+            sliding_window_size,
+            name="compute_attention_masks",
+            dtype=dtype,
+        )
+        full_mask, sliding_mask = mask_layer(x, padding_mask_input)
+
         _hpl = hidden_size_per_layer_input
         for i, transformer_layer in enumerate(self.transformer_layers):
             if per_layer_proj_flat is not None:
@@ -373,6 +394,13 @@ class EmbeddingGemma2Backbone(Backbone):
             else:
                 per_layer_input_i = None
 
+            layer_mask = (
+                sliding_mask
+                if transformer_layer.use_sliding_window_attention
+                and not transformer_layer.is_global_attention
+                else full_mask
+            )
+
             # Attention is fully bidirectional, so no `vision_mask` is
             # needed to open up image spans the way Gemma 4 does.
             x, _ = transformer_layer(
@@ -380,6 +408,7 @@ class EmbeddingGemma2Backbone(Backbone):
                 padding_mask=padding_mask_input,
                 per_layer_input=per_layer_input_i,
                 positions=None,
+                attention_mask=layer_mask,
             )
 
         sequence_output = self.layer_norm(x)

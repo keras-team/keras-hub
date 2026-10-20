@@ -465,6 +465,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         per_layer_input=None,
         shared_kv=None,
         positions=None,
+        attention_mask=None,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -474,9 +475,14 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # === Attention sub-block ===
         residual = x
         normalized_x = self.pre_attention_norm(x)
-        attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, vision_mask, cache, cache_update_index
-        )
+        if attention_mask is None:
+            attention_mask = self._compute_attention_mask(
+                normalized_x,
+                padding_mask,
+                vision_mask,
+                cache,
+                cache_update_index,
+            )
         if cache is not None:
             attention, new_cache = self.attention(
                 normalized_x,
