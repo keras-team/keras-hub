@@ -112,10 +112,26 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="language_model.embedding_projection.weight",
         hook_fn=lambda x, _: x.T,
     )
-    if backbone.vision_encoder is not None:
-        _convert_vision_encoder(backbone.vision_encoder, p, transformers_config)
-    if backbone.audio_encoder is not None:
-        _convert_audio_encoder(backbone.audio_encoder, p, transformers_config)
+    if (
+        backbone.vision_encoder is not None
+        or backbone.audio_encoder is not None
+    ):
+
+        class PrefixAdapterLoader:
+            def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+                if hf_weight_key.startswith("model."):
+                    hf_weight_key = hf_weight_key[len("model.") :]
+                p(keras_variable, hf_weight_key, hook_fn=hook_fn)
+
+        adapter = PrefixAdapterLoader()
+        if backbone.vision_encoder is not None:
+            convert_gemma4._convert_vision_encoder(
+                backbone.vision_encoder, adapter, transformers_config
+            )
+        if backbone.audio_encoder is not None:
+            convert_gemma4._convert_audio_encoder(
+                backbone.audio_encoder, adapter, transformers_config
+            )
 
 
 def load_image_converter_config(preset, transformers_config):
@@ -190,8 +206,6 @@ def load_task_config(preset, transformers_config):
         pooling_config = load_json(preset, pooling_config_file)
         if "pooling_mode" in pooling_config:
             kwargs["pooling_mode"] = pooling_config["pooling_mode"]
-        elif pooling_config.get("pooling_mode_mean_tokens", False):
-            kwargs["pooling_mode"] = "mean"
         else:
             kwargs["pooling_mode"] = "mean"
 
@@ -387,168 +401,6 @@ def _convert_decoder_block(
             layer_key("layer_scalar"),
             hook_fn=lambda x, _: np.squeeze(x),
         )
-
-
-def _port_clips(p, keras_layer, hf_name):
-    if not getattr(keras_layer, "use_clipped_linears", False):
-        return
-    for w in ["input_min", "input_max", "output_min", "output_max"]:
-        p(getattr(keras_layer, w), f"{hf_name}.{w}")
-
-
-def _convert_vision_encoder(vision_encoder, p, transformers_config):
-    image_encoder = vision_encoder.get_layer("image_encoder")
-    patch_embedder = image_encoder.patch_embedder
-    vis_prefix = "vision_tower"
-    p(
-        keras_variable=patch_embedder.input_proj.kernel,
-        hf_weight_key=f"{vis_prefix}.patch_embedder.input_proj.weight",
-        hook_fn=lambda x, _: x.T,
-    )
-    p(
-        patch_embedder.position_embedding_table,
-        f"{vis_prefix}.patch_embedder.position_embedding_table",
-    )
-    for i, block in enumerate(image_encoder.encoder_blocks):
-        _convert_decoder_block(
-            p,
-            block,
-            i,
-            hf_key_fn=lambda attr: f"{vis_prefix}.encoder.{attr}",
-            is_vision=True,
-        )
-        attn = block.attention
-        blk = f"{vis_prefix}.encoder.layers.{i}"
-        _port_clips(p, attn.query_dense, f"{blk}.self_attn.q_proj")
-        _port_clips(p, attn.key_dense, f"{blk}.self_attn.k_proj")
-        _port_clips(p, attn.value_dense, f"{blk}.self_attn.v_proj")
-        _port_clips(p, attn.output_dense, f"{blk}.self_attn.o_proj")
-        _port_clips(p, block.gating_ffw, f"{blk}.mlp.gate_proj")
-        _port_clips(p, block.gating_ffw_2, f"{blk}.mlp.up_proj")
-        _port_clips(p, block.ffw_linear, f"{blk}.mlp.down_proj")
-    projector_prefix = "embed_vision"
-    vision_output = vision_encoder.get_layer("vision_output_encoder")
-    p(
-        keras_variable=vision_output.vision_input_projection.kernel,
-        hf_weight_key=f"{projector_prefix}.embedding_projection.weight",
-        hook_fn=lambda x, _: x.T,
-    )
-
-
-def _convert_audio_encoder(audio_encoder, p, transformers_config):
-    aud_prefix = "audio_tower"
-    sscp = audio_encoder.subsample_conv_projection
-    for conv_block, hf_attr in [
-        (sscp.conv_0, "layer0"),
-        (sscp.conv_1, "layer1"),
-    ]:
-        hf_conv_pfx = f"{aud_prefix}.subsample_conv_projection.{hf_attr}"
-        p(
-            keras_variable=conv_block.conv.kernel,
-            hf_weight_key=f"{hf_conv_pfx}.conv.weight",
-            hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
-        )
-        p(conv_block.norm.gamma, f"{hf_conv_pfx}.norm.weight")
-    p(
-        keras_variable=sscp.input_proj.kernel,
-        hf_weight_key=f"{aud_prefix}.subsample_conv_projection.input_proj_linear.weight",
-        hook_fn=lambda x, _: x.T,
-    )
-    for i, block in enumerate(audio_encoder.conformer_blocks):
-        hf_blk = f"{aud_prefix}.layers.{i}"
-        for hf_ffw_name, keras_ffw in [
-            ("feed_forward1", block.ffw_start),
-            ("feed_forward2", block.ffw_end),
-        ]:
-            p(
-                keras_variable=keras_ffw.ffw_1.dense.kernel,
-                hf_weight_key=f"{hf_blk}.{hf_ffw_name}.ffw_layer_1.linear.weight",
-                hook_fn=lambda x, _: x.T,
-            )
-            p(
-                keras_variable=keras_ffw.ffw_2.dense.kernel,
-                hf_weight_key=f"{hf_blk}.{hf_ffw_name}.ffw_layer_2.linear.weight",
-                hook_fn=lambda x, _: x.T,
-            )
-            ffw_pfx = f"{hf_blk}.{hf_ffw_name}"
-            _port_clips(p, keras_ffw.ffw_1, f"{ffw_pfx}.ffw_layer_1")
-            _port_clips(p, keras_ffw.ffw_2, f"{ffw_pfx}.ffw_layer_2")
-        attn = block.attention.attn
-        hf_attn = f"{hf_blk}.self_attn"
-        for proj_name, keras_dense in [
-            ("q_proj", attn.q_proj),
-            ("k_proj", attn.k_proj),
-            ("v_proj", attn.v_proj),
-        ]:
-            p(
-                keras_variable=keras_dense.dense.kernel,
-                hf_weight_key=f"{hf_attn}.{proj_name}.linear.weight",
-                hook_fn=lambda x, _: x.T,
-            )
-            _port_clips(p, keras_dense, f"{hf_attn}.{proj_name}")
-        p(attn.per_dim_scale, f"{hf_attn}.per_dim_scale")
-        p(
-            keras_variable=attn.rpe.pos_proj,
-            hf_weight_key=f"{hf_attn}.relative_k_proj.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        p(
-            keras_variable=block.attention.out_proj.dense.kernel,
-            hf_weight_key=f"{hf_blk}.self_attn.post.linear.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        _port_clips(p, block.attention.out_proj, f"{hf_attn}.post")
-        lconv = block.lconv
-        hf_lconv = f"{hf_blk}.lconv1d"
-        p(
-            keras_variable=lconv.linear_start.dense.kernel,
-            hf_weight_key=f"{hf_lconv}.linear_start.linear.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        _port_clips(p, lconv.linear_start, f"{hf_lconv}.linear_start")
-        p(
-            keras_variable=lconv.depthwise_conv.kernel,
-            hf_weight_key=f"{hf_lconv}.depthwise_conv1d.weight",
-            hook_fn=lambda x, _: np.transpose(x, (2, 0, 1)),
-        )
-        p(
-            keras_variable=lconv.linear_end.dense.kernel,
-            hf_weight_key=f"{hf_lconv}.linear_end.linear.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        _port_clips(p, lconv.linear_end, f"{hf_lconv}.linear_end")
-        for hf_ffw_name, keras_ffw in [
-            ("feed_forward1", block.ffw_start),
-            ("feed_forward2", block.ffw_end),
-        ]:
-            p(
-                keras_ffw.pre_norm.scale,
-                f"{hf_blk}.{hf_ffw_name}.pre_layer_norm.weight",
-            )
-            p(
-                keras_ffw.post_norm.scale,
-                f"{hf_blk}.{hf_ffw_name}.post_layer_norm.weight",
-            )
-        p(
-            block.attention.pre_attn_norm.scale,
-            f"{hf_blk}.norm_pre_attn.weight",
-        )
-        p(block.attention.post_norm.scale, f"{hf_blk}.norm_post_attn.weight")
-        p(lconv.pre_norm.scale, f"{hf_lconv}.pre_layer_norm.weight")
-        p(lconv.conv_norm.scale, f"{hf_lconv}.conv_norm.weight")
-        p(block.norm.scale, f"{hf_blk}.norm_out.weight")
-    if audio_encoder.output_proj is not None:
-        p(
-            keras_variable=audio_encoder.output_proj.kernel,
-            hf_weight_key=f"{aud_prefix}.output_proj.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        p(audio_encoder.output_proj.bias, f"{aud_prefix}.output_proj.bias")
-    p(
-        keras_variable=audio_encoder.audio_output_projection.kernel,
-        hf_weight_key="embed_audio.embedding_projection.weight",
-        hook_fn=lambda x, _: x.T,
-    )
 
 
 def convert_tokenizer(cls, preset, **kwargs):

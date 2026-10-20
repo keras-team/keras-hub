@@ -46,8 +46,11 @@ class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
                 (batch_size, input_length, input_length), dtype="bool"
             )
         else:
-            mask_2 = ops.transpose(mask_1, (0, 2, 1))
-            mask = ops.cast(mask_1 * mask_2, "bool")
+            mask = ops.cast(mask_1, "bool")
+            query_mask = ops.expand_dims(
+                ops.cast(padding_mask, "bool"), axis=-1
+            )
+            mask = ops.logical_and(mask, query_mask)
 
         # Sliding-window layers use a symmetric, *inclusive* window, matching
         # HF `masking_utils.sliding_window_bidirectional_overlay`

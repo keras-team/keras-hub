@@ -403,6 +403,43 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             _compute,
         )
 
+    def _expand_modality_placeholders_tf(
+        self, texts, num_tokens_tensor, placeholder, start_token, end_token
+    ):
+        import re
+
+        def _replace_modality(args):
+            text, num_tokens = args
+            replacement = tf.strings.join(
+                [
+                    start_token,
+                    tf.strings.reduce_join(
+                        tf.repeat(placeholder, num_tokens),
+                        axis=0,
+                    ),
+                    end_token,
+                ]
+            )
+            return tf.strings.regex_replace(
+                text, re.escape(placeholder), replacement
+            )
+
+        return tf.map_fn(
+            _replace_modality,
+            (texts, num_tokens_tensor),
+            fn_output_signature=tf.string,
+        )
+
+    def _expand_modality_placeholders_py(
+        self, texts, tokens_list, placeholder, start_token, end_token
+    ):
+        for i in range(len(texts)):
+            replacement = (
+                start_token + placeholder * int(tokens_list[i]) + end_token
+            )
+            texts[i] = texts[i].replace(placeholder, replacement)
+        return texts
+
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
@@ -511,26 +548,12 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             pixel_values = tf.expand_dims(pixel_values, 1)
             pixel_position_ids = tf.expand_dims(pixel_position_ids, 1)
 
-            def _replace_image(args):
-                text, num_tokens = args
-                replacement = tf.strings.join(
-                    [
-                        self.start_of_image_token,
-                        tf.strings.reduce_join(
-                            tf.repeat(self.image_placeholder, num_tokens),
-                            axis=0,
-                        ),
-                        self.end_of_image_token,
-                    ]
-                )
-                return tf.strings.regex_replace(
-                    text, re.escape(self.image_placeholder), replacement
-                )
-
-            texts = tf.map_fn(
-                _replace_image,
-                (texts, num_tokens_tensor),
-                fn_output_signature=tf.string,
+            texts = self._expand_modality_placeholders_tf(
+                texts,
+                num_tokens_tensor,
+                self.image_placeholder,
+                self.start_of_image_token,
+                self.end_of_image_token,
             )
 
         if self.video_converter is not None and videos is not None:
@@ -676,26 +699,12 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             audio_mel = tf.expand_dims(audio_mel, 1)
             audio_mel_mask = tf.expand_dims(audio_mel_mask, 1)
 
-            def _replace_audio(args):
-                text, num_tokens = args
-                replacement = tf.strings.join(
-                    [
-                        self.start_of_audio_token,
-                        tf.strings.reduce_join(
-                            tf.repeat(self.audio_placeholder, num_tokens),
-                            axis=0,
-                        ),
-                        self.end_of_audio_token,
-                    ]
-                )
-                return tf.strings.regex_replace(
-                    text, re.escape(self.audio_placeholder), replacement
-                )
-
-            texts = tf.map_fn(
-                _replace_audio,
-                (texts, num_tokens_tensor),
-                fn_output_signature=tf.string,
+            texts = self._expand_modality_placeholders_tf(
+                texts,
+                num_tokens_tensor,
+                self.audio_placeholder,
+                self.start_of_audio_token,
+                self.end_of_audio_token,
             )
 
         # Soft-token counts of the expanded prompts; packing must keep all.
@@ -891,38 +900,52 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 else:
                     images_list = [images[i] for i in range(images.shape[0])]
 
-            pv_list, ppi_list, tokens_list = [], [], []
-
-            for img in images_list:
-                img_arr = np.array(img)
-                img_arr = np.expand_dims(img_arr, axis=0)
-                image_outputs = self.image_converter(img_arr)
-                pv = keras.ops.convert_to_numpy(image_outputs["pixel_values"])
-                ppi = keras.ops.convert_to_numpy(
+            shapes = [img.shape for img in images_list]
+            if len(set(shapes)) == 1 and len(shapes[0]) == 3:
+                batched_images = np.stack(images_list, axis=0)
+                image_outputs = self.image_converter(batched_images)
+                pv_all = keras.ops.convert_to_numpy(
+                    image_outputs["pixel_values"]
+                )
+                ppi_all = keras.ops.convert_to_numpy(
                     image_outputs["pixel_position_ids"]
                 )
-                valid_patches = ppi[0, :, 0] != -1
+            else:
+                pv_list, ppi_list = [], []
+                for img in images_list:
+                    img_arr = np.expand_dims(np.array(img), axis=0)
+                    image_outputs = self.image_converter(img_arr)
+                    pv_list.append(
+                        keras.ops.convert_to_numpy(
+                            image_outputs["pixel_values"]
+                        )[0]
+                    )
+                    ppi_list.append(
+                        keras.ops.convert_to_numpy(
+                            image_outputs["pixel_position_ids"]
+                        )[0]
+                    )
+                pv_all = np.stack(pv_list, axis=0)
+                ppi_all = np.stack(ppi_list, axis=0)
+
+            tokens_list = []
+            for i in range(len(images_list)):
+                valid_patches = ppi_all[i, :, 0] != -1
                 num_patches = np.sum(valid_patches)
-                num_soft_tokens = num_patches // (
-                    self.image_converter.pooling_kernel_size**2
+                tokens_list.append(
+                    num_patches // (self.image_converter.pooling_kernel_size**2)
                 )
 
-                pv_list.append(pv[0])
-                ppi_list.append(ppi[0])
-                tokens_list.append(num_soft_tokens)
+            pixel_values = np.expand_dims(pv_all, axis=1)
+            pixel_position_ids = np.expand_dims(ppi_all, axis=1)
 
-            pixel_values = np.stack(pv_list, axis=0)
-            pixel_position_ids = np.stack(ppi_list, axis=0)
-            pixel_values = np.expand_dims(pixel_values, axis=1)
-            pixel_position_ids = np.expand_dims(pixel_position_ids, axis=1)
-
-            for i in range(len(texts)):
-                replacement = (
-                    self.start_of_image_token
-                    + self.image_placeholder * int(tokens_list[i])
-                    + self.end_of_image_token
-                )
-                texts[i] = texts[i].replace(self.image_placeholder, replacement)
+            texts = self._expand_modality_placeholders_py(
+                texts,
+                tokens_list,
+                self.image_placeholder,
+                self.start_of_image_token,
+                self.end_of_image_token,
+            )
 
         if self.video_converter is not None and videos is not None:
             if isinstance(videos, (list, tuple)):
@@ -1058,13 +1081,13 @@ class EmbeddingGemma2TextEmbedderPreprocessor(TextEmbedderPreprocessor):
             audio_mel_mask = np.stack(mask_list, axis=0)
             audio_mel_mask = np.expand_dims(audio_mel_mask, axis=1)
 
-            for i in range(len(texts)):
-                replacement = (
-                    self.start_of_audio_token
-                    + self.audio_placeholder * int(tokens_list[i])
-                    + self.end_of_audio_token
-                )
-                texts[i] = texts[i].replace(self.audio_placeholder, replacement)
+            texts = self._expand_modality_placeholders_py(
+                texts,
+                tokens_list,
+                self.audio_placeholder,
+                self.start_of_audio_token,
+                self.end_of_audio_token,
+            )
 
         # Soft-token counts of the expanded prompts; packing must keep all.
         expanded_counts = self._expected_placeholder_counts(texts, False)

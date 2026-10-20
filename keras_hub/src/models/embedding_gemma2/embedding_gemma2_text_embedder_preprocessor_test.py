@@ -601,3 +601,92 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                     block[:n], alone_idx[0, f * n : (f + 1) * n]
                 )
                 self.assertAllEqual(block[n:], np.zeros(width - n))
+
+    def test_preprocessor_batched_vs_per_image(self):
+        import unittest.mock
+
+        from keras_hub.src.models.embedding_gemma2 import (
+            embedding_gemma2_image_converter,
+        )
+        EmbeddingGemma2ImageConverter = (
+            embedding_gemma2_image_converter.EmbeddingGemma2ImageConverter
+        )
+
+        original_call = EmbeddingGemma2ImageConverter.call
+        call_count = [0]
+
+        def mocked_call(self_obj, *args, **kwargs):
+            call_count[0] += 1
+            return original_call(self_obj, *args, **kwargs)
+
+        with unittest.mock.patch.object(
+            EmbeddingGemma2ImageConverter,
+            "call",
+            autospec=True,
+            side_effect=mocked_call,
+        ):
+            img1 = np.ones((16, 16, 3))
+            img2 = np.ones((16, 16, 3))
+
+            # Uniform shape: should be batched
+            call_count[0] = 0
+            out_batch = self.preprocessor({"images": [img1, img2]})
+            self.assertEqual(call_count[0], 1)
+
+            # Per-image baseline
+            call_count[0] = 0
+            out_img1 = self.preprocessor({"images": [img1]})
+            out_img2 = self.preprocessor({"images": [img2]})
+            self.assertEqual(call_count[0], 2)
+
+            # Assert batched outputs equal per-image outputs
+            self.assertAllClose(
+                out_batch["pixel_values"][0], out_img1["pixel_values"][0]
+            )
+            self.assertAllClose(
+                out_batch["pixel_values"][1], out_img2["pixel_values"][0]
+            )
+
+            # Mixed shape: should fall back to per-image calls
+            img3 = np.ones((12, 12, 3))
+            call_count[0] = 0
+            self.preprocessor({"images": [img1, img3]})
+            self.assertEqual(call_count[0], 2)
+
+    def test_preprocessor_shares_modality_expansion(self):
+        # T5: Test the extracted helper directly. If the old code lacked this
+        # helper, this test would fail because the attribute does not exist.
+        texts = ["A <|image|> B", "C <|audio|> D"]
+        tokens_list = [2, 3]
+
+        img_out = self.preprocessor._expand_modality_placeholders_py(
+            texts.copy(),
+            tokens_list,
+            self.preprocessor.image_placeholder,
+            self.preprocessor.start_of_image_token,
+            self.preprocessor.end_of_image_token,
+        )
+        expected_img = (
+            "A "
+            + self.preprocessor.start_of_image_token
+            + self.preprocessor.image_placeholder * 2
+            + self.preprocessor.end_of_image_token
+            + " B"
+        )
+        self.assertEqual(img_out[0], expected_img)
+
+        aud_out = self.preprocessor._expand_modality_placeholders_py(
+            texts.copy(),
+            tokens_list,
+            self.preprocessor.audio_placeholder,
+            self.preprocessor.start_of_audio_token,
+            self.preprocessor.end_of_audio_token,
+        )
+        expected_aud = (
+            "C "
+            + self.preprocessor.start_of_audio_token
+            + self.preprocessor.audio_placeholder * 3
+            + self.preprocessor.end_of_audio_token
+            + " D"
+        )
+        self.assertEqual(aud_out[1], expected_aud)
