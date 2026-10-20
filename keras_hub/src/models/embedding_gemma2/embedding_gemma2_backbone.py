@@ -396,8 +396,7 @@ class EmbeddingGemma2Backbone(Backbone):
 
             layer_mask = (
                 sliding_mask
-                if transformer_layer.use_sliding_window_attention
-                and not transformer_layer.is_global_attention
+                if transformer_layer.is_sliding_attention
                 else full_mask
             )
 

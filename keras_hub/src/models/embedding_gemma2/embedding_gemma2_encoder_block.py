@@ -67,6 +67,6 @@ class EmbeddingGemma2EncoderBlock(Gemma4TextDecoderBlock):
         full_mask, sliding_mask = compute_embedding_gemma2_attention_masks(
             x, padding_mask, self.sliding_window_size
         )
-        if self.use_sliding_window_attention and not self.is_global_attention:
+        if self.is_sliding_attention:
             return sliding_mask
         return full_mask
