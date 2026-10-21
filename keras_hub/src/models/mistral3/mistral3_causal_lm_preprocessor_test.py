@@ -60,7 +60,7 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
             "placeholder_indices",
         ):
             self.assertIn(key, x)
-        token_ids = np.array(x["token_ids"])
+        token_ids = ops.convert_to_numpy(x["token_ids"])
         num_placeholders = int(
             np.sum(
                 token_ids == preprocessor.tokenizer.image_placeholder_token_id
@@ -162,7 +162,7 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
         self.assertEqual(ops.shape(y), (1, 32))
         self.assertEqual(ops.shape(sample_weight), (1, 32))
         self.assertAllEqual(x_out["image_sizes"], [[8, 8]])
-        token_ids = np.array(x_out["token_ids"])[0]
+        token_ids = ops.convert_to_numpy(x_out["token_ids"])[0]
         expected_indices = np.nonzero(
             token_ids == preprocessor.tokenizer.image_placeholder_token_id
         )[0]

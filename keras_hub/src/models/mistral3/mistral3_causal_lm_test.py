@@ -199,7 +199,8 @@ class Mistral3CausalLMTest(TestCase, parameterized.TestCase):
             ],
         )
         placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=image_token_index
+            ops.convert_to_numpy(token_ids),
+            image_token_index=image_token_index,
         )
         input_data = {
             "token_ids": token_ids,

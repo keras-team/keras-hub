@@ -175,6 +175,17 @@ def build_multimodal_inputs(hf_preset, hf_config, image):
             prompt = prompt[len(bos_token) :]
         token_ids = inputs["input_ids"].astype("int32")
         padding_mask = inputs["attention_mask"].astype("int32")
+        # Some chat templates (e.g. Ministral 3 Reasoning) render a literal
+        # `"<s>"`, and `hf_processor` also adds its own BOS. Drop the
+        # duplicate so the ids match KerasHub's single BOS.
+        bos_id = hf_processor.tokenizer.bos_token_id
+        if (
+            bos_id is not None
+            and token_ids.shape[1] > 1
+            and np.all(token_ids[:, :2] == bos_id)
+        ):
+            token_ids = token_ids[:, 1:]
+            padding_mask = padding_mask[:, 1:]
         pixel_values = inputs["pixel_values"].astype("float32")
         image_sizes = inputs["image_sizes"].astype("int32")
         tokenizer = hf_processor.tokenizer

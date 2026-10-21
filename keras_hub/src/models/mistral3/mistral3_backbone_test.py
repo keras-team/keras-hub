@@ -63,7 +63,8 @@ class Mistral3BackboneTest(TestCase, parameterized.TestCase):
             dtype="int32",
         )
         placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=self.image_token_index
+            ops.convert_to_numpy(token_ids),
+            image_token_index=self.image_token_index,
         )
         self.input_data = {
             "token_ids": token_ids,
@@ -145,7 +146,8 @@ class Mistral3BackboneTest(TestCase, parameterized.TestCase):
             dtype="int32",
         )
         placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=self.image_token_index
+            ops.convert_to_numpy(token_ids),
+            image_token_index=self.image_token_index,
         )
         input_data = {
             "token_ids": token_ids,
@@ -166,7 +168,8 @@ class Mistral3BackboneTest(TestCase, parameterized.TestCase):
     def _mixed_size_input_data(self, token_rows):
         token_ids = ops.array(token_rows, dtype="int32")
         placeholder_indices = compute_image_placeholder_indices(
-            token_ids, image_token_index=self.image_token_index
+            ops.convert_to_numpy(token_ids),
+            image_token_index=self.image_token_index,
         )
         return {
             "token_ids": token_ids,
