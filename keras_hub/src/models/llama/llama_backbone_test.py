@@ -29,6 +29,15 @@ class LlamaTest(TestCase):
             expected_output_shape=(2, 5, 8),
         )
 
+    def test_get_config_preserves_tie_word_embeddings(self):
+        init_kwargs = {**self.init_kwargs, "tie_word_embeddings": True}
+        model = LlamaBackbone(**init_kwargs)
+        config = model.get_config()
+        self.assertTrue(config["tie_word_embeddings"])
+        revived = LlamaBackbone.from_config(config)
+        self.assertTrue(revived.tie_word_embeddings)
+        self.assertTrue(revived.token_embedding.tie_weights)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
