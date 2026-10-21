@@ -4,9 +4,18 @@ from keras import layers
 from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
 )
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = ModernBertBackbone
+
+# Single sentence-transformers pooling strategies supported by
+# `ModernBertTextEmbedder`, keyed by their `1_Pooling/config.json` flag.
+_SENTENCE_TRANSFORMERS_POOLING_MODES = {
+    "pooling_mode_cls_token": "cls",
+    "pooling_mode_mean_tokens": "mean",
+    "pooling_mode_max_tokens": "max",
+}
 
 
 def convert_backbone_config(transformers_config):
@@ -248,7 +257,14 @@ def convert_tokenizer(cls, preset, **kwargs):
         )
 
     vocab = dict(tokenizer_model["vocab"])
-    merges = tokenizer_model["merges"]
+    # Newer `tokenizers` versions serialize merges as `["a", "b"]` pairs
+    # (e.g. `nomic-ai/modernbert-embed-base`), while older checkpoints such
+    # as `answerdotai/ModernBERT-base` use `"a b"` strings. Normalize to the
+    # string form expected by `BytePairTokenizer`.
+    merges = [
+        merge if isinstance(merge, str) else " ".join(merge)
+        for merge in tokenizer_model["merges"]
+    ]
 
     # Ordered rather than a `set`, so `unsplittable_tokens` (and therefore
     # the serialized config) is stable across runs under hash randomization.
@@ -265,3 +281,68 @@ def convert_tokenizer(cls, preset, **kwargs):
     )
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)
+
+
+def load_task_config(preset, transformers_config):
+    """Detect sentence-transformers pipeline settings.
+
+    Reads two sentence-transformers config files when available:
+
+    - `modules.json`: determines whether L2 normalization is applied. For
+      example, `nomic-ai/modernbert-embed-base` includes a `Normalize`
+      module, while `Alibaba-NLP/gte-modernbert-base` does not.
+    - `1_Pooling/config.json`: determines the pooling strategy (`"cls"`,
+      `"mean"` or `"max"`).
+
+    Returns kwargs suitable for `ModernBertTextEmbedder`. A pooling config
+    that `ModernBertTextEmbedder` does not support (e.g. weighted-mean, or
+    several concatenated strategies) is passed through verbatim, so building
+    the embedder raises a descriptive error rather than silently falling
+    back to a different pooling strategy.
+    """
+    del transformers_config
+    kwargs = {}
+
+    if check_file_exists(preset, "modules.json"):
+        modules = load_json(preset, "modules.json")
+        kwargs["normalize"] = any(
+            "Normalize" in module.get("type", "") for module in modules
+        )
+
+    pooling_config_file = "1_Pooling/config.json"
+    if check_file_exists(preset, pooling_config_file):
+        pooling_config = load_json(preset, pooling_config_file)
+        enabled_modes = [
+            key
+            for key, value in pooling_config.items()
+            if key.startswith("pooling_mode_") and value is True
+        ]
+        if (
+            len(enabled_modes) == 1
+            and enabled_modes[0] in _SENTENCE_TRANSFORMERS_POOLING_MODES
+        ):
+            kwargs["pooling_mode"] = _SENTENCE_TRANSFORMERS_POOLING_MODES[
+                enabled_modes[0]
+            ]
+        else:
+            kwargs["pooling_mode"] = "+".join(enabled_modes) or "none"
+
+    return kwargs
+
+
+def load_preprocessor_config(preset, transformers_config):
+    """Read the sentence-transformers sequence length, if available.
+
+    Sentence-transformers checkpoints define their maximum sequence length
+    as `max_seq_length` in `sentence_bert_config.json`, which can differ
+    from `max_position_embeddings` in `config.json`. For example,
+    `nomic-ai/modernbert-embed-base` specifies `8192`.
+    """
+    del transformers_config
+    st_config_file = "sentence_bert_config.json"
+    if check_file_exists(preset, st_config_file):
+        st_config = load_json(preset, st_config_file)
+        max_seq_length = st_config.get("max_seq_length")
+        if max_seq_length is not None:
+            return {"sequence_length": max_seq_length}
+    return {}
