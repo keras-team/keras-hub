@@ -8,7 +8,6 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
 from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
-from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 def _resize_output_size_rescale_to_max_len(height, width, max_len):
@@ -137,10 +136,6 @@ class SmolVLM2ImageConverter(ImageConverter):
             # arrays rather than backend tensors.
             return convert_preprocessing_outputs_grain(outputs)
         return outputs
-
-    @preprocessing_function
-    def _call_tf(self, inputs):
-        return self._call_python(inputs)
 
     def _convert_ragged(self, images):
         """Convert images of different sizes one at a time.

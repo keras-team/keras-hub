@@ -143,7 +143,9 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     During training (``fit()``), image inputs are supported only when the
     image converter is created with ``do_image_splitting=False``: the number
     of crops for a split image depends on its original size, which cannot be
-    resolved inside the ``tf.data`` graph. Video inputs are inference-only.
+    resolved inside the ``tf.data`` graph. The shipped preset default has
+    ``do_image_splitting=True``, so this must be changed before training.
+    Video inputs are inference-only.
 
     Args:
         tokenizer: A ``SmolVLM2Tokenizer`` instance.
@@ -202,21 +204,6 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             sep_value=[],
             sequence_length=self.sequence_length,
         )
-
-    def _generate_preprocess_python(self, x, sequence_length=None):
-        # Pass `add_start_value` explicitly. The base class omits it, and
-        # `StartEndPacker` then adds the start token even when
-        # `add_start_token=False`.
-        if not self.built:
-            self.build(None)
-        x = self.tokenizer(x)
-        token_ids, padding_mask = self.packer(
-            x,
-            sequence_length=sequence_length,
-            add_start_value=self.add_start_token,
-            add_end_value=False,
-        )
-        return {"token_ids": token_ids, "padding_mask": padding_mask}
 
     # ------------------------------------------------------------------
     # Special-token-aware tokenization
@@ -429,10 +416,10 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             if self.image_converter.do_image_splitting:
                 raise ValueError(
                     "Training with `do_image_splitting=True` is not "
-                    "supported: the number of crops (and therefore the "
-                    "number of `<image>` tokens) depends on each image's "
+                    "supported: the number of crops depends on each image's "
                     "original size, which cannot be resolved inside the "
-                    "`tf.data` graph that `fit()` runs on. Set "
+                    "`tf.data` graph that `fit()` runs on. The shipped preset "
+                    "default has to be changed before training by setting "
                     "`do_image_splitting=False` on the image converter."
                 )
             pixel_values = self.image_converter(images)
@@ -766,10 +753,32 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
 
         # ------ Image path ------
         if images is not None:
+            if isinstance(images, (list, tuple)) and any(
+                img is None for img in images
+            ):
+                raise ValueError(
+                    "Mixed text and image batches are not supported. "
+                    "Received `None` in the `images` input."
+                )
             for prompt, image in zip(
                 prompt_strings,
                 self._split_per_sample(images, batch_size, 3, "images"),
             ):
+                placeholder_count = prompt.count(image_token_str)
+                if isinstance(image, (list, tuple)):
+                    num_images = len(image)
+                elif hasattr(image, "shape") and len(image.shape) == 4:
+                    num_images = image.shape[0]
+                else:
+                    num_images = 1
+
+                if placeholder_count != 1 or num_images != 1:
+                    raise ValueError(
+                        "Only one image per prompt is supported. "
+                        f"Found {placeholder_count} `{image_token_str}` "
+                        f"placeholder(s) in the prompt and {num_images} "
+                        "image(s) provided."
+                    )
                 image_output = self._preprocess_image(image)
                 pixel_values_per_sample.append(image_output["pixel_values"])
                 image_prompt = self._expand_image_prompt(
@@ -790,6 +799,13 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
                 self._split_per_sample(videos, batch_size, 4, "videos"),
                 metadata_per_sample,
             ):
+                placeholder_count = prompt.count(video_token_str)
+                if placeholder_count != 1:
+                    raise ValueError(
+                        "Only one video per prompt is supported. Found "
+                        f"{placeholder_count} `{video_token_str}` "
+                        "placeholder(s) in the prompt."
+                    )
                 video_output = self._preprocess_video(video)
                 pixel_values_per_sample.append(video_output["pixel_values"])
                 video_prompt = self._get_video_prompt_string(

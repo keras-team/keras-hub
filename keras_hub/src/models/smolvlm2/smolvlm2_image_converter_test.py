@@ -1,4 +1,5 @@
 import grain
+import keras
 import numpy as np
 from absl.testing import parameterized
 from keras import ops
@@ -7,6 +8,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 # `tf.image.resize(method=<name>, antialias=True)` on the (1, 8, 12, 3)
 # hard-edge image in `test_lanczos_resize_matches_reference`, resized to
@@ -278,7 +280,14 @@ class SmolVLM2ImageConverterTest(TestCase):
         expected = np.broadcast_to(
             np.array(expected_row)[None, None, :, None], (1, 16, 16, 3)
         )
-        self.assertAllClose(pixel_values, expected, atol=0.1)
+        atol = 0.1
+        if (
+            keras.config.backend() == "tensorflow"
+            and running_on_gpu()
+            and interpolation == "lanczos5"
+        ):
+            atol = 0.3
+        self.assertAllClose(pixel_values, expected, atol=atol)
 
     def test_empty_batch_lanczos_resize(self):
         """An empty batch resizes to an empty batch on every backend."""

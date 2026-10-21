@@ -13,6 +13,9 @@ from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
 from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import SmolVLM2Tokenizer
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -107,7 +110,12 @@ class SmolVLM2CausalLMTest(TestCase):
             "responses": [" at airport", " at airport"],
             "images": images,
         }
+        # The token embedding receives a gradient on both the multimodal and
+        # the text-only path, so it must move if `fit()` actually trained.
+        embedding = causal_lm.backbone.token_embedding.embeddings
+        old_weight = ops.convert_to_numpy(embedding)
         causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)
+        self.assertNotAllClose(old_weight, ops.convert_to_numpy(embedding))
 
     def test_batched_multimodal_generate(self):
         causal_lm = SmolVLM2CausalLM(**self.init_kwargs)
@@ -239,4 +247,60 @@ class SmolVLM2CausalLMTest(TestCase):
             "prompts": [" airplane", " airport"],
             "responses": [" at airport", " at airport"],
         }
+        # The token embedding receives a gradient on both the multimodal and
+        # the text-only path, so it must move if `fit()` actually trained.
+        embedding = causal_lm.backbone.token_embedding.embeddings
+        old_weight = ops.convert_to_numpy(embedding)
         causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)
+        self.assertNotAllClose(old_weight, ops.convert_to_numpy(embedding))
+
+    def test_video_generate(self):
+        """`generate()` runs through the video path: sampled frames, the
+        per-frame timestamp prompt and the `<image>` slots they expand to."""
+        video_converter = SmolVLM2VideoConverter(
+            max_image_size=32,
+            size=32,
+            num_frames=3,
+            fps=1,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            self.preprocessor.tokenizer,
+            image_converter=self.image_converter,
+            video_converter=video_converter,
+            sequence_length=128,
+            image_seq_len=4,
+        )
+        causal_lm = SmolVLM2CausalLM(
+            preprocessor=preprocessor, backbone=self.backbone
+        )
+        videos = np.random.randint(0, 256, size=(1, 6, 20, 20, 3)).astype(
+            "uint8"
+        )
+        x = {
+            "prompts": ["<video> airport"],
+            "videos": videos,
+            "video_metadata": {"fps": 2.0},
+        }
+
+        preprocessed = preprocessor.generate_preprocess(x)
+        # `num_frames=3` sampled frames, each wrapped in a
+        # `FRAME_TIMESTAMP_MESSAGE` and expanded to `image_seq_len` slots.
+        self.assertEqual(
+            ops.convert_to_numpy(preprocessed["pixel_values"]).shape[0], 3
+        )
+        self.assertEqual(
+            ops.convert_to_numpy(preprocessed["vision_indices"]).shape,
+            (1, 3 * 4),
+        )
+        prompt = preprocessor._get_video_prompt_string(
+            num_frames=3, metadata={"fps": 2.0}, frames_indices=[0, 2, 5]
+        )
+        self.assertEqual(prompt.count("Frame from"), 3)
+        self.assertIn("Frame from 00:02:", prompt)
+
+        outputs = causal_lm.generate(x, max_length=128)
+        self.assertEqual(len(outputs), 1)
+        self.assertIsInstance(outputs[0], str)
+        self.assertIn("airport", outputs[0])

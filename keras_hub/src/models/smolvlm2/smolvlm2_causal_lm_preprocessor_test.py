@@ -323,6 +323,44 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
                 {"prompts": prompts, "images": images}
             )
 
+    def test_generate_preprocess_multiple_images_per_prompt_raises(self):
+        """Several `<image>` placeholders, or several images, per prompt."""
+        preprocessor = self._image_preprocessor()
+        img = np.random.randint(0, 256, size=(20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "one image per prompt"):
+            preprocessor.generate_preprocess(
+                {"prompts": ["<image><image>a"], "images": [[img, img]]}
+            )
+        with self.assertRaisesRegex(ValueError, "one image per prompt"):
+            preprocessor.generate_preprocess(
+                {"prompts": ["<image><image>a"], "images": [img]}
+            )
+
+    def test_generate_preprocess_mixed_text_and_image_batch_raises(self):
+        """A `None` image entry must raise, not crash in the converter."""
+        preprocessor = self._image_preprocessor()
+        img = np.random.randint(0, 256, size=(20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "Mixed text and image"):
+            preprocessor.generate_preprocess(
+                {"prompts": ["a", "<image>b"], "images": [None, img]}
+            )
+
+    def test_generate_preprocess_multiple_video_placeholders_raises(self):
+        """A second `<video>` must raise, not be left as literal text."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=SmolVLM2VideoConverter(
+                max_image_size=32, size=32, num_frames=2, fps=1
+            ),
+            sequence_length=128,
+            image_seq_len=4,
+        )
+        video = np.random.randint(0, 256, size=(4, 20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "one video per prompt"):
+            preprocessor.generate_preprocess(
+                {"prompts": ["<video><video>a"], "videos": [video]}
+            )
+
     def test_generate_preprocess_truncated_image_tokens(self):
         """Too short a sequence must raise instead of misaligning vision."""
         preprocessor = self._image_preprocessor(sequence_length=4)

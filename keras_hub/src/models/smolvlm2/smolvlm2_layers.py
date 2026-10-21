@@ -1,6 +1,5 @@
 import math
 
-import keras
 from keras import activations
 from keras import layers
 from keras import ops
@@ -12,89 +11,32 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
+    Qwen3_5InterleaveEmbeddings,
+)
 
 
-class SmolVLM2InterleaveEmbeddings(keras.layers.Layer):
+class SmolVLM2InterleaveEmbeddings(Qwen3_5InterleaveEmbeddings):
     """Scatter vision token embeddings into the text embedding sequence.
 
-    Given a (batch, seq_len, hidden_dim) text embedding tensor and a flat
-    list of vision token embeddings, this layer replaces positions indicated
-    by `vision_indices` with the corresponding vision embeddings.
-
-    This is the KerasHub equivalent of the HF
-    `inputs_embeds.masked_scatter(image_mask, image_embeds)` pattern, and
-    mirrors `Qwen3_5InterleaveEmbeddings`.
-
-    Args:
-        hidden_dim: int. The embedding dimension (must match both text and
-            vision embeddings after projection).
+    Identical to `Qwen3_5InterleaveEmbeddings` except that the image
+    embeddings are first truncated to the number of `vision_indices`. The
+    SmolVLM2 functional graph always runs the vision encoder, so a text-only
+    batch still reaches this layer with one embedding row per image slot but
+    zero indices; JAX silently drops the surplus rows, while TensorFlow and
+    PyTorch reject the `scatter_update` with a shape mismatch.
     """
 
-    def __init__(self, hidden_dim, **kwargs):
-        super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-
     def call(self, image_embeddings, text_embeddings, vision_indices):
-        """Interleave vision tokens into the text embedding sequence.
-
-        Args:
-            image_embeddings: Tensor with vision token embeddings.
-                Batched: (batch, total_vision_tokens, hidden_dim).
-                Unbatched: (total_vision_tokens, hidden_dim).
-            text_embeddings: Tensor (batch, seq_len, hidden_dim).
-            vision_indices: int32 Tensor with flat indices into the
-                concatenated (batch × seq_len) sequence.
-
-        Returns:
-            Tensor (batch, seq_len, hidden_dim) with vision tokens
-            inserted at the specified positions.
-        """
-        batch_size = ops.shape(text_embeddings)[0]
-        seq_len = ops.shape(text_embeddings)[1]
-
-        # Handle batched image_embeddings from the functional graph.
         if len(ops.shape(image_embeddings)) == 3:
             image_embeddings = ops.reshape(
                 image_embeddings, (-1, self.hidden_dim)
             )
         if len(ops.shape(vision_indices)) == 2:
             vision_indices = ops.reshape(vision_indices, (-1,))
-
-        # Slice image_embeddings to match the number of vision indices.
-        # This handles text-only calls where the vision encoder
-        # produces embeddings but there are 0 vision positions.
         num_indices = ops.shape(vision_indices)[0]
         image_embeddings = image_embeddings[:num_indices]
-
-        image_embeddings = ops.cast(image_embeddings, text_embeddings.dtype)
-
-        # Flatten text to (batch * seq_len, hidden_dim).
-        flat_text = ops.reshape(text_embeddings, (-1, self.hidden_dim))
-
-        # Reshape indices for scatter_update.
-        vision_indices = ops.cast(vision_indices, "int32")
-        vision_indices = ops.expand_dims(vision_indices, axis=-1)
-
-        # Scatter vision embeddings into the flat text tensor.
-        flat_out = ops.scatter_update(
-            flat_text, vision_indices, image_embeddings
-        )
-
-        return ops.reshape(flat_out, (batch_size, seq_len, self.hidden_dim))
-
-    def compute_output_spec(
-        self, image_embeddings, text_embeddings, vision_indices
-    ):
-        """Return output shape spec for functional model tracing."""
-        return keras.KerasTensor(
-            shape=text_embeddings.shape,
-            dtype=text_embeddings.dtype,
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"hidden_dim": self.hidden_dim})
-        return config
+        return super().call(image_embeddings, text_embeddings, vision_indices)
 
 
 class SmolVLM2Attention(layers.Layer):
