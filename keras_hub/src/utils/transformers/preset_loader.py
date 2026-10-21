@@ -10,6 +10,7 @@ from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_blip2
+from keras_hub.src.utils.transformers import convert_deberta_v3
 from keras_hub.src.utils.transformers import convert_deit
 from keras_hub.src.utils.transformers import convert_diffusion_gemma
 from keras_hub.src.utils.transformers import convert_dinov2
@@ -59,6 +60,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_bert
         elif model_type == "blip-2":
             self.converter = convert_blip2
+        elif model_type == "deberta-v2":
+            self.converter = convert_deberta_v3
         elif model_type == "deit":
             self.converter = convert_deit
         elif model_type == "distilbert":
