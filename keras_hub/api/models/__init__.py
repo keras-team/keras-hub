@@ -289,6 +289,18 @@ from keras_hub.src.models.electra.electra_backbone import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
+    EmbeddingGemma2Backbone as EmbeddingGemma2Backbone,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder import (
+    EmbeddingGemma2TextEmbedder as EmbeddingGemma2TextEmbedder,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (
+    EmbeddingGemma2TextEmbedderPreprocessor as EmbeddingGemma2TextEmbedderPreprocessor,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer as EmbeddingGemma2Tokenizer,
+)
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESM2Backbone
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESMBackbone
 from keras_hub.src.models.esm.esm_classifier import (
