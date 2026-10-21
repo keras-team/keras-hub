@@ -173,6 +173,66 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             expected_output_shape=(2, 20, self.tokenizer.vocabulary_size()),
         )
 
+    def test_final_logit_soft_cap_applied_once(self):
+        cap = 2.0
+        backbone_kwargs = copy.deepcopy(self.text_backbone.get_config())
+        backbone_kwargs["final_logit_soft_cap"] = cap
+        backbone = Gemma4Backbone.from_config(backbone_kwargs)
+        # Official presets store the cap in both `config.json` and
+        # `task.json`. It must still only be applied once.
+        causal_lm = Gemma4CausalLM(
+            preprocessor=None, backbone=backbone, final_logit_cap=cap
+        )
+        self.assertNotIn("final_logit_cap", causal_lm.get_config())
+
+        embeddings = ops.convert_to_numpy(backbone.token_embedding.embeddings)
+
+        def capped_once(hidden_states):
+            raw = ops.convert_to_numpy(hidden_states) @ embeddings.T
+            once = cap * np.tanh(raw / cap)
+            twice = cap * np.tanh(np.tanh(raw / cap))
+            # Make sure raw logits are large enough to tell the two apart.
+            self.assertGreater(np.max(np.abs(once - twice)), 0.1)
+            return once
+
+        # Functional model, used by `fit()`, `predict()` and `evaluate()`.
+        input_data = self.text_input_data
+        logits = causal_lm(input_data)
+        self.assertAllClose(
+            logits, capped_once(backbone(input_data)), atol=1e-5, rtol=1e-5
+        )
+
+        # Cached forward pass, used by `generate()`.
+        token_ids = input_data["token_ids"]
+        batch_size, max_length = ops.shape(token_ids)
+        cache = ops.zeros(
+            (
+                batch_size,
+                backbone.num_layers,
+                2,
+                max_length,
+                backbone.num_key_value_heads,
+                backbone.head_dim,
+            )
+        )
+        logits, hidden_states, _ = causal_lm.call_with_cache(
+            token_ids=token_ids,
+            cache=cache,
+            cache_update_index=0,
+            padding_mask=input_data["padding_mask"],
+        )
+        self.assertAllClose(
+            logits, capped_once(hidden_states), atol=1e-5, rtol=1e-5
+        )
+
+    def test_final_logit_cap_mismatch_raises(self):
+        with self.assertRaisesRegex(ValueError, "final_logit_soft_cap"):
+            Gemma4CausalLM(
+                preprocessor=None,
+                backbone=self.text_backbone,
+                final_logit_cap=30.0,
+            )
+
     def test_text_flash_attention_call(self):
         if (
             keras.config.backend() != "jax"

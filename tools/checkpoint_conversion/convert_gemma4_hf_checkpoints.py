@@ -1296,7 +1296,6 @@ def _verify_model(
     raw_video,
     is_audio_model,
     is_video_model,
-    final_logit_cap,
 ):
     """Run all four verification stages and return the assembled
     Gemma4CausalLM."""
@@ -1458,11 +1457,12 @@ def _verify_model(
         preprocessor.packer.sequence_length = saved_packer_seq_len
 
     # ── 4. Generation comparison (all modalities) ─────────────────────────────
+    # The final logit soft-cap is applied by the backbone, so it is not passed
+    # to the task again.
     gemma4_lm = keras_hub.models.Gemma4CausalLM(
         backbone=backbone,
         preprocessor=preprocessor,
         sampler="greedy",
-        final_logit_cap=final_logit_cap,
     )
 
     if FLAGS.skip_generate:
@@ -1519,7 +1519,6 @@ def _save_preset(
     keras_hub_preset,
     preset,
     save_dtype,
-    final_logit_cap,
 ):
     """Save the model to a local preset directory in the requested dtype."""
     preset_save_path = f"./{preset}"
@@ -1550,7 +1549,6 @@ def _save_preset(
                 backbone=backbone_bf16,
                 preprocessor=preprocessor_ref,
                 sampler="greedy",
-                final_logit_cap=final_logit_cap,
             )
             kh_save.save_to_preset(preset_save_path)
     else:
@@ -1585,7 +1583,7 @@ def main(_):
         processor,
         is_audio_model,
         is_video_model,
-        final_logit_cap,
+        _final_logit_cap,  # set on the backbone by convert_backbone_config
         hf_target_model,
         _target_hidden_size,  # consumed by from_preset via convert_task_config
     ) = _load_hf_model(hf_preset)
@@ -1634,7 +1632,6 @@ def main(_):
             f"hf://{hf_preset}",
             preset,
             FLAGS.save_dtype,
-            final_logit_cap,
         )
         return
 
@@ -1672,7 +1669,6 @@ def main(_):
         raw_video,
         is_audio_model,
         is_video_model,
-        final_logit_cap,
     )
 
     # Free all float32 model references before _save_preset loads bfloat16.
@@ -1680,9 +1676,7 @@ def main(_):
     del backbone, tokenizer, preprocessor
     gc.collect()
 
-    _save_preset(
-        gemma4_lm, keras_hub_preset, preset, FLAGS.save_dtype, final_logit_cap
-    )
+    _save_preset(gemma4_lm, keras_hub_preset, preset, FLAGS.save_dtype)
 
 
 if __name__ == "__main__":
