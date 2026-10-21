@@ -45,11 +45,6 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
-        final_logit_cap: Deprecated. `None` or float. The final logit soft-cap
-            is applied by the backbone's `token_embedding`, configured through
-            `Gemma4Backbone(final_logit_soft_cap=...)`. This argument is
-            accepted only so that existing presets keep loading, and must be
-            `None` or equal to `backbone.final_logit_soft_cap`.
 
     Examples:
 
@@ -106,24 +101,21 @@ class Gemma4CausalLM(CausalLM):
         self,
         preprocessor,
         backbone,
-        final_logit_cap=None,
         **kwargs,
     ):
-        # `backbone.token_embedding(..., reverse=True)` already applies
-        # `final_logit_soft_cap`, so a task-level cap would apply it twice.
-        # Older presets still store `final_logit_cap` in `task.json`, always
-        # equal to the backbone cap, so it is accepted and ignored.
-        if (
-            final_logit_cap is not None
-            and final_logit_cap != backbone.final_logit_soft_cap
-        ):
+        # TODO: Delete this block after resaving the Kaggle presets. Older
+        # `task.json` files store `final_logit_cap`, always equal to the
+        # backbone cap. `backbone.token_embedding(..., reverse=True)` already
+        # applies it, so applying it here too would cap the logits twice.
+        final_logit_cap = kwargs.pop("final_logit_cap", None)
+        backbone_cap = backbone.final_logit_soft_cap
+        if final_logit_cap is not None and final_logit_cap != backbone_cap:
             raise ValueError(
-                "`final_logit_cap` is deprecated. The final logit soft-cap "
-                "is applied by the backbone; set it with "
+                "`final_logit_cap` is no longer supported. The final logit "
+                "soft-cap is applied by the backbone; set it with "
                 "`Gemma4Backbone(final_logit_soft_cap=...)` instead. "
                 f"Received: final_logit_cap={final_logit_cap}, "
-                "backbone.final_logit_soft_cap="
-                f"{backbone.final_logit_soft_cap}."
+                f"backbone.final_logit_soft_cap={backbone_cap}."
             )
 
         # === Layers ===
