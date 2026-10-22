@@ -1,6 +1,7 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -203,6 +204,35 @@ class Mistral3Tokenizer(BytePairTokenizer):
         if unbatched:
             tokens = tokens[0]
         return tokens
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        self._maybe_initialized_tokenizers()
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+
+        def _decode(flat_values, row_splits):
+            flat_values = flat_values.numpy().tolist()
+            row_splits = row_splits.numpy().tolist()
+            token_ids = [
+                flat_values[start:end]
+                for start, end in zip(row_splits[:-1], row_splits[1:])
+            ]
+            return tf.constant(
+                self._tokenizer.decode_batch(
+                    token_ids, skip_special_tokens=False
+                ),
+                dtype="string",
+            )
+
+        outputs = tf.py_function(
+            _decode,
+            [inputs.flat_values, inputs.row_splits],
+            Tout=tf.string,
+        )
+        outputs.set_shape([None])
+        if unbatched:
+            outputs = outputs[0]
+        return outputs
 
     def get_config(self):
         config = super().get_config()

@@ -58,7 +58,7 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "rope_max_wavelength": rope_theta,
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "sliding_window": transformers_config.get("sliding_window"),
+        "sliding_window": transformers_config["sliding_window"],
         "head_dim": transformers_config.get("head_dim"),
     }
     # `original_max_position_embeddings` supports YaRN correction and Llama4

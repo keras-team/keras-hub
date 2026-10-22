@@ -26,6 +26,7 @@ from PIL import Image  # noqa: E402
 from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 from transformers import Mistral3ForConditionalGeneration  # noqa: E402
+from transformers import PixtralImageProcessor  # noqa: E402
 
 import keras_hub  # noqa: E402
 
@@ -70,6 +71,10 @@ PRESET_MAP = {
 }
 
 MAX_NEW_TOKENS = 64
+
+# Fraction of logits that may exceed the 1e-3 tolerance. Float32 noise in a
+# deep model leaves a few outliers. A systematic error moves far more logits.
+MAX_OUTLIER_FRACTION = 1e-6
 
 TEXT_PROMPT = "What is Keras?"
 
@@ -215,6 +220,35 @@ def build_multimodal_inputs(hf_preset, hf_config, image):
         padding_mask = np.ones_like(token_ids)
         pixel_values = tokenized.images[0][None, ...].astype("float32")
         image_sizes = np.array([pixel_values.shape[-2:]], dtype="int32")
+        # `mistral_common` resizes differently from HF. Take the pixels from
+        # HF's `PixtralImageProcessor` instead. A checkpoint with no processor
+        # config gets one built from the converter's defaults. Keep the
+        # `mistral_common` pixels if the image size differs, because the
+        # token ids depend on that size.
+        patch = hf_config.vision_config.patch_size
+        patch *= hf_config.spatial_merge_size
+        try:
+            image_processor = AutoProcessor.from_pretrained(
+                hf_preset
+            ).image_processor
+        except (OSError, ValueError):
+            from mistral_common.tokens.tokenizers.image import DATASET_MEAN
+            from mistral_common.tokens.tokenizers.image import DATASET_STD
+
+            image_processor = PixtralImageProcessor(
+                image_mean=list(DATASET_MEAN),
+                image_std=list(DATASET_STD),
+                rescale_factor=1 / 255,
+                size={"longest_edge": hf_config.vision_config.image_size},
+            )
+        hf_image_inputs = image_processor(
+            images=image,
+            patch_size={"height": patch, "width": patch},
+            return_tensors="np",
+        )
+        hf_image_sizes = np.array(hf_image_inputs["image_sizes"], dtype="int32")
+        if np.array_equal(hf_image_sizes, image_sizes):
+            pixel_values = hf_image_inputs["pixel_values"].astype("float32")
         prompt = f"[INST][IMG]{IMAGE_PROMPT}[/INST]"
         tokenizer = mistral_tokenizer.instruct_tokenizer.tokenizer
 
@@ -308,23 +342,20 @@ def test_numerics(label, keras_logits, hf_logits):
     mean_diff = float(np.mean(abs_diff))
     print(f"KerasHub logits [{label}]:", keras_logits[0, 0, :5])
     print(f"HF logits [{label}]:      ", hf_logits[0, 0, :5])
-    try:
-        np.testing.assert_allclose(
-            keras_logits, hf_logits, atol=1e-3, rtol=1e-3
-        )
-        print(
-            f"✓ [{label}] Logits within 1e-3 tolerance "
-            f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
-        )
-    except AssertionError:
-        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
-        mismatched = int(np.sum(abs_diff > tol))
-        total = hf_logits.size
-        matched_pct = 100 * (1.0 - mismatched / total)
-        print(
-            f"✗ [{label}] Logits exceed 1e-3 tolerance — "
-            f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
-            f"matching={matched_pct:.2f}% ({total - mismatched}/{total}).\n"
+    tol = 1e-3 + 1e-3 * np.abs(hf_logits)
+    mismatched = int(np.sum(abs_diff > tol))
+    total = hf_logits.size
+    summary = (
+        f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
+        f"outliers={mismatched}/{total}"
+    )
+    if mismatched / total <= MAX_OUTLIER_FRACTION:
+        print(f"✓ [{label}] Logits within 1e-3 tolerance ({summary}).")
+    else:
+        print(f"✗ [{label}] Logits exceed 1e-3 tolerance — {summary}.\n")
+        raise AssertionError(
+            f"[{label}] {mismatched / total:.2e} of the logits exceed the "
+            f"1e-3 tolerance. The limit is {MAX_OUTLIER_FRACTION:.0e}."
         )
 
 
@@ -397,28 +428,23 @@ def validate_output(keras_model, hf_results, skip_generate=False):
     # declares as graph inputs. The HF token ids have no end token.
     add_end_token = preprocessor.add_end_token
     preprocessor.add_end_token = False
-    backbone_inputs, _, _ = preprocessor(
+    text_inputs, _, _ = preprocessor(
         {"prompts": [TEXT_PROMPT]},
         sequence_length=text_results["token_ids"].shape[1],
     )
+    image_inputs, _, _ = preprocessor(
+        {
+            "prompts": [image_results["prompt"]],
+            "images": [[image_results["image"]]],
+        },
+        sequence_length=image_results["token_ids"].shape[1],
+    )
     preprocessor.add_end_token = add_end_token
-    keras_logits = run_kh_forward(backbone, backbone_inputs)
-    print("\n--- Numerics Comparison ---")
-    test_numerics("text", keras_logits, text_results["logits"])
 
-    # Feed HF's preprocessed `pixel_values` directly, rather than re-running
-    # the Keras preprocessor, to avoid PIL vs `ops.image.resize` divergence.
-    backbone_inputs = {
-        key: image_results[key]
-        for key in (
-            "token_ids",
-            "padding_mask",
-            "pixel_values",
-            "image_sizes",
-            "placeholder_indices",
-        )
-    }
-    keras_logits = run_kh_forward(backbone, backbone_inputs)
+    print("\n--- Numerics Comparison ---")
+    keras_logits = run_kh_forward(backbone, text_inputs)
+    test_numerics("text", keras_logits, text_results["logits"])
+    keras_logits = run_kh_forward(backbone, image_inputs)
     test_numerics("image", keras_logits, image_results["logits"])
 
     if not skip_generate:

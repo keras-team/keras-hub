@@ -226,6 +226,7 @@ class TestTask(TestCase):
                 "intermediate_size": 24,
                 "num_hidden_layers": 2,
                 "num_attention_heads": 4,
+                "head_dim": 4,
                 "num_channels": 3,
                 "image_size": 32,
                 "patch_size": 8,
@@ -282,6 +283,7 @@ class TestTask(TestCase):
                 "intermediate_size": 24,
                 "num_hidden_layers": 2,
                 "num_attention_heads": 4,
+                "head_dim": 4,
                 "num_channels": 3,
                 "image_size": 32,
                 "patch_size": 8,
@@ -323,10 +325,9 @@ class TestTask(TestCase):
             config = convert_mistral3.load_image_converter_config(
                 dir_path, transformers_config
             )
-        expected_offset = [-m / s for m, s in zip(DATASET_MEAN, DATASET_STD)]
-        expected_scale = [(1 / 255) / s for s in DATASET_STD]
-        self.assertAllClose(config["offset"], expected_offset)
-        self.assertAllClose(config["scale"], expected_scale)
+        self.assertAllClose(config["image_mean"], DATASET_MEAN)
+        self.assertAllClose(config["image_std"], DATASET_STD)
+        self.assertAllClose(config["rescale_factor"], 1 / 255)
         self.assertEqual(config["patch_size"], 14)
         self.assertEqual(config["longest_edge"], 1540)
         self.assertEqual(config["spatial_merge_size"], 2)
@@ -359,7 +360,9 @@ class TestTask(TestCase):
             config = convert_mistral3.load_image_converter_config(
                 dir_path, transformers_config
             )
-        self.assertAllClose(config["offset"], [-1.0, -1.0, -1.0])
+        self.assertAllClose(config["image_mean"], [0.5, 0.5, 0.5])
+        self.assertAllClose(config["image_std"], [0.5, 0.5, 0.5])
+        self.assertAllClose(config["rescale_factor"], 1 / 255)
         self.assertEqual(config["patch_size"], 14)
         self.assertEqual(config["longest_edge"], 1540)
         self.assertEqual(config["spatial_merge_size"], 2)

@@ -1,5 +1,6 @@
 import keras
 import numpy as np
+from keras import ops
 
 from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
     Mistral3ImageFeatureExtractor,
@@ -124,18 +125,22 @@ class Mistral3VisionEncoderTest(TestCase):
 
     # === MLP ===
 
-    def test_mlp_output_shape(self):
-        mlp = Mistral3VisionMLP(
-            hidden_dim=self.hidden_dim,
-            intermediate_dim=self.intermediate_dim,
-        )
-        inputs = np.random.rand(
-            self.batch_size, self.sequence_length, self.hidden_dim
-        )
-        output = mlp(inputs)
-        self.assertEqual(
-            output.shape,
-            (self.batch_size, self.sequence_length, self.hidden_dim),
+    def test_mlp_basics(self):
+        self.run_layer_test(
+            cls=Mistral3VisionMLP,
+            init_kwargs={
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+            },
+            input_data=np.random.rand(
+                self.batch_size, self.sequence_length, self.hidden_dim
+            ).astype("float32"),
+            expected_output_shape=(
+                self.batch_size,
+                self.sequence_length,
+                self.hidden_dim,
+            ),
+            expected_num_trainable_weights=3,
         )
 
     # === Encoder layer ===
@@ -153,6 +158,68 @@ class Mistral3VisionEncoderTest(TestCase):
             output.shape,
             (self.batch_size, self.sequence_length, self.hidden_dim),
         )
+
+    def _zero_weights(self, layer):
+        layer.set_weights([np.zeros_like(w) for w in layer.get_weights()])
+
+    def test_encoder_layer_mlp_residual_adds(self):
+        # Zero the attention output projection. The layer must then return
+        # `x + feed_forward(ffn_norm(x))`.
+        inputs = (
+            np.random.RandomState(0)
+            .rand(2, self.sequence_length, self.hidden_dim)
+            .astype("float32")
+        )
+        position_ids = np.zeros((2, self.sequence_length), dtype="int32")
+        position_embeddings = self.rope(position_ids)
+        self.encoder_layer(inputs, position_embeddings=position_embeddings)
+        self._zero_weights(self.encoder_layer.attention.o_proj)
+        output = self.encoder_layer(
+            inputs, position_embeddings=position_embeddings
+        )
+        mlp_output = self.encoder_layer.feed_forward(
+            self.encoder_layer.ffn_norm(inputs)
+        )
+        self.assertAllClose(output, ops.convert_to_tensor(inputs) + mlp_output)
+
+    def test_encoder_layer_attention_residual_adds(self):
+        # Zero the MLP output projection. The layer must then return
+        # `x + attention(attention_norm(x))`.
+        inputs = (
+            np.random.RandomState(1)
+            .rand(2, self.sequence_length, self.hidden_dim)
+            .astype("float32")
+        )
+        position_ids = np.zeros((2, self.sequence_length), dtype="int32")
+        position_embeddings = self.rope(position_ids)
+        self.encoder_layer(inputs, position_embeddings=position_embeddings)
+        self._zero_weights(self.encoder_layer.feed_forward.down_proj)
+        output = self.encoder_layer(
+            inputs, position_embeddings=position_embeddings
+        )
+        attention_output = self.encoder_layer.attention(
+            self.encoder_layer.attention_norm(inputs),
+            position_embeddings=position_embeddings,
+        )
+        self.assertAllClose(
+            output, ops.convert_to_tensor(inputs) + attention_output
+        )
+
+    def test_mlp_matches_gated_formula(self):
+        mlp = Mistral3VisionMLP(
+            hidden_dim=self.hidden_dim,
+            intermediate_dim=self.intermediate_dim,
+        )
+        inputs = (
+            np.random.RandomState(2)
+            .rand(2, self.sequence_length, self.hidden_dim)
+            .astype("float32")
+        )
+        mlp(inputs)
+        gate = mlp.gate_proj(inputs)
+        up = mlp.up_proj(inputs)
+        expected = mlp.down_proj(keras.activations.silu(gate) * up)
+        self.assertAllClose(mlp(inputs), expected)
 
     def test_encoder_layer_serialization(self):
         self.run_serialization_test(self.encoder_layer)
@@ -356,3 +423,36 @@ class Mistral3VisionEncoderTest(TestCase):
             token_ids, image_token_index=10
         )
         self.assertAllEqual(indices, np.array([[-1]]))
+
+    def test_image_text_embedding_merger_zero_images_with_dynamic_shapes(self):
+        if keras.config.backend() != "tensorflow":
+            self.skipTest("Uses `tf.function` with unknown dimensions.")
+        import tensorflow as tf
+
+        @tf.function(
+            input_signature=[
+                tf.TensorSpec([None, 5, 3], tf.float32),
+                tf.TensorSpec([None, 3], tf.float32),
+                tf.TensorSpec([None, None], tf.int32),
+            ]
+        )
+        def merge(token_embeddings, image_features, placeholder_indices):
+            return self.embedding_merger(
+                token_embeddings, image_features, placeholder_indices
+            )
+
+        token_embeddings = np.ones((2, 5, 3), dtype="float32")
+        output = merge(
+            token_embeddings,
+            np.zeros((0, 3), dtype="float32"),
+            np.full((2, 1), -1, dtype="int32"),
+        )
+        self.assertAllClose(output, token_embeddings)
+
+    def test_image_text_embedding_merger_output_spec(self):
+        spec = self.embedding_merger.compute_output_spec(
+            keras.KerasTensor((2, 5, 3)),
+            keras.KerasTensor((4, 3)),
+            keras.KerasTensor((2, 2), dtype="int32"),
+        )
+        self.assertEqual(tuple(spec.shape), (2, 5, 3))

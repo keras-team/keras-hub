@@ -250,7 +250,10 @@ class RotaryEmbedding(keras.layers.Layer):
             "float32",
         )
         freq_range = idx / denom
-        inv = ops.power(ops.cast(self.max_wavelength, "float32"), -freq_range)
+        # Divide by the power, as HF does. `power(base, -x)` rounds
+        # differently in `float32`.
+        base = ops.cast(self.max_wavelength, "float32")
+        inv = 1.0 / ops.power(base, freq_range)
 
         if self.rope_type == "linear":
             return inv / ops.cast(self.scaling_factor, "float32")

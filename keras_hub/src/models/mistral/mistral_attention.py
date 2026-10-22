@@ -240,6 +240,8 @@ class CachedMistralAttention(keras.layers.Layer):
         query = self.rotary_embedding_layer(
             self._query_dense(hidden_states), positions=positions
         )
+        if self._llama_4_scaling_beta is not None:
+            query = self._apply_llama_4_scaling(query, positions=positions)
         key = self.rotary_embedding_layer(
             self._key_dense(hidden_states), positions=positions
         )
@@ -258,23 +260,34 @@ class CachedMistralAttention(keras.layers.Layer):
             return attention_output, cache
         return attention_output
 
-    def _apply_llama_4_scaling(self, query, start_index=0):
+    def _apply_llama_4_scaling(self, query, start_index=0, positions=None):
         """Scale query magnitude by absolute position.
 
         Matches HF's Llama4-style `attn_temperature_tuning`: `query *= 1 +
         llama_4_scaling_beta * log(1 + floor(pos /
         original_max_position_embeddings))`.
+
+        Args:
+            query: Tensor of shape `(batch, seq_len, heads, head_dim)`.
+            start_index: int or int Tensor. The position of the first token.
+                The method ignores it when `positions` is set.
+            positions: Optional int Tensor of shape `(batch, seq_len)`. The
+                absolute position of each token. If `None`, the positions
+                are `start_index + arange(seq_len)` for every batch row.
         """
-        seq_len = ops.shape(query)[1]
-        positions = ops.arange(seq_len, dtype="float32") + ops.cast(
-            start_index, "float32"
-        )
+        if positions is None:
+            seq_len = ops.shape(query)[1]
+            positions = ops.arange(seq_len, dtype="float32") + ops.cast(
+                start_index, "float32"
+            )
+            positions = ops.reshape(positions, (1, -1))
+        positions = ops.cast(positions, "float32")
         floor_scale = ops.cast(
             self._original_max_position_embeddings, "float32"
         )
         attn_scales = ops.log(ops.floor(positions / floor_scale) + 1.0)
         attn_scales = attn_scales * self._llama_4_scaling_beta + 1.0
-        attn_scales = ops.reshape(attn_scales, (1, -1, 1, 1))
+        attn_scales = ops.expand_dims(ops.expand_dims(attn_scales, -1), -1)
         return ops.multiply(query, ops.cast(attn_scales, query.dtype))
 
     def _masked_softmax(self, attention_scores, attention_mask=None):

@@ -222,3 +222,20 @@ class Mistral3CausalLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=input_data,
             )
+
+    def test_call_mixed_batch_pads_text_only_row(self):
+        preprocessor = Mistral3CausalLMPreprocessor(**self.init_kwargs)
+        image = np.zeros((8, 8, 3), dtype="float32")
+        x, _, _ = preprocessor(
+            {"prompts": ["the [IMG] quick", "the tin"], "images": [image]}
+        )
+        placeholder_indices = ops.convert_to_numpy(x["placeholder_indices"])
+        token_ids = ops.convert_to_numpy(x["token_ids"])
+        expected_indices = np.nonzero(
+            token_ids[0] == preprocessor.tokenizer.image_placeholder_token_id
+        )[0]
+        self.assertEqual(len(expected_indices), 4)
+        self.assertEqual(placeholder_indices.shape, (2, 4))
+        self.assertAllEqual(placeholder_indices[0], expected_indices)
+        self.assertAllEqual(placeholder_indices[1], [-1, -1, -1, -1])
+        self.assertAllEqual(x["image_sizes"], [[8, 8]])

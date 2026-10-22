@@ -209,6 +209,26 @@ class Mistral3BackboneTest(TestCase, parameterized.TestCase):
         with self.assertRaisesRegex(ValueError, "multimodal_projector"):
             Mistral3Backbone(**init_kwargs)
 
+    def test_tie_word_embeddings(self):
+        init_kwargs = {**self.text_init_kwargs, "tie_word_embeddings": True}
+        input_data = {
+            "token_ids": ops.ones((2, 5), dtype="int32"),
+            "padding_mask": ops.ones((2, 5), dtype="int32"),
+        }
+        self.run_backbone_test(
+            cls=Mistral3Backbone,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            expected_output_shape=(2, 5, 16),
+        )
+        backbone = Mistral3Backbone(**init_kwargs)
+        self.assertTrue(backbone.token_embedding.tie_weights)
+        # The tied head adds no separate output kernel.
+        untied = Mistral3Backbone(**self.text_init_kwargs)
+        self.assertEqual(
+            untied.count_params() - backbone.count_params(), 10 * 16
+        )
+
     def test_num_parameters(self):
         model = Mistral3Backbone(**self.init_kwargs)
         self.assertEqual(model.count_params(), 4016)

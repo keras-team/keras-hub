@@ -5,6 +5,7 @@ from keras_hub.src.models.mistral3.mistral3_tokenizer import (
 )
 from keras_hub.src.models.mistral3.mistral3_tokenizer import Mistral3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def _bytes_to_unicode():
@@ -85,3 +86,23 @@ class Mistral3TokenizerTest(TestCase):
                 preset=preset,
                 input_data=["The quick brown fox jumped."],
             )
+
+    def test_detokenize(self):
+        tokenizer = Mistral3Tokenizer(**self.init_kwargs)
+        token_ids = tokenizer(["the tin", "in the"])
+        self.assertAllEqual(
+            tokenizer.detokenize(token_ids), ["the tin", "in the"]
+        )
+
+    def test_detokenize_in_tf_data(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        tokenizer = Mistral3Tokenizer(**self.init_kwargs)
+        dataset = (
+            tf.data.Dataset.from_tensor_slices(["the tin", "in the"])
+            .batch(2)
+            .map(tokenizer)
+            .map(tokenizer.detokenize)
+        )
+        outputs = [x.decode("utf-8") for x in next(iter(dataset)).numpy()]
+        self.assertEqual(outputs, ["the tin", "in the"])

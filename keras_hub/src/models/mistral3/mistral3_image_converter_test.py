@@ -69,8 +69,7 @@ class Mistral3ImageConverterTest(TestCase):
         self.assertAllClose(
             pixel_values[0, :, 8:, :], np.zeros((3, 4, 8), dtype="float32")
         )
-        # CLIP normalization: x * scale + offset, scale = 1/255/std,
-        # offset = -mean/std.
+        # CLIP normalization: (x / 255 - mean) / std.
         mean = np.array([0.48145466, 0.4578275, 0.40821073], dtype="float32")
         std = np.array([0.26862954, 0.26130258, 0.27577711], dtype="float32")
         expected_pixel = (255.0 / 255.0 - mean) / std
@@ -153,3 +152,57 @@ class Mistral3ImageConverterTest(TestCase):
                 tf.constant(height), tf.constant(width), 16, 4
             )
             self.assertEqual(tuple(int(v) for v in actual), expected)
+
+    def test_resize_keeps_constant_image(self):
+        # The integer weights of each output pixel sum to one.
+        image = np.full((9, 13, 3), 200.0, dtype="float32")
+        pixel_values, _ = self.converter(image)
+        mean = np.array([0.48145466, 0.4578275, 0.40821073], dtype="float32")
+        std = np.array([0.26862954, 0.26130258, 0.27577711], dtype="float32")
+        expected = (200.0 / 255.0 - mean) / std
+        pixel_values = np.array(pixel_values)
+        for channel in range(3):
+            self.assertAllClose(
+                pixel_values[channel], np.full((12, 16), expected[channel])
+            )
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_path_matches_python_path(self):
+        image = np.random.default_rng(0).integers(0, 256, (9, 13, 3))
+        image = image.astype("float32")
+        expected, _ = self.converter(image)
+        actual, _ = self.converter._call_tf(tf.constant(image))
+        self.assertAllClose(actual, expected, atol=0, rtol=0)
+
+    def test_get_config_round_trip(self):
+        converter = Mistral3ImageConverter(
+            **self.init_kwargs,
+            image_mean=[0.5, 0.4, 0.3],
+            image_std=[0.25, 0.2, 0.15],
+            rescale_factor=1 / 255,
+        )
+        restored = Mistral3ImageConverter.from_config(converter.get_config())
+        self.assertEqual(restored.image_mean, [0.5, 0.4, 0.3])
+        self.assertEqual(restored.image_std, [0.25, 0.2, 0.15])
+        self.assertEqual(restored.rescale_factor, 1 / 255)
+
+    def test_get_config_describes_resize(self):
+        config = self.converter.get_config()
+        self.assertFalse(config["crop_to_aspect_ratio"])
+        self.assertEqual(config["interpolation"], "bicubic")
+        self.assertTrue(config["antialias"])
+        # An older config with the base defaults loads and is corrected.
+        old_config = {
+            **config,
+            "crop_to_aspect_ratio": True,
+            "interpolation": "bilinear",
+            "antialias": False,
+        }
+        restored = Mistral3ImageConverter.from_config(old_config)
+        self.assertEqual(restored.get_config()["interpolation"], "bicubic")
+
+    def test_scale_and_offset_without_mean_raises(self):
+        with self.assertRaisesRegex(ValueError, "image_mean"):
+            Mistral3ImageConverter(
+                **self.init_kwargs, scale=[0.1] * 3, offset=[0.0] * 3
+            )

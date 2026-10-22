@@ -86,6 +86,8 @@ class Mistral3Backbone(Backbone):
             Set explicitly when the model's head size is not equal to
             `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
+        dropout: float, optional. The dropout probability for the attention
+            layers. Defaults to `0`.
         image_token_index: int, optional. The token ID in `token_ids` that
             marks image placeholder positions. Defaults to `10`.
         tie_word_embeddings: bool, optional. Whether to tie the input token

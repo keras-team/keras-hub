@@ -31,10 +31,125 @@ class Mistral3CausalLM(MistralCausalLM):
         preprocessor: A `keras_hub.models.Mistral3CausalLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
+
+    Examples:
+
+    Generate text from a text prompt.
+    ```python
+    causal_lm = keras_hub.models.Mistral3CausalLM.from_preset(
+        "mistral_small_3.2_24b_instruct_2506_en"
+    )
+    causal_lm.generate("What is Keras?", max_length=64)
+    ```
+
+    Generate text from a prompt and an image. The prompt has one `[IMG]`
+    marker for each image. `images` holds one list of images for each prompt.
+    ```python
+    causal_lm.generate(
+        {
+            "prompts": "[INST][IMG]Describe this image.[/INST]",
+            "images": [[image]],
+        },
+        max_length=128,
+    )
+    ```
     """
 
     backbone_cls = Mistral3Backbone
     preprocessor_cls = Mistral3CausalLMPreprocessor
+
+    def score(
+        self,
+        token_ids,
+        padding_mask=None,
+        scoring_mode="logits",
+        layer_intercept_fn=None,
+        target_ids=None,
+        pixel_values=None,
+        image_sizes=None,
+        placeholder_indices=None,
+    ):
+        """Score a generation, optionally grounded in input images.
+
+        This method works like `MistralCausalLM.score()`. It adds three
+        arguments for image input. The image features replace the token
+        embeddings at the image placeholder positions. The
+        `layer_intercept_fn` with index `-1` receives the embeddings after
+        this replacement.
+
+        Args:
+            token_ids: A <int>[batch_size, num_tokens] tensor of tokens to
+                score. The tokens include the `[IMG]` placeholder tokens.
+            padding_mask: A <bool>[batch_size, num_tokens] tensor. If
+                omitted, the model scores every token.
+            scoring_mode: str. Either `"logits"` or `"loss"`. Both modes
+                return one score for each input token.
+            layer_intercept_fn: An optional function that receives the
+                activations and the layer index. It returns the
+                activations for the next layer.
+            target_ids: A <int>[batch_size, num_tokens] tensor of the target
+                tokens. Required when `scoring_mode` is `"loss"`.
+            pixel_values: An optional float tensor of the padded images.
+                Use the `"pixel_values"` output of the preprocessor.
+            image_sizes: An optional int tensor with the `(height, width)`
+                of each image. Required when `pixel_values` is set.
+            placeholder_indices: An optional int tensor with the position of
+                each `[IMG]` placeholder in each row, padded with `-1`.
+                Required when `pixel_values` is set.
+
+        Returns:
+            The per-token scores. The shape is
+            <float>[batch_size, num_tokens, vocab_size] in `"logits"` mode
+            and <float>[batch_size, num_tokens] in `"loss"` mode.
+
+        Examples:
+
+        Score a prompt with an image.
+        ```python
+        inputs, _, _ = causal_lm.preprocessor(
+            {"prompts": ["[INST][IMG]Describe.[/INST]"], "images": [[image]]}
+        )
+        logits = causal_lm.score(
+            token_ids=inputs["token_ids"],
+            padding_mask=inputs["padding_mask"],
+            pixel_values=inputs["pixel_values"],
+            image_sizes=inputs["image_sizes"],
+            placeholder_indices=inputs["placeholder_indices"],
+        )
+        ```
+        """
+        if pixel_values is not None:
+            if image_sizes is None or placeholder_indices is None:
+                raise ValueError(
+                    "`image_sizes` and `placeholder_indices` are required "
+                    "when `pixel_values` is set."
+                )
+            if not hasattr(self.backbone, "image_feature_extractor"):
+                raise ValueError(
+                    "`pixel_values` needs a backbone with a vision encoder. "
+                    "This backbone is text only."
+                )
+            img_embeddings = self.backbone.image_feature_extractor(
+                pixel_values, image_sizes
+            )
+            user_intercept_fn = layer_intercept_fn
+
+            def layer_intercept_fn(x, index):
+                if index == -1:
+                    x = self.backbone.image_text_embedding_merger(
+                        x, img_embeddings, placeholder_indices
+                    )
+                if user_intercept_fn is not None:
+                    x = user_intercept_fn(x, index)
+                return x
+
+        return super().score(
+            token_ids=token_ids,
+            padding_mask=padding_mask,
+            scoring_mode=scoring_mode,
+            layer_intercept_fn=layer_intercept_fn,
+            target_ids=target_ids,
+        )
 
     def call_with_cache(
         self,

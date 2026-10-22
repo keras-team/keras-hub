@@ -1,3 +1,4 @@
+import ml_dtypes
 import numpy as np
 
 from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
@@ -106,8 +107,9 @@ def load_image_converter_config(preset, transformers_config):
 
     config = {}
     if mean is not None and std is not None:
-        config["offset"] = [-m / s for m, s in zip(mean, std)]
-        config["scale"] = [rescale_factor / s for s in std]
+        config["image_mean"] = list(mean)
+        config["image_std"] = list(std)
+        config["rescale_factor"] = rescale_factor
     if patch_size is not None:
         config["patch_size"] = patch_size
     if longest_edge is not None:
@@ -123,9 +125,7 @@ def convert_backbone_config(transformers_config):
 
     vision_hidden_dim = vision_config["hidden_size"]
     vision_num_heads = vision_config["num_attention_heads"]
-    vision_head_dim = vision_config.get("head_dim") or (
-        vision_hidden_dim // vision_num_heads
-    )
+    vision_head_dim = vision_config["head_dim"]
     vision_image_size = vision_config["image_size"]
     vision_patch_size = vision_config["patch_size"]
     vision_encoder = Mistral3VisionEncoder(
@@ -196,8 +196,17 @@ def _is_fp8_quantized(transformers_config):
     return True
 
 
+def _alias_fp8_numpy_dtypes():
+    """Adds the FP8 dtypes to `numpy`, which `safetensors` looks up there."""
+    for name in ("float8_e4m3fn", "float8_e5m2"):
+        if not hasattr(np, name):
+            setattr(np, name, getattr(ml_dtypes, name))
+
+
 def convert_weights(backbone, loader, transformers_config):
     fp8_quantized = _is_fp8_quantized(transformers_config)
+    if fp8_quantized:
+        _alias_fp8_numpy_dtypes()
 
     def port_dense_weight(keras_variable, hf_weight_key, hook_fn):
         hf_tensor = loader.get_tensor(hf_weight_key).astype(np.float32)

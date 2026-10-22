@@ -166,9 +166,6 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
     """
 
     def call(self, token_embeddings, image_features, placeholder_indices):
-        # A text-only batch has no image features to scatter.
-        if image_features.shape[0] == 0:
-            return token_embeddings
         batch_size = ops.shape(token_embeddings)[0]
         seq_length = ops.shape(token_embeddings)[1]
         hidden_dim = ops.shape(token_embeddings)[2]
@@ -211,7 +208,10 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
         )
         feature_index = ops.where(is_valid, feature_index, 0)
 
+        # A zero row keeps every gather index valid. A text-only batch has no
+        # image features, and its indices all point at this row.
         image_features = ops.cast(image_features, flat_embeddings.dtype)
+        image_features = ops.concatenate([image_features, scratch_row], axis=0)
         gathered_features = ops.take(
             image_features, ops.reshape(feature_index, (-1,)), axis=0
         )
@@ -250,8 +250,12 @@ class Mistral3ImageTextEmbeddingMerger(keras.layers.Layer):
                 f"placeholder(s) and {num_features} feature(s)."
             )
 
-    def compute_output_shape(self, input_shape):
-        return input_shape
+    def compute_output_spec(
+        self, token_embeddings, image_features, placeholder_indices
+    ):
+        return keras.KerasTensor(
+            token_embeddings.shape, dtype=token_embeddings.dtype
+        )
 
 
 class Mistral3VisionRotaryEmbedding(keras.layers.Layer):
