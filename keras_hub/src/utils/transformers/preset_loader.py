@@ -35,6 +35,7 @@ from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
 from keras_hub.src.utils.transformers import convert_qwen3_moe
+from keras_hub.src.utils.transformers import convert_qwen3_vl
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_roberta
 from keras_hub.src.utils.transformers import convert_sam3
@@ -114,6 +115,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
             self.converter = convert_qwen3_5
+        elif model_type == "qwen3_vl":
+            self.converter = convert_qwen3_vl
         elif model_type == "roberta":
             self.converter = convert_roberta
         elif model_type == "sam3_video":
