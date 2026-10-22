@@ -15,6 +15,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
     MuseGlimmerVideoConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import tf
 
 LAYOUT_SPECIAL_TOKENS = [
@@ -291,7 +292,7 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
         )
         self.assertEqual(output["image_grid_thw"].shape, (2, 3))
         num_image_tokens = int(
-            np.sum(np.asarray(output["token_ids"]) == self.image_token_id)
+            np.sum(convert_to_numpy(output["token_ids"]) == self.image_token_id)
         )
         self.assertEqual(output["vision_indices"].shape, (num_image_tokens,))
 
@@ -563,7 +564,7 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
         inputs = {"prompts": ["<|image|> airplane"], "images": [self.image]}
         python_ids = preprocessor.generate_preprocess(inputs)["token_ids"]
         self.assertNotEqual(
-            int(np.asarray(python_ids)[0, 0]),
+            int(convert_to_numpy(python_ids)[0, 0]),
             self.image_tokenizer.start_token_id,
         )
         dataset = tf.data.Dataset.from_tensors(
@@ -631,7 +632,7 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
 
     def test_generate_postprocess_drops_vision_placeholders(self):
         text_ids = self.image_tokenizer(" airplane at airport")
-        text_ids = [int(token_id) for token_id in np.asarray(text_ids)]
+        text_ids = [int(token_id) for token_id in convert_to_numpy(text_ids)]
         num_image_tokens = 4
         token_ids = [self.image_token_id] * num_image_tokens + text_ids
         outputs = {
@@ -688,8 +689,8 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
 
     def _layout_ids(self, preprocessor, inputs):
         output = preprocessor.generate_preprocess(inputs)
-        token_ids = np.asarray(output["token_ids"])[0]
-        padding_mask = np.asarray(output["padding_mask"])[0].astype(bool)
+        token_ids = convert_to_numpy(output["token_ids"])[0]
+        padding_mask = convert_to_numpy(output["padding_mask"])[0].astype(bool)
         return token_ids[padding_mask].tolist()
 
     def _layout_image_inputs(self, prompt="<|patch|> airplane"):

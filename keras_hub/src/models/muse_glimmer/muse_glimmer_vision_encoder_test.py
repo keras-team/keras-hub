@@ -32,7 +32,12 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
     _window_layout,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.tensor_utils import tf
+
+# TF32 matmuls on GPU drift by up to 3e-3 between traced and eager runs.
+_TRACED_TOL = 1e-2 if running_on_gpu() else 1e-5
+_ENCODER_TOL = 1e-2 if running_on_gpu() else 1e-4
 
 
 class MuseGlimmerVisionEncoderTest(TestCase):
@@ -287,10 +292,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
             masked_output = traced_masked(pixel_values, grid_thw)
             capped_output = traced_capped(pixel_values, grid_thw)
             self.assertAllClose(
-                masked_output, eager_output, atol=1e-5, rtol=1e-5
+                masked_output, eager_output, atol=_TRACED_TOL, rtol=_TRACED_TOL
             )
             self.assertAllClose(
-                capped_output, eager_output, atol=1e-5, rtol=1e-5
+                capped_output, eager_output, atol=_TRACED_TOL, rtol=_TRACED_TOL
             )
 
     def test_traced_attention_over_several_blocks_matches_reference(self):
@@ -340,7 +345,9 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         else:
             self.skipTest("Only JAX and TensorFlow trace the encoder.")
         output = traced(q, k, v, segment_id)
-        self.assertAllClose(output, expected, atol=1e-5, rtol=1e-5)
+        self.assertAllClose(
+            output, expected, atol=_TRACED_TOL, rtol=_TRACED_TOL
+        )
 
     def test_traced_encoder_over_several_blocks_matches_eager(self):
         # One 48x48 grid has 2304 patches, which is more than one block.
@@ -351,7 +358,10 @@ class MuseGlimmerVisionEncoderTest(TestCase):
         pixel_values = np.random.randn(48 * 48, patch_dim).astype("float32")
         eager_output = self.encoder(pixel_values, grid_thw)
         self.assertAllClose(
-            traced(pixel_values, grid_thw), eager_output, atol=1e-4, rtol=1e-4
+            traced(pixel_values, grid_thw),
+            eager_output,
+            atol=_ENCODER_TOL,
+            rtol=_ENCODER_TOL,
         )
 
     def test_eager_call_groups_segments_by_length(self):

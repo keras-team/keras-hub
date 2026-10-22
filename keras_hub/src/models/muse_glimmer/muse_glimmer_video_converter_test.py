@@ -68,7 +68,7 @@ class MuseGlimmerVideoConverterTest(TestCase):
         output = converter(video)
         normalized = (output["patches"] + 1.0) / (2.0 / 255.0)
 
-        self.assertAllClose(normalized, np.round(normalized))
+        self.assertAllClose(normalized, keras.ops.round(normalized))
 
     def test_patch_layout_is_temporal_channel_first(self):
         converter = MuseGlimmerVideoConverter(

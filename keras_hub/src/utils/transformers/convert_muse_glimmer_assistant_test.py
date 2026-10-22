@@ -6,6 +6,7 @@ from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
     MuseGlimmerBackbone,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 
 
@@ -213,6 +214,11 @@ class TestMuseGlimmerAssistantConverter(TestCase):
                 "padding_mask": np.ones((batch_size, block_size), "int32"),
             }
         )
+        # TF32 matmuls on GPU leave up to 3e-3 against HF. CPU keeps 1e-4.
+        tol = 1e-2 if running_on_gpu() else 1e-4
         self.assertAllClose(
-            hf_output, keras.ops.convert_to_numpy(keras_output), atol=1e-4
+            hf_output,
+            keras.ops.convert_to_numpy(keras_output),
+            atol=tol,
+            rtol=1e-6,
         )

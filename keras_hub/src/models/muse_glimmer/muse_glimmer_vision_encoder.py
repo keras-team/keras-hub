@@ -468,6 +468,9 @@ class MuseGlimmerVisionMLP(keras.layers.Layer):
     def call(self, x):
         return self.fc2(keras.activations.gelu(self.fc1(x), approximate=False))
 
+    def compute_output_shape(self, input_shape):
+        return tuple(input_shape[:-1]) + (self.hidden_size,)
+
     def get_config(self):
         config = super().get_config()
         config.update(

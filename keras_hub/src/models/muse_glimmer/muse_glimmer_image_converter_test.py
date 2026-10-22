@@ -73,7 +73,7 @@ class MuseGlimmerImageConverterTest(TestCase):
         output = converter(image)
         normalized = (output["patches"] + 1.0) / (2.0 / 255.0)
 
-        self.assertAllClose(normalized, np.round(normalized))
+        self.assertAllClose(normalized, keras.ops.round(normalized))
 
     def test_patch_layout_is_channel_first(self):
         converter = MuseGlimmerImageConverter(
