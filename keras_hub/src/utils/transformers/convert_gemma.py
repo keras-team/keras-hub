@@ -60,6 +60,12 @@ def convert_backbone_config(transformers_config):
             ),
             "use_post_ffw_norm": False,
             "use_post_attention_norm": False,
+            "final_logit_soft_cap": transformers_config.get(
+                "final_logit_softcapping"
+            ),
+            "attention_logit_soft_cap": transformers_config.get(
+                "attn_logit_softcapping"
+            ),
             "sliding_window_size": transformers_config["sliding_window"],
             "use_sliding_window_attention": True,
         }
