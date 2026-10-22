@@ -1,8 +1,18 @@
 # Release Process
 
+## Centralized Release Process
+
+Releases are now run from the release panel in `keras-team/shared-workflows`
+(Actions -> release -> Run workflow). You need write access on keras-hub and on
+shared-workflows. Start with a dry run; the bot opens PRs and a human merges
+them. See
+[RELEASE_PROCESS.md](https://github.com/keras-team/shared-workflows/blob/main/RELEASE_PROCESS.md)
+in `keras-team/shared-workflows`. The rest of this file is for rollback only.
+
 ⚠️ This doc is intended for maintainers of the KerasHub library. Steps below
-require push access to base repository. However, all are welcome to use this
-process for other projects, or suggest improvements!
+require write access; branch cuts and tags require membership in the rollback
+team. However, all are welcome to use this process for other projects, or
+suggest improvements!
 
 ## Overview
 
@@ -17,12 +27,20 @@ We follow [semantic versioning](https://semver.org/) for our releases, and
 have a different process when releasing major/minor versions (e.g. 1.0 or
 1.2) vs a "patch" release (1.0.1). Both are covered below.
 
-## Creating a new major or minor release
+## Rollback only
+
+Use only if the shared-workflows release path is unavailable. Stop using the
+panel for keras-hub, and re-enable the disabled
+[`publish-to-pypi.yml`](.github/workflows/publish-to-pypi.yml) workflow first.
+
+### Creating a new major or minor release
 
 Use the following steps to create an `X.Y.0` release.
 
 1. Similar to the Keras and Tensorflow repositories, we keep a named branch
-   `rX.Y` for each minor release. We need to set this up.
+   `rX.Y` for each minor release. We need to set this up. Branch cuts (creating
+   `rX.Y`) are done by the rollback team (the bypass group of the new
+   branch-creation ruleset).
 
    If you have not, please set
    `upstream` as `keras-team/keras-hub` by running:
@@ -65,7 +83,9 @@ Use the following steps to create an `X.Y.0` release.
    On github, make a PR targeting the new release branch instead of the master
    branch, and ask someone to review.
 
-3. On github, we can now create the `X.Y.0.dev0` release. Use
+3. On github, we can now create the `X.Y.0.dev0` release. Tag and release
+   creation are done by the rollback team (the bypass group of the new tag
+   ruleset). Use
    [this link](https://github.com/keras-team/keras-hub/releases/new) to kick it
    off.
 
@@ -86,18 +106,21 @@ Use the following steps to create an `X.Y.0` release.
    the release.
 
    It is important that we make any fixes to the master branch first, and
-   then cherry-pick them to the release branch. Given a commit hash `e32e9ded`,
-   you can cherry pick a change as follows.
+   then cherry-pick them to the release branch. Because release branches
+   require pull requests, cherry-picks must go through a PR into `rX.Y`.
+   Given a commit hash `e32e9ded`, you can cherry pick a change as follows:
 
    ```shell
-   git checkout rX.Y
-   # Make sure we are exactly up to date with the upstream branch.
    git fetch --all
-   git reset --hard upstream/rX.Y
-   # Cherry pick as many times as you need.
-   git cherry-pick e32e9ded
-   git push upstream rX.Y
+   git checkout --no-track -b cherry-pick-e32e9ded upstream/rX.Y
+   # Cherry pick as many times as you need (use -x to record the source commit).
+   git cherry-pick -x e32e9ded
+   git push -u origin cherry-pick-e32e9ded
    ```
+
+   On GitHub, make a PR targeting `rX.Y` instead of the master branch. Include a
+   `Cherry-picks: #<PR> (e32e9ded)` line in the PR description (list each pick
+   as `#<PR> (sha)`, comma-separated), and ask someone to review and merge.
 
 5. Before cutting the final release, we should try previewing our documentation
    on keras.io. This will help catch bugs with our symbol export and docstrings.
@@ -117,7 +140,8 @@ Use the following steps to create an `X.Y.0` release.
    Confirm that the latest commit on our release branch is green before making
    the actual release! We should not release if there are any test failures.
 
-   Make a release similar to step 3, but updating the tag and title to `X.Y.0`.
+   Make a release similar to step 3 (done by a member of the rollback team),
+   but updating the tag and title to `X.Y.0`.
    Leave "Set as pre-release" unchecked and check the box that says
    "Set as the latest release".
 
@@ -138,7 +162,7 @@ Use the following steps to create an `X.Y.0` release.
 
    Create a land a PR with this change to the master branch.
 
-## Creating a new patch release
+### Creating a new patch release
 
 Use the following steps to create a "patch" `X.Y.Z` release. We do this when we
 do not yet want to release everything on our master branch, but still would like
@@ -146,18 +170,21 @@ to push certain fixes out to our users.
 
 1. We need to bring in code changes to the release branch. Whenever possible
    these should be changes also on the master branch, that we cherry pick for
-   the release. Given a commit hash `e32e9ded`, you can cherry pick a change
-   to the release branch as follows.
+   the release. Because release branches require pull requests, cherry-picks
+   must go through a PR into `rX.Y`. Given a commit hash `e32e9ded`, you can
+   cherry pick a change to the release branch as follows:
 
    ```shell
-   git checkout rX.Y
-   # Make sure we are exactly up to date with the upstream branch.
    git fetch --all
-   git reset --hard upstream/rX.Y
-   # Cherry pick as many times as you need.
-   git cherry-pick e32e9ded
-   git push upstream rX.Y
+   git checkout --no-track -b cherry-pick-e32e9ded upstream/rX.Y
+   # Cherry pick as many times as you need (use -x to record the source commit).
+   git cherry-pick -x e32e9ded
+   git push -u origin cherry-pick-e32e9ded
    ```
+
+   On GitHub, make a PR targeting `rX.Y` instead of the master branch. Include a
+   `Cherry-picks: #<PR> (e32e9ded)` line in the PR description (list each pick
+   as `#<PR> (sha)`, comma-separated), and ask someone to review and merge.
 
 2. Before we officially push a new stable release to pypi, it is good practice to
    test out a [development release](https://pythonpackaging.info/07-Package-Release.html#Versioning-your-code)
@@ -181,7 +208,9 @@ to push certain fixes out to our users.
    On github, make a PR from your fork to the new release branch, and ask
    someone to review.
 
-3. On github, we can now create the `X.Y.Z.dev0` release. Use
+3. On github, we can now create the `X.Y.Z.dev0` release. Tag and release
+   creation are done by the rollback team (the bypass group of the new tag
+   ruleset). Use
    [this link](https://github.com/keras-team/keras-hub/releases/new).
 
    This release should be titled `X.Y.Z.dev0`, and create a new tag with the
@@ -217,7 +246,8 @@ to push certain fixes out to our users.
    Confirm that the latest commit on our release branch is green before making
    the actual release! We should not release if there are any test failures.
 
-   Make a release similar to step 3, but updating the tag and title to `X.Y.Z`.
+   Make a release similar to step 3 (done by a member of the rollback team),
+   but updating the tag and title to `X.Y.Z`.
    Leave "Set as pre-release" unchecked and check the box that says
    "Set as the latest release" if `X.Y` is the latest stable release series.
 
