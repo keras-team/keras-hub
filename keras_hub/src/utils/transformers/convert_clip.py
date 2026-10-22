@@ -3,6 +3,7 @@ import numpy as np
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
@@ -11,9 +12,9 @@ backbone_cls = CLIPBackbone
 
 def load_image_converter_config(preset, transformers_config):
     """Load image converter config from HuggingFace preprocessor config."""
-    preprocessor_config = load_json(preset, "preprocessor_config.json")
-    if preprocessor_config is None:
+    if not check_file_exists(preset, "preprocessor_config.json"):
         return None
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
 
     mean = preprocessor_config.get(
         "image_mean", [0.48145466, 0.4578275, 0.40821073]
@@ -222,7 +223,7 @@ def convert_weights(backbone, loader, transformers_config):
     # === Text Encoder ===
     # Token embedding
     loader.port_weight(
-        backbone.text_encoder.embedding.token_embedding._embeddings,
+        backbone.text_encoder.embedding.token_embedding.embeddings,
         "text_model.embeddings.token_embedding.weight",
     )
     # Position embedding

@@ -21,16 +21,15 @@ python tools/checkpoint_conversion/convert_clip_checkpoints.py \
     --preset clip_vit_bigg_14_laion2b_39b_b160k --upload_uri kaggle://kerashub/clip/keras/clip_vit_bigg_14_laion2b_39b_b160k
 """
 
-import json
 import os
 import shutil
+import tempfile
 
 import keras
 import numpy as np
 import torch
 from absl import app
 from absl import flags
-from huggingface_hub import hf_hub_download
 from PIL import Image
 from transformers import CLIPModel
 from transformers import CLIPProcessor
@@ -39,9 +38,7 @@ import keras_hub
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
 from keras_hub.src.models.clip.clip_preprocessor import CLIPPreprocessor
-from keras_hub.src.models.clip.clip_text_encoder import CLIPTextEncoder
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
-from keras_hub.src.models.clip.clip_vision_encoder import CLIPVisionEncoder
 
 FLAGS = flags.FLAGS
 
@@ -76,235 +73,24 @@ flags.DEFINE_string(
 )
 
 
-def convert_model(hf_model):
-    vision_encoder_config = hf_model.vision_model.config.to_dict()
-    text_encoder_config = hf_model.text_model.config.to_dict()
-    projection_dim = hf_model.config.to_dict().get("projection_dim", None)
-    if projection_dim is None:
-        assert (
-            vision_encoder_config["projection_dim"]
-            == text_encoder_config["projection_dim"]
-        )
-        projection_dim = vision_encoder_config["projection_dim"]
-    image_size = vision_encoder_config["image_size"]
-    vision_encoder = CLIPVisionEncoder(
-        patch_size=vision_encoder_config["patch_size"],
-        hidden_dim=vision_encoder_config["hidden_size"],
-        num_layers=vision_encoder_config["num_hidden_layers"],
-        num_heads=vision_encoder_config["num_attention_heads"],
-        intermediate_dim=vision_encoder_config["intermediate_size"],
-        intermediate_activation=vision_encoder_config["hidden_act"],
-        image_shape=(image_size, image_size, 3),
-    )
-    text_encoder = CLIPTextEncoder(
-        vocabulary_size=text_encoder_config["vocab_size"],
-        embedding_dim=text_encoder_config["hidden_size"],
-        hidden_dim=text_encoder_config["hidden_size"],
-        num_layers=text_encoder_config["num_hidden_layers"],
-        num_heads=text_encoder_config["num_attention_heads"],
-        intermediate_dim=text_encoder_config["intermediate_size"],
-        intermediate_activation=text_encoder_config["hidden_act"],
-        max_sequence_length=text_encoder_config["max_position_embeddings"],
-    )
-    return CLIPBackbone(
-        vision_encoder, text_encoder, projection_dim=projection_dim
-    )
+def load_keras_hub_components(hf_model, hf_preset, hf_dir):
+    """Load KerasHub CLIP components via the transformers converter.
 
-
-def convert_weights(keras_hub_model, hf_model):
-    # Get `state_dict` from `hf_model`.
-    state_dict = hf_model.state_dict()
-    state_dict.update(hf_model.named_buffers())  # Add buffers.
-
-    # Helper functions.
-    def port_weights(keras_variable, weight_key, hook_fn=None):
-        torch_tensor = state_dict[weight_key].cpu().numpy()
-        if hook_fn:
-            torch_tensor = hook_fn(torch_tensor, list(keras_variable.shape))
-        keras_variable.assign(torch_tensor)
-
-    def port_ln(keras_variable, weight_key):
-        port_weights(keras_variable.gamma, f"{weight_key}.weight")
-        port_weights(keras_variable.beta, f"{weight_key}.bias")
-
-    def port_dense(keras_variable, weight_key):
-        port_weights(
-            keras_variable.kernel,
-            f"{weight_key}.weight",
-            hook_fn=lambda x, _: x.T,
-        )
-        if keras_variable.bias is not None:
-            port_weights(keras_variable.bias, f"{weight_key}.bias")
-
-    def port_mha(keras_variable, weight_key, num_heads, hidden_dim):
-        # query
-        port_weights(
-            keras_variable.query_dense.kernel,
-            f"{weight_key}.q_proj.weight",
-            hook_fn=lambda x, _: np.reshape(
-                x.T, (hidden_dim, num_heads, hidden_dim // num_heads)
-            ),
-        )
-        port_weights(
-            keras_variable.query_dense.bias,
-            f"{weight_key}.q_proj.bias",
-            hook_fn=lambda x, _: np.reshape(
-                x, (num_heads, hidden_dim // num_heads)
-            ),
-        )
-        # key
-        port_weights(
-            keras_variable.key_dense.kernel,
-            f"{weight_key}.k_proj.weight",
-            hook_fn=lambda x, _: np.reshape(
-                x.T, (hidden_dim, num_heads, hidden_dim // num_heads)
-            ),
-        )
-        port_weights(
-            keras_variable.key_dense.bias,
-            f"{weight_key}.k_proj.bias",
-            hook_fn=lambda x, _: np.reshape(
-                x, (num_heads, hidden_dim // num_heads)
-            ),
-        )
-        # value
-        port_weights(
-            keras_variable.value_dense.kernel,
-            f"{weight_key}.v_proj.weight",
-            hook_fn=lambda x, _: np.reshape(
-                x.T, (hidden_dim, num_heads, hidden_dim // num_heads)
-            ),
-        )
-        port_weights(
-            keras_variable.value_dense.bias,
-            f"{weight_key}.v_proj.bias",
-            hook_fn=lambda x, _: np.reshape(
-                x, (num_heads, hidden_dim // num_heads)
-            ),
-        )
-        # output
-        port_weights(
-            keras_variable.output_dense.kernel,
-            f"{weight_key}.out_proj.weight",
-            hook_fn=lambda x, _: np.reshape(
-                x.T, (num_heads, hidden_dim // num_heads, hidden_dim)
-            ),
-        )
-        port_weights(
-            keras_variable.output_dense.bias, f"{weight_key}.out_proj.bias"
-        )
-
-    # Port vision encoder.
-    port_weights(
-        keras_hub_model.vision_encoder.embedding.patch_embedding.kernel,
-        "vision_model.embeddings.patch_embedding.weight",
-        hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
-    )
-    port_weights(
-        keras_hub_model.vision_encoder.embedding.position_embedding.embeddings,
-        "vision_model.embeddings.position_embedding.weight",
-    )
-    port_weights(
-        keras_hub_model.vision_encoder.embedding.class_embedding,
-        "vision_model.embeddings.class_embedding",
-    )
-    port_weights(
-        keras_hub_model.vision_encoder.embedding.position_ids,
-        "vision_model.embeddings.position_ids",
-    )
-    port_ln(
-        keras_hub_model.vision_encoder.pre_layer_norm,
-        "vision_model.pre_layrnorm",
-    )
-    encoder_layers = keras_hub_model.vision_encoder.encoder_layers
-    for i in range(len(encoder_layers)):
-        prefix = "vision_model.encoder.layers"
-        num_heads = encoder_layers[i].num_heads
-        hidden_dim = encoder_layers[i].hidden_dim
-        port_mha(
-            encoder_layers[i].attention,
-            f"{prefix}.{i}.self_attn",
-            num_heads,
-            hidden_dim,
-        )
-        port_ln(
-            encoder_layers[i].layer_norm_1,
-            f"{prefix}.{i}.layer_norm1",
-        )
-        port_ln(
-            encoder_layers[i].layer_norm_2,
-            f"{prefix}.{i}.layer_norm2",
-        )
-        port_dense(encoder_layers[i].dense_1, f"{prefix}.{i}.mlp.fc1")
-        port_dense(encoder_layers[i].dense_2, f"{prefix}.{i}.mlp.fc2")
-    port_ln(
-        keras_hub_model.vision_encoder.layer_norm, "vision_model.post_layernorm"
-    )
-    port_dense(keras_hub_model.vision_projection, "visual_projection")
-
-    # Port text encoder.
-    port_weights(
-        keras_hub_model.text_encoder.embedding.token_embedding._embeddings,
-        "text_model.embeddings.token_embedding.weight",
-    )
-    port_weights(
-        keras_hub_model.text_encoder.embedding.position_embedding.position_embeddings,
-        "text_model.embeddings.position_embedding.weight",
-    )
-    encoder_layers = keras_hub_model.text_encoder.encoder_layers
-    for i in range(len(encoder_layers)):
-        prefix = "text_model.encoder.layers"
-        num_heads = encoder_layers[i].num_heads
-        hidden_dim = encoder_layers[i].hidden_dim
-        port_mha(
-            encoder_layers[i].attention,
-            f"{prefix}.{i}.self_attn",
-            num_heads,
-            hidden_dim,
-        )
-        port_ln(
-            encoder_layers[i].layer_norm_1,
-            f"{prefix}.{i}.layer_norm1",
-        )
-        port_ln(
-            encoder_layers[i].layer_norm_2,
-            f"{prefix}.{i}.layer_norm2",
-        )
-        port_dense(encoder_layers[i].dense_1, f"{prefix}.{i}.mlp.fc1")
-        port_dense(encoder_layers[i].dense_2, f"{prefix}.{i}.mlp.fc2")
-    port_ln(
-        keras_hub_model.text_encoder.layer_norm, "text_model.final_layer_norm"
-    )
-    port_dense(keras_hub_model.text_projection, "text_projection")
-
-    # Port logit scale.
-    port_weights(keras_hub_model.clip_head.logit_scale, "logit_scale")
-
-
-def convert_image_converter(hf_image_processor):
-    config = hf_image_processor.to_dict()
-    image_size = (config["crop_size"]["height"], config["crop_size"]["width"])
-    std = config["image_std"]
-    mean = config["image_mean"]
-    return CLIPImageConverter(
-        image_size=image_size,
-        scale=[1.0 / 255.0 / s for s in std],
-        offset=[-m / s for m, s in zip(mean, std)],
-        interpolation="bicubic",  # CLIP defaults to bicubic resampling.
-    )
-
-
-def convert_tokenizer(hf_preset):
-    tokenizer_path = hf_hub_download(hf_preset, "tokenizer.json", token=True)
-    with open(tokenizer_path, "r") as tokenizer_file:
-        tokenizer_content = json.load(tokenizer_file)
-    vocabulary = tokenizer_content["model"]["vocab"]
-    merges = tokenizer_content["model"]["merges"]
-    return CLIPTokenizer(
-        vocabulary,
-        merges,
-        pad_with_end_token=True,
-    )
+    Weight porting lives in `keras_hub/src/utils/transformers/convert_clip.py`
+    and is shared with `from_preset("hf://...")`. Some upstream checkpoints
+    only ship `pytorch_model.bin` (or sharded safetensors without an index),
+    which the safetensors-based converter cannot read directly. To support all
+    presets, we re-save the HF model as a local HF-format directory with
+    safetensors and load the backbone from there. The tokenizer and image
+    converter only need JSON/text files, which every upstream repo provides,
+    so they are loaded from the Hub directly.
+    """
+    hf_model.save_pretrained(hf_dir, safe_serialization=True)
+    keras_model = CLIPBackbone.from_preset(hf_dir)
+    hf_uri = f"hf://{hf_preset}"
+    keras_image_converter = CLIPImageConverter.from_preset(hf_uri)
+    keras_tokenizer = CLIPTokenizer.from_preset(hf_uri)
+    return keras_model, keras_image_converter, keras_tokenizer
 
 
 def validate_output(
@@ -386,15 +172,13 @@ def main(_):
     hf_preprocessor = CLIPProcessor.from_pretrained(hf_preset)
     hf_model.eval()
 
-    keras_model = convert_model(hf_model)
-    keras_image_converter = convert_image_converter(
-        hf_preprocessor.image_processor
-    )
-    keras_tokenizer = convert_tokenizer(hf_preset)
-    print("✅ KerasHub model loaded.")
-
-    convert_weights(keras_model, hf_model)
-    print("✅ Weights converted.")
+    # Load KerasHub components through the transformers converter
+    # (`keras_hub/src/utils/transformers/convert_clip.py`).
+    with tempfile.TemporaryDirectory() as hf_dir:
+        keras_model, keras_image_converter, keras_tokenizer = (
+            load_keras_hub_components(hf_model, hf_preset, hf_dir)
+        )
+    print("✅ KerasHub model loaded and weights converted.")
 
     validate_output(
         keras_model,
