@@ -49,6 +49,8 @@ class TestTask(TestCase):
             "head_dim": 256,
             "query_pre_attn_scalar": 256,
             "sliding_window": 512,
+            "final_logit_softcapping": 30.0,
+            "attn_logit_softcapping": 50.0,
         }
         backbone_config = convert_gemma.convert_backbone_config(hf_config)
         self.assertEqual(backbone_config["vocabulary_size"], 256000)
@@ -57,5 +59,7 @@ class TestTask(TestCase):
         self.assertEqual(backbone_config["use_post_attention_norm"], False)
         self.assertEqual(backbone_config["query_head_dim_normalize"], True)
         self.assertEqual(backbone_config["sliding_window_size"], 512)
+        self.assertEqual(backbone_config["final_logit_soft_cap"], 30.0)
+        self.assertEqual(backbone_config["attention_logit_soft_cap"], 50.0)
 
     # TODO: compare numerics with huggingface model

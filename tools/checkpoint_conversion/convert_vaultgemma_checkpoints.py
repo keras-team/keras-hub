@@ -9,7 +9,6 @@ Usage:
 import gc
 import os
 import random
-import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
@@ -124,20 +123,10 @@ def test_model(
     print(f"   Mean absolute difference: {mean_abs_diff:.6f}")
     print(f"   Tolerance - atol: {atol}, rtol: {rtol}")
 
-    try:
-        np.testing.assert_allclose(
-            keras_hub_logits, hf_output_logits, atol=atol, rtol=rtol
-        )
-        print("✓ All logits within tolerance.")
-    except AssertionError as err:
-        print(
-            "Some logits exceed tolerance (numerical kernel differences).\n"
-            "NOTE: Generated text comparison is the authoritative check."
-        )
-        print("Traceback:")
-        print(traceback.format_exc())
-        print("Assertion message:")
-        print(err.args[0])
+    np.testing.assert_allclose(
+        keras_hub_logits, hf_output_logits, atol=atol, rtol=rtol
+    )
+    print("✓ All logits within tolerance.")
 
     # Sequence-wide top-50 normalized logits check
     k = 50
@@ -146,13 +135,8 @@ def test_model(
     kh_norm = keras_hub_logits - keras_hub_logits.max(axis=-1, keepdims=True)
     hf_topk = np.sort(np.partition(hf_norm, -k, axis=-1)[..., -k:], axis=-1)
     kh_topk = np.sort(np.partition(kh_norm, -k, axis=-1)[..., -k:], axis=-1)
-    try:
-        np.testing.assert_allclose(kh_topk, hf_topk, atol=atol, rtol=rtol)
-        print(f"✓ Top-{k} normalized logits within tolerance.")
-    except AssertionError as err:
-        print(f"Top-{k} normalized logits exceed tolerance.")
-        print(traceback.format_exc())
-        print(err.args[0])
+    np.testing.assert_allclose(kh_topk, hf_topk, atol=atol, rtol=rtol)
+    print(f"✓ Top-{k} normalized logits within tolerance.")
 
 
 def validate_output(
