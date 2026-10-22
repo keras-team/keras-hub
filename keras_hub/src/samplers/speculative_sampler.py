@@ -127,6 +127,7 @@ class SpeculativeSampler(Sampler):
             current_prompt = prompt
             draft_ids_list = []
             draft_probs_list = []
+            draft_is_prompt_list = []
 
             for i in range(k):
                 # Clamp the index to [0, max_length - 1] for safety.
@@ -166,10 +167,12 @@ class SpeculativeSampler(Sampler):
                 )
                 draft_ids_list.append(next_token)
                 draft_probs_list.append(probs)
+                draft_is_prompt_list.append(mask_val)
 
-            # Stack: (batch, k), (batch, k, vocab)
+            # Stack: (batch, k), (batch, k, vocab), (batch, k)
             draft_ids = ops.stack(draft_ids_list, axis=1)
             q_probs = ops.stack(draft_probs_list, axis=1)
+            draft_is_prompt = ops.stack(draft_is_prompt_list, axis=1)
 
             # ── Phase 2: Verify with target model ─────────────────────────
             verify_hidden_states = None
@@ -265,6 +268,11 @@ class SpeculativeSampler(Sampler):
                     ops.argmax(p_probs, axis=-1), prompt.dtype
                 )
                 matches = ops.equal(draft_ids, target_tokens)
+
+            # Prompt tokens are given, not drafted, so they are always kept.
+            # Without this, a longer prompt in a ragged batch is "rejected"
+            # whenever the target disagrees with it.
+            matches = ops.logical_or(matches, draft_is_prompt)
 
             # Compute the prefix of accepted tokens (all must match up to i).
             # num_accepted[b] = length of the accepted prefix for item b.
@@ -395,6 +403,10 @@ class SpeculativeSampler(Sampler):
             existing_bonus = final_prompt[:, safe_bonus_idx]
             in_bounds = ops.cast(bonus_idx < max_length, "bool")
             bonus_token = ops.where(in_bounds, bonus_token, existing_bonus)
+            # Don't overwrite prompt tokens in rows with longer prompts.
+            bonus_token = ops.where(
+                mask[:, safe_bonus_idx], existing_bonus, bonus_token
+            )
             final_prompt = ops.slice_update(
                 final_prompt, [0, safe_bonus_idx], bonus_token[:, None]
             )

@@ -1,5 +1,7 @@
+from absl.testing import parameterized
 from keras import ops
 
+from keras_hub.src.samplers.random_sampler import RandomSampler
 from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.tests.test_case import TestCase
 
@@ -177,6 +179,50 @@ class SpeculativeSamplerTest(TestCase):
         )
         output_str = self.join_as_string(output)
         self.assertEqual(output_str, ["aaaaaaaa", "aaaaaaaa"])
+
+    @parameterized.named_parameters(("greedy", False), ("stochastic", True))
+    def test_ragged_prompts_are_kept(self, stochastic):
+        # Row 1 has a longer prompt ("zbb") than row 0 ("z"), so generation
+        # starts inside row 1's prompt. Its prompt tokens must be kept.
+        batch_size = 2
+
+        def batched_next(prompt, cache, index):
+            hidden_states = ops.ones([batch_size, 5])
+            logits = (
+                ops.one_hot(
+                    ops.zeros((batch_size,), dtype="int32"),
+                    self.vocab_size,
+                )
+                * 1e9
+            )
+            return logits, hidden_states, cache
+
+        sampler = SpeculativeSampler(
+            num_speculative_tokens=3,
+            base_sampler=RandomSampler() if stochastic else None,
+            seed=0,
+        )
+        prompt = ops.array(
+            [
+                [self.char_lookup[c] for c in "zzzzzzzz"],
+                [self.char_lookup[c] for c in "zbbzzzzz"],
+            ]
+        )
+        mask = ops.array(
+            [
+                [True, False, False, False, False, False, False, False],
+                [True, True, True, False, False, False, False, False],
+            ]
+        )
+        output = sampler(
+            next=batched_next,
+            prompt=prompt,
+            index=1,
+            mask=mask,
+            draft_next=batched_next,
+        )
+        output_str = self.join_as_string(output)
+        self.assertEqual(output_str, ["zaaaaaaa", "zbbaaaaa"])
 
     def test_short_circuit_rejection(self):
         # If token 2 is wrong, tokens 3+ should be rejected even if correct.
