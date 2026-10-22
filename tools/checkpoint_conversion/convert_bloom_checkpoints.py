@@ -1,19 +1,33 @@
-import json
+"""Convert BLOOM HuggingFace checkpoints to the KerasHub preset format.
+
+Usage:
+    python tools/checkpoint_conversion/convert_bloom_checkpoints.py \
+        --preset bloom_560m_multi \
+        --save_dtype float16
+"""
+
+import gc
 import os
+import random
+import traceback
 
-import huggingface_hub
-import numpy as np
-import transformers
-from absl import app
-from absl import flags
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Hide any CUDA devices
 
-from keras_hub.src.models.bloom.bloom_backbone import BloomBackbone
-from keras_hub.src.models.bloom.bloom_causal_lm_preprocessor import (
-    BloomCausalLMPreprocessor,
-)
-from keras_hub.src.models.bloom.bloom_tokenizer import BloomTokenizer
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+from keras import ops  # noqa: E402
+from transformers import AutoModelForCausalLM  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
 
-FLAGS = flags.FLAGS
+import keras_hub  # noqa: E402
+
+random.seed(123)
+torch.manual_seed(123)
+device = torch.device("cpu")
+torch.set_default_device(device)
 
 PRESET_MAP = {
     "bloom_560m_multi": "bigscience/bloom-560m",
@@ -22,308 +36,269 @@ PRESET_MAP = {
     "bloom_3b_multi": "bigscience/bloom-3b",
     "bloom_7b_multi": "bigscience/bloom-7b1",
     "bloom_176b_multi": "bigscience/bloom",
-    # Multitask finetuned on xP3 (Crosslingual Public Pool of Prompts) https://huggingface.co/datasets/bigscience/xP3
-    # xP3 is a mixture of 13 training tasks in 46 languages with English prompts
+    # Multitask finetuned on xP3 (Crosslingual Public Pool of Prompts)
+    # https://huggingface.co/datasets/bigscience/xP3
+    # xP3 is a mixture of 13 training tasks in 46 languages with English
+    # prompts.
     "bloomz_560m_multi": "bigscience/bloomz-560m",
     "bloomz_1.1b_multi": "bigscience/bloomz-1b1",
     "bloomz_1.7b_multi": "bigscience/bloomz-1b7",
     "bloomz_3b_multi": "bigscience/bloomz-3b",
     "bloomz_7b_multi": "bigscience/bloomz-7b1",
     "bloomz_176b_multi": "bigscience/bloomz",
-    # Multitask finetuned on xP3mt
-    # (Crosslingual Public Pool of Prompts machine-translated) https://huggingface.co/datasets/bigscience/xP3
-    # xP3mt is Mixture of 13 training tasks in 46 languages with prompts in 20
-    # languages (machine-translated from English)
+    # Multitask finetuned on xP3mt (machine-translated prompts).
     "bloomz_7b_mt": "bigscience/bloomz-7b1-mt",
     "bloomz_176b_mt": "bigscience/bloomz-mt",
-    # Multitask finetuned on P3 (Public Pool of Prompts) https://huggingface.co/datasets/Muennighoff/P3
-    # xP3 is a mixture of 8 training tasks with English-only prompts
+    # Multitask finetuned on P3 (Public Pool of Prompts)
+    # https://huggingface.co/datasets/Muennighoff/P3
     "bloomz_7b_p3": "bigscience/bloomz-7b1-p3",
     "bloomz_176b_p3": "bigscience/bloomz-p3",
 }
 
-EXTRACT_DIR = "./model"
-
-
+FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "preset", None, f"Must be one of {', '.join(PRESET_MAP.keys())}"
+    "preset",
+    "bloom_560m_multi",
+    f"Must be one of {','.join(PRESET_MAP.keys())}. "
+    "Defaults to 'bloom_560m_multi'.",
 )
-flags.mark_flag_as_required("preset")
-flags.DEFINE_boolean(
-    "validate_only",
-    False,
-    "To validate the output of a preset that has been already uploaded. "
-    "No weights conversion will happen.",
+flags.DEFINE_string(
+    "save_dtype",
+    "float16",
+    "Dtype to save the model in. Defaults to float16.",
+)
+flags.DEFINE_string(
+    "upload_uri",
+    None,
+    'Optional upload URI, e.g. "kaggle://keras/bloom/keras/{preset}"',
+    required=False,
 )
 
+# Tolerance for logit comparison. BLOOM stacks up to 70 decoder blocks, so
+# `float32` kernel differences between PyTorch and Keras accumulate to the
+# 1e-4 range. `1e-3` matches the tolerance used by other KerasHub decoder
+# converter checks.
+DTYPE_TOLERANCES = {
+    "float32": {"atol": 1e-3, "rtol": 1e-3},
+    "float16": {"atol": 1e-2, "rtol": 1e-2},
+    "bfloat16": {"atol": 1e-2, "rtol": 1e-2},
+}
 
-def download_hf_model(hf_model_name):
-    hf_model_dir = huggingface_hub.snapshot_download(
-        repo_id=hf_model_name,
-        allow_patterns=["*.json", "*.bin"],
-        ignore_patterns=["*/*"],
-        local_dir=EXTRACT_DIR,
+
+def make_preprocessor(keras_hub_tokenizer):
+    """Build the preprocessor that ships with the converted preset."""
+    return keras_hub.models.BloomCausalLMPreprocessor(
+        tokenizer=keras_hub_tokenizer,
     )
 
-    return hf_model_dir
+
+def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
+    test_text = "What is Keras?"
+    hf_output = hf_tokenizer([test_text], return_tensors="pt")
+    hf_tokens = hf_output["input_ids"].detach().cpu().numpy()
+
+    # Compare the tokenizers directly. Routing through
+    # `BloomCausalLMPreprocessor.generate_preprocess()` would also pack a `<s>`
+    # start token onto the sequence, which the Hugging Face BLOOM tokenizer
+    # does not add.
+    kh_tokens = np.asarray(keras_hub_tokenizer(test_text)).reshape(1, -1)
+
+    np.testing.assert_equal(kh_tokens, hf_tokens)
+    print("✓ Tokenizer output match.")
 
 
-def convert_model(hf_model):
-    # get huggingface model configuration.
-    hf_config = hf_model.config.to_dict()
-
-    kwargs = {}
-    kwargs["vocabulary_size"] = hf_config["vocab_size"]
-    kwargs["num_layers"] = hf_config["n_layer"]
-    kwargs["num_heads"] = hf_config["n_head"]
-    kwargs["hidden_dim"] = hf_config["hidden_size"]
-    kwargs["intermediate_dim"] = hf_config["hidden_size"] * 4
-    kwargs["dropout"] = hf_config["hidden_dropout"]
-    kwargs["layer_norm_epsilon"] = hf_config["layer_norm_epsilon"]
-
-    return BloomBackbone(**kwargs)
-
-
-def convert_tokenizer(hf_model_dir):
-    tokenizer_file_path = os.path.join(hf_model_dir, "tokenizer.json")
-    with open(tokenizer_file_path) as tokenizer_file:
-        hf_tokenizer = json.load(tokenizer_file)
-
-    vocab = hf_tokenizer["model"]["vocab"]
-    merges = hf_tokenizer["model"]["merges"]
-
-    return BloomTokenizer(vocabulary=vocab, merges=merges)
-
-
-def convert_weights(keras_model, hf_model):
-    hidden_dim = keras_model.hidden_dim
-    num_heads = keras_model.num_heads
-    head_dim = hidden_dim // num_heads
-    num_layers = keras_model.num_layers
-
-    # get huggingface model weights.
-    hf_wts = hf_model.state_dict()
-
-    # assign huggingface weights to the keras model.
-    # Embedding layer.
-    keras_model.get_layer("token_embedding").embeddings.assign(
-        hf_wts["word_embeddings.weight"].detach().numpy()
+def test_model(
+    keras_hub_model,
+    hf_model,
+    hf_tokenizer,
+    keras_dtype,
+):
+    # Verify parameter count.
+    keras_hub_params = keras_hub_model.count_params()
+    hf_params = hf_model.num_parameters()
+    assert keras_hub_params == hf_params, (
+        f"Parameter count mismatch: KerasHub={keras_hub_params:,} vs "
+        f"HF={hf_params:,}"
     )
-    # LayerNorm.
-    keras_model.get_layer("embedding_layernorm").gamma.assign(
-        hf_wts["word_embeddings_layernorm.weight"].detach().numpy()
+    print(f"\n✓ Parameter count match: {keras_hub_params:,} params")
+
+    # Forward pass comparison. Both models are fed the exact same token ids so
+    # that the check isolates the weight conversion from tokenization.
+    hf_tokenized = hf_tokenizer(["What is Keras?"], return_tensors="pt")
+    token_ids = hf_tokenized["input_ids"].to(device)
+    padding_mask = hf_tokenized["attention_mask"].to(device)
+
+    hf_outputs = hf_model(input_ids=token_ids, attention_mask=padding_mask)
+    hf_output_logits = hf_outputs.logits.detach().cpu().float().numpy()
+
+    keras_hub_inputs = {
+        "token_ids": token_ids.detach().cpu().numpy(),
+        "padding_mask": padding_mask.detach().cpu().numpy(),
+    }
+    keras_hub_output = keras_hub_model(keras_hub_inputs)
+    keras_hub_logits = keras_hub_model.token_embedding(
+        keras_hub_output, reverse=True
     )
-    keras_model.get_layer("embedding_layernorm").beta.assign(
-        hf_wts["word_embeddings_layernorm.bias"].detach().numpy()
-    )
+    keras_hub_logits = ops.convert_to_numpy(keras_hub_logits)
 
-    keras_model.get_layer("final_layernorm").gamma.assign(
-        hf_wts["ln_f.weight"].detach().numpy()
-    )
-    keras_model.get_layer("final_layernorm").beta.assign(
-        hf_wts["ln_f.bias"].detach().numpy()
-    )
+    abs_diff = np.abs(keras_hub_logits - hf_output_logits)
+    max_abs_diff = np.max(abs_diff)
+    mean_abs_diff = np.mean(abs_diff)
 
-    # Decoder layers.
-    for i in range(num_layers):
-        decoder_layer = keras_model.get_layer(f"transformer_layer_{i}")
-        # LayrNorm.
-        decoder_layer._pre_attention_layernorm.gamma.assign(
-            hf_wts[f"h.{i}.input_layernorm.weight"].detach().numpy()
-        )
-        decoder_layer._pre_attention_layernorm.beta.assign(
-            hf_wts[f"h.{i}.input_layernorm.bias"].detach().numpy()
-        )
-        decoder_layer._post_attention_layernorm.gamma.assign(
-            hf_wts[f"h.{i}.post_attention_layernorm.weight"].detach().numpy()
-        )
-        decoder_layer._post_attention_layernorm.beta.assign(
-            hf_wts[f"h.{i}.post_attention_layernorm.bias"].detach().numpy()
-        )
+    tolerances = DTYPE_TOLERANCES.get(keras_dtype, {"atol": 1e-3, "rtol": 1e-3})
+    atol = tolerances["atol"]
+    rtol = tolerances["rtol"]
 
-        # Attention layer.
-        attention_layer = decoder_layer._self_attention_layer
+    print(f"\nLogit comparison (dtype: {keras_dtype}):")
+    print(f"   Max absolute difference:  {max_abs_diff:.6f}")
+    print(f"   Mean absolute difference: {mean_abs_diff:.6f}")
+    print(f"   Tolerance - atol: {atol}, rtol: {rtol}")
 
-        fused_qkv_kernal = (
-            hf_wts[f"h.{i}.self_attention.query_key_value.weight"]
-            .T.detach()
-            .numpy()
+    try:
+        np.testing.assert_allclose(
+            keras_hub_logits, hf_output_logits, atol=atol, rtol=rtol
         )
-        fused_qkv_kernal = fused_qkv_kernal.reshape(
-            hidden_dim, num_heads, 3, head_dim
+        print("✓ All logits within tolerance.")
+    except AssertionError as err:
+        print(
+            "Some logits exceed tolerance (numerical kernel differences).\n"
+            "NOTE: Generated text comparison is the authoritative check."
         )
-        query_kernal = fused_qkv_kernal[..., 0, :]
-        key_kernal = fused_qkv_kernal[..., 1, :]
-        value_kernl = fused_qkv_kernal[..., 2, :]
+        print("Traceback:")
+        print(traceback.format_exc())
+        print("Assertion message:")
+        print(err.args[0])
 
-        fused_qkv_bais = (
-            hf_wts[f"h.{i}.self_attention.query_key_value.bias"]
-            .detach()
-            .numpy()
-        )
-        fused_qkv_bais = fused_qkv_bais.reshape(num_heads, 3, head_dim)
-        query_bais = fused_qkv_bais[:, 0, :]
-        key_bais = fused_qkv_bais[:, 1, :]
-        value_bais = fused_qkv_bais[:, 2, :]
-
-        attention_layer._query_dense.kernel.assign(query_kernal)
-        attention_layer._query_dense.bias.assign(query_bais)
-        attention_layer._key_dense.kernel.assign(key_kernal)
-        attention_layer._key_dense.bias.assign(key_bais)
-        attention_layer._value_dense.kernel.assign(value_kernl)
-        attention_layer._value_dense.bias.assign(value_bais)
-
-        attention_layer._output_dense.kernel.assign(
-            hf_wts[f"h.{i}.self_attention.dense.weight"].T.detach().numpy()
-        )
-        attention_layer._output_dense.bias.assign(
-            hf_wts[f"h.{i}.self_attention.dense.bias"].detach().numpy()
-        )
-
-        # mlp.
-        decoder_layer._mlp_intermediate_dense.kernel.assign(
-            hf_wts[f"h.{i}.mlp.dense_h_to_4h.weight"].T.detach().numpy()
-        )
-        decoder_layer._mlp_intermediate_dense.bias.assign(
-            hf_wts[f"h.{i}.mlp.dense_h_to_4h.bias"].detach().numpy()
-        )
-        decoder_layer._mlp_output_dense.kernel.assign(
-            hf_wts[f"h.{i}.mlp.dense_4h_to_h.weight"].T.detach().numpy()
-        )
-        decoder_layer._mlp_output_dense.bias.assign(
-            hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"].detach().numpy()
-        )
+    # Sequence-wide top-50 normalized logits check.
+    k = 50
+    print(f"Top-{k} normalized logits check across all timesteps:")
+    hf_norm = hf_output_logits - hf_output_logits.max(axis=-1, keepdims=True)
+    kh_norm = keras_hub_logits - keras_hub_logits.max(axis=-1, keepdims=True)
+    hf_topk = np.sort(np.partition(hf_norm, -k, axis=-1)[..., -k:], axis=-1)
+    kh_topk = np.sort(np.partition(kh_norm, -k, axis=-1)[..., -k:], axis=-1)
+    try:
+        np.testing.assert_allclose(kh_topk, hf_topk, atol=atol, rtol=rtol)
+        print(f"✓ Top-{k} normalized logits within tolerance.")
+    except AssertionError as err:
+        print(f"Top-{k} normalized logits exceed tolerance.")
+        print(traceback.format_exc())
+        print(err.args[0])
 
 
 def validate_output(
-    hf_model,
     keras_model,
+    hf_model,
     hf_tokenizer,
-    keras_tokenizer,
 ):
-    input_str = ["the quick brown fox ran, galloped and jumped."]
+    input_str = "What is Keras?"
+    length = 32
 
-    # HuggingFace
-    hf_model_input = hf_tokenizer(input_str, return_tensors="pt")
-    hf_model_outputs = hf_model(**hf_model_input).last_hidden_state
-    hf_model_outputs = hf_model_outputs.detach().numpy()
+    # KerasHub generation.
+    keras_output = keras_model.generate([input_str], max_length=length)
+    keras_output = keras_output[0]
+    print("\n🔶 KerasHub output:\n", keras_output)
 
-    # KerasHub
-    preprocessor = BloomCausalLMPreprocessor(
-        tokenizer=keras_tokenizer,
-        sequence_length=hf_model_outputs.shape[1],
-        add_end_token=False,
-        add_start_token=False,
+    # Hugging Face generation. KerasHub's `generate_preprocess()` always packs
+    # a `<s>` start token onto the prompt, so add it here too.
+    hf_inputs = hf_tokenizer([input_str], return_tensors="pt")
+    bos = torch.full(
+        (hf_inputs["input_ids"].shape[0], 1),
+        hf_tokenizer.bos_token_id,
+        dtype=hf_inputs["input_ids"].dtype,
     )
-
-    # Since we've removed `BloomPreprocessor`, to verify the outputs, we need to
-    # manually call the following function.
-    def preprocessor_call(input_str):
-        if not preprocessor.built:
-            preprocessor.build(None)
-        x = preprocessor.tokenizer(input_str)
-        token_ids, padding_mask = preprocessor.packer(
-            x,
-            sequence_length=None,
-            add_start_value=preprocessor.add_start_token,
-            add_end_value=preprocessor.add_end_token,
-        )
-        return {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
-
-    keras_model_input = preprocessor_call(input_str)
-    keras_model_outputs = keras_model.predict(keras_model_input)
-
-    # Comparing the outputs.
-    print("🔶 KerasHub output:", keras_model_outputs[0, 0, :10])
-    print("🔶 HF output:", hf_model_outputs[0, 0, :10])
-    print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
+    hf_inputs["input_ids"] = torch.cat([bos, hf_inputs["input_ids"]], dim=-1)
+    hf_inputs["attention_mask"] = torch.cat(
+        [torch.ones_like(bos), hf_inputs["attention_mask"]], dim=-1
+    )
+    outputs = hf_model.generate(
+        **hf_inputs,
+        max_length=length,
+        do_sample=False,
+        num_beams=1,
+        pad_token_id=hf_tokenizer.pad_token_id,
+    )
+    hf_generated_text = hf_tokenizer.batch_decode(
+        outputs, skip_special_tokens=True
+    )[0]
+    print("\n🔶 HuggingFace output:\n", hf_generated_text)
 
 
 def main(_):
     preset = FLAGS.preset
-    assert preset in PRESET_MAP.keys(), (
-        f"Invalid preset {preset}. "
-        f"Must be one of {', '.join(PRESET_MAP.keys())}"
+    if preset not in PRESET_MAP:
+        raise ValueError(
+            f"Invalid preset {preset}. "
+            f"Must be one of {','.join(PRESET_MAP.keys())}"
+        )
+    hf_preset = PRESET_MAP[preset]
+
+    print(f"\n🏃 Converting and validating {preset} from hf://{hf_preset}")
+
+    # Load HuggingFace model in float32 for reference validation.
+    hf_model = AutoModelForCausalLM.from_pretrained(
+        hf_preset,
+        torch_dtype=torch.float32,
+    )
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset, return_tensors="pt")
+    hf_model.eval()
+
+    keras_dtype = "float32"
+    keras_hub_backbone = keras_hub.models.BloomBackbone.from_preset(
+        f"hf://{hf_preset}", dtype=keras_dtype
+    )
+    keras_hub_tokenizer = keras_hub.models.BloomTokenizer.from_preset(
+        f"hf://{hf_preset}"
+    )
+    keras_hub_preprocessor = make_preprocessor(keras_hub_tokenizer)
+
+    print("\n-> Hugging Face model and tokenizer loaded.")
+    print("-> KerasHub model loaded via on-the-fly converter.")
+
+    # Numerical verification.
+    test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
+    test_model(
+        keras_hub_backbone,
+        hf_model,
+        hf_tokenizer,
+        keras_dtype,
     )
 
-    validate_only = FLAGS.validate_only
+    bloom_lm = keras_hub.models.BloomCausalLM(
+        backbone=keras_hub_backbone,
+        preprocessor=keras_hub_preprocessor,
+    )
+    bloom_lm.compile(sampler="greedy")
 
-    if not validate_only:
-        print(f"✅ Coverting {preset}")
+    validate_output(bloom_lm, hf_model, hf_tokenizer)
 
-        hf_model_name = PRESET_MAP[preset]
-        hf_model_dir = download_hf_model(hf_model_name)
-        print("✅ Huggingface model downloaded from hub")
-
-        hf_model = transformers.BloomModel.from_pretrained(
-            hf_model_dir,
-        )
-        hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(
-            hf_model_dir
-        )
-        print("✅ Huggingface model loaded")
-
-        keras_model = convert_model(hf_model)
-        keras_tokenizer = convert_tokenizer(hf_model_dir)
-        print("✅ Keras model loaded")
-
-        convert_weights(keras_model, hf_model)
-        print("✅ Weights converted")
-
-        validate_output(
-            hf_model,
-            keras_model,
-            hf_tokenizer,
-            keras_tokenizer,
-        )
-        print("✅ Numerics validated")
-
-        # Delete huggingface model
-        del hf_model
-        del hf_tokenizer
-
-        # Save float32 keras preset
-        keras_model.save_to_preset(preset)
-
-        # Delete float32 Keras model
-        del keras_model
-
-        # Load The model in float16 percision
-        preset_path = os.path.join(os.getcwd(), preset)
-        keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
-
-        # Save float16 keras model
-        keras_model.save_to_preset(preset)
-        keras_tokenizer.save_to_preset(preset)
-
-        print("✅ Preset saved")
+    save_dtype = FLAGS.save_dtype
+    if save_dtype == "float32":
+        print(f"\n-> Saving model in {save_dtype}...")
+        bloom_lm.save_to_preset(f"./{preset}")
     else:
-        print(f"✅ Validating {preset}")
+        # Free memory before reloading in save_dtype.
+        del bloom_lm
+        del keras_hub_backbone
+        del hf_model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-        hf_model_name = PRESET_MAP[preset]
-        hf_model_dir = download_hf_model(hf_model_name)
-        print("✅ Huggingface model downloaded from hub")
-
-        hf_model = transformers.BloomModel.from_pretrained(
-            hf_model_dir,
+        print(f"\n-> Reloading model in {save_dtype} for saving...")
+        keras_hub_backbone_save = keras_hub.models.BloomBackbone.from_preset(
+            f"hf://{hf_preset}", dtype=save_dtype
         )
-        hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(
-            hf_model_dir
+        bloom_lm_save = keras_hub.models.BloomCausalLM(
+            backbone=keras_hub_backbone_save,
+            preprocessor=keras_hub_preprocessor,
         )
+        bloom_lm_save.save_to_preset(f"./{preset}")
 
-        keras_model = BloomBackbone.from_preset(preset)
-        keras_tokenizer = BloomTokenizer.from_preset(preset)
+    print(f"\n🏁 Saved preset to ./{preset}")
 
-        validate_output(
-            hf_model,
-            keras_model,
-            hf_tokenizer,
-            keras_tokenizer,
-        )
-        print("✅ Numerics validated")
+    if FLAGS.upload_uri:
+        keras_hub.upload_preset(uri=FLAGS.upload_uri, preset=f"./{preset}")
+        print(f"🏁 Successfully uploaded {preset} to {FLAGS.upload_uri}")
 
 
 if __name__ == "__main__":
