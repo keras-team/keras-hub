@@ -27,6 +27,7 @@ from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
+from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_pali_gemma
@@ -96,6 +97,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
+        elif model_type == "mistral3":
+            self.converter = convert_mistral3
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":
