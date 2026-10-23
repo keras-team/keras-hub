@@ -15,6 +15,7 @@ from keras_hub.src.utils.transformers import convert_diffusion_gemma
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
+from keras_hub.src.utils.transformers import convert_embedding_gemma2
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_flux
 from keras_hub.src.utils.transformers import convert_flux2
@@ -86,6 +87,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "embedding_gemma2":
+            self.converter = convert_embedding_gemma2
         elif model_type == "gemma4_assistant":
             self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
