@@ -77,22 +77,10 @@ class Qwen3_5MoeCausalLMTest(TestCase):
         )
 
     def test_generate(self):
-        causal_lm = Qwen3_5MoeCausalLM(**self.init_kwargs)
-        # String input.
-        prompt = " airplane at airport"
-        output = causal_lm.generate(" airplane at airport")
-        self.assertTrue(prompt in output)
-        # Int tensor input.
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        self.assertAllEqual(
-            outputs["token_ids"][:, :5],
-            prompt_ids["token_ids"][:, :5],
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :5],
-            prompt_ids["padding_mask"][:, :5],
+        self.run_generate_test(
+            cls=Qwen3_5MoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=" airplane at airport",
         )
 
     def test_generate_strip_prompt(self):
@@ -119,14 +107,11 @@ class Qwen3_5MoeCausalLMTest(TestCase):
             self.assertEqual(prompt, output)
 
     def test_generate_compilation(self):
-        causal_lm = Qwen3_5MoeCausalLM(**self.init_kwargs)
-        causal_lm.generate(" airplane at airport")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate(" airplane at airport")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=Qwen3_5MoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=" airplane at airport",
+        )
 
     def test_cache_shapes(self):
         """Verify that _build_cache produces caches with correct shapes."""
