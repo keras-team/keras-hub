@@ -1,7 +1,4 @@
-from unittest.mock import patch
-
 import pytest
-from keras import ops
 
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm import Qwen3_5CausalLM
@@ -81,21 +78,11 @@ class Qwen3_5CausalLMTest(TestCase):
         self.assertFalse(output.startswith(prompt))
 
     def test_early_stopping(self):
-        causal_lm = Qwen3_5CausalLM(**self.init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = [" airplane at airport", " airplane"]
-            output = causal_lm.generate(prompt)
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Qwen3_5CausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=[" airplane at airport", " airplane"],
+        )
 
     def test_generate_compilation(self):
         self.run_generate_compilation_test(

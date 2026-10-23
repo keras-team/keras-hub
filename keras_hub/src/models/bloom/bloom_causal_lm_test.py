@@ -68,50 +68,28 @@ class BloomCausalLMTest(TestCase):
         backbone = BloomBackbone.from_config(
             {**self.backbone.get_config(), "dtype": "bfloat16"}
         )
-        causal_lm = BloomCausalLM(
-            backbone=backbone, preprocessor=self.preprocessor
-        )
-        # String input.
-        prompt = "airplane at airport"
-        output = causal_lm.generate(prompt)
-        self.assertTrue(prompt in output)
-        # Int tensor input.
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        # Assert prompt is in output in token id space.
-        self.assertAllEqual(
-            outputs["token_ids"][:, :4],
-            prompt_ids["token_ids"][:, :4],
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :4],
-            prompt_ids["padding_mask"][:, :4],
+        self.run_generate_test(
+            cls=BloomCausalLM,
+            init_kwargs={
+                "backbone": backbone,
+                "preprocessor": self.preprocessor,
+            },
+            prompt="airplane at airport",
+            num_prompt_tokens=4,
         )
 
     def test_generate_with_mixed_float16(self):
         backbone = BloomBackbone.from_config(
             {**self.backbone.get_config(), "dtype": "mixed_float16"}
         )
-        causal_lm = BloomCausalLM(
-            backbone=backbone, preprocessor=self.preprocessor
-        )
-        # String input.
-        prompt = "airplane at airport"
-        output = causal_lm.generate(prompt)
-        self.assertTrue(prompt in output)
-        # Int tensor input.
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        # Assert prompt is in output in token id space.
-        self.assertAllEqual(
-            outputs["token_ids"][:, :4],
-            prompt_ids["token_ids"][:, :4],
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :4],
-            prompt_ids["padding_mask"][:, :4],
+        self.run_generate_test(
+            cls=BloomCausalLM,
+            init_kwargs={
+                "backbone": backbone,
+                "preprocessor": self.preprocessor,
+            },
+            prompt="airplane at airport",
+            num_prompt_tokens=4,
         )
 
     def test_early_stopping(self):
