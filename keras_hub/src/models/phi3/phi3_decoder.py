@@ -8,7 +8,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_hub.src.models.phi3.phi3_attention import Phi3Attention
-from keras_hub.src.models.phi3.phi3_layernorm import Phi3LayerNorm
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -54,7 +53,7 @@ class Phi3Decoder(keras.layers.Layer):
 
     def build(self, decoder_sequence_shape):
         # Pre-attention layernorm.
-        self.pre_attention_layernorm = Phi3LayerNorm(
+        self.pre_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="pre_attention_layernorm",
@@ -79,7 +78,7 @@ class Phi3Decoder(keras.layers.Layer):
         self.attention.build(decoder_sequence_shape)
 
         # Post-attention layernorm.
-        self.post_attention_layernorm = Phi3LayerNorm(
+        self.post_attention_layernorm = keras.layers.RMSNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="post_attention_layernorm",
