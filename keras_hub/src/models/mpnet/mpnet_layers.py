@@ -138,6 +138,18 @@ class MPNetAttention(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
 
+        # The softmax always runs in float32 for numerical stability.
+        self.softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
+        self.dropout_layer = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="attention_dropout",
+        )
+
     def build(self, inputs_shape):
         hidden_dim = inputs_shape[-1]
         if hidden_dim % self.num_heads != 0:
@@ -176,17 +188,6 @@ class MPNetAttention(keras.layers.Layer):
         )
         self.output_dense.build(
             (None, None, self.num_heads, self.head_dim),
-        )
-        # The softmax always runs in float32 for numerical stability.
-        self.softmax = keras.layers.Softmax(
-            axis=-1,
-            dtype="float32",
-            name="attention_softmax",
-        )
-        self.dropout_layer = keras.layers.Dropout(
-            rate=self.dropout,
-            dtype=self.dtype_policy,
-            name="attention_dropout",
         )
         self.built = True
 

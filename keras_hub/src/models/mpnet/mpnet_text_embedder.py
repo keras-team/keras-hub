@@ -131,8 +131,10 @@ class MPNetTextEmbedder(TextEmbedder):
             ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
         )
         sum_embeddings = ops.sum(sequence_output * mask, axis=1)
-        # Same clamp as sentence-transformers.
-        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-9)
+        # The mask sum is a token count, so clamping it to 1 only affects
+        # fully padded rows (zeros instead of `0 / 0`). A small epsilon such
+        # as `1e-9` or `1e-5` underflows or is flushed to zero in float16.
+        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1.0)
         return sum_embeddings / sum_mask
 
     @staticmethod

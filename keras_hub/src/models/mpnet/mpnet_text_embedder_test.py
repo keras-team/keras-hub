@@ -140,6 +140,13 @@ class MPNetTextEmbedderTest(TestCase):
         self.assertAllClose(pooled_full, [[14.0 / 3, 26.0 / 3]], atol=1e-5)
         self.assertNotAllClose(pooled_partial, pooled_full)
 
+    def test_mean_pooling_fully_padded_row(self):
+        # A fully padded row must pool to zeros, not NaN, even in float16.
+        sequence_output = ops.ones((2, 3, 2), dtype="float16")
+        padding_mask = np.array([[1, 1, 0], [0, 0, 0]], dtype="int32")
+        pooled = MPNetTextEmbedder._mean_pooling(sequence_output, padding_mask)
+        self.assertAllClose(pooled, [[1.0, 1.0], [0.0, 0.0]])
+
     def test_similarity(self):
         embedder = MPNetTextEmbedder(**self.init_kwargs)
         query = embedder.encode_text("the quick brown fox.")
