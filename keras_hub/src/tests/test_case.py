@@ -1342,7 +1342,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
-    def run_early_stopping_test(self, cls, init_kwargs, prompt):
+    def run_early_stopping_test(
+        self, cls, init_kwargs, prompt, **generate_kwargs
+    ):
         """Check generation stops at once when the end token is favored."""
         causal_lm = cls(**init_kwargs)
         call_with_cache = causal_lm.call_with_cache
@@ -1357,7 +1359,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            output = causal_lm.generate(prompt)
+            output = causal_lm.generate(prompt, **generate_kwargs)
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
