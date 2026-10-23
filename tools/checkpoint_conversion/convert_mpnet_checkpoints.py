@@ -5,26 +5,30 @@ This script converts an MPNet sentence-transformer model (e.g.
 verifies numerical parity against the reference `SentenceTransformer`
 implementation, and saves the result as a KerasHub preset.
 
-Setup:
+Setup (from the root of a keras-hub checkout):
 ```shell
-pip install keras-hub keras sentence-transformers safetensors huggingface_hub
+pip install -e .
+pip install sentence-transformers safetensors huggingface_hub
 ```
-To run (from a checkout installed with `pip install -e .`):
 
 Usage:
 ```shell
 python tools/checkpoint_conversion/convert_mpnet_checkpoints.py \
     --preset all_mpnet_base_v2_en
 ```
+
+The Keras backend defaults to torch and can be set with `KERAS_BACKEND`
+(e.g. `KERAS_BACKEND=jax`). The KerasHub model runs on a GPU when one is
+available, while the reference model always runs on the CPU.
 """
 
 import json
 import os
 import tempfile
 
-os.environ["KERAS_BACKEND"] = "torch"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ.setdefault("KERAS_BACKEND", "torch")
 
+import keras
 import numpy as np
 import torch
 from absl import app
@@ -85,6 +89,9 @@ TEST_TEXTS = [
 EMBEDDING_TOLERANCE = 1e-5
 # The maximum absolute difference allowed between the final hidden states.
 HIDDEN_STATE_TOLERANCE = 1e-4
+# The maximum absolute difference allowed between the embeddings of the
+# converted model and of the reloaded preset.
+RELOAD_TOLERANCE = 1e-6
 
 
 def convert_model(preset_dir):
@@ -221,14 +228,42 @@ def check_semantic_search(keras_model, hf_model):
 
 
 def check_saved_preset(keras_model, preset):
-    """Reload the saved preset and compare outputs."""
+    """Reload the saved preset and compare weights and outputs."""
     # Use a path, a bare name would resolve to the registered Kaggle preset.
     reloaded = MPNetTextEmbedder.from_preset(os.path.abspath(preset))
+    weights_match = len(keras_model.weights) == len(reloaded.weights) and all(
+        np.array_equal(ops.convert_to_numpy(a), ops.convert_to_numpy(b))
+        for a, b in zip(keras_model.weights, reloaded.weights)
+    )
     original = np.asarray(keras_model.predict(TEST_TEXTS, verbose=0))
     restored = np.asarray(reloaded.predict(TEST_TEXTS, verbose=0))
     max_diff = np.max(np.abs(original - restored))
+    print(f"Weights identical after reload: {weights_match}")
     print(f"Max abs diff after reload: {max_diff:.2e}")
-    return max_diff == 0.0
+    # The weights must match exactly. GPU kernels are not guaranteed to be
+    # bitwise reproducible across separately compiled models, so the outputs
+    # get a tiny tolerance.
+    return weights_match and max_diff <= RELOAD_TOLERANCE
+
+
+def configure_devices():
+    """Use full float32 matmuls on GPUs and keep TensorFlow on the CPU."""
+    import tensorflow as tf
+
+    # On Ampere and newer GPUs, TF32 matmuls would inflate the diffs against
+    # the float32 reference to ~1e-3.
+    torch.backends.cuda.matmul.allow_tf32 = False
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        jax.config.update("jax_default_matmul_precision", "highest")
+    if backend == "tensorflow":
+        tf.config.experimental.enable_tensor_float_32_execution(False)
+    else:
+        # TensorFlow only runs the tokenizer's string ops. Keeping it off the
+        # GPU stops it from reserving memory that torch or JAX needs.
+        tf.config.set_visible_devices([], "GPU")
 
 
 def main(_):
@@ -239,12 +274,16 @@ def main(_):
             f"{','.join(PRESET_MAP.keys())}"
         )
     hf_model_id = PRESET_MAP[preset]
-    print(f"Converting {hf_model_id} -> {preset}")
+    backend = keras.config.backend()
+    print(f"Converting {hf_model_id} -> {preset} ({backend} backend)")
+    configure_devices()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         for filename in HF_FILES:
             hf_hub_download(hf_model_id, filename, local_dir=temp_dir)
         keras_model = convert_model(temp_dir)
+    device = keras_model.backbone.weights[0].value.device
+    print(f"KerasHub model device: {device}")
 
     hf_model = SentenceTransformer(hf_model_id, device="cpu")
     hf_model.eval()
