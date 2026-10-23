@@ -327,7 +327,7 @@ def test_token_ids(keras_model, hf_results, label):
 # Fraction of logits allowed outside `atol=rtol=1e-3`. Text must match
 # exactly. Image and video keep a small budget for float32 rounding in the
 # vision tower.
-MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 8e-5, "VIDEO": 8e-5}
+MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 5e-5, "VIDEO": 4.5e-5}
 
 
 def _report_numerics(label, keras_logits, hf_logits, vision_indices):
