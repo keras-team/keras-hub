@@ -1,9 +1,7 @@
 import copy
-from unittest.mock import patch
 
 import numpy as np
 from absl.testing import parameterized
-from keras import ops
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
@@ -298,54 +296,26 @@ class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
         self.skipTest("Gemma3n has no fused attention path. See issue #3113.")
 
     def test_text_early_stopping(self):
-        causal_lm = Gemma3nCausalLM(**self.text_init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.text_preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the quick"]
-            output = causal_lm.generate(prompt)
-            # We should immediately abort and output the prompt.
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt=["the quick brown fox", "the quick"],
+        )
 
     def test_text_multitoken_stopping(self):
-        causal_lm = Gemma3nCausalLM(**self.text_init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.text_preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the quick"]
-            output = causal_lm.generate(prompt, stop_token_ids=(3,))
-            # We should immediately abort and output the prompt.
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt=["the quick brown fox", "the quick"],
+            stop_token_ids=(3,),
+        )
 
     def test_text_generate_compilation(self):
-        causal_lm = Gemma3nCausalLM(**self.text_init_kwargs)
-        # Assert we do not recompile with successive calls.
-        causal_lm.generate("the quick brown fox")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate("the quick brown fox")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=Gemma3nCausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt="the quick brown fox",
+        )
 
     def test_vision_generate(self):
         causal_lm = Gemma3nCausalLM(**self.vision_init_kwargs)
