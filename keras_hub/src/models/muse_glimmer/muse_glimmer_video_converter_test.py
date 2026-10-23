@@ -58,8 +58,8 @@ class MuseGlimmerVideoConverterTest(TestCase):
             merge_size=1,
             num_frames=2,
             max_video_frame_tokens=1,
-            scale=2 / 255.0,
-            offset=-1.0,
+            image_mean=127.5,
+            image_std=127.5,
             interpolation="bilinear",
             antialias=True,
         )
@@ -123,8 +123,8 @@ class MuseGlimmerVideoConverterTest(TestCase):
             "num_frames": 2,
             "max_video_frame_tokens": 16,
             "interpolation": "bilinear",
-            "scale": [2 / 255.0] * 3,
-            "offset": [-1.0] * 3,
+            "image_mean": [127.5] * 3,
+            "image_std": [127.5] * 3,
         }
         video = np.random.uniform(0, 255, (2, 8, 8, 3)).astype("float32")
         expected = MuseGlimmerVideoConverter(**kwargs)(video)
@@ -143,7 +143,8 @@ class MuseGlimmerVideoConverterTest(TestCase):
             merge_size=2,
             num_frames=8,
             max_video_frame_tokens=16,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         video = np.random.randint(0, 255, (4, 16, 16, 3)).astype("float32")
         output = converter(video)
@@ -259,6 +260,17 @@ class MuseGlimmerVideoConverterTest(TestCase):
         self.assertEqual(int(output["grid_thw"][0]), 2)
         self.assertAllClose(output["patches"][0], [0.0] * 12 + [2.0] * 12)
         self.assertAllClose(output["patches"][-1], [4.0] * 12 + [7.0] * 12)
+
+    def test_scale_and_offset_are_rejected_and_not_saved(self):
+        with self.assertRaisesRegex(ValueError, "image_mean"):
+            MuseGlimmerVideoConverter(scale=1 / 255.0)
+        with self.assertRaisesRegex(ValueError, "image_mean"):
+            MuseGlimmerVideoConverter(offset=-1.0)
+        config = MuseGlimmerVideoConverter(
+            image_mean=[127.5] * 3, image_std=[127.5] * 3
+        ).get_config()
+        self.assertNotIn("scale", config)
+        self.assertNotIn("offset", config)
 
     def test_serialization(self):
         converter = MuseGlimmerVideoConverter(patch_size=14)

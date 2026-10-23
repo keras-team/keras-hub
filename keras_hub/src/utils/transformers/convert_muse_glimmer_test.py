@@ -182,8 +182,8 @@ class TestMuseGlimmerConverter(TestCase, parameterized.TestCase):
         self.assertEqual(config["max_image_tokens"], 4096)
         self.assertEqual(config["interpolation"], "lanczos3")
         self.assertTrue(config["antialias"])
-        self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
-        self.assertEqual(config["offset"], [-1.0] * 3)
+        self.assertEqual(config["image_mean"], [127.5] * 3)
+        self.assertEqual(config["image_std"], [127.5] * 3)
 
     def test_load_video_converter_config(self):
         processor_config = {
@@ -216,8 +216,8 @@ class TestMuseGlimmerConverter(TestCase, parameterized.TestCase):
         self.assertEqual(config["max_video_frame_tokens"], 144)
         self.assertEqual(config["interpolation"], "lanczos3")
         self.assertTrue(config["antialias"])
-        self.assertEqual(config["scale"], [2.0 / 255.0] * 3)
-        self.assertEqual(config["offset"], [-1.0] * 3)
+        self.assertEqual(config["image_mean"], [127.5] * 3)
+        self.assertEqual(config["image_std"], [127.5] * 3)
 
     def test_convert_backbone_config_with_vision(self):
         transformers_config = {

@@ -88,7 +88,8 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             patch_temporal=2,
             merge_size=2,
             max_image_tokens=64,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         # Map `image_token_id` to a vocabulary token, so prompts can
         # contain image placeholders.
@@ -270,6 +271,25 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             sequence_length=sequence_length,
         )
 
+    def test_generate_scalar_prompt_with_image_returns_string(self):
+        causal_lm = MuseGlimmerCausalLM(
+            backbone=self.multimodal_causal_lm.backbone,
+            preprocessor=self.multimodal_preprocessor,
+        )
+        causal_lm.compile(sampler="greedy")
+        image = np.ones((16, 16, 3), dtype="float32") * 127.0
+        # The image key comes last in one call and first in the other.
+        for inputs in (
+            {"prompts": "<|image|> air", "images": image},
+            {"images": image, "prompts": "<|image|> air"},
+        ):
+            self.assertIsInstance(causal_lm.generate(inputs), str)
+        output = causal_lm.generate(
+            {"prompts": ["<|image|> air"], "images": [image]}
+        )
+        self.assertIsInstance(output, list)
+        self.assertLen(output, 1)
+
     def _first_image_position(self, row_token_ids):
         tokenizer = self.multimodal_preprocessor.tokenizer
         is_image = convert_to_numpy(row_token_ids) == tokenizer.image_token_id
@@ -360,8 +380,8 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             hidden_dim=32,
             intermediate_dim=32,
             head_dim=8,
-            sliding_window_size=None,
-            layer_types=["full_attention", "full_attention"],
+            sliding_window_size=3,
+            layer_types=["sliding_attention", "full_attention"],
             use_bidirectional_attention=True,
             context_projection_layer_ids=[0, 1],
             use_external_embeddings=True,
@@ -518,8 +538,8 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         if running_on_gpu():
             # TF32 drift flips int8 rounding on GPU. The two compiled
             # functions then pick different tokens from near-tied logits,
-            # starting at the first generated token. Compare only the shape
-            # and the prompt.
+            # starting at the first generated token. Each assisted token
+            # must stay in the top 2 of the target logits at its step.
             prompt_length = int(
                 np.sum(convert_to_numpy(prompt_ids["padding_mask"]))
             )
@@ -527,6 +547,18 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             self.assertAllEqual(
                 output_ids[:, :prompt_length], reference_ids[:, :prompt_length]
             )
+            logits = convert_to_numpy(
+                self.causal_lm(
+                    {
+                        "token_ids": output["token_ids"],
+                        "padding_mask": output["padding_mask"],
+                    }
+                )
+            )
+            for position in range(prompt_length, output_ids.shape[1]):
+                top_2 = np.argsort(logits[:, position - 1], axis=-1)[:, -2:]
+                for row, token in enumerate(output_ids[:, position]):
+                    self.assertIn(token, top_2[row])
         else:
             self.assertAllEqual(output_ids, reference_ids)
 
@@ -585,6 +617,10 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         out_of_range.mask_token_id = vocabulary_size
         with self.assertRaisesRegex(ValueError, "mask_token_id"):
             generate(out_of_range)
+        no_layer_ids = self._make_assistant(block_size=3)
+        no_layer_ids.backbone.context_projection_layer_ids = None
+        with self.assertRaisesRegex(ValueError, "context_projection_layer_ids"):
+            generate(no_layer_ids)
         bad_layer_ids = self._make_assistant(block_size=3)
         bad_layer_ids.backbone.context_projection_layer_ids = [1, 7]
         with self.assertRaisesRegex(ValueError, "context_projection_layer_ids"):

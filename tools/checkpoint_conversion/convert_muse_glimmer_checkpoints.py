@@ -55,6 +55,10 @@ VIDEO_URL = (
     "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/"
     "Big_Buck_Bunny_360_10s_1MB.mp4"
 )
+ASSET_CACHE_DIR = os.path.join(
+    os.path.expanduser("~"), ".cache", "keras_hub_muse_glimmer"
+)
+
 TEXT_PROMPT = "What is Keras?"
 # Bare placeholders. The HF processor and the KerasHub preprocessor both
 # expand them to the full layout with the delimiter tokens.
@@ -75,10 +79,27 @@ flags.DEFINE_bool(
 )
 
 
-def _load_image_asset():
-    response = requests.get(IMAGE_URL, timeout=30)
+def _fetch_asset(url, timeout):
+    """Return the bytes at `url`, cached on disk after the first download.
+
+    Some hosts return 403 to the default python-requests user agent.
+    """
+    cache_path = os.path.join(ASSET_CACHE_DIR, os.path.basename(url))
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            return f.read()
+    response = requests.get(
+        url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout
+    )
     response.raise_for_status()
-    return Image.open(BytesIO(response.content)).convert("RGB")
+    os.makedirs(ASSET_CACHE_DIR, exist_ok=True)
+    with open(cache_path, "wb") as f:
+        f.write(response.content)
+    return response.content
+
+
+def _load_image_asset():
+    return Image.open(BytesIO(_fetch_asset(IMAGE_URL, 30))).convert("RGB")
 
 
 def _load_video_asset():
@@ -95,9 +116,7 @@ def _load_video_asset():
         ) from error
 
     try:
-        response = requests.get(VIDEO_URL, timeout=60)
-        response.raise_for_status()
-        container = av.open(BytesIO(response.content))
+        container = av.open(BytesIO(_fetch_asset(VIDEO_URL, 60)))
         video_stream = container.streams.video[0]
         fps = float(video_stream.average_rate)
         frames = [
@@ -189,11 +208,6 @@ def _precompute_multimodal_outputs(
     modality,
     video_metadata=None,
 ):
-    visual_key = (
-        "pixel_values" if modality == "image" else "pixel_values_videos"
-    )
-    grid_key = "image_grid_thw" if modality == "image" else "video_grid_thw"
-
     hf_inputs = _build_hf_multimodal_inputs(
         hf_tokenizer,
         processor,
@@ -209,15 +223,8 @@ def _precompute_multimodal_outputs(
     result = {
         "prompt": prompt,
         "input_ids": hf_inputs["input_ids"].cpu().numpy().astype(np.int32),
-        "attention_mask": hf_inputs["attention_mask"]
-        .cpu()
-        .numpy()
-        .astype(np.int32),
         "logits": hf_outputs.logits.detach().cpu().float().numpy(),
-        "grid_thw": hf_inputs[grid_key].cpu().numpy().astype(np.int32),
-        "pixel_values": hf_inputs[visual_key].cpu().float().numpy(),
         "media": np.asarray(media) if modality == "image" else media,
-        "modality": modality,
     }
 
     if not FLAGS.skip_generation:
@@ -291,32 +298,6 @@ def test_parameter_count(keras_backbone, hf_param_count):
     print("  ✓ Parameter counts match!")
 
 
-def _build_keras_multimodal_inputs(keras_model, result):
-    token_ids = result["input_ids"]
-    if result["modality"] == "image":
-        placeholder_id = keras_model.preprocessor.tokenizer.image_token_id
-    else:
-        placeholder_id = keras_model.preprocessor.tokenizer.video_token_id
-    vision_indices = np.where(token_ids[0] == placeholder_id)[0].astype(
-        np.int32
-    )[np.newaxis, :]
-
-    pixel_values = result["pixel_values"]
-    if pixel_values.ndim == 2:
-        pixel_values = pixel_values[np.newaxis, ...]
-    grid_thw = result["grid_thw"]
-    if grid_thw.ndim == 2:
-        grid_thw = grid_thw[np.newaxis, ...]
-
-    return {
-        "token_ids": token_ids,
-        "padding_mask": result["attention_mask"],
-        "pixel_values": pixel_values,
-        "image_grid_thw": grid_thw,
-        "vision_indices": vision_indices,
-    }
-
-
 def test_token_ids(keras_model, hf_results, label):
     if label == "TEXT":
         hf_ids = hf_results["text_token_ids"]
@@ -346,13 +327,31 @@ def test_token_ids(keras_model, hf_results, label):
 # Fraction of logits allowed outside `atol=rtol=1e-3`. Text must match
 # exactly. Image and video keep a small budget for float32 rounding in the
 # vision tower.
-MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 1e-3, "VIDEO": 1e-3}
+MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 8e-5, "VIDEO": 8e-5}
 
 
-def _report_numerics(label, keras_logits, hf_logits):
+def _report_numerics(label, keras_logits, hf_logits, vision_indices):
+    """Print the logit gap and return `True` if it is beyond the budget.
+
+    A logit mismatches when it differs from HF by more than
+    `atol=1e-3, rtol=1e-3`. `MAX_MISMATCH_FRACTION` sets how many logits
+    may mismatch.
+    """
     abs_diff = np.abs(keras_logits - hf_logits)
+    per_position = abs_diff.reshape(-1, abs_diff.shape[-1]).max(axis=-1)
     print(f"\nlogit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"logit max absolute diff:  {abs_diff.max():.6f}")
+    print(
+        f"logit max diff at worst position ({int(per_position.argmax())} of "
+        f"{per_position.size}): {per_position.max():.6f}"
+    )
+    print(f"logit max diff at last position: {per_position[-1]:.6f}")
+    if vision_indices is not None:
+        vision_diff = per_position[np.asarray(vision_indices).reshape(-1)]
+        print(
+            f"logit max diff at vision positions: {vision_diff.max():.6f} "
+            f"(mean {vision_diff.mean():.6f})"
+        )
     tol = 1e-3 + 1e-3 * np.abs(hf_logits)
     mismatched = int(np.sum(abs_diff > tol))
     total = hf_logits.size
@@ -361,15 +360,44 @@ def _report_numerics(label, keras_logits, hf_logits):
         f"  [{label}] {mismatched}/{total} logits outside "
         f"atol=1e-3, rtol=1e-3 (matching={pct:.4f}%)."
     )
-    if mismatched / total > MAX_MISMATCH_FRACTION[label]:
-        raise AssertionError(
-            f"[{label}] logits differ from HF beyond tolerance: "
-            f"{mismatched}/{total} outside atol=1e-3, rtol=1e-3."
+    beyond_budget = mismatched / total > MAX_MISMATCH_FRACTION[label]
+    if beyond_budget:
+        print(
+            f" ✗ [{label}] logits differ from HF beyond the allowed "
+            f"{MAX_MISMATCH_FRACTION[label]:g} of logits."
         )
-    print(f" ✓ [{label}] logits match HF.")
+    else:
+        print(f" ✓ [{label}] logits match HF.")
+    return beyond_budget
+
+
+def _prepare_media_inputs(keras_model, result, media_key):
+    """Run a raw prompt and its media through the preprocessor.
+
+    Returns the batch-of-one inputs that the model expects.
+    """
+    preprocessed = keras_model.preprocessor.generate_preprocess(
+        {"prompts": [result["prompt"]], media_key: result["media"]},
+        sequence_length=result["input_ids"].shape[1],
+    )
+    preprocessed = {
+        key: ops.convert_to_numpy(value) for key, value in preprocessed.items()
+    }
+    return {
+        "token_ids": preprocessed["token_ids"].reshape(1, -1),
+        "padding_mask": preprocessed["padding_mask"].reshape(1, -1),
+        "pixel_values": preprocessed["pixel_values"][np.newaxis],
+        "image_grid_thw": preprocessed["image_grid_thw"][np.newaxis],
+        "vision_indices": preprocessed["vision_indices"].reshape(1, -1),
+    }
 
 
 def test_numerics(keras_model, hf_results, label):
+    """Compare logits with HF and return `True` if they are beyond budget.
+
+    Every check runs the raw prompt and media through the preprocessor.
+    The image and video converters are in the measured pass.
+    """
     if label == "TEXT":
         model_inputs, _, _ = keras_model.preprocessor(
             [TEXT_PROMPT],
@@ -379,17 +407,23 @@ def test_numerics(keras_model, hf_results, label):
             keras_logits = ops.convert_to_numpy(
                 keras_model(model_inputs)
             ).astype(np.float32)
-        _report_numerics(label, keras_logits, hf_results["text_logits"])
-        return
+        return _report_numerics(
+            label, keras_logits, hf_results["text_logits"], None
+        )
 
     result = hf_results[label.lower()]
-    keras_inputs = _build_keras_multimodal_inputs(keras_model, result)
-
+    media_key = "images" if label == "IMAGE" else "videos"
+    model_inputs = _prepare_media_inputs(keras_model, result, media_key)
     with torch.no_grad():
-        keras_logits = ops.convert_to_numpy(keras_model(keras_inputs)).astype(
+        keras_logits = ops.convert_to_numpy(keras_model(model_inputs)).astype(
             np.float32
         )
-    _report_numerics(label, keras_logits, result["logits"])
+    return _report_numerics(
+        label,
+        keras_logits,
+        result["logits"],
+        model_inputs["vision_indices"][0],
+    )
 
 
 def test_generation(keras_model, hf_results, label):
@@ -432,17 +466,23 @@ def validate_output(keras_model, hf_results):
         test_token_ids(keras_model, hf_results, label)
 
     print("\n--- Numerics Verification ---")
-    for label in labels:
-        test_numerics(keras_model, hf_results, label)
+    failed = [
+        label
+        for label in labels
+        if test_numerics(keras_model, hf_results, label)
+    ]
 
-    if FLAGS.skip_generation:
-        return
+    if not FLAGS.skip_generation:
+        keras_model.compile(sampler="greedy")
 
-    keras_model.compile(sampler="greedy")
+        print("\n--- Text Generation ---")
+        for label in labels:
+            test_generation(keras_model, hf_results, label)
 
-    print("\n--- Text Generation ---")
-    for label in labels:
-        test_generation(keras_model, hf_results, label)
+    if failed:
+        raise AssertionError(
+            f"Logits differ from HF beyond tolerance for: {failed}."
+        )
 
 
 def save_preset(keras_model, preset_name):

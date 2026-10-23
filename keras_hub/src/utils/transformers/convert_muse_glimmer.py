@@ -12,17 +12,21 @@ backbone_cls = MuseGlimmerBackbone
 
 
 def _get_normalization(processor_config):
-    scale = [
-        processor_config["rescale_factor"] / value
+    """Return the mean and std in pixel units, as the HF processor fuses them.
+
+    The HF processor multiplies the float32 mean and std by
+    `1 / rescale_factor`. Then it computes `(x - mean) / std` in float32.
+    """
+    to_pixel_units = np.float32(1.0 / processor_config["rescale_factor"])
+    image_mean = [
+        float(np.float32(value) * to_pixel_units)
+        for value in processor_config["image_mean"]
+    ]
+    image_std = [
+        float(np.float32(value) * to_pixel_units)
         for value in processor_config["image_std"]
     ]
-    offset = [
-        -mean / std
-        for mean, std in zip(
-            processor_config["image_mean"], processor_config["image_std"]
-        )
-    ]
-    return scale, offset
+    return image_mean, image_std
 
 
 def load_image_converter_config(preset, transformers_config):
@@ -33,14 +37,14 @@ def load_image_converter_config(preset, transformers_config):
     processor_config = load_json(preset, "processor_config.json")[
         "image_processor"
     ]
-    scale, offset = _get_normalization(processor_config)
+    image_mean, image_std = _get_normalization(processor_config)
     return {
         "patch_size": processor_config["patch_size"],
         "patch_temporal": processor_config["temporal_patch_size"],
         "merge_size": processor_config["merge_size"],
         "max_image_tokens": processor_config["max_image_tokens"],
-        "scale": scale,
-        "offset": offset,
+        "image_mean": image_mean,
+        "image_std": image_std,
         "interpolation": "lanczos3",
         "antialias": True,
     }
@@ -54,7 +58,7 @@ def load_video_converter_config(preset, transformers_config):
     processor_config = load_json(preset, "processor_config.json")[
         "video_processor"
     ]
-    scale, offset = _get_normalization(processor_config)
+    image_mean, image_std = _get_normalization(processor_config)
     return {
         "patch_size": processor_config["patch_size"],
         "patch_temporal": processor_config["temporal_patch_size"],
@@ -62,8 +66,8 @@ def load_video_converter_config(preset, transformers_config):
         "fps": processor_config["fps"],
         "num_frames": processor_config["num_frames"],
         "max_video_frame_tokens": processor_config["max_video_frame_tokens"],
-        "scale": scale,
-        "offset": offset,
+        "image_mean": image_mean,
+        "image_std": image_std,
         "interpolation": "lanczos3",
         "antialias": True,
     }

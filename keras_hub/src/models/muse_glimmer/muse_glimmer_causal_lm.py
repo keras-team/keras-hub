@@ -17,6 +17,7 @@ from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.samplers.top_k_sampler import TopKSampler
 from keras_hub.src.samplers.top_p_sampler import TopPSampler
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.MuseGlimmerCausalLM")
@@ -591,6 +592,12 @@ class MuseGlimmerCausalLM(CausalLM):
                 f"`mask_token_id={mask_token_id}`."
             )
         layer_ids = assistant_model.backbone.context_projection_layer_ids
+        if layer_ids is None:
+            raise ValueError(
+                "The assistant backbone must set "
+                "`context_projection_layer_ids`. Received "
+                "`context_projection_layer_ids=None`."
+            )
         num_layers = self.backbone.num_layers
         if any(not 0 <= layer_id < num_layers for layer_id in layer_ids):
             raise ValueError(
@@ -624,6 +631,30 @@ class MuseGlimmerCausalLM(CausalLM):
         super()._post_quantize(mode, **kwargs)
         # The cached assisted function holds the old target variables.
         self._assisted_generate_cache = None
+
+    def _normalize_generate_inputs(self, inputs):
+        if tf and isinstance(inputs, tf.data.Dataset):
+            return inputs.as_numpy_iterator(), False
+
+        if self.preprocessor is None:
+            return [inputs], False
+
+        def normalize(x):
+            if isinstance(x, str):
+                return [x], True
+            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                return x[tf.newaxis], True
+            return x, False
+
+        if isinstance(inputs, dict):
+            inputs = dict(inputs)
+            inputs["prompts"], input_is_scalar = normalize(inputs["prompts"])
+            if "responses" in inputs:
+                inputs["responses"], _ = normalize(inputs["responses"])
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+
+        return [inputs], input_is_scalar
 
     def generate(
         self,

@@ -103,6 +103,16 @@ class MuseGlimmerVideoConverter(VideoConverter):
             `96`.
         max_video_frame_tokens: int. Maximum merged vision tokens per
             frame. Defaults to `144`.
+        image_mean: float, list of floats, or `None`. Per-channel mean in
+            pixel units `[0, 255]`. The converter computes
+            `(frame - image_mean) / image_std` in float32. Defaults to `None`.
+        image_std: float, list of floats, or `None`. Per-channel standard
+            deviation in pixel units `[0, 255]`. Set it together with
+            `image_mean`. Defaults to `None`.
+        interpolation: string. Resize interpolation method for frames.
+            Defaults to `"lanczos3"`.
+        antialias: bool. If `True`, the resize filters each frame to avoid
+            aliasing. Defaults to `True`.
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -116,11 +126,26 @@ class MuseGlimmerVideoConverter(VideoConverter):
         source_fps=24.0,
         num_frames=96,
         max_video_frame_tokens=144,
-        interpolation="bilinear",
-        antialias=False,
+        interpolation="lanczos3",
+        antialias=True,
+        image_mean=None,
+        image_std=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
+        for name in ("scale", "offset"):
+            if kwargs.get(name) is not None:
+                raise ValueError(
+                    f"`{name}` is not supported. Use `image_mean` and "
+                    "`image_std`."
+                )
+        if (image_mean is None) != (image_std is None):
+            raise ValueError(
+                "Set `image_mean` and `image_std` together. Received "
+                f"`image_mean={image_mean}` and `image_std={image_std}`."
+            )
+        self.image_mean = image_mean
+        self.image_std = image_std
         self.patch_size = patch_size
         self.patch_temporal = patch_temporal
         self.merge_size = merge_size
@@ -128,11 +153,9 @@ class MuseGlimmerVideoConverter(VideoConverter):
         self.source_fps = source_fps
         self.num_frames = num_frames
         self.max_video_frame_tokens = max_video_frame_tokens
-        # `VideoConverter` (unlike `ImageConverter`) doesn't expose these
-        # directly — it delegates per-frame resizing to a composed
-        # `image_converter`, but this class resizes frames itself in
-        # `_call_ops`/`_call_tf`, so they're set here to match
-        # `ImageConverter`'s own defaults.
+        # `VideoConverter` does not expose these arguments. This class
+        # resizes frames itself in `_call_ops` and `_call_tf`. The defaults
+        # match the HF video processor.
         self.interpolation = interpolation
         self.antialias = antialias
 
@@ -193,9 +216,9 @@ class MuseGlimmerVideoConverter(VideoConverter):
         video = _normalize(
             video,
             self.image_converter,
-            self.scale,
-            self.offset,
             self.compute_dtype,
+            self.image_mean,
+            self.image_std,
         )
 
         new_frame_count = video.shape[0]
@@ -273,9 +296,9 @@ class MuseGlimmerVideoConverter(VideoConverter):
         video = _normalize(
             video,
             self.image_converter,
-            self.scale,
-            self.offset,
             self.compute_dtype,
+            self.image_mean,
+            self.image_std,
         )
 
         new_frame_count = int(ops.shape(video)[0])
@@ -334,6 +357,11 @@ class MuseGlimmerVideoConverter(VideoConverter):
                 "max_video_frame_tokens": self.max_video_frame_tokens,
                 "interpolation": self.interpolation,
                 "antialias": self.antialias,
+                "image_mean": self.image_mean,
+                "image_std": self.image_std,
             }
         )
+        # The converter ignores the base class `scale` and `offset`.
+        config.pop("scale", None)
+        config.pop("offset", None)
         return config

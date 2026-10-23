@@ -84,7 +84,8 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
             patch_temporal=2,
             merge_size=2,
             max_image_tokens=64,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         self.image = np.random.randint(0, 255, (8, 8, 3)).astype("float32")
         # Map `image_token_id` to a vocabulary token, so prompts can
@@ -109,7 +110,8 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
             source_fps=1.0,
             num_frames=4,
             max_video_frame_tokens=16,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         self.video_token_id = self.vocab["<|video|>"]
         self.video_vocab = dict(self.vocab)
@@ -670,14 +672,16 @@ class MuseGlimmerCausalLMPreprocessorTest(TestCase, parameterized.TestCase):
             source_fps=1.0,
             num_frames=num_frames,
             max_video_frame_tokens=16,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         image_converter = MuseGlimmerImageConverter(
             patch_size=4,
             patch_temporal=2,
             merge_size=2,
             max_image_tokens=64,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         return MuseGlimmerCausalLMPreprocessor(
             tokenizer=tokenizer,

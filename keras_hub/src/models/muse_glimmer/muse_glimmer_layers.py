@@ -35,7 +35,7 @@ class MuseGlimmerRMSNorm(keras.layers.Layer):
         x = ops.cast(x, "float32")
         mean_squared = ops.mean(ops.square(x), axis=-1, keepdims=True)
         mean_squared = mean_squared + self.eps
-        x = x * ops.power(mean_squared, -0.5)
+        x = x * ops.rsqrt(mean_squared)
         if self.with_scale:
             x = x * ops.cast(self.scale, "float32")
         return ops.cast(x, self.compute_dtype)

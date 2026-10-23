@@ -81,6 +81,116 @@ def _smart_resize_tf(height, width, patch_size, merge_size, max_tokens):
     return target_h, target_w
 
 
+def _lanczos3_kernel(x):
+    x = np.asarray(x, dtype="float64")
+    return np.where(np.abs(x) < 3.0, np.sinc(x) * np.sinc(x / 3.0), 0.0)
+
+
+def _fixed_point_lanczos_weights(in_size, out_size):
+    """Return the int32 weight matrix and the precision for one resize pass.
+
+    The weights follow the torchvision CPU resize of uint8 images. The
+    precision is the largest number of bits that keeps every scaled weight
+    below `2**15`. Each weight rounds half away from zero. Float weights
+    give a different uint8 value for about 1% of the values.
+    """
+    scale = in_size / out_size
+    support = 3.0 * max(scale, 1.0)
+    inv_scale = 1.0 / max(scale, 1.0)
+    rows = []
+    for index in range(out_size):
+        center = scale * (index + 0.5)
+        start = max(int(center - support + 0.5), 0)
+        stop = min(int(center + support + 0.5), in_size)
+        weights = _lanczos3_kernel(
+            (np.arange(start, stop) - center + 0.5) * inv_scale
+        )
+        rows.append((start, weights / weights.sum()))
+    max_weight = max(np.abs(weights).max() for _, weights in rows)
+    precision = 0
+    while (
+        precision < 22 and int(0.5 + max_weight * 2 ** (precision + 1)) < 2**15
+    ):
+        precision += 1
+    matrix = np.zeros((out_size, in_size), dtype="int32")
+    for index, (start, weights) in enumerate(rows):
+        scaled = weights * 2.0**precision
+        matrix[index, start : start + len(weights)] = np.where(
+            weights < 0, scaled - 0.5, scaled + 0.5
+        ).astype("int64")
+    return matrix, precision
+
+
+def _resize_uint8_lanczos(images, target_h, target_w):
+    """Resize integer `(..., height, width, 3)` images with Lanczos.
+
+    The result matches the torchvision CPU resize of uint8 images. Each
+    pass uses integer weights, adds half a unit, shifts right, and clips
+    to `[0, 255]`. The width pass runs first.
+    """
+    rank = len(ops.shape(images))
+    if rank == 3:
+        images = ops.expand_dims(images, 0)
+    images = ops.cast(images, "int32")
+    _, in_h, in_w, _ = ops.shape(images)
+    if in_w != target_w:
+        matrix, precision = _fixed_point_lanczos_weights(in_w, target_w)
+        images = ops.einsum(
+            "ow,nhwc->nhoc", ops.convert_to_tensor(matrix), images
+        )
+        images = ops.floor_divide(
+            images + (1 << (precision - 1)), 1 << precision
+        )
+        images = ops.clip(images, 0, 255)
+    if in_h != target_h:
+        matrix, precision = _fixed_point_lanczos_weights(in_h, target_h)
+        images = ops.einsum(
+            "oh,nhwc->nowc", ops.convert_to_tensor(matrix), images
+        )
+        images = ops.floor_divide(
+            images + (1 << (precision - 1)), 1 << precision
+        )
+        images = ops.clip(images, 0, 255)
+    return images[0] if rank == 3 else images
+
+
+def _fixed_point_lanczos_weights_tf(in_size, out_size):
+    """Return `_fixed_point_lanczos_weights` for ints or scalar tensors."""
+    if isinstance(in_size, int) and isinstance(out_size, int):
+        matrix, precision = _fixed_point_lanczos_weights(in_size, out_size)
+        return tf.constant(matrix), tf.constant(precision, dtype="int32")
+
+    def compute(in_size, out_size):
+        matrix, precision = _fixed_point_lanczos_weights(
+            int(in_size), int(out_size)
+        )
+        return matrix, np.int32(precision)
+
+    matrix, precision = tf.numpy_function(
+        compute, [in_size, out_size], [tf.int32, tf.int32], stateful=False
+    )
+    matrix.set_shape([None, None])
+    precision.set_shape([])
+    return matrix, precision
+
+
+def _resize_uint8_lanczos_tf(images, target_h, target_w):
+    """Run `_resize_uint8_lanczos` on a `(batch, h, w, 3)` TF tensor."""
+    images = tf.cast(images, "int32")
+    in_h = images.shape[1] or tf.shape(images)[1]
+    in_w = images.shape[2] or tf.shape(images)[2]
+    for equation, in_size, out_size in (
+        ("ow,nhwc->nhoc", in_w, target_w),
+        ("oh,nhwc->nowc", in_h, target_h),
+    ):
+        matrix, precision = _fixed_point_lanczos_weights_tf(in_size, out_size)
+        images = tf.einsum(equation, matrix, images)
+        half = tf.bitwise.left_shift(1, precision - 1)
+        images = tf.bitwise.right_shift(images + half, precision)
+        images = tf.clip_by_value(images, 0, 255)
+    return images
+
+
 def _resize(images, orig_h, orig_w, target_h, target_w, method, antialias):
     """Resize a `(..., height, width, 3)` image or video with Keras ops."""
     rank = len(ops.shape(images))
@@ -120,7 +230,10 @@ def _resize_pixels(
     images, orig_h, orig_w, target_h, target_w, method, antialias
 ):
     """Resize images with Keras ops to float32 values in `[0, 255]`."""
-    if keras.backend.is_int_dtype(images.dtype):
+    is_integer = keras.backend.is_int_dtype(images.dtype)
+    if is_integer and method == "lanczos3" and antialias:
+        images = _resize_uint8_lanczos(images, target_h, target_w)
+    elif is_integer:
         # Matches torchvision's separable uint8 resize: width pass,
         # round to uint8 range, then height pass, round again.
         images = _resize(
@@ -149,7 +262,10 @@ def _resize_pixels_tf(
     unbatched = images.shape.rank == 3
     if unbatched:
         images = images[tf.newaxis]
-    if input_is_integer:
+    if input_is_integer and method == "lanczos3" and antialias:
+        images = _resize_uint8_lanczos_tf(images, target_h, target_w)
+        images = tf.cast(images, "float32")
+    elif input_is_integer:
         # Matches torchvision's separable uint8 resize: width pass,
         # round to uint8 range, then height pass, round again.
         images = tf.image.resize(
@@ -169,18 +285,23 @@ def _resize_pixels_tf(
     return tf.clip_by_value(images, 0.0, 255.0)
 
 
-def _normalize(images, image_converter, scale, offset, compute_dtype):
-    """Apply `scale` and `offset` to channels-last `images`."""
-    if scale is not None:
-        images, scale = image_converter._convert_types(
-            images, np.asarray(scale), compute_dtype
-        )
-        images = images * scale
-    if offset is not None:
-        images, offset = image_converter._convert_types(
-            images, np.asarray(offset), images.dtype
-        )
-        images = images + offset
+def _normalize(images, image_converter, compute_dtype, image_mean, image_std):
+    """Normalize channels-last `images` like the HF processor.
+
+    The function computes `(images - image_mean) / image_std` in float32.
+    This gives the same float32 values as HF. If `image_mean` is `None`,
+    the function returns `images` unchanged.
+    """
+    if image_mean is None:
+        return images
+    images, mean = image_converter._convert_types(
+        images, np.asarray(image_mean, dtype="float32"), "float32"
+    )
+    _, std = image_converter._convert_types(
+        images, np.asarray(image_std, dtype="float32"), "float32"
+    )
+    images = (images - mean) / std
+    images, _ = image_converter._convert_types(images, mean, compute_dtype)
     return images
 
 
@@ -203,6 +324,16 @@ class MuseGlimmerImageConverter(ImageConverter):
             `2`.
         max_image_tokens: int. Maximum number of merged vision tokens per
             image. Defaults to `4096`.
+        image_mean: float, list of floats, or `None`. Per-channel mean in
+            pixel units `[0, 255]`. The converter computes
+            `(image - image_mean) / image_std` in float32. Defaults to `None`.
+        image_std: float, list of floats, or `None`. Per-channel standard
+            deviation in pixel units `[0, 255]`. Set it together with
+            `image_mean`. Defaults to `None`.
+        interpolation: string. Resize interpolation method. Defaults to
+            `"lanczos3"`.
+        antialias: bool. If `True`, the resize filters the image to avoid
+            aliasing. Defaults to `True`.
     """
 
     backbone_cls = MuseGlimmerBackbone
@@ -213,13 +344,32 @@ class MuseGlimmerImageConverter(ImageConverter):
         patch_temporal=2,
         merge_size=2,
         max_image_tokens=4096,
+        image_mean=None,
+        image_std=None,
+        interpolation="lanczos3",
+        antialias=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            interpolation=interpolation, antialias=antialias, **kwargs
+        )
+        for name in ("scale", "offset"):
+            if kwargs.get(name) is not None:
+                raise ValueError(
+                    f"`{name}` is not supported. Use `image_mean` and "
+                    "`image_std`."
+                )
+        if (image_mean is None) != (image_std is None):
+            raise ValueError(
+                "Set `image_mean` and `image_std` together. Received "
+                f"`image_mean={image_mean}` and `image_std={image_std}`."
+            )
         self.patch_size = patch_size
         self.patch_temporal = patch_temporal
         self.merge_size = merge_size
         self.max_image_tokens = max_image_tokens
+        self.image_mean = image_mean
+        self.image_std = image_std
 
     @preprocessing_function
     def call(self, inputs):
@@ -263,7 +413,11 @@ class MuseGlimmerImageConverter(ImageConverter):
             self.antialias,
         )
         image = _normalize(
-            image, self, self.scale, self.offset, self.compute_dtype
+            image,
+            self,
+            self.compute_dtype,
+            self.image_mean,
+            self.image_std,
         )
 
         grid_h, grid_w = (
@@ -312,7 +466,11 @@ class MuseGlimmerImageConverter(ImageConverter):
             self.antialias,
         )
         image = _normalize(
-            image, self, self.scale, self.offset, self.compute_dtype
+            image,
+            self,
+            self.compute_dtype,
+            self.image_mean,
+            self.image_std,
         )
 
         grid_h, grid_w = (
@@ -346,6 +504,12 @@ class MuseGlimmerImageConverter(ImageConverter):
                 "patch_temporal": self.patch_temporal,
                 "merge_size": self.merge_size,
                 "max_image_tokens": self.max_image_tokens,
+                "image_mean": self.image_mean,
+                "image_std": self.image_std,
             }
         )
+        # The converter ignores these base class settings.
+        config.pop("scale", None)
+        config.pop("offset", None)
+        config.pop("crop_to_aspect_ratio", None)
         return config
