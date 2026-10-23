@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -234,51 +232,30 @@ class Mistral3CausalLMTest(TestCase, parameterized.TestCase):
         )
 
     def test_generate(self):
+        self.run_generate_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt="the tin",
+        )
         causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
-        prompt = "the tin"
-        output = causal_lm.generate(prompt)
-        self.assertTrue(prompt in output)
         prompts = ["the tin", "in the"]
         outputs = causal_lm.generate(prompts)
         for prompt, output in zip(prompts, outputs):
-            self.assertTrue(prompt in output)
-        prompt_ids = self.text_preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        self.assertAllEqual(
-            outputs["token_ids"][:, :2], prompt_ids["token_ids"][:, :2]
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :2], prompt_ids["padding_mask"][:, :2]
-        )
+            self.assertIn(prompt, output)
 
     def test_early_stopping(self):
-        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.text_preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the tin", "in the"]
-            output = causal_lm.generate(prompt)
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt=["the tin", "in the"],
+        )
 
     def test_generate_compilation(self):
-        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
-        causal_lm.generate("the tin")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate("the tin")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt="the tin",
+        )
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

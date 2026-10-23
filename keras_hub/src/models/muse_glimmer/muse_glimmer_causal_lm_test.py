@@ -222,17 +222,10 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         )
 
     def test_generate(self):
-        prompt = " airplane at airport"
-        output = self.causal_lm.generate(" airplane at airport")
-        self.assertTrue(prompt in output)
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        self.causal_lm.preprocessor = None
-        outputs = self.causal_lm.generate(prompt_ids, stop_token_ids=None)
-        self.assertAllEqual(
-            outputs["token_ids"][:, :5], prompt_ids["token_ids"][:, :5]
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :5], prompt_ids["padding_mask"][:, :5]
+        self.run_generate_test(
+            cls=MuseGlimmerCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=" airplane at airport",
         )
 
     def test_generate_with_image_under_compiled_backend(self):
@@ -451,20 +444,11 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         self.assertAllEqual(assisted["token_ids"], plain["token_ids"])
 
     def test_early_stopping(self):
-        call_with_cache = self.causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = [" airplane at airport", " airplane"]
-            output = self.causal_lm.generate(prompt)
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=MuseGlimmerCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=[" airplane at", " airplane"],
+        )
 
     def test_generate_with_assistant(self):
         assistant = self._make_assistant(block_size=3)
