@@ -83,23 +83,11 @@ class GemmaCausalLMTest(TestCase):
         self.assertAllClose(full_logits, cached_logits, atol=atol)
 
     def test_generate(self):
-        causal_lm = GemmaCausalLM(**self.init_kwargs)
-        # String input.
-        prompt = "the quick brown fox"
-        output = causal_lm.generate("the quick brown fox")
-        self.assertTrue(prompt in output)
-        # Int tensor input.
-        prompt_ids = self.preprocessor.generate_preprocess([prompt])
-        causal_lm.preprocessor = None
-        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
-        # Assert prompt is in output in token id space.
-        self.assertAllEqual(
-            outputs["token_ids"][:, :4],
-            prompt_ids["token_ids"][:, :4],
-        )
-        self.assertAllEqual(
-            outputs["padding_mask"][:, :4],
-            prompt_ids["padding_mask"][:, :4],
+        self.run_generate_test(
+            cls=GemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt="the quick brown fox",
+            num_prompt_tokens=4,
         )
 
     def test_flash_attention_call(self):
@@ -153,23 +141,11 @@ class GemmaCausalLMTest(TestCase):
             keras.config.set_floatx(original_floatx)
 
     def test_early_stopping(self):
-        causal_lm = GemmaCausalLM(**self.init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the quick"]
-            output = causal_lm.generate(prompt)
-            # We should immediately abort and output the prompt.
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=GemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt=["the quick brown fox", "the quick"],
+        )
 
     def test_multitoken_stopping(self):
         causal_lm = GemmaCausalLM(**self.init_kwargs)
@@ -192,16 +168,11 @@ class GemmaCausalLMTest(TestCase):
             self.assertEqual(prompt, output)
 
     def test_generate_compilation(self):
-        causal_lm = GemmaCausalLM(**self.init_kwargs)
-        # Assert we do not recompile with successive calls.
-        causal_lm.generate("the quick brown fox")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate("the quick brown fox")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=GemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            prompt="the quick brown fox",
+        )
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.large
