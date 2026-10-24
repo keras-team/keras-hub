@@ -137,6 +137,7 @@ class VAEBackbone(Backbone):
         self.output_channels = output_channels
         self._scale = scale
         self._shift = shift
+        self.data_format = data_format
 
     @property
     def scale(self):
@@ -179,6 +180,7 @@ class VAEBackbone(Backbone):
                 "output_channels": self.output_channels,
                 "scale": self.scale,
                 "shift": self.shift,
+                "data_format": self.data_format,
             }
         )
         return config
