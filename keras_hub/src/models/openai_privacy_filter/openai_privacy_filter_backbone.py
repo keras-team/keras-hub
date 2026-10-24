@@ -363,8 +363,7 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        # Force fp32 for routing
-        router_logits = self.router_dense(ops.cast(hidden_states, "float32"))
+        router_logits = self.router_dense(hidden_states)
         routing_weights, selected_experts = ops.top_k(
             router_logits, k=self.top_k
         )

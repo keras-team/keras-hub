@@ -76,7 +76,7 @@ def main(_):
     # === Load HF model ===
     print("\n→ Loading HuggingFace model...")
     hf_model = AutoModelForTokenClassification.from_pretrained(
-        hf_preset, device_map=device, torch_dtype=torch.float32
+        hf_preset, device_map=device, dtype=torch.float32
     )
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
     hf_model.eval()
@@ -103,21 +103,50 @@ def main(_):
     del hf_model
     print(f"\n  HF params: {hf_params:,}")
 
-    # === Load KerasHub tokenizer (for preset saving) ===
-    print("\n→ Loading KerasHub tokenizer...")
+    # === Load KerasHub tokenizer and preprocessor ===
+    print("\n→ Loading KerasHub tokenizer and preprocessor...")
     keras_tokenizer = keras_hub.models.OpenAIPrivacyFilterTokenizer.from_preset(
         f"hf://{hf_preset}"
     )
-    print("  ✅ KerasHub tokenizer loaded")
+    preprocessor = keras_hub.models.OpenAIPrivacyFilterPreprocessor(
+        keras_tokenizer
+    )
+    print("  ✅ KerasHub tokenizer and preprocessor loaded")
 
-    # This checks the tokenizer's eager Python path only. The preset's
-    # preprocessor runs the TF path, which splits '@', '.' and digits
-    # differently from HF's GPT-4o pre-tokenizer, including on this text.
-    # The logits check below uses HF token IDs for both models.
-    keras_tok_ids = ops.convert_to_numpy(keras_tokenizer([test_text]))
-    hf_tok_ids = hf_tokenizer([test_text])["input_ids"]
-    np.testing.assert_equal(keras_tok_ids, hf_tok_ids)
-    print("  ✅ Tokenizer parity verified")
+    corpus = [
+        "My name is John Smith and my email is john@example.com",
+        "card 4111 1111 1111 1111",
+        "Call +1 (555) 123-4567 or 555.987.6543",
+        "SSN 123-45-6789, account 00012345678, routing 021000021",
+        "Contact me at jane.doe+work@sub.example.co.uk today.",
+        "See https://example.com/path?user=bob&id=12345 for details",
+        "Born 12/25/1990, moved on March 3rd, 2015.",
+        "Zoë Müller lives at Straße 12, 80331 München",
+        "IP 192.168.1.254 and MAC 00:1A:2B:3C:4D:5E",
+        "IBAN DE89 3704 0044 0532 0130 00",
+        "tabs\there\tand  double  spaces   triple",
+        "123 Main St., Apt 4B, Springfield, IL 62704",
+    ]
+
+    mismatches = []
+    for text in corpus:
+        hf_ids = hf_tokenizer(text)["input_ids"]
+        out = preprocessor([text])
+        keras_ids = np.asarray(out["token_ids"])[0]
+        padding_mask = np.asarray(out["padding_mask"])[0]
+        keras_ids = keras_ids[padding_mask.astype(bool)].tolist()
+        if hf_ids != keras_ids:
+            mismatches.append(
+                f"Text: {text!r}\n  HF: {hf_ids}\n  Keras: {keras_ids}"
+            )
+
+    if mismatches:
+        raise AssertionError(
+            "Preprocessor parity check failed on "
+            f"{len(mismatches)}/{len(corpus)} strings:\n"
+            + "\n".join(mismatches)
+        )
+    print("  ✅ Preprocessor parity verified")
     del hf_tokenizer
 
     # === Load KerasHub classifier ===

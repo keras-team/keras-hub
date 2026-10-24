@@ -10,8 +10,25 @@ from keras_hub.src.utils.preset_utils import load_json
 backbone_cls = OpenAIPrivacyFilterBackbone
 
 
+def convert_task_config(transformers_config):
+    return {"num_classes": len(transformers_config["id2label"])}
+
+
 def convert_backbone_config(transformers_config):
     rope_params = transformers_config.get("rope_parameters", {})
+    if rope_params.get("rope_type") != "yarn":
+        raise ValueError("rope_type must be 'yarn'")
+    if rope_params.get("beta_fast") != 32:
+        raise ValueError("beta_fast must be 32")
+    if rope_params.get("beta_slow") != 1:
+        raise ValueError("beta_slow must be 1")
+    if rope_params.get("original_max_position_embeddings") != 4096:
+        raise ValueError("original_max_position_embeddings must be 4096")
+    if rope_params.get("truncate", False) is not False:
+        raise ValueError("truncate must be False")
+    if transformers_config.get("attention_bias", True) is not True:
+        raise ValueError("attention_bias must be True")
+
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],

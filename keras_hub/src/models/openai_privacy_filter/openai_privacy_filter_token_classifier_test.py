@@ -1,18 +1,41 @@
-from keras import ops
+import numpy as np
+import pytest
 
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
+    OpenAIPrivacyFilterPreprocessor,
+)
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier import (  # noqa: E501
     OpenAIPrivacyFilterTokenClassifier,
+)
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
+    OpenAIPrivacyFilterTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
 
 
 class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
     def setUp(self):
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.preprocessor = OpenAIPrivacyFilterPreprocessor(
+            OpenAIPrivacyFilterTokenizer(
+                vocabulary=self.vocab, merges=self.merges
+            ),
+            sequence_length=8,
+        )
         self.backbone = OpenAIPrivacyFilterBackbone(
-            vocabulary_size=1000,
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=2,
@@ -25,33 +48,27 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
         )
         self.init_kwargs = {
             "backbone": self.backbone,
-            "num_classes": 33,
-            "classifier_dropout": 0.0,
+            "num_classes": 3,
+            "preprocessor": self.preprocessor,
         }
-        self.input_data = {
-            "token_ids": ops.ones((2, 8), dtype="int32"),
-            "padding_mask": ops.ones((2, 8), dtype="int32"),
-        }
+        # Per-token labels, aligned with the packed `sequence_length`.
+        self.train_data = (
+            ["airplane at airport", " the airplane"],
+            np.array([[0, 1, 2, 0, 1, 0, 0, 0], [1, 0, 2, 0, 0, 0, 0, 0]]),
+        )
 
     def test_classifier_basics(self):
-        classifier = OpenAIPrivacyFilterTokenClassifier(
-            **self.init_kwargs, compile=False
+        self.run_task_test(
+            cls=OpenAIPrivacyFilterTokenClassifier,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 8, 3),
         )
-        output = classifier(self.input_data)
-        self.assertEqual(output.shape, (2, 8, 33))
 
-    def test_compile_defaults(self):
-        """Test that compile() sets default optimizer, loss, metrics."""
-        classifier = OpenAIPrivacyFilterTokenClassifier(
-            **self.init_kwargs, compile=True
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=OpenAIPrivacyFilterTokenClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.preprocessor(self.train_data[0]),
         )
-        self.assertIsNotNone(classifier.optimizer)
-        self.assertIsNotNone(classifier.loss)
-
-    def test_get_config(self):
-        classifier = OpenAIPrivacyFilterTokenClassifier(
-            **self.init_kwargs, compile=False
-        )
-        config = classifier.get_config()
-        self.assertEqual(config["num_classes"], 33)
-        self.assertEqual(config["classifier_dropout"], 0.0)

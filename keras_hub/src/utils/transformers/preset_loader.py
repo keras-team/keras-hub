@@ -4,6 +4,7 @@ import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.token_classifier import TokenClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
@@ -160,19 +161,6 @@ class TransformersPresetLoader(PresetLoader):
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
 
-        # Token classification models (e.g. OpenAI Privacy Filter)
-        if "ForTokenClassification" in architecture:
-            if "num_classes" not in kwargs:
-                kwargs["num_classes"] = len(self.config.get("id2label", {}))
-            task = super().load_task(
-                cls, load_weights, load_task_weights, **kwargs
-            )
-            if load_task_weights:
-                with SafetensorLoader(self.preset, prefix="") as loader:
-                    if hasattr(self.converter, "convert_head"):
-                        self.converter.convert_head(task, loader, self.config)
-            return task
-
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
         # `convert_head` is only defined for task-specific heads (e.g.
@@ -183,7 +171,7 @@ class TransformersPresetLoader(PresetLoader):
         # into a `convert_head` written for a different task class.
         has_matching_convert_head = hasattr(
             self.converter, "convert_head"
-        ) and issubclass(cls, MaskedLM)
+        ) and issubclass(cls, (MaskedLM, TokenClassifier))
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)

@@ -16,8 +16,9 @@ class TokenClassifier(Task):
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     where `x` is a string (or preprocessed dict) and `y` is an integer tensor
-    of shape `(batch, seq_len)` with values in `[0, num_classes)`. Padding
-    positions are automatically excluded from the loss via the `padding_mask`.
+    with values in `[0, num_classes)`. When `x` is a string or list of strings,
+    `y` will be padded or truncated to match the model's `sequence_length`.
+    Padding positions are automatically masked via `sample_weight`.
 
     All `TokenClassifier` tasks include a `from_preset()` constructor for
     loading pre-trained configs and weights.
@@ -26,7 +27,7 @@ class TokenClassifier(Task):
     ```python
     # Load a pre-trained token classifier.
     classifier = keras_hub.models.TokenClassifier.from_preset(
-        "openai_privacy_filter_en",
+        "hf://openai/privacy-filter",
     )
     # Predict PII labels for a batch of sentences.
     classifier.predict(["My name is John and I live in Paris."])

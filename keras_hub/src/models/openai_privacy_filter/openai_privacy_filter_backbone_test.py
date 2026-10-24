@@ -10,6 +10,28 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone i
 )
 from keras_hub.src.tests.test_case import TestCase
 
+# Reference values for `test_small_forward_matches_reference`.
+EXPECTED_FIRST_TOKEN = [
+    0.170374,
+    0.094855,
+    0.222122,
+    -0.041173,
+    0.486997,
+    -0.866669,
+    0.894465,
+    -0.603817,
+]
+EXPECTED_LAST_TOKEN = [
+    0.086222,
+    0.173202,
+    -0.123395,
+    0.567319,
+    0.766982,
+    -0.571161,
+    -2.287978,
+    1.340635,
+]
+
 
 class OpenAIPrivacyFilterBackboneTest(TestCase):
     def setUp(self):
@@ -49,8 +71,43 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
 
     def test_num_parameters(self):
         model = OpenAIPrivacyFilterBackbone(**self.init_kwargs)
-        # Verify the model can count its own params.
-        self.assertGreater(model.count_params(), 0)
+        self.assertEqual(model.count_params(), 189648)
+
+    def test_small_forward_matches_reference(self):
+        # Pins the model-specific numerics on a tiny config with
+        # deterministic weights. Any of these one-line mutations changes the
+        # values below: SwiGLU `alpha` or `limit`, the `(up + 1)` term, the
+        # attention sinks column, the router softmax, the `/ top_k` and
+        # `* top_k` scalings, the fp32 attention softmax, and the sliding
+        # window. The expected values were computed once on CPU in float32
+        # and agree across the JAX, TensorFlow and PyTorch backends.
+        import numpy as np
+
+        model = OpenAIPrivacyFilterBackbone(
+            vocabulary_size=16,
+            num_layers=1,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=8,
+            intermediate_dim=8,
+            head_dim=4,
+            num_experts=4,
+            top_k=2,
+            sliding_window=2,
+        )
+        rng = np.random.RandomState(1234)
+        model.set_weights(
+            [rng.normal(scale=1.0, size=w.shape) for w in model.get_weights()]
+        )
+        token_ids = np.array([[3, 1, 4, 1, 5, 0]], dtype="int32")
+        padding_mask = np.array([[1, 1, 1, 1, 0, 0]], dtype="int32")
+        out = model({"token_ids": token_ids, "padding_mask": padding_mask})
+        out = ops.convert_to_numpy(out)
+        self.assertEqual(out.shape, (1, 6, 8))
+        expected_first = EXPECTED_FIRST_TOKEN
+        expected_last = EXPECTED_LAST_TOKEN
+        self.assertAllClose(out[0, 0], expected_first, atol=1e-4, rtol=1e-4)
+        self.assertAllClose(out[0, 3], expected_last, atol=1e-4, rtol=1e-4)
 
     def test_bidirectional_attention(self):
         """Verify the model is truly bidirectional (not causal)."""
