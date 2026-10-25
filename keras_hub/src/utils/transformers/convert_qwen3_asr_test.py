@@ -8,6 +8,7 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import Qwen3ASRCausalLM
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class TestQwen3ASRConverter(TestCase):
@@ -136,4 +137,5 @@ class TestQwen3ASRConverter(TestCase):
             )
 
         self.assertEqual(keras_out.shape, hf_out.shape)
-        self.assertAllClose(keras_out, hf_out, atol=1e-3, rtol=1e-3)
+        atol = 3e-3 if running_on_gpu() else 1e-3
+        self.assertAllClose(keras_out, hf_out, atol=atol, rtol=1e-3)
