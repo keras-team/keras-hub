@@ -43,7 +43,7 @@ jobs:
     container:
       image: python:3.11-slim
 
-    runs-on: linux-x86-n4-16
+    runs-on: linux-x86-n2-16
     timeout-minutes: ${{ inputs.timeout }}
     env:
       KERAS_BACKEND: ${{ matrix.config.backend }}
