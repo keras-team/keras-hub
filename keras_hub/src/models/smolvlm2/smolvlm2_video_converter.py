@@ -6,6 +6,12 @@ from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
     SmolVLM2ImageConverter,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    _resize_output_size_rescale_to_max_len,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    _resize_output_size_scale_below_upper_bound,
+)
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -128,6 +134,15 @@ class SmolVLM2VideoConverter(VideoConverter):
                 ops.linspace(0, total_frames - 1, sample_count), "int32"
             )
             video = ops.take(video, indices, axis=0)
+
+        h, w = int(video.shape[1]), int(video.shape[2])
+        new_h, new_w = _resize_output_size_rescale_to_max_len(
+            h, w, max_len=self.size
+        )
+        new_h, new_w = _resize_output_size_scale_below_upper_bound(
+            new_h, new_w, max_len=4096
+        )
+        video = self.image_converter._resize(video, (new_h, new_w))
 
         # All frames share the same target size, so resize them in one
         # batched call instead of looping frame by frame.

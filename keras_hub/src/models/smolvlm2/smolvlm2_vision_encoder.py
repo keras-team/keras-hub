@@ -90,15 +90,29 @@ class SmolVLM2VisionEmbedding(layers.Layer):
             # On TensorFlow a convolution over a zero-image batch returns
             # its input unchanged, so `Conv2D`'s bias add fails with
             # `Incompatible shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`.
-            # Append one blank image so the conv batch is never empty, then
-            # drop its output.
-            blank = ops.zeros(
-                (1, self.image_size, self.image_size, self.num_channels),
-                dtype=pixel_values.dtype,
-            )
-            patch_embeds = self.patch_embedding(
-                ops.concatenate([pixel_values, blank], axis=0)
-            )[:-1]
+            # Append one blank image if the conv batch is empty.
+            batch_size = pixel_values.shape[0]
+
+            def _empty_batch():
+                blank = ops.zeros(
+                    (1, self.image_size, self.image_size, self.num_channels),
+                    dtype=pixel_values.dtype,
+                )
+                return self.patch_embedding(blank)[:0]
+
+            def _normal_batch():
+                return self.patch_embedding(pixel_values)
+
+            if batch_size == 0:
+                patch_embeds = _empty_batch()
+            elif batch_size is not None:
+                patch_embeds = _normal_batch()
+            else:
+                patch_embeds = ops.cond(
+                    ops.shape(pixel_values)[0] == 0,
+                    _empty_batch,
+                    _normal_batch,
+                )
         else:
             patch_embeds = self.patch_embedding(pixel_values)
         embeddings = ops.reshape(

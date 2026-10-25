@@ -1,6 +1,7 @@
 """Tests for SmolVLM2CausalLMPreprocessor."""
 
 import re
+from unittest import mock
 
 import numpy as np
 from keras import ops
@@ -22,6 +23,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
     SmolVLM2VideoConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class SmolVLM2CausalLMPreprocessorTest(TestCase):
@@ -601,3 +603,107 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         )
         # Without it the duration would be `int(3 / 8)`, i.e. 0:00:00.
         self.assertIn("four frames from a 0:00:20 [H:MM:SS]", prompt)
+
+    def test_generate_preprocess_without_tf(self):
+        """NumPy packing path works when TF is absent."""
+        image_converter = SmolVLM2ImageConverter(
+            max_image_size=32,
+            size=64,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="bicubic",
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=128,
+            image_seq_len=4,
+        )
+        image = np.random.randint(0, 256, size=(32, 32, 3)).astype("uint8")
+        prompt = "<|im_start|>User:<image>air<end_of_utterance>"
+
+        with mock.patch.object(tensor_utils, "tf", None):
+            x = preprocessor.generate_preprocess(
+                {"prompts": prompt, "images": image}
+            )
+
+        self.assertIn("token_ids", x)
+        self.assertIn("pixel_values", x)
+        self.assertIn("vision_indices", x)
+
+    def test_text_only_training_call(self):
+        """Text-only call works when TF is absent, using ops.zeros."""
+        image_converter = SmolVLM2ImageConverter(
+            max_image_size=32,
+            size=64,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="bicubic",
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=128,
+        )
+        with mock.patch.object(tensor_utils, "tf", None):
+            x, y, sw = preprocessor(["A simple prompt"])
+
+        self.assertIn("pixel_values", x)
+        self.assertEqual(ops.shape(x["pixel_values"]), (0, 32, 32, 3))
+        self.assertEqual(ops.shape(x["vision_indices"]), (1, 0))
+
+    def test_image_token_without_image(self):
+        """Guards against <image> or <video> in text-only batches."""
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            sequence_length=128,
+        )
+        with self.assertRaisesRegex(ValueError, "no images/videos"):
+            preprocessor("Here is a token: <image>")
+
+        with self.assertRaisesRegex(ValueError, "no images/videos"):
+            preprocessor.generate_preprocess("Here is a token: <video>")
+
+    def test_tf_data_map_with_images(self):
+        """`fit()` on a `tf.data` pipeline that carries images (T42)."""
+        import tensorflow as tf
+
+        preprocessor = self._image_preprocessor()
+        images = np.random.randint(0, 256, size=(4, 20, 20, 3)).astype("uint8")
+        ds = tf.data.Dataset.from_tensor_slices(
+            {
+                "prompts": ["<image>describe"] * 4,
+                "responses": [" airplane"] * 4,
+                "images": images,
+            }
+        )
+        ds = ds.batch(2).map(preprocessor)
+        for x, y, sw in ds:
+            self.assertEqual(tuple(x["pixel_values"].shape), (2, 32, 32, 3))
+            self.assertEqual(tuple(x["vision_indices"].shape), (2, 4))
+
+    def test_tf_data_map_text_only(self):
+        """Text-only `tf.data` batches trace with the placeholder guard."""
+        import tensorflow as tf
+
+        preprocessor = self._image_preprocessor()
+        ds = tf.data.Dataset.from_tensor_slices([" airplane at airport"] * 4)
+        ds = ds.batch(2).map(preprocessor)
+        for x, y, sw in ds:
+            self.assertEqual(tuple(x["pixel_values"].shape), (0, 32, 32, 3))
+            self.assertEqual(tuple(x["vision_indices"].shape), (2, 0))
+
+    def test_tf_data_map_image_token_without_image_raises(self):
+        """The placeholder guard also fires inside a `tf.data` trace."""
+        import tensorflow as tf
+
+        preprocessor = self._image_preprocessor()
+        ds = tf.data.Dataset.from_tensor_slices(["<image>describe"] * 2)
+        ds = ds.batch(2).map(preprocessor)
+        with self.assertRaisesRegex(
+            tf.errors.InvalidArgumentError, "no images/videos"
+        ):
+            for _ in ds:
+                pass

@@ -8,6 +8,8 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.smolvlm2.smolvlm2_backbone import SmolVLM2Backbone
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
 from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
+from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def _resize_output_size_rescale_to_max_len(height, width, max_len):
@@ -40,6 +42,23 @@ def _resize_output_size_scale_below_upper_bound(height, width, max_len=4096):
     height = max(height, 1)
     width = max(width, 1)
     return height, width
+
+
+def _resize_tf(images, size, method="lanczos3", antialias=True):
+    images = tf.image.resize(
+        images,
+        size=(tf.shape(images)[1], size[1]),
+        method=method,
+        antialias=antialias,
+    )
+    images = tf.round(tf.clip_by_value(images, 0.0, 255.0))
+    images = tf.image.resize(
+        images,
+        size=(size[0], size[1]),
+        method=method,
+        antialias=antialias,
+    )
+    return tf.round(tf.clip_by_value(images, 0.0, 255.0))
 
 
 @keras_hub_export("keras_hub.layers.SmolVLM2ImageConverter")
@@ -103,6 +122,46 @@ class SmolVLM2ImageConverter(ImageConverter):
                 "`size` and `max_image_size` instead. "
                 f"Received: image_size={self.image_size}"
             )
+
+    @preprocessing_function
+    def _call_tf(self, inputs):
+        if self.do_image_splitting:
+            raise ValueError(
+                "Training with `do_image_splitting=True` is not "
+                "supported: the number of crops depends on each image's "
+                "original size, which cannot be resolved inside the "
+                "`tf.data` graph. Set `do_image_splitting=False` on the "
+                "image converter."
+            )
+
+        rank = len(inputs.shape)
+        if rank not in (3, 4):
+            raise ValueError(
+                "`SmolVLM2ImageConverter` expects a single image of shape "
+                "`(height, width, channels)` or a batch of shape "
+                "`(batch_size, height, width, channels)`. Received inputs "
+                f"with shape {tuple(inputs.shape)}."
+            )
+
+        images = tf.cast(inputs, "float32")
+        if rank == 3:
+            images = tf.expand_dims(images, 0)
+
+        ms = self.max_image_size
+
+        images = _resize_tf(
+            images, (ms, ms), self.interpolation, self.antialias
+        )
+
+        if rank == 3:
+            images = tf.squeeze(images, 0)
+
+        pixel_values = self._rescale_and_normalize(images)
+        return {
+            "pixel_values": pixel_values,
+            "rows": tf.constant(0, dtype="int32"),
+            "cols": tf.constant(0, dtype="int32"),
+        }
 
     def _static_hw(self, shape):
         """Return the static `(height, width)` from an unbatched image shape."""
@@ -270,29 +329,53 @@ class SmolVLM2ImageConverter(ImageConverter):
         Keras release includes that PR, this branch can collapse into the
         plain `ops.image.resize` call below.
         """
+        in_h, in_w = self._static_hw(images.shape[1:])
+        out_h, out_w = size
+        batch = images.shape[0]
+        if batch is None:
+            batch = ops.shape(images)[0]
+
         if self.interpolation in ("lanczos3", "lanczos5"):
-            in_h, in_w = self._static_hw(images.shape[1:])
-            out_h, out_w = size
-            batch = images.shape[0]
-            if batch is None:
-                batch = ops.shape(images)[0]
+            # W pass
             images = ops.image.scale_and_translate(
                 images,
-                output_shape=(batch, out_h, out_w, images.shape[-1]),
-                scale=(out_h / in_h, out_w / in_w),
+                output_shape=(batch, in_h, out_w, images.shape[-1]),
+                scale=(1.0, out_w / in_w),
                 translation=(0.0, 0.0),
                 spatial_dims=(1, 2),
                 method=self.interpolation,
                 antialias=self.antialias,
             )
+            images = ops.round(ops.clip(images, 0.0, 255.0))
+            # H pass
+            images = ops.image.scale_and_translate(
+                images,
+                output_shape=(batch, out_h, out_w, images.shape[-1]),
+                scale=(out_h / in_h, 1.0),
+                translation=(0.0, 0.0),
+                spatial_dims=(1, 2),
+                method=self.interpolation,
+                antialias=self.antialias,
+            )
+            images = ops.round(ops.clip(images, 0.0, 255.0))
         else:
+            # W pass
             images = ops.image.resize(
                 images,
-                size=size,
+                size=(in_h, out_w),
                 interpolation=self.interpolation,
                 antialias=self.antialias,
             )
-        return ops.clip(images, 0.0, 255.0)
+            images = ops.round(ops.clip(images, 0.0, 255.0))
+            # H pass
+            images = ops.image.resize(
+                images,
+                size=(out_h, out_w),
+                interpolation=self.interpolation,
+                antialias=self.antialias,
+            )
+            images = ops.round(ops.clip(images, 0.0, 255.0))
+        return images
 
     def _rescale_and_normalize(self, pixel_values):
         """Apply the HF `rescale_factor` and mean/std normalization.

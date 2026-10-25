@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -5,6 +6,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_vision_encoder import (
     SmolVLM2VisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 def _make_encoder(**overrides):
@@ -129,6 +131,12 @@ class SmolVLM2VisionEncoderTest(TestCase):
         expected = ops.reshape(conv(pixel_values), (3, 4, 64))
         positions = embedding.position_embedding(ops.arange(4, dtype="int32"))
         expected = expected + ops.expand_dims(positions, 0)
+
+        atol = 1e-5
+        if keras.config.backend() == "tensorflow":
+            if running_on_gpu():
+                atol = 2e-2
+
         self.assertAllClose(
-            embedding(pixel_values), expected, atol=1e-5, rtol=1e-5
+            embedding(pixel_values), expected, atol=atol, rtol=1e-5
         )

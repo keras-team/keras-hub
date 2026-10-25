@@ -375,7 +375,14 @@ def load_video_converter_config(preset, transformers_config):
     video_sampling = cfg["video_sampling"]
     shared.update(
         {
-            "size": video_sampling["video_size"]["longest_edge"],
+            # HF's `SmolVLMVideoProcessor` resizes each frame so its longest
+            # edge is the processor's `size` (2048) before the final
+            # `max_image_size` square, the same two resizes as images. The
+            # `video_sampling.video_size` key in the JSON is not what the
+            # runtime uses; building from it (512) puts the frames up to
+            # 42 u8 away from HF's on the 256M preset, versus 2 u8 with
+            # `size`.
+            "size": cfg["size"]["longest_edge"],
             "num_frames": video_sampling["max_frames"],
             "fps": video_sampling["fps"],
         }

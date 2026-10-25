@@ -300,7 +300,16 @@ class SmolVLM2CausalLMTest(TestCase):
         self.assertEqual(prompt.count("Frame from"), 3)
         self.assertIn("Frame from 00:02:", prompt)
 
-        outputs = causal_lm.generate(x, max_length=128)
+        full = causal_lm.generate(x, max_length=128)
+        outputs = causal_lm.generate(x, max_length=128, strip_prompt=True)
         self.assertEqual(len(outputs), 1)
         self.assertIsInstance(outputs[0], str)
-        self.assertIn("airport", outputs[0])
+        # The stripped output is the generated tail of the full output, so
+        # the prompt alone cannot satisfy it. A random model may
+        # legitimately stop at once, so the generated part may be empty.
+        # (The test vocabulary cannot spell the frame prompt, so its text
+        # is not asserted on directly.)
+        self.assertTrue(full[0].endswith(outputs[0]))
+        self.assertGreater(len(full[0]), len(outputs[0]))
+        ids = causal_lm.preprocessor.tokenizer(full[0])
+        self.assertLessEqual(len(ids), 128)

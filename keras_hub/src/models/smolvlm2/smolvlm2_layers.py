@@ -11,32 +11,6 @@ from keras_hub.src.layers.modeling.transformer_layer_utils import (
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
-    Qwen3_5InterleaveEmbeddings,
-)
-
-
-class SmolVLM2InterleaveEmbeddings(Qwen3_5InterleaveEmbeddings):
-    """Scatter vision token embeddings into the text embedding sequence.
-
-    Identical to `Qwen3_5InterleaveEmbeddings` except that the image
-    embeddings are first truncated to the number of `vision_indices`. The
-    SmolVLM2 functional graph always runs the vision encoder, so a text-only
-    batch still reaches this layer with one embedding row per image slot but
-    zero indices; JAX silently drops the surplus rows, while TensorFlow and
-    PyTorch reject the `scatter_update` with a shape mismatch.
-    """
-
-    def call(self, image_embeddings, text_embeddings, vision_indices):
-        if len(ops.shape(image_embeddings)) == 3:
-            image_embeddings = ops.reshape(
-                image_embeddings, (-1, self.hidden_dim)
-            )
-        if len(ops.shape(vision_indices)) == 2:
-            vision_indices = ops.reshape(vision_indices, (-1,))
-        num_indices = ops.shape(vision_indices)[0]
-        image_embeddings = image_embeddings[:num_indices]
-        return super().call(image_embeddings, text_embeddings, vision_indices)
 
 
 class SmolVLM2Attention(layers.Layer):

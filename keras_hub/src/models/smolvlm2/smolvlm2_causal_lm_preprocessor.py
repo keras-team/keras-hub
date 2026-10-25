@@ -21,7 +21,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
     SmolVLM2VideoConverter,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
-from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import tf
 
 # HF-compatible video prompt templates.
@@ -346,7 +346,7 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     def _graph_vision_indices(self, token_ids, num_images):
         """Graph-mode version of `_compute_vision_indices`.
 
-        `SmolVLM2InterleaveEmbeddings` scatters into the *flattened*
+        `Qwen3_5InterleaveEmbeddings` scatters into the *flattened*
         `(batch * seq_len, hidden_dim)` text tensor, so the indices here are
         flat offsets `batch_index * seq_len + position`.
 
@@ -378,14 +378,49 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
     # ------------------------------------------------------------------
     # call (training)
     # ------------------------------------------------------------------
-    @preprocessing_function
-    def call(
+    def _check_media_placeholders(self, prompts, images, videos):
+        """Raise if a prompt names media that was not provided.
+
+        Eagerly this is a `ValueError`. Inside a `tf.data` trace the prompts
+        are symbolic string tensors, so the same check runs as a graph
+        assertion and surfaces as an `InvalidArgumentError` when the batch
+        is produced.
+        """
+        if images is not None or videos is not None:
+            return
+        image_token_str, _, _ = self._image_token_strings()
+        video_token_str = getattr(self.tokenizer, "video_token", "<video>")
+        message = (
+            f"Prompt contains `{image_token_str}` or `{video_token_str}` "
+            "but no images/videos were provided."
+        )
+        if in_tf_function():
+            pattern = (
+                f".*({re.escape(image_token_str)}|{re.escape(video_token_str)})"
+                ".*"
+            )
+            has_media = tf.strings.regex_full_match(
+                tf.reshape(tf.convert_to_tensor(prompts), [-1]), pattern
+            )
+            tf.debugging.assert_equal(
+                tf.reduce_any(has_media), False, message=message
+            )
+            return
+        prompt_strings, _ = self._extract_prompt_strings(prompts)
+        for prompt in prompt_strings:
+            if image_token_str in prompt or video_token_str in prompt:
+                raise ValueError(message)
+
+    def _call_python(
         self,
         x,
         y=None,
         sample_weight=None,
         sequence_length=None,
     ):
+        # The base `call()` routes here directly in eager mode and through
+        # the `@preprocessing_function` `_call_tf` wrapper inside a `tf.data`
+        # trace, so this body runs with or without TensorFlow installed.
         sequence_length = sequence_length or self.sequence_length
 
         # Handle both dict and string inputs.
@@ -399,6 +434,8 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             videos = None
             prompts = x
             responses = x
+
+        self._check_media_placeholders(prompts, images, videos)
 
         if videos is not None:
             raise ValueError(
@@ -483,12 +520,22 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             # batch (the Gemma3 pattern) so the vision encoder does no work,
             # while the output structure still matches the model inputs.
             crop_size = self.image_converter.max_image_size
-            out["pixel_values"] = tf.zeros(
-                (0, crop_size, crop_size, 3), dtype="float32"
-            )
-            out["vision_indices"] = tf.zeros(
-                (tf.shape(token_ids)[0], 0), dtype="int32"
-            )
+            if in_tf_function():
+                # Inside a `tf.data` trace the batch axis is symbolic, which
+                # `ops.zeros` cannot take on the jax and torch backends.
+                out["pixel_values"] = tf.zeros(
+                    (0, crop_size, crop_size, 3), dtype="float32"
+                )
+                out["vision_indices"] = tf.zeros(
+                    (tf.shape(token_ids)[0], 0), dtype="int32"
+                )
+            else:
+                out["pixel_values"] = ops.zeros(
+                    (0, crop_size, crop_size, 3), dtype="float32"
+                )
+                out["vision_indices"] = ops.zeros(
+                    (ops.shape(token_ids)[0], 0), dtype="int32"
+                )
         # With no image converter at all there is no way to know the image
         # size, so the vision keys are omitted entirely and
         # `SmolVLM2Backbone.__call__` fills in the placeholders.
@@ -734,6 +781,8 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             videos = None
             prompts = x
 
+        self._check_media_placeholders(prompts, images, videos)
+
         # ------ Text-only path ------
         if images is None and videos is None:
             return super().generate_preprocess(
@@ -826,19 +875,18 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             for prompt in expanded_prompts
         ]
 
-        # Pack to fixed length using the training packer which
-        # supports the tuple input + segment_ids return format.
-        token_ids_tensor = tf.ragged.constant(token_id_lists, dtype="int32")
-        token_ids, _ = self._training_packer(
-            (token_ids_tensor,),
+        # Pack to fixed length using the StartEndPacker
+        token_ids, padding_mask = self.packer(
+            token_id_lists,
             sequence_length=sequence_length,
             add_start_value=self.add_start_token,
             add_end_value=False,
         )
-        padding_mask = token_ids != self.tokenizer.pad_token_id
+        token_ids = np.array(token_ids, dtype="int32")
+        padding_mask = np.array(padding_mask, dtype="bool")
 
         # Compute vision_indices as flat `batch_index * seq_len + position`
-        # offsets, which is what `SmolVLM2InterleaveEmbeddings` scatters on.
+        # offsets, which is what `Qwen3_5InterleaveEmbeddings` scatters on.
         vision_indices = self._compute_vision_indices(token_ids)
         expected = pixel_values.shape[0] * self.image_seq_len
         if vision_indices.size != expected:

@@ -5,11 +5,11 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
+    Qwen3_5InterleaveEmbeddings,
+)
 from keras_hub.src.models.smolvlm2.smolvlm2_layers import SmolVLM2Connector
 from keras_hub.src.models.smolvlm2.smolvlm2_layers import SmolVLM2DecoderBlock
-from keras_hub.src.models.smolvlm2.smolvlm2_layers import (
-    SmolVLM2InterleaveEmbeddings,
-)
 from keras_hub.src.models.smolvlm2.smolvlm2_vision_encoder import (
     SmolVLM2VisionEncoder,
 )
@@ -134,7 +134,7 @@ class SmolVLM2Backbone(Backbone):
         )
 
         # Interleave layer for merging vision into text embeddings.
-        self.interleave_embeddings = SmolVLM2InterleaveEmbeddings(
+        self.interleave_embeddings = Qwen3_5InterleaveEmbeddings(
             hidden_dim=hidden_dim,
             dtype=dtype,
             name="interleave_embeddings",

@@ -52,3 +52,38 @@ class ConvertBackboneConfigTest(TestCase):
         self.assertEqual(resolved["num_key_value_heads"], 32)
         self.assertEqual(resolved["vision_hidden_dim"], 1152)
         self.assertEqual(resolved["vision_num_heads"], 16)
+
+
+class VideoConverterConfigTest(TestCase):
+    def test_video_size_follows_processor_size(self):
+        """Frames resize to `size` (2048) first, as HF's video processor does.
+
+        The shipped `preprocessor_config.json` also carries
+        `video_sampling.video_size.longest_edge = 512`, which HF's runtime
+        does not use for resizing; building from it leaves frames up to
+        42 u8 away from HF's on the 256M preset.
+        """
+        config = {
+            "image_mean": [0.5] * 3,
+            "image_std": [0.5] * 3,
+            "rescale_factor": 1 / 255,
+            "resample": 1,
+            "max_image_size": {"longest_edge": 512},
+            "size": {"longest_edge": 2048},
+            "do_image_splitting": True,
+            "video_sampling": {
+                "fps": 1,
+                "max_frames": 64,
+                "video_size": {"longest_edge": 512},
+            },
+        }
+        with mock.patch.object(
+            convert_smolvlm2, "_load_preprocessor_config", return_value=config
+        ):
+            video = convert_smolvlm2.load_video_converter_config("x", {})
+            image = convert_smolvlm2.load_image_converter_config("x", {})
+        self.assertEqual(video["size"], 2048)
+        self.assertEqual(video["size"], image["size"])
+        self.assertEqual(video["max_image_size"], 512)
+        self.assertEqual(video["num_frames"], 64)
+        self.assertEqual(video["fps"], 1)

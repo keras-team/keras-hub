@@ -29,15 +29,17 @@ class SmolVLM2BackboneTest(TestCase):
         }
         # All four functional-model inputs are passed explicitly here.
         # `predict()` on raw arrays requires every input to share the same
-        # first dimension, so `pixel_values` carries one (unused) image per
-        # row; `vision_indices` is empty, so nothing is scattered. Text-only
-        # callers can instead omit both keys and let `__call__` inject
-        # zero-length placeholders.
+        # first dimension, so `pixel_values` carries one image per row.
+        # `vision_indices` are flat offsets across the flattened batch.
+        token_ids = np.ones((2, 5), dtype="int32")
+        token_ids[:, 1:] = 200
         self.input_data = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
+            "token_ids": ops.convert_to_tensor(token_ids),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
             "pixel_values": ops.zeros((2, 32, 32, 3), dtype="float32"),
-            "vision_indices": ops.zeros((2, 0), dtype="int32"),
+            "vision_indices": ops.convert_to_tensor(
+                [[1, 2, 3, 4], [6, 7, 8, 9]], dtype="int32"
+            ),
         }
 
     def test_backbone_basics(self):

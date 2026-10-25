@@ -12,14 +12,18 @@ from keras_hub.src.utils.keras_utils import running_on_gpu
 
 # `tf.image.resize(method=<name>, antialias=True)` on the (1, 8, 12, 3)
 # hard-edge image in `test_lanczos_resize_matches_reference`, resized to
-# 16x16 and clipped to [0, 255]. Every row and channel is the same.
+# 16x16, clipped to [0, 255] and rounded. The converter resizes width then
+# height with a clip + round after each pass (the PIL uint8 pipeline);
+# every row of this image is identical, so the height pass is an identity
+# and the result is the rounded single-pass row. Every row and channel is
+# the same.
 _LANCZOS3_REFERENCE_ROW = [
-    0.0, 0.0, 0.0, 0.0, 0.0, 7.767, 0.0, 23.432,
-    231.568, 255.0, 247.233, 255.0, 255.0, 255.0, 255.0, 255.0,
+    0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 0.0, 23.0,
+    232.0, 255.0, 247.0, 255.0, 255.0, 255.0, 255.0, 255.0,
 ]  # fmt: skip
 _LANCZOS5_REFERENCE_ROW = [
-    0.0, 0.0, 1.383, 0.0, 0.0, 14.637, 0.0, 24.592,
-    230.408, 255.0, 240.363, 255.0, 255.0, 253.617, 255.0, 255.0,
+    0.0, 0.0, 1.0, 0.0, 0.0, 15.0, 0.0, 25.0,
+    230.0, 255.0, 240.0, 255.0, 255.0, 254.0, 255.0, 255.0,
 ]  # fmt: skip
 
 
@@ -286,7 +290,9 @@ class SmolVLM2ImageConverterTest(TestCase):
             and running_on_gpu()
             and interpolation == "lanczos5"
         ):
-            atol = 0.3
+            # The GPU kernel is up to 0.25 off before rounding, which can
+            # flip a value by one u8 after it.
+            atol = 1.0
         self.assertAllClose(pixel_values, expected, atol=atol)
 
     def test_empty_batch_lanczos_resize(self):
@@ -314,3 +320,55 @@ class SmolVLM2ImageConverterTest(TestCase):
         image = np.random.randint(0, 256, size=(20, 24, 3)).astype("uint8")
         with self.assertRaisesRegex(ValueError, "image_size"):
             converter(image)
+
+    def test_tf_data_map_jax_torch(self):
+        """Map over tf.data works on all backends for training inputs."""
+        import tensorflow as tf
+
+        converter = SmolVLM2ImageConverter(
+            max_image_size=16,
+            size=32,
+            do_image_splitting=False,
+        )
+        images = np.random.randint(0, 256, size=(4, 20, 24, 3)).astype("uint8")
+        ds = tf.data.Dataset.from_tensor_slices(images).batch(2).map(converter)
+        for batch in ds:
+            self.assertEqual(batch["pixel_values"].shape, (2, 16, 16, 3))
+
+    def test_call_tf_matches_call_python(self):
+        """`_call_tf` and `_call_python` agree to within 1 u8 on hard edges.
+
+        The two paths are independent implementations of the same two-pass
+        pipeline (`scale_and_translate` vs `tf.image.resize`), so with an
+        edge that is neither horizontal nor vertical they only agree if both
+        clip and round between the width and height passes.
+        """
+        converter = SmolVLM2ImageConverter(
+            max_image_size=512,
+            size=512,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="lanczos3",
+            antialias=True,
+        )
+        # A small diagonal hard edge that gets upsampled ~20x. Lanczos rings
+        # well past [0, 255] on the way up, and the height pass sees that
+        # ringing unless the width pass clipped and rounded it away: without
+        # the intermediate clip the two paths differ by up to 32 u8 here,
+        # whereas an antialiased downscale would hide it (<= 1 u8).
+        rows, cols = np.mgrid[0:24, 0:32]
+        images = np.where(cols * 24 > rows * 32, 255, 0).astype("uint8")
+        images = np.broadcast_to(images[None, :, :, None], (1, 24, 32, 3))
+
+        out_python = ops.convert_to_numpy(
+            converter._call_python(images)["pixel_values"]
+        )
+        out_tf = ops.convert_to_numpy(
+            converter._call_tf(images)["pixel_values"]
+        )
+
+        # Both paths emit whole u8 values before the `scale`.
+        self.assertAllClose(out_python * 255, np.round(out_python * 255))
+        # Max abs diff <= 1 u8, i.e. <= 1 / 255 after the scale.
+        self.assertAllClose(out_python, out_tf, atol=1.5 / 255.0)
