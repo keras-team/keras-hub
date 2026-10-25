@@ -182,8 +182,10 @@ class SpeculativeSamplerTest(TestCase):
 
     @parameterized.named_parameters(("greedy", False), ("stochastic", True))
     def test_ragged_prompts_are_kept(self, stochastic):
-        # Row 1 has a longer prompt ("zbb") than row 0 ("z"), so generation
-        # starts inside row 1's prompt. Its prompt tokens must be kept.
+        # Row 1 has a longer prompt ("zbbbb") than row 0 ("z"), so generation
+        # starts inside row 1's prompt. The prompt extends past
+        # `index + num_speculative_tokens`, so the bonus token also lands
+        # inside it. Its prompt tokens must be kept.
         batch_size = 2
 
         def batched_next(prompt, cache, index):
@@ -205,13 +207,13 @@ class SpeculativeSamplerTest(TestCase):
         prompt = ops.array(
             [
                 [self.char_lookup[c] for c in "zzzzzzzz"],
-                [self.char_lookup[c] for c in "zbbzzzzz"],
+                [self.char_lookup[c] for c in "zbbbbzzz"],
             ]
         )
         mask = ops.array(
             [
                 [True, False, False, False, False, False, False, False],
-                [True, True, True, False, False, False, False, False],
+                [True, True, True, True, True, False, False, False],
             ]
         )
         output = sampler(
@@ -222,7 +224,7 @@ class SpeculativeSamplerTest(TestCase):
             draft_next=batched_next,
         )
         output_str = self.join_as_string(output)
-        self.assertEqual(output_str, ["zaaaaaaa", "zbbaaaaa"])
+        self.assertEqual(output_str, ["zaaaaaaa", "zbbbbaaa"])
 
     def test_short_circuit_rejection(self):
         # If token 2 is wrong, tokens 3+ should be rejected even if correct.
