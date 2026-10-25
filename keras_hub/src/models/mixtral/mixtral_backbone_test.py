@@ -32,6 +32,15 @@ class MixtralBackboneTest(TestCase):
             run_quantization_check=False,
         )
 
+    def test_get_config_preserves_output_router_logits(self):
+        init_kwargs = {**self.init_kwargs, "output_router_logits": True}
+        model = MixtralBackbone(**init_kwargs)
+        config = model.get_config()
+        self.assertTrue(config["output_router_logits"])
+        revived = MixtralBackbone.from_config(config)
+        self.assertTrue(revived.output_router_logits)
+        self.assertTrue(revived.transformer_layers[0].output_router_logits)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(

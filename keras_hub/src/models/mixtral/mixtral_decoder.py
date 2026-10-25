@@ -482,6 +482,7 @@ class MixtralTransformerDecoder(keras.layers.Layer):
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
                 "router_jitter_noise": self.router_jitter_noise,
+                "output_router_logits": self.output_router_logits,
                 "sliding_window": self.sliding_window,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
