@@ -38,7 +38,7 @@ class ImageConverterTest(TestCase):
         # that is missing from `get_config` is missing on both sides and
         # matches. The value only matters once the global image data format
         # differs from the one the converter was built with.
-        converter = ImageConverter(image_size=(4, 4))
+        converter = ImageConverter(image_size=(4, 4), scale=1 / 255.0)
         built = converter.data_format
         config = converter.get_config()
         self.assertEqual(config["data_format"], built)
@@ -52,8 +52,19 @@ class ImageConverterTest(TestCase):
             revived = ImageConverter.from_config(config)
             self.assertEqual(revived.data_format, built)
             self.assertEqual(revived.resizing.data_format, built)
+            shape = (2, 3, 4, 4) if built == "channels_first" else (2, 4, 4, 3)
+            outputs = revived(np.ones(shape))
+            self.assertEqual(ops.shape(outputs), shape)
         finally:
             keras.config.set_image_data_format(original)
+
+    def test_channels_first_scalar_scale_and_offset(self):
+        converter = ImageConverter(
+            scale=1 / 255.0, offset=-1.0, data_format="channels_first"
+        )
+        inputs = np.ones((2, 3, 4, 4)) * 255.0
+        self.assertAllClose(converter(inputs), np.zeros((2, 3, 4, 4)))
+        self.assertAllClose(converter(inputs[0]), np.zeros((3, 4, 4)))
 
     def test_resize_simple(self):
         converter = ImageConverter(
