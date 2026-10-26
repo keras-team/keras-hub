@@ -121,6 +121,22 @@ def _fixed_point_lanczos_weights(in_size, out_size):
     return matrix, precision
 
 
+def _exact_int_einsum(equation, matrix, images):
+    """Compute an exact int32 einsum with float32 matmuls.
+
+    Some backends have no integer matmul kernel on GPU. The function splits
+    each weight into a high and a low byte. Each float32 matmul stays below
+    `2**24`, so the result is exact. Then the function recombines the two
+    results in int32.
+    """
+    low = matrix % 256
+    high = matrix // 256
+    images = ops.cast(images, "float32")
+    low_result = ops.einsum(equation, ops.cast(low, "float32"), images)
+    high_result = ops.einsum(equation, ops.cast(high, "float32"), images)
+    return ops.cast(high_result, "int32") * 256 + ops.cast(low_result, "int32")
+
+
 def _resize_uint8_lanczos(images, target_h, target_w):
     """Resize integer `(..., height, width, 3)` images with Lanczos.
 
@@ -135,7 +151,7 @@ def _resize_uint8_lanczos(images, target_h, target_w):
     _, in_h, in_w, _ = ops.shape(images)
     if in_w != target_w:
         matrix, precision = _fixed_point_lanczos_weights(in_w, target_w)
-        images = ops.einsum(
+        images = _exact_int_einsum(
             "ow,nhwc->nhoc", ops.convert_to_tensor(matrix), images
         )
         images = ops.floor_divide(
@@ -144,7 +160,7 @@ def _resize_uint8_lanczos(images, target_h, target_w):
         images = ops.clip(images, 0, 255)
     if in_h != target_h:
         matrix, precision = _fixed_point_lanczos_weights(in_h, target_h)
-        images = ops.einsum(
+        images = _exact_int_einsum(
             "oh,nhwc->nowc", ops.convert_to_tensor(matrix), images
         )
         images = ops.floor_divide(

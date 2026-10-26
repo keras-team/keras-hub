@@ -99,7 +99,8 @@ class NoTensorflow(unittest.TestCase):
             patch_temporal=2,
             merge_size=2,
             max_image_tokens=64,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         preprocessor = keras_hub.models.MuseGlimmerCausalLMPreprocessor(
             tokenizer=tokenizer,
@@ -149,7 +150,8 @@ class NoTensorflow(unittest.TestCase):
             fps=2.0,
             num_frames=4,
             max_video_frame_tokens=16,
-            scale=1 / 255.0,
+            image_mean=0.0,
+            image_std=255.0,
         )
         preprocessor = keras_hub.models.MuseGlimmerCausalLMPreprocessor(
             tokenizer=tokenizer,

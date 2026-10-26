@@ -1,3 +1,4 @@
+import contextlib
 import gc
 import weakref
 from unittest.mock import patch
@@ -37,6 +38,31 @@ from keras_hub.src.utils.tensor_utils import convert_to_numpy
 _CACHE_TOL = 5e-3 if running_on_gpu() else 1e-4
 # TF32 matmuls on GPU drift by up to 1.3e-3 between drafter calls.
 _DRAFT_TOL = 5e-3 if running_on_gpu() else 1e-4
+
+
+@contextlib.contextmanager
+def _full_precision_matmul():
+    """Turn off TF32 matmuls on the JAX and TensorFlow backends.
+
+    PyTorch keeps TF32 matmuls off by default.
+    """
+    backend = keras.config.backend()
+    if backend == "jax":
+        import jax
+
+        with jax.default_matmul_precision("highest"):
+            yield
+    elif backend == "tensorflow":
+        import tensorflow as tf
+
+        enabled = tf.config.experimental.tensor_float_32_execution_enabled()
+        tf.config.experimental.enable_tensor_float_32_execution(False)
+        try:
+            yield
+        finally:
+            tf.config.experimental.enable_tensor_float_32_execution(enabled)
+    else:
+        yield
 
 
 class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
@@ -524,43 +550,46 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         self.causal_lm.generate(
             prompt_ids, stop_token_ids=None, assistant_model=assistant
         )
-        self.causal_lm.quantize("int8")
-        # The compiled assisted function holds the old target variables.
-        self.assertIsNone(self.causal_lm._assisted_generate_cache)
-        reference_output = self.causal_lm.generate(
-            prompt_ids, stop_token_ids=None
-        )
-        output = self.causal_lm.generate(
-            prompt_ids, stop_token_ids=None, assistant_model=assistant
-        )
-        output_ids = convert_to_numpy(output["token_ids"])
-        reference_ids = convert_to_numpy(reference_output["token_ids"])
-        if running_on_gpu():
-            # TF32 drift flips int8 rounding on GPU. The two compiled
-            # functions then pick different tokens from near-tied logits,
-            # starting at the first generated token. Each assisted token
-            # must stay in the top 2 of the target logits at its step.
-            prompt_length = int(
-                np.sum(convert_to_numpy(prompt_ids["padding_mask"]))
+        # TF32 drift flips int8 rounding and makes the two compiled
+        # functions pick different tokens from near-tied logits.
+        with _full_precision_matmul():
+            self.causal_lm.quantize("int8")
+            # The compiled assisted function holds the old target variables.
+            self.assertIsNone(self.causal_lm._assisted_generate_cache)
+            reference_output = self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None
             )
-            self.assertEqual(output_ids.shape, reference_ids.shape)
-            self.assertAllEqual(
-                output_ids[:, :prompt_length], reference_ids[:, :prompt_length]
+            output = self.causal_lm.generate(
+                prompt_ids, stop_token_ids=None, assistant_model=assistant
             )
-            logits = convert_to_numpy(
-                self.causal_lm(
-                    {
-                        "token_ids": output["token_ids"],
-                        "padding_mask": output["padding_mask"],
-                    }
+            output_ids = convert_to_numpy(output["token_ids"])
+            reference_ids = convert_to_numpy(reference_output["token_ids"])
+            if running_on_gpu():
+                # Other GPU kernels can still differ in the last bit. Each
+                # assisted token must stay in the top 2 of the target
+                # logits at its step.
+                prompt_length = int(
+                    np.sum(convert_to_numpy(prompt_ids["padding_mask"]))
                 )
-            )
-            for position in range(prompt_length, output_ids.shape[1]):
-                top_2 = np.argsort(logits[:, position - 1], axis=-1)[:, -2:]
-                for row, token in enumerate(output_ids[:, position]):
-                    self.assertIn(token, top_2[row])
-        else:
-            self.assertAllEqual(output_ids, reference_ids)
+                self.assertEqual(output_ids.shape, reference_ids.shape)
+                self.assertAllEqual(
+                    output_ids[:, :prompt_length],
+                    reference_ids[:, :prompt_length],
+                )
+                logits = convert_to_numpy(
+                    self.causal_lm(
+                        {
+                            "token_ids": output["token_ids"],
+                            "padding_mask": output["padding_mask"],
+                        }
+                    )
+                )
+                for position in range(prompt_length, output_ids.shape[1]):
+                    top_2 = np.argsort(logits[:, position - 1], axis=-1)[:, -2:]
+                    for row, token in enumerate(output_ids[:, position]):
+                        self.assertIn(token, top_2[row])
+            else:
+                self.assertAllEqual(output_ids, reference_ids)
 
     def test_generate_with_assistant_rejects_beam_and_contrastive(self):
         assistant = self._make_assistant(block_size=3)

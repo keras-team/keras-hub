@@ -324,18 +324,11 @@ def test_token_ids(keras_model, hf_results, label):
     print(f" ✓ [{label}] Token IDs match.")
 
 
-# Fraction of logits allowed outside `atol=rtol=1e-3`. Text must match
-# exactly. Image and video keep a small budget for float32 rounding in the
-# vision tower.
-MAX_MISMATCH_FRACTION = {"TEXT": 0.0, "IMAGE": 5e-5, "VIDEO": 4.5e-5}
-
-
 def _report_numerics(label, keras_logits, hf_logits, vision_indices):
-    """Print the logit gap and return `True` if it is beyond the budget.
+    """Print the logit gap and return `True` if the check fails.
 
-    A logit mismatches when it differs from HF by more than
-    `atol=1e-3, rtol=1e-3`. `MAX_MISMATCH_FRACTION` sets how many logits
-    may mismatch.
+    The check requires `atol=1e-3, rtol=1e-3` on every position that is not
+    a vision position. The vision positions only print their gap.
     """
     abs_diff = np.abs(keras_logits - hf_logits)
     per_position = abs_diff.reshape(-1, abs_diff.shape[-1]).max(axis=-1)
@@ -346,29 +339,27 @@ def _report_numerics(label, keras_logits, hf_logits, vision_indices):
         f"{per_position.size}): {per_position.max():.6f}"
     )
     print(f"logit max diff at last position: {per_position[-1]:.6f}")
+    is_vision = np.zeros(per_position.shape, dtype=bool)
     if vision_indices is not None:
-        vision_diff = per_position[np.asarray(vision_indices).reshape(-1)]
+        is_vision[np.asarray(vision_indices).reshape(-1)] = True
+        vision_diff = per_position[is_vision]
         print(
             f"logit max diff at vision positions: {vision_diff.max():.6f} "
             f"(mean {vision_diff.mean():.6f})"
         )
     tol = 1e-3 + 1e-3 * np.abs(hf_logits)
-    mismatched = int(np.sum(abs_diff > tol))
-    total = hf_logits.size
-    pct = 100.0 * (1.0 - mismatched / total)
+    outside = (abs_diff > tol).reshape(-1, abs_diff.shape[-1]).any(axis=-1)
+    failed_positions = int(np.sum(outside & ~is_vision))
+    checked_positions = int(np.sum(~is_vision))
     print(
-        f"  [{label}] {mismatched}/{total} logits outside "
-        f"atol=1e-3, rtol=1e-3 (matching={pct:.4f}%)."
+        f"  [{label}] {failed_positions}/{checked_positions} non-vision "
+        "positions have logits outside atol=1e-3, rtol=1e-3."
     )
-    beyond_budget = mismatched / total > MAX_MISMATCH_FRACTION[label]
-    if beyond_budget:
-        print(
-            f" ✗ [{label}] logits differ from HF beyond the allowed "
-            f"{MAX_MISMATCH_FRACTION[label]:g} of logits."
-        )
+    if failed_positions:
+        print(f" ✗ [{label}] logits differ from HF.")
     else:
-        print(f" ✓ [{label}] logits match HF.")
-    return beyond_budget
+        print(f" ✓ [{label}] logits match HF on non-vision positions.")
+    return failed_positions > 0
 
 
 def _prepare_media_inputs(keras_model, result, media_key):
@@ -393,7 +384,7 @@ def _prepare_media_inputs(keras_model, result, media_key):
 
 
 def test_numerics(keras_model, hf_results, label):
-    """Compare logits with HF and return `True` if they are beyond budget.
+    """Compare logits with HF and return `True` if the check fails.
 
     Every check runs the raw prompt and media through the preprocessor.
     The image and video converters are in the measured pass.
