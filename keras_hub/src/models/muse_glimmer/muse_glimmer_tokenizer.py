@@ -63,6 +63,23 @@ class MuseGlimmerTokenizer(BytePairTokenizer):
 
     The five delimiter tokens follow the Hugging Face processor layout. The
     vocabulary must contain all of them.
+
+    Example:
+
+    ```python
+    tokenizer = keras_hub.models.MuseGlimmerTokenizer.from_preset(
+        "muse_glimmer_30b"
+    )
+
+    # Unbatched input.
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone

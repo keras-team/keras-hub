@@ -113,6 +113,24 @@ class MuseGlimmerVideoConverter(VideoConverter):
             Defaults to `"lanczos3"`.
         antialias: bool. If `True`, the resize filters each frame to avoid
             aliasing. Defaults to `True`.
+
+    Example:
+
+    Convert one video of 4 frames to patches.
+    ```python
+    converter = keras_hub.layers.MuseGlimmerVideoConverter(
+        patch_size=2,
+        patch_temporal=2,
+        merge_size=1,
+        fps=2.0,
+        source_fps=2.0,
+        num_frames=4,
+        max_video_frame_tokens=4,
+    )
+    outputs = converter(np.ones((4, 8, 8, 3), dtype="float32"))
+    outputs["patches"].shape  # (8, 24)
+    outputs["grid_thw"]  # [2, 2, 2]
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone

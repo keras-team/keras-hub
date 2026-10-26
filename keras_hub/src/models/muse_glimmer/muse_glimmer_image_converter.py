@@ -350,6 +350,18 @@ class MuseGlimmerImageConverter(ImageConverter):
             `"lanczos3"`.
         antialias: bool. If `True`, the resize filters the image to avoid
             aliasing. Defaults to `True`.
+
+    Example:
+
+    Convert one image to patches.
+    ```python
+    converter = keras_hub.layers.MuseGlimmerImageConverter(
+        patch_size=2, patch_temporal=2, merge_size=1, max_image_tokens=4
+    )
+    outputs = converter(np.ones((8, 8, 3), dtype="float32"))
+    outputs["patches"].shape  # (4, 24)
+    outputs["grid_thw"]  # [1, 2, 2]
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone

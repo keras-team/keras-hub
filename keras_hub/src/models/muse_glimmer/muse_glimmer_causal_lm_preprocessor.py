@@ -178,6 +178,27 @@ class MuseGlimmerCausalLMPreprocessor(CausalLMPreprocessor):
             token. Defaults to `True`.
         add_end_token: bool. Whether to append the tokenizer's end token.
             Defaults to `True`.
+
+    Example:
+
+    Preprocess prompts for training and for generation.
+    ```python
+    preprocessor = keras_hub.models.MuseGlimmerCausalLMPreprocessor.from_preset(
+        "muse_glimmer_30b", sequence_length=512
+    )
+    # Call the preprocessor for training. It returns `(x, y, sample_weight)`.
+    x, y, sample_weight = preprocessor(["What is a plane?"])
+    x, y, sample_weight = preprocessor({
+        "prompts": ["Describe <|image|>"],
+        "images": np.ones((1, 224, 224, 3), dtype="float32"),
+    })
+    # Call `generate_preprocess` for generation. It returns the model inputs.
+    preprocessor.generate_preprocess(["What is a plane?"])
+    preprocessor.generate_preprocess({
+        "prompts": ["Describe <|image|>"],
+        "images": np.ones((1, 224, 224, 3), dtype="float32"),
+    })
+    ```
     """
 
     backbone_cls = MuseGlimmerBackbone

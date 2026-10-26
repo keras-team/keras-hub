@@ -12,7 +12,7 @@ backbone_presets = {
             "params": 29776626688,
             "path": "muse_glimmer",
         },
-        "kaggle_handle": "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b/1",
+        "kaggle_handle": "kaggle://keras/museglimmer/keras/muse_glimmer_30b/1",
     },
     "muse_glimmer_30b_assistant": {
         "metadata": {
@@ -28,6 +28,6 @@ backbone_presets = {
             "params": 2555985152,
             "path": "muse_glimmer",
         },
-        "kaggle_handle": "kaggle://keras/muse-glimmer/keras/muse_glimmer_30b_assistant/1",
+        "kaggle_handle": "kaggle://keras/museglimmer/keras/muse_glimmer_30b_assistant/1",
     },
 }

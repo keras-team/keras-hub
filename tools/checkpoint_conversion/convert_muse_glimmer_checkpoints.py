@@ -329,7 +329,10 @@ def _report_numerics(label, keras_logits, hf_logits, vision_indices):
 
     The check requires `atol=1e-3, rtol=1e-3` on every position that is not
     a vision position. The vision positions only print their gap.
+    The function supports a batch of one, because it flattens the batch and
+    sequence axes and `vision_indices` index the flat sequence.
     """
+    assert keras_logits.shape[0] == 1, "Expected a batch of one."
     abs_diff = np.abs(keras_logits - hf_logits)
     per_position = abs_diff.reshape(-1, abs_diff.shape[-1]).max(axis=-1)
     print(f"\nlogit mean absolute diff: {abs_diff.mean():.6f}")
