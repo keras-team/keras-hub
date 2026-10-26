@@ -205,28 +205,20 @@ def resolve_text_prefix(loader, transformers_config):
     `model.*`. The config decides which prefix is tried first, and the
     checkpoint's weight keys decide which one is used, so a mislabelled
     config still loads.
+
+    The check is an exact key match (`SafetensorLoader.has_key`) rather
+    than `get_tensor`, because the loader's suffix matching would accept
+    `model.embed_tokens.weight` against
+    `model.language_model.embed_tokens.weight`.
     """
     if is_text_only_config(transformers_config):
         candidates = ["model", "model.language_model"]
     else:
         candidates = ["model.language_model", "model"]
 
-    # Prefer the weight index when there is one: it is a plain dict and
-    # checking it has no side effects on the loader's prefix cache.
-    if loader.safetensor_config is not None:
-        weight_map = loader.safetensor_config["weight_map"]
-        for candidate in candidates:
-            if f"{candidate}.embed_tokens.weight" in weight_map:
-                return candidate
-        return candidates[0]
-
-    # Single-file checkpoint: probe the file for the embedding weight.
     for candidate in candidates:
-        try:
-            loader.get_tensor(f"{candidate}.embed_tokens.weight")
+        if loader.has_key(f"{candidate}.embed_tokens.weight"):
             return candidate
-        except Exception:
-            continue
     return candidates[0]
 
 

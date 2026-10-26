@@ -252,6 +252,20 @@ class TestQwen3_5Converter(TestCase):
             hf_config, prefix="model.language_model", sharded=True
         )
 
+    def test_mislabelled_config_resolves_from_weight_keys(self):
+        # A text-only `model_type` on a checkpoint whose keys use the
+        # multimodal `model.language_model.*` layout, and vice versa. The
+        # prefix must be resolved from the actual keys, not the config,
+        # and must not be fooled by the loader's suffix matching
+        # (`model.language_model.embed_tokens.weight` ends with
+        # `model.embed_tokens.weight`). Single-file checkpoints only; the
+        # sharded path checks the weight index directly.
+        self._assert_roundtrip(
+            TINY_HF_TEXT_CONFIG, prefix="model.language_model"
+        )
+        hf_config = {**TINY_HF_TEXT_CONFIG, "model_type": "qwen3_5"}
+        self._assert_roundtrip(hf_config, prefix="model")
+
     def test_is_text_only_config(self):
         self.assertTrue(
             convert_qwen3_5.is_text_only_config(TINY_HF_TEXT_CONFIG)
