@@ -615,6 +615,10 @@ class Mistral3VisionMLP(keras.layers.Layer):
 
         return self.down_proj(gate * up)
 
+    def compute_output_spec(self, inputs):
+        output_shape = tuple(inputs.shape[:-1]) + (self.hidden_dim,)
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+
     def get_config(self):
         config = super().get_config()
         config.update(
