@@ -240,6 +240,13 @@ class ImageConverter(PreprocessingLayer):
 
     def _expand_non_channel_dims(self, value, inputs):
         """Expand non channel dims so value is broadcastable with inputs."""
+        value = np.asarray(value)
+        if value.ndim == 0:
+            # A scalar broadcasts against any input shape. Expanding it with
+            # a channel-dependent tuple of axes would exceed the number of
+            # dims it can have (e.g. `(0, 2, 3)` on a 0-d value), so return
+            # it as is.
+            return value
         unbatched = len(ops.shape(inputs)) == 3
         channels_first = self.data_format == "channels_first"
         if unbatched:

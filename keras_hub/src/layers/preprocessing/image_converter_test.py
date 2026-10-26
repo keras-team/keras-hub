@@ -71,6 +71,37 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(outputs[:, :, 1], np.ones((4, 4)) * 0.301569)
         self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
 
+    @parameterized.named_parameters(
+        ("scalar", 1.0 / 255.0, 0.1),
+        (
+            "per_channel",
+            (1.0 / 255.0, 0.8 / 255.0, 1.2 / 255.0),
+            (0.2, -0.1, 0.25),
+        ),
+    )
+    def test_channels_first_scale_and_offset(self, scale, offset):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=scale,
+            offset=offset,
+            data_format="channels_first",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        scale = np.reshape(np.asarray(scale, "float32"), (-1, 1, 1))
+        offset = np.reshape(np.asarray(offset, "float32"), (-1, 1, 1))
+        # Batched input.
+        inputs = np.ones((2, 3, 10, 10), "float32") * 128
+        outputs = converter(inputs)
+        self.assertEqual(ops.shape(outputs), (2, 3, 4, 4))
+        expected = np.ones((2, 3, 4, 4), "float32") * 128 * scale + offset
+        self.assertAllClose(outputs, expected)
+        # Unbatched input.
+        inputs = np.ones((3, 10, 10), "float32") * 128
+        outputs = converter(inputs)
+        self.assertEqual(ops.shape(outputs), (3, 4, 4))
+        expected = np.ones((3, 4, 4), "float32") * 128 * scale + offset
+        self.assertAllClose(outputs, expected)
+
     def test_dtypes(self):
         converter = ImageConverter(
             image_size=(4, 4),
