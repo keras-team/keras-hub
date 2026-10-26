@@ -300,16 +300,30 @@ class SmolVLM2CausalLMTest(TestCase):
         self.assertEqual(prompt.count("Frame from"), 3)
         self.assertIn("Frame from 00:02:", prompt)
 
-        full = causal_lm.generate(x, max_length=128)
-        outputs = causal_lm.generate(x, max_length=128, strip_prompt=True)
+        # The expanded video prompt (3 frames x `image_seq_len`, plus the
+        # timestamp text) must fit in `sequence_length`; this is the id
+        # count the old detokenize-then-retokenize check was after, which
+        # flaked because the test vocab cannot round-trip the text.
+        prompt_mask = ops.convert_to_numpy(preprocessed["padding_mask"])
+        prompt_len = int(prompt_mask.sum())
+        self.assertLessEqual(prompt_len, 128)
+
+        outputs = causal_lm.generate(x, max_length=128)
         self.assertEqual(len(outputs), 1)
         self.assertIsInstance(outputs[0], str)
-        # The stripped output is the generated tail of the full output, so
-        # the prompt alone cannot satisfy it. A random model may
-        # legitimately stop at once, so the generated part may be empty.
-        # (The test vocabulary cannot spell the frame prompt, so its text
-        # is not asserted on directly.)
-        self.assertTrue(full[0].endswith(outputs[0]))
-        self.assertGreater(len(full[0]), len(outputs[0]))
-        ids = causal_lm.preprocessor.tokenizer(full[0])
-        self.assertLessEqual(len(ids), 128)
+
+        # Assert on the sampler's ids directly, not on re-tokenized text.
+        # A random model may stop at once, so the generated tail may be
+        # empty; what must hold is that the prompt is preserved and nothing
+        # runs past `max_length`.
+        stop_token_ids = (preprocessor.tokenizer.end_token_id,)
+        causal_lm.preprocessor = None
+        ids = causal_lm.generate(preprocessed, stop_token_ids=stop_token_ids)
+        token_ids = ops.convert_to_numpy(ids["token_ids"])
+        out_mask = ops.convert_to_numpy(ids["padding_mask"])
+        prompt_ids = ops.convert_to_numpy(preprocessed["token_ids"])
+        self.assertAllEqual(
+            token_ids[0, :prompt_len], prompt_ids[0, :prompt_len]
+        )
+        self.assertGreaterEqual(int(out_mask.sum()), prompt_len)
+        self.assertLessEqual(int(out_mask.sum()), 128)

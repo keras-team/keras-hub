@@ -87,32 +87,24 @@ class SmolVLM2VisionEmbedding(layers.Layer):
                 )
 
         if keras.config.backend() == "tensorflow":
-            # On TensorFlow a convolution over a zero-image batch returns
-            # its input unchanged, so `Conv2D`'s bias add fails with
-            # `Incompatible shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`.
-            # Append one blank image if the conv batch is empty.
-            batch_size = pixel_values.shape[0]
-
-            def _empty_batch():
-                blank = ops.zeros(
-                    (1, self.image_size, self.image_size, self.num_channels),
-                    dtype=pixel_values.dtype,
-                )
-                return self.patch_embedding(blank)[:0]
-
-            def _normal_batch():
-                return self.patch_embedding(pixel_values)
-
-            if batch_size == 0:
-                patch_embeds = _empty_batch()
-            elif batch_size is not None:
-                patch_embeds = _normal_batch()
-            else:
-                patch_embeds = ops.cond(
-                    ops.shape(pixel_values)[0] == 0,
-                    _empty_batch,
-                    _normal_batch,
-                )
+            # On TensorFlow 2.20 a convolution over a zero-image batch
+            # returns its input unchanged, so `Conv2D`'s bias add fails with
+            # `Incompatible shapes: [0, H, W, C] vs. [1, 1, 1, hidden_dim]`
+            # (fixed in 2.21). Concatenate one blank image, run the conv on
+            # the first `max(B, 1)` images and drop the blank again: for
+            # B >= 1 the conv sees exactly B images (so cuDNN picks the
+            # same algorithm as a plain conv), for B == 0 it sees the blank
+            # and returns an empty batch. No `cond`, whose branches have
+            # different static batch shapes and break the XLA gradient in
+            # `fit()`.
+            B = ops.shape(pixel_values)[0]
+            blank = ops.zeros(
+                (1, self.image_size, self.image_size, self.num_channels),
+                dtype=pixel_values.dtype,
+            )
+            padded = ops.concatenate([pixel_values, blank], axis=0)
+            to_run = padded[: ops.maximum(B, 1)]
+            patch_embeds = self.patch_embedding(to_run)[:B]
         else:
             patch_embeds = self.patch_embedding(pixel_values)
         embeddings = ops.reshape(

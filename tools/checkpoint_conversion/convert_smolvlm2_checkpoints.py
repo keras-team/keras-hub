@@ -22,6 +22,7 @@ from absl import app
 from absl import flags
 from keras import ops
 from PIL import Image
+from transformers import AutoImageProcessor
 from transformers import AutoModelForImageTextToText
 from transformers import AutoProcessor
 from transformers import AutoTokenizer
@@ -59,48 +60,60 @@ GENERATE_NEW_TOKENS = 8
 # than a 13-crop prompt on the 2.2B preset (13 x 81 image tokens). Nothing
 # about this value comes from the HF side.
 KERASHUB_SEQUENCE_LENGTH = 2048
-# Weight parity: HF's own pixel_values through the KerasHub backbone must
-# reproduce HF's logits. This isolates the port from the preprocessing.
+# Text-only weight parity: HF's tokenizer ids through the KerasHub model
+# must reproduce HF's logits. This isolates the port from the image
+# preprocessing. Text ids are identical on both sides by construction.
 #
 # The 2.2B value is the model's own float32 noise floor, measured on the
-# COCO prompt by running HF in float64 and float32 on the same input: the
-# two differ by up to 3.2e-3, all at `<image>` positions, the largest at
-# sequence position 745. KerasHub's float32 logits differ from HF's by at
-# most 1.5e-3, at that same position and nowhere else above 1e-3 (126 of
-# 54M elements). The checkpoint is natively float32, so no dtype upcast is
-# involved. 256M and 500M stay within 1e-3 (max 1.2e-4 measured).
+# COCO prompt by running HF in float64 and float32 on the same input (the
+# script prints that measurement under "HF float64 vs float32" so the
+# justification stays checkable): the two differ by up to 3.2e-3, all at
+# `<image>` positions. KerasHub's float32 logits differ from HF's by at
+# most 1.5e-3 there. The checkpoint is natively float32, so no dtype
+# upcast is involved. 256M and 500M stay within 1e-3 (max 1.2e-4 measured).
 WEIGHT_PARITY_ATOL = {
     "smolvlm2_256m_video_instruct": 1e-3,
     "smolvlm2_500m_video_instruct": 1e-3,
     "smolvlm2_2.2b_instruct": 4e-3,
 }
 
-# PROVISIONAL: pending reviewer decision on keras-team/keras-hub#3096 T37.
+# End-to-end logit parity: raw input -> SmolVLM2CausalLMPreprocessor ->
+# SmolVLM2CausalLM, against HF processor (PIL image backend, see
+# `precompute_hf_outputs`) -> HF model, with nothing fed across. Per preset,
+# `(text_atol, image_atol)` for the image rows and separately for the video
+# row; text positions are the ones whose logits are consumed, `<image>`
+# slots carry no output but are asserted too so a preprocessing regression
+# cannot hide there.
 #
-# End-to-end logit parity: raw image -> SmolVLM2CausalLMPreprocessor ->
-# backbone, against HF processor -> HF model, with nothing fed across. The
-# gate applies to the positions whose logits are consumed, i.e. every
-# position that is not an `<image>` slot (the next token after an image
-# slot is always another image token). The `<image>`-slot maximum is
-# printed alongside but not asserted: those positions carry no output,
-# and on the 2.2B preset they are where float32 itself is least stable
-# (HF in float64 vs float32 already differs by 3.2e-3 there on HF's own
-# pixels).
+# With `SmolVLM2ImageConverter` reproducing Pillow's resize bit for bit,
+# the image rows sit at the float32 noise floor (the script prints HF's own
+# float64-vs-float32 gap next to the table). The video row compares against
+# HF's torchvision video processor, which has no PIL backend; torchvision's
+# Lanczos is 1-2 u8 off Pillow, which the model amplifies at `<image>`
+# slots. Gates are the measured maximum over the inputs plus margin
+# (measured on keras-team-n2-512-mem, float32, jax backend):
 #
-# The residual comes from `ops.image.scale_and_translate` (float Lanczos)
-# vs PIL's fixed-point Lanczos: pixels agree to 1-2 u8, which the model
-# amplifies most on the 64x64 image that gets upsampled ~30x. Each value
-# is the measured text-position max over the seven inputs, rounded up to
-# one significant figure.
+#   preset   image rows: max@text / max@<image>   video: max@text / max@<image>
+#   256M     1.5e-4 / 2.4e-4                       0.028 / 0.43
+#   500M     2.0e-4 / 1.0e-4                       0.009 / 0.33
+#   2.2B     3.0e-4 / 3.1e-3                       0.018 / 1.91
 #
-#   preset   max@text (input)   max@<image> (input)   COCO max@text
-#   256M     0.24 (64x64)       1.04 (64x64)          0.05
-#   500M     0.23 (64x64)       1.91 (64x64)          0.02
-#   2.2B     0.19 (batch)       9.84 (COCO)           0.04
+# On 2.2B the 3.1e-3 at an `<image>` slot on COCO is HF's own float32
+# noise floor there (HF float64 vs float32 differs by 3.2e-3 at the same
+# slots on HF's own pixels; the script prints the current measurement).
 E2E_LOGIT_ATOL = {
-    "smolvlm2_256m_video_instruct": 0.3,
-    "smolvlm2_500m_video_instruct": 0.3,
-    "smolvlm2_2.2b_instruct": 0.2,
+    "smolvlm2_256m_video_instruct": {
+        "image": (1e-3, 1e-3),
+        "video": (0.05, 0.6),
+    },
+    "smolvlm2_500m_video_instruct": {
+        "image": (1e-3, 1e-3),
+        "video": (0.05, 0.6),
+    },
+    "smolvlm2_2.2b_instruct": {
+        "image": (1e-3, 5e-3),
+        "video": (0.05, 2.5),
+    },
 }
 
 TEXT_PROMPT = "What is Keras?"
@@ -153,14 +166,6 @@ def _decode_video(path):
     return decoder[:], decoder.metadata.average_fps
 
 
-def _hf_pixels_to_channels_last(pixel_values):
-    """HF `(batch, images, C, H, W)` to KerasHub `(batch*images, H, W, C)`."""
-    if pixel_values.ndim == 5:
-        b, n, c, h, w = pixel_values.shape
-        pixel_values = pixel_values.reshape(b * n, c, h, w)
-    return np.transpose(pixel_values, (0, 2, 3, 1))
-
-
 # ---------------------------------------------------------------
 # 1. Precompute HF outputs (before freeing HF model)
 # ---------------------------------------------------------------
@@ -168,7 +173,23 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     """Precompute all HF outputs needed for validation."""
     results = {}
 
+    # SmolVLM2 was trained with Pillow's LANCZOS resize, which
+    # `SmolVLM2ImageConverter` reproduces bit for bit. transformers >= 5
+    # defaults this processor to its torchvision backend, whose Lanczos is
+    # 1-2 u8 off Pillow on ~1% of pixels (and silently falls back to
+    # bicubic on torchvision < 0.27), so the reference is built with the
+    # PIL backend to compare like with like.
+    # Only the image processor has a PIL backend (the video processor is
+    # torchvision-only, so the video row keeps HF's torchvision frames).
     processor = AutoProcessor.from_pretrained(hf_preset)
+    processor.image_processor = AutoImageProcessor.from_pretrained(
+        hf_preset, backend="pil"
+    )
+    image_backend = getattr(processor.image_processor, "backend", "pil")
+    if image_backend != "pil":
+        raise RuntimeError(
+            f"Expected the PIL image processor backend, got {image_backend}."
+        )
 
     # 1. text
     print("\n   Precomputing: text")
@@ -247,10 +268,31 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         }
 
         if name == "image_coco":
-            # For weight parity validation, keep the raw pixel values.
-            results[name]["pixel_values"] = (
-                hf_inputs["pixel_values"].cpu().float().numpy()
+            # The float32 noise floor the 2.2B tolerance rests on: run HF
+            # itself in float64 on the same inputs and report how far its
+            # own float32 logits are from that, split by position type.
+            hf_model.double()
+            with torch.no_grad():
+                hf_out64 = hf_model(
+                    **{
+                        k: (v.double() if v.is_floating_point() else v)
+                        for k, v in hf_inputs.items()
+                    }
+                )
+            hf_model.float()
+            logits64 = hf_out64.logits.detach().cpu().numpy()
+            fp_diff = np.abs(
+                logits64 - results[name]["logits"].astype(np.float64)
             )
+            is_image = results[name][
+                "input_ids"
+            ] == processor.tokenizer.convert_tokens_to_ids("<image>")
+            results[name]["hf_fp64_vs_fp32"] = {
+                "max_text": float(fp_diff[~is_image].max()),
+                "max_image": float(fp_diff[is_image].max())
+                if is_image.any()
+                else 0.0,
+            }
             with torch.no_grad():
                 hf_gen = hf_model.generate(
                     **hf_inputs,
@@ -386,7 +428,7 @@ def test_parameter_count(keras_backbone, hf_param_count):
         print("  ✓ Parameter counts match!")
     else:
         diff = hf_param_count - keras_params
-        print(f"  ⚠ Parameter count difference: {diff:,}")
+        raise AssertionError(f"Parameter count difference: {diff:,}")
 
 
 # ---------------------------------------------------------------
@@ -423,19 +465,11 @@ def validate_text_output(keras_model, hf_results, preset):
     )
     print("  ✓ Token IDs match on valid positions.")
 
-    # --- Logit comparison (preprocessor-free forward pass) ---
-    token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
-    padding_mask = ops.ones_like(token_ids)
-
-    keras_hidden = keras_model.backbone(
-        {"token_ids": token_ids, "padding_mask": padding_mask}
-    )
-    keras_logits = keras_model.backbone.token_embedding(
-        keras_hidden, reverse=True
-    )
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
-
-    hf_logits = hf_results["text"]["logits"]
+    # --- Logit comparison (task call, KerasHub's own ids) ---
+    keras_logits = ops.convert_to_numpy(keras_model(keras_preprocessed)).astype(
+        np.float32
+    )[:, :common_len]
+    hf_logits = hf_results["text"]["logits"][:, :common_len]
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
@@ -445,61 +479,7 @@ def validate_text_output(keras_model, hf_results, preset):
 
 
 # ---------------------------------------------------------------
-# 4. Validate Multimodal Weight Parity
-# ---------------------------------------------------------------
-def validate_weight_parity(keras_model, hf_results, preset):
-    """Validate weight parity on COCO image using HF pixel_values."""
-    print("\n" + "=" * 50)
-    print("MULTIMODAL WEIGHT PARITY")
-    print("=" * 50)
-
-    hf_ids = hf_results["image_coco"]["input_ids"]
-    hf_pixels = _hf_pixels_to_channels_last(
-        hf_results["image_coco"]["pixel_values"]
-    )
-    hf_logits = hf_results["image_coco"]["logits"]
-
-    preprocessed = keras_model.preprocessor.generate_preprocess(
-        {
-            "prompts": [KERASHUB_MULTIMODAL_PROMPT],
-            "images": [np.array(hf_results["image_coco"]["raw_images"][0])],
-        },
-        sequence_length=KERASHUB_SEQUENCE_LENGTH,
-    )
-
-    backbone_inputs = {
-        key: ops.convert_to_tensor(value) for key, value in preprocessed.items()
-    }
-    backbone_inputs["pixel_values"] = ops.convert_to_tensor(hf_pixels)
-    backbone_inputs["padding_mask"] = ops.cast(
-        backbone_inputs["padding_mask"], "int32"
-    )
-
-    hidden = keras_model.backbone(backbone_inputs)
-    keras_logits = ops.convert_to_numpy(
-        keras_model.backbone.token_embedding(hidden, reverse=True)
-    ).astype(np.float32)
-
-    # We compare on the common length
-    keras_mask = ops.convert_to_numpy(preprocessed["padding_mask"])
-    hf_valid_len = hf_ids.shape[1]
-    keras_valid_len = (
-        int(np.sum(keras_mask[0]))
-        if keras_mask.ndim == 2
-        else int(np.sum(keras_mask))
-    )
-    common_len = min(hf_valid_len, keras_valid_len)
-
-    port_diff = np.abs(keras_logits[0, :common_len] - hf_logits[0, :common_len])
-    print(f"\n  [HF pixels] logit mean absolute diff: {port_diff.mean():.6f}")
-    print(f"  [HF pixels] logit max absolute diff:  {port_diff.max():.6f}")
-    atol = WEIGHT_PARITY_ATOL[preset]
-    np.testing.assert_allclose(port_diff, 0.0, atol=atol)
-    print(f"  ✓ Logits on HF pixels match within atol={atol}.")
-
-
-# ---------------------------------------------------------------
-# 5. Validate E2E Parity
+# 4. Validate E2E Parity
 # ---------------------------------------------------------------
 def validate_e2e_parity(keras_model, hf_results, preset):
     print("\n" + "=" * 50)
@@ -575,18 +555,13 @@ def validate_e2e_parity(keras_model, hf_results, preset):
 
         common_len = min(hf_valid_len, keras_valid_len)
 
-        ids_match = "Yes"
-        if hf_valid_len != keras_valid_len:
-            ids_match = f"No (HF:{hf_valid_len} KH:{keras_valid_len})"
-        else:
-            if not np.array_equal(
-                hf_ids[:, :common_len], keras_ids[:, :common_len]
-            ):
-                ids_match = "No (Values)"
+        np.testing.assert_array_equal(
+            hf_ids[:, :common_len], keras_ids[:, :common_len]
+        )
+        ids_match = "Yes"  # asserted above; a mismatch stops the script
 
-        keras_hidden = keras_model.backbone(keras_preprocessed)
         keras_logits = ops.convert_to_numpy(
-            keras_model.backbone.token_embedding(keras_hidden, reverse=True)
+            keras_model(keras_preprocessed)
         ).astype(np.float32)
 
         e2e_diff = np.abs(
@@ -612,6 +587,7 @@ def validate_e2e_parity(keras_model, hf_results, preset):
                 max_image,
                 ids_match,
                 e2e_diff[~is_image],
+                e2e_diff[is_image],
             )
         )
 
@@ -629,35 +605,48 @@ def validate_e2e_parity(keras_model, hf_results, preset):
         max_image,
         ids_match,
         _,
+        _,
     ) in table_data:
         print(
             f"{name:<14} | {mean_diff:<9.6f} | {max_diff:<9.4f} | "
             f"{max_text:<9.4f} | {max_image:<11.4f} | {ids_match}"
         )
 
-    atol = E2E_LOGIT_ATOL.get(preset)
-    if atol is None:
-        raise AssertionError(
-            f"E2E_LOGIT_ATOL['{preset}'] is unset: fill it from the table "
-            "above (Max@text rounded up to 1 significant figure) and re-run."
-        )
+    fp = hf_results["image_coco"]["hf_fp64_vs_fp32"]
+    print(
+        "  HF float64 vs float32 on image_coco (HF's own float32 noise "
+        f"floor): max@text {fp['max_text']:.2e}, "
+        f"max@<image> {fp['max_image']:.2e}."
+    )
 
-    for name, _, _, _, _, _, text_diff in table_data:
+    atols = E2E_LOGIT_ATOL[preset]
+    for name, _, _, _, _, _, text_diff, image_diff in table_data:
+        text_atol, image_atol = atols["video" if name == "video" else "image"]
         np.testing.assert_allclose(
             text_diff,
             0.0,
-            atol=atol,
+            atol=text_atol,
             err_msg=f"E2E logit parity at text positions failed for {name}",
         )
+        if image_diff.size > 0:
+            np.testing.assert_allclose(
+                image_diff,
+                0.0,
+                atol=image_atol,
+                err_msg=(
+                    f"E2E logit parity at <image> positions failed for {name}"
+                ),
+            )
 
     print(
-        f"\n  ✓ All inputs match E2E at text positions within atol={atol} "
-        "(`<image>`-slot maxima reported above, not asserted)."
+        "\n  ✓ All inputs match E2E: image rows within "
+        f"(text, <image>) atol={atols['image']}, video row within "
+        f"atol={atols['video']}."
     )
 
 
 # ---------------------------------------------------------------
-# 6. Generation Smoke Test
+# 5. Generation Smoke Test
 # ---------------------------------------------------------------
 def generation_smoke(keras_model, hf_results):
     print("\n" + "=" * 50)
@@ -754,7 +743,6 @@ def main(_):
     # --- Phase 4: Validate against precomputed HF outputs ---
     test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
     validate_text_output(keras_model, hf_results, preset)
-    validate_weight_parity(keras_model, hf_results, preset)
     validate_e2e_parity(keras_model, hf_results, preset)
     generation_smoke(keras_model, hf_results)
 

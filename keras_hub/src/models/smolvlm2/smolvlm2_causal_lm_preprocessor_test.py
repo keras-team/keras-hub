@@ -372,6 +372,19 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
                 {"prompts": "<image>describe", "images": img}
             )
 
+    def test_call_truncated_image_tokens_raises(self):
+        """The eager training path enforces the same guard as the graph."""
+        preprocessor = self._image_preprocessor(sequence_length=4)
+        img = np.random.randint(0, 256, size=(1, 20, 20, 3)).astype("uint8")
+        with self.assertRaisesRegex(ValueError, "image_seq_len"):
+            preprocessor(
+                {
+                    "prompts": ["<image>describe"],
+                    "responses": [" airplane"],
+                    "images": img,
+                }
+            )
+
     def test_generate_preprocess_uneven_crops_raises(self):
         """Prompts expanding to different crop counts must raise clearly."""
         preprocessor = self._image_preprocessor(
@@ -647,12 +660,58 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
             image_converter=image_converter,
             sequence_length=128,
         )
-        with mock.patch.object(tensor_utils, "tf", None):
+        with mock.patch(
+            "keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor.tf",
+            None,
+        ):
             x, y, sw = preprocessor(["A simple prompt"])
 
         self.assertIn("pixel_values", x)
         self.assertEqual(ops.shape(x["pixel_values"]), (0, 32, 32, 3))
         self.assertEqual(ops.shape(x["vision_indices"]), (1, 0))
+
+    def test_image_training_call_tf_free(self):
+        """Image-training `call()` works when TF is absent.
+
+        Patching this module's own `tf` name (not only `tensor_utils.tf`)
+        is what makes the test bite: the `<image>` expansion and the vision
+        index computation live here, and used to call `tf.strings` and
+        `tf.equal` unconditionally.
+        """
+        image_converter = SmolVLM2ImageConverter(
+            max_image_size=32,
+            size=64,
+            do_image_splitting=False,
+            scale=[1 / 255.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="bicubic",
+        )
+        preprocessor = SmolVLM2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=128,
+            image_seq_len=4,
+        )
+        images = np.random.randint(0, 256, (1, 64, 64, 3), dtype="uint8")
+        with (
+            mock.patch(
+                "keras_hub.src.models.smolvlm2."
+                "smolvlm2_causal_lm_preprocessor.tf",
+                None,
+            ),
+            mock.patch.object(tensor_utils, "tf", None),
+        ):
+            x, y, sw = preprocessor(
+                {
+                    "prompts": ["<image>describe"],
+                    "responses": [" airplane"],
+                    "images": images,
+                }
+            )
+
+        self.assertIn("pixel_values", x)
+        self.assertEqual(ops.shape(x["pixel_values"]), (1, 32, 32, 3))
+        self.assertEqual(ops.shape(x["vision_indices"]), (1, 4))
 
     def test_image_token_without_image(self):
         """Guards against <image> or <video> in text-only batches."""

@@ -466,18 +466,28 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             # constant token run, so the expansion can be done with graph
             # mode string ops.
             image_token, fake_token, global_token = self._image_token_strings()
-            prompts = tf.strings.regex_replace(
-                prompts,
-                image_token,
-                _get_image_prompt_string(
-                    image_seq_len=self.image_seq_len,
-                    image_rows=0,
-                    image_cols=0,
-                    fake_token_around_image=fake_token,
-                    image_token=image_token,
-                    global_image_token=global_token,
-                ),
+            expanded_image_str = _get_image_prompt_string(
+                image_seq_len=self.image_seq_len,
+                image_rows=0,
+                image_cols=0,
+                fake_token_around_image=fake_token,
+                image_token=image_token,
+                global_image_token=global_token,
             )
+            if in_tf_function():
+                prompts = tf.strings.regex_replace(
+                    prompts, image_token, expanded_image_str
+                )
+            else:
+                prompt_strings, is_scalar = self._extract_prompt_strings(
+                    prompts
+                )
+                prompts = [
+                    p.replace(image_token, expanded_image_str)
+                    for p in prompt_strings
+                ]
+                if is_scalar:
+                    prompts = prompts[0]
 
         # Plain `tokenizer()` is enough here: image splitting is rejected
         # above, so no `<row_R_col_C>` tag can reach this point. The generate
@@ -509,12 +519,33 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             # convert it through `__array__`, which fails for torch tensors
             # on a non-CPU device. The static shape is known whenever the
             # converter ran eagerly; only a graph-mode batch needs `tf`.
-            num_images = pixel_values.shape[0]
-            if num_images is None:
-                num_images = tf.shape(pixel_values)[0]
-            out["vision_indices"] = self._graph_vision_indices(
-                out["token_ids"], num_images
-            )
+            if in_tf_function():
+                num_images = pixel_values.shape[0]
+                if num_images is None:
+                    num_images = tf.shape(pixel_values)[0]
+                out["vision_indices"] = self._graph_vision_indices(
+                    out["token_ids"], num_images
+                )
+            else:
+                # Eager: NumPy only, so this runs without TensorFlow and on
+                # torch tensors that live on a GPU. Same guard as the graph
+                # path: every expanded `<image>` token must survive packing.
+                token_ids_np = convert_to_numpy(out["token_ids"])
+                num_images = int(pixel_values.shape[0])
+                vision_indices = self._compute_vision_indices(token_ids_np)
+                expected = num_images * self.image_seq_len
+                if vision_indices.shape[0] != expected:
+                    raise ValueError(
+                        "The packed sequence does not contain "
+                        "`num_images * image_seq_len` `<image>` tokens "
+                        f"(found {vision_indices.shape[0]}, expected "
+                        f"{expected}). This usually means `sequence_length="
+                        f"{sequence_length}` is too short and truncated the "
+                        "expanded image tokens."
+                    )
+                out["vision_indices"] = vision_indices.reshape(
+                    token_ids_np.shape[0], -1
+                )
         elif self.image_converter is not None:
             # Text-only batch for a vision model. Pass a zero-length image
             # batch (the Gemma3 pattern) so the vision encoder does no work,
@@ -882,8 +913,8 @@ class SmolVLM2CausalLMPreprocessor(CausalLMPreprocessor):
             add_start_value=self.add_start_token,
             add_end_value=False,
         )
-        token_ids = np.array(token_ids, dtype="int32")
-        padding_mask = np.array(padding_mask, dtype="bool")
+        token_ids = convert_to_numpy(token_ids).astype("int32")
+        padding_mask = convert_to_numpy(padding_mask).astype("bool")
 
         # Compute vision_indices as flat `batch_index * seq_len + position`
         # offsets, which is what `Qwen3_5InterleaveEmbeddings` scatters on.

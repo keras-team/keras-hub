@@ -335,40 +335,117 @@ class SmolVLM2ImageConverterTest(TestCase):
         for batch in ds:
             self.assertEqual(batch["pixel_values"].shape, (2, 16, 16, 3))
 
-    def test_call_tf_matches_call_python(self):
-        """`_call_tf` and `_call_python` agree to within 1 u8 on hard edges.
+    def test_dynamic_sizing_matches_static(self):
+        """The `tf.data` dynamic-shape sizing equals the Python helper.
 
-        The two paths are independent implementations of the same two-pass
-        pipeline (`scale_and_translate` vs `tf.image.resize`), so with an
-        edge that is neither horizontal nor vertical they only agree if both
-        clip and round between the width and height passes.
+        Covers both orientations, odd sizes (the even bump), tiny inputs
+        and the 4096 cap, which only engages when `size` exceeds it.
+        """
+        import tensorflow as tf
+
+        for size in (512, 2048, 8192):
+            converter = SmolVLM2ImageConverter(
+                max_image_size=16, size=size, do_image_splitting=False
+            )
+            for h, w in [
+                (480, 640),
+                (640, 480),
+                (333, 517),
+                (517, 333),
+                (1, 1),
+                (7, 5),
+                (2500, 5000),
+                (5000, 2500),
+            ]:
+                expected = converter._sizes_for(h, w)
+                got = converter._sizes_for_dynamic(
+                    tf.constant(h, "int32"), tf.constant(w, "int32")
+                )
+                got = (int(got[0].numpy()), int(got[1].numpy()))
+                self.assertEqual(got, expected, msg=f"size={size} hw={h, w}")
+
+    def _pillow_pipeline(self, image, converter):
+        """HF's two Pillow resizes: longest edge to `size`, then square."""
+        from PIL import Image
+
+        h, w = image.shape[:2]
+        new_h, new_w = converter._sizes_for(h, w)
+        ms = converter.max_image_size
+        out = Image.fromarray(image).resize((new_w, new_h), Image.LANCZOS)
+        out = out.resize((ms, ms), Image.LANCZOS)
+        return np.asarray(out).astype("float32")
+
+    @parameterized.named_parameters(
+        ("diagonal_edge", "edge"),
+        ("noise", "noise"),
+    )
+    def test_lanczos3_matches_pillow_bit_exact(self, kind):
+        """`lanczos3` reproduces Pillow's fixed-point resample exactly.
+
+        HF resizes with `PIL.Image.LANCZOS`; Pillow quantizes the taps to
+        22 bits, accumulates in int32 and clips to uint8 after each pass.
+        A float pipeline lands within 1-2 u8 of that, which is enough to
+        flip a greedy token on a near tie, so the check is equality, not a
+        tolerance. The diagonal edge rings past [0, 255] on the upscale and
+        only matches if the clip happens between the two passes too.
+        """
+        rows, cols = np.mgrid[0:24, 0:32]
+        if kind == "edge":
+            image = np.where(cols * 24 > rows * 32, 255, 0).astype("uint8")
+            image = np.broadcast_to(image[:, :, None], (24, 32, 3))
+        else:
+            image = np.random.default_rng(0).integers(
+                0, 256, (24, 32, 3), dtype="uint8"
+            )
+        converter = SmolVLM2ImageConverter(
+            # 24x32 -> 72x96 (upscale), then -> 40x40 (downscale). These
+            # sizes separate Pillow's result from a float two-pass Lanczos
+            # (1 u8), a 20-bit tap quantization (1 u8) and a missing
+            # inter-pass clip (15 u8); 4x/3x ratios do not.
+            max_image_size=40,
+            size=96,
+            do_image_splitting=False,
+            scale=[1.0] * 3,
+            offset=[0.0] * 3,
+            interpolation="lanczos3",
+        )
+        expected = self._pillow_pipeline(np.ascontiguousarray(image), converter)
+        actual = ops.convert_to_numpy(converter(image)["pixel_values"])
+        self.assertAllEqual(actual, expected[None])
+
+    def test_batch_paths_match_per_image_path(self):
+        """`_resize_batch` and `_call_tf` equal `_convert_image` exactly.
+
+        All three must apply the longest-edge `size` step first and the
+        same resample. With `size=2048` the batch paths used to skip that
+        step and go straight to `max_image_size`, so `fit()` and
+        `generate()` saw different pixels (14 u8 apart on COCO).
         """
         converter = SmolVLM2ImageConverter(
             max_image_size=512,
-            size=512,
+            size=2048,
             do_image_splitting=False,
             scale=[1 / 255.0] * 3,
             offset=[0.0] * 3,
             interpolation="lanczos3",
-            antialias=True,
         )
-        # A small diagonal hard edge that gets upsampled ~20x. Lanczos rings
-        # well past [0, 255] on the way up, and the height pass sees that
-        # ringing unless the width pass clipped and rounded it away: without
-        # the intermediate clip the two paths differ by up to 32 u8 here,
-        # whereas an antialiased downscale would hide it (<= 1 u8).
         rows, cols = np.mgrid[0:24, 0:32]
-        images = np.where(cols * 24 > rows * 32, 255, 0).astype("uint8")
-        images = np.broadcast_to(images[None, :, :, None], (1, 24, 32, 3))
-
-        out_python = ops.convert_to_numpy(
-            converter._call_python(images)["pixel_values"]
+        image = np.where(cols * 24 > rows * 32, 255, 0).astype("uint8")
+        image = np.ascontiguousarray(
+            np.broadcast_to(image[:, :, None], (24, 32, 3))
         )
-        out_tf = ops.convert_to_numpy(
+        images = image[None]
+
+        per_image = ops.convert_to_numpy(
+            converter._convert_image(image)["pixel_values"]
+        )
+        batch = ops.convert_to_numpy(
+            converter._resize_batch(images)["pixel_values"]
+        )
+        tf_path = ops.convert_to_numpy(
             converter._call_tf(images)["pixel_values"]
         )
-
-        # Both paths emit whole u8 values before the `scale`.
-        self.assertAllClose(out_python * 255, np.round(out_python * 255))
-        # Max abs diff <= 1 u8, i.e. <= 1 / 255 after the scale.
-        self.assertAllClose(out_python, out_tf, atol=1.5 / 255.0)
+        expected = self._pillow_pipeline(image, converter)[None] / 255.0
+        self.assertAllEqual(batch, per_image)
+        self.assertAllEqual(tf_path, per_image)
+        self.assertAllClose(per_image, expected, atol=1e-6)
