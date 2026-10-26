@@ -45,6 +45,29 @@ def convert_backbone_config(transformers_config):
             "use_sliding_window_attention": True,
         }
     elif transformers_config["model_type"] == "vaultgemma":
+        # Determine sliding window attention usage from layer_types or config
+        sliding_window = transformers_config.get("sliding_window", None)
+        layer_types = transformers_config.get("layer_types", [])
+
+        if layer_types:
+            use_sliding_window_attention = any(
+                lt == "sliding_attention" for lt in layer_types
+            )
+        else:
+            use_sliding_window_attention = sliding_window not in (None, 0)
+
+        # `GemmaBackbone` applies sliding window attention to even layers only.
+        expected_layer_types = [
+            "sliding_attention" if i % 2 == 0 else "full_attention"
+            for i in range(len(layer_types))
+        ]
+        if use_sliding_window_attention and layer_types != expected_layer_types:
+            raise ValueError(
+                "`GemmaBackbone` only supports sliding window attention on "
+                "even layers and full attention on odd layers. Received "
+                f"`layer_types={layer_types}`."
+            )
+
         # Build VaultGemma backbone configuration
         backbone_config = {
             "vocabulary_size": transformers_config["vocab_size"],
@@ -67,7 +90,7 @@ def convert_backbone_config(transformers_config):
                 "attn_logit_softcapping"
             ),
             "sliding_window_size": transformers_config["sliding_window"],
-            "use_sliding_window_attention": True,
+            "use_sliding_window_attention": use_sliding_window_attention,
         }
     return backbone_config
 

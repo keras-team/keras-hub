@@ -62,4 +62,44 @@ class TestTask(TestCase):
         self.assertEqual(backbone_config["final_logit_soft_cap"], 30.0)
         self.assertEqual(backbone_config["attention_logit_soft_cap"], 50.0)
 
+    def test_convert_vaultgemma_layer_types(self):
+        hf_config = {
+            "model_type": "vaultgemma",
+            "vocab_size": 256000,
+            "num_hidden_layers": 4,
+            "num_attention_heads": 4,
+            "num_key_value_heads": 4,
+            "hidden_size": 1152,
+            "intermediate_size": 6912,
+            "head_dim": 256,
+            "query_pre_attn_scalar": 256,
+            "sliding_window": 512,
+        }
+        # `google/vaultgemma-1b` uses full attention in every layer.
+        hf_config["layer_types"] = ["full_attention"] * 4
+        backbone_config = convert_gemma.convert_backbone_config(hf_config)
+        self.assertFalse(backbone_config["use_sliding_window_attention"])
+
+        hf_config["layer_types"] = [
+            "sliding_attention",
+            "full_attention",
+        ] * 2
+        backbone_config = convert_gemma.convert_backbone_config(hf_config)
+        self.assertTrue(backbone_config["use_sliding_window_attention"])
+
+        hf_config["layer_types"] = [
+            "full_attention",
+            "sliding_attention",
+        ] * 2
+        with self.assertRaisesRegex(ValueError, "layer_types"):
+            convert_gemma.convert_backbone_config(hf_config)
+
+        hf_config.pop("layer_types")
+        backbone_config = convert_gemma.convert_backbone_config(hf_config)
+        self.assertTrue(backbone_config["use_sliding_window_attention"])
+
+        hf_config["sliding_window"] = None
+        backbone_config = convert_gemma.convert_backbone_config(hf_config)
+        self.assertFalse(backbone_config["use_sliding_window_attention"])
+
     # TODO: compare numerics with huggingface model
