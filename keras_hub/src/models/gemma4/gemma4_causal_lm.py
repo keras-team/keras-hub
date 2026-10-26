@@ -1,3 +1,4 @@
+import warnings
 import weakref
 
 import numpy as np
@@ -45,6 +46,12 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
+        final_logit_cap: Deprecated, will be removed in a future release.
+            `None` or float. The final logit soft-cap is applied by the
+            backbone; set it with `Gemma4Backbone(final_logit_soft_cap=...)`.
+            If given, it must equal `backbone.final_logit_soft_cap`. If the
+            backbone has no cap, the value is moved to the backbone with a
+            warning.
 
     Examples:
 
@@ -101,22 +108,40 @@ class Gemma4CausalLM(CausalLM):
         self,
         preprocessor,
         backbone,
+        final_logit_cap=None,
         **kwargs,
     ):
-        # TODO: Delete this block after resaving the Kaggle presets. Older
-        # `task.json` files store `final_logit_cap`, always equal to the
-        # backbone cap. `backbone.token_embedding(..., reverse=True)` already
-        # applies it, so applying it here too would cap the logits twice.
-        final_logit_cap = kwargs.pop("final_logit_cap", None)
-        backbone_cap = backbone.final_logit_soft_cap
-        if final_logit_cap is not None and final_logit_cap != backbone_cap:
-            raise ValueError(
-                "`final_logit_cap` is no longer supported. The final logit "
-                "soft-cap is applied by the backbone; set it with "
-                "`Gemma4Backbone(final_logit_soft_cap=...)` instead. "
-                f"Received: final_logit_cap={final_logit_cap}, "
-                f"backbone.final_logit_soft_cap={backbone_cap}."
-            )
+        # TODO: Remove `final_logit_cap` and this block in the next release.
+        # `backbone.token_embedding(..., reverse=True)` already applies
+        # `backbone.final_logit_soft_cap`, so the task must not cap again.
+        # Published `task.json` files store a `final_logit_cap` equal to the
+        # backbone cap, which is ignored here.
+        if final_logit_cap is not None:
+            backbone_cap = backbone.final_logit_soft_cap
+            if backbone_cap is None:
+                # Models built with the cap only on the task used to cap
+                # once. Move it to the backbone so they still do, and so it
+                # is saved there from now on.
+                warnings.warn(
+                    "`final_logit_cap` is deprecated and will be removed in a "
+                    "future release. Moving it to the backbone as "
+                    f"`final_logit_soft_cap={final_logit_cap}`. Set it with "
+                    "`Gemma4Backbone(final_logit_soft_cap=...)` instead. If "
+                    "this model was loaded with `from_preset()`, re-save it "
+                    "with `save_to_preset()` to keep the cap on the backbone."
+                )
+                backbone.final_logit_soft_cap = final_logit_cap
+                backbone.token_embedding.logit_soft_cap = final_logit_cap
+            elif final_logit_cap != backbone_cap:
+                raise ValueError(
+                    "`final_logit_cap` is deprecated. The final logit "
+                    "soft-cap is applied by the backbone; set it with "
+                    "`Gemma4Backbone(final_logit_soft_cap=...)`, or pass "
+                    "`final_logit_cap=None` to `from_preset()` to load with "
+                    "the backbone's cap only. "
+                    f"Received: final_logit_cap={final_logit_cap}, "
+                    f"backbone.final_logit_soft_cap={backbone_cap}."
+                )
 
         # === Layers ===
         self.preprocessor = preprocessor

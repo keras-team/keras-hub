@@ -14,6 +14,7 @@ from keras_hub.src.models.gemma4.gemma4_assistant_causal_lm import (
 )
 from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.models.gemma4.gemma4_causal_lm import Gemma4CausalLM
+from keras_hub.src.samplers.speculative_sampler import SpeculativeSampler
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -125,11 +126,8 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
             backbone=target_backbone,
         )
 
-    @parameterized.named_parameters(
-        ("no_soft_cap", None), ("final_logit_soft_cap", 30.0)
-    )
-    def test_speculative_generate(self, final_logit_soft_cap):
-        target_model = self._create_target_model(final_logit_soft_cap)
+    def test_speculative_generate(self):
+        target_model = self._create_target_model()
 
         batch_size = 1
         seq_len = 5
@@ -142,6 +140,45 @@ class Gemma4AssistantTest(TestCase, parameterized.TestCase):
             stop_token_ids=None,
         )
         self.assertIsNotNone(output)
+
+    def test_draft_logits_use_target_cap(self):
+        # The assistant returns uncapped logits, so the target must cap the
+        # draft logits with its own `final_logit_soft_cap`.
+        cap = 30.0
+        target_model = self._create_target_model(final_logit_soft_cap=cap)
+        assistant_call_with_cache = self.model.call_with_cache
+
+        def large_logits(*args, **kwargs):
+            # Push the raw draft logits far past the cap.
+            logits, next_hidden = assistant_call_with_cache(*args, **kwargs)
+            return logits * 1e4, next_hidden
+
+        def run_one_draft_step(
+            sampler, next, prompt, draft_next, draft_cache, index, **kwargs
+        ):
+            # Values inside the compiled generate function can't be read
+            # directly, so return the check as the output token ids.
+            logits, _, _ = draft_next(prompt, draft_cache, index)
+            within_cap = ops.all(ops.abs(logits) <= cap)
+            return ops.where(
+                within_cap, ops.ones_like(prompt), ops.zeros_like(prompt)
+            )
+
+        inputs = self._make_inputs(np.random.randint(0, 100, (1, 5)))
+        with (
+            mock.patch.object(
+                self.model, "call_with_cache", wraps=large_logits
+            ),
+            mock.patch.object(
+                SpeculativeSampler, "__call__", run_one_draft_step
+            ),
+        ):
+            output = target_model.generate(
+                inputs,
+                assistant_model=self.model,
+                stop_token_ids=None,
+            )
+        self.assertTrue(np.all(ops.convert_to_numpy(output["token_ids"]) == 1))
 
     def test_assistant_weights_not_tracked(self):
         target_model = self._create_target_model()

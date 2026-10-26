@@ -712,23 +712,16 @@ def _load_hf_model(hf_preset):
         target_hidden_size = (
             hf_target_model.config.get_text_config().hidden_size
         )
-        final_logit_cap = getattr(
-            hf_target_model.config.get_text_config(),
-            "final_logit_softcapping",
-            None,
-        )
         print(
             f"-> HuggingFace assistant model loaded "
             f"(target hidden_size={target_hidden_size})."
         )
-        print(f"-> final_logit_softcapping: {final_logit_cap}")
         return (
             hf_model,
             hf_tokenizer,
             processor,
             is_audio_model,
             is_video_model,
-            final_logit_cap,
             hf_target_model,
             target_hidden_size,
         )
@@ -755,20 +748,12 @@ def _load_hf_model(hf_preset):
         and processor.video_processor is not None
     )
 
-    final_logit_cap = getattr(hf_model.config, "final_logit_softcapping", None)
-    if final_logit_cap is None and hasattr(hf_model.config, "get_text_config"):
-        final_logit_cap = getattr(
-            hf_model.config.get_text_config(), "final_logit_softcapping", None
-        )
-    print(f"-> final_logit_softcapping: {final_logit_cap}")
-
     return (
         hf_model,
         hf_tokenizer,
         processor,
         is_audio_model,
         is_video_model,
-        final_logit_cap,
         None,  # hf_target_model
         None,  # target_hidden_size
     )
@@ -1583,7 +1568,6 @@ def main(_):
         processor,
         is_audio_model,
         is_video_model,
-        _final_logit_cap,  # set on the backbone by convert_backbone_config
         hf_target_model,
         _target_hidden_size,  # consumed by from_preset via convert_task_config
     ) = _load_hf_model(hf_preset)
