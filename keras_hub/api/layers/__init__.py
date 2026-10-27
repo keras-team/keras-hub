@@ -108,6 +108,15 @@ from keras_hub.src.models.dinov3.dinov3_image_converter import (
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (
+    EmbeddingGemma2AudioConverter as EmbeddingGemma2AudioConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter import (
+    EmbeddingGemma2ImageConverter as EmbeddingGemma2ImageConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (
+    EmbeddingGemma2VideoConverter as EmbeddingGemma2VideoConverter,
+)
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,
 )
@@ -132,6 +141,9 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
 from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
     MetaCLIP2ImageConverter as MetaCLIP2ImageConverter,
 )
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
+    Mistral3ImageConverter as Mistral3ImageConverter,
+)
 from keras_hub.src.models.mit.mit_image_converter import (
     MiTImageConverter as MiTImageConverter,
 )
@@ -143,6 +155,12 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
 )
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    MuseGlimmerImageConverter as MuseGlimmerImageConverter,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
+    MuseGlimmerVideoConverter as MuseGlimmerVideoConverter,
 )
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,

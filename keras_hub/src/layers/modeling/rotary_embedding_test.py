@@ -278,6 +278,26 @@ class RotaryEmbeddingTest(TestCase):
             ops.convert_to_tensor(expected),
         )
 
+    def test_yarn_attention_factor(self):
+        # At position 0, `cos=1` and `sin=0`, so the output is `factor * x`.
+        inputs = ops.ones((1, 2, 2, 8))
+        default_layer = RotaryEmbedding(
+            max_wavelength=100.0, rope_type="yarn", scaling_factor=2.0
+        )
+        default_factor = 1.0 + 0.1 * np.log(2.0)
+        self.assertAllClose(
+            default_layer(inputs)[:, 0], default_factor * np.ones((1, 2, 8))
+        )
+        explicit_layer = RotaryEmbedding(
+            max_wavelength=100.0,
+            rope_type="yarn",
+            scaling_factor=2.0,
+            attention_factor=1.5,
+        )
+        self.assertAllClose(
+            explicit_layer(inputs)[:, 0], 1.5 * np.ones((1, 2, 8))
+        )
+
     def test_yarn_beyond_original_context(self):
         # Positions past `original_max_position_embeddings` must keep
         # advancing, which is the case YaRN exists for.
