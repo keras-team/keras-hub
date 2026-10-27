@@ -141,6 +141,9 @@ from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
 from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
     MetaCLIP2ImageConverter as MetaCLIP2ImageConverter,
 )
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
+    Mistral3ImageConverter as Mistral3ImageConverter,
+)
 from keras_hub.src.models.mit.mit_image_converter import (
     MiTImageConverter as MiTImageConverter,
 )
@@ -212,6 +215,12 @@ from keras_hub.src.models.segformer.segformer_image_converter import (
 )
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    SmolVLM2ImageConverter as SmolVLM2ImageConverter,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter as SmolVLM2VideoConverter,
 )
 from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (
     SwinTransformerImageConverter as SwinTransformerImageConverter,

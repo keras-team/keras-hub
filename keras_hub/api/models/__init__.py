@@ -547,6 +547,21 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral3.mistral3_backbone import (
+    Mistral3Backbone as Mistral3Backbone,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm import (
+    Mistral3CausalLM as Mistral3CausalLM,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
+    Mistral3CausalLMPreprocessor as Mistral3CausalLMPreprocessor,
+)
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3VisionEncoder as Mistral3VisionEncoder,
+)
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import (
     MiTImageClassifier as MiTImageClassifier,
@@ -933,6 +948,21 @@ from keras_hub.src.models.smollm3.smollm3_tokenizer import (
 )
 from keras_hub.src.models.smollm3.smollm3_tokenizer import (
     SmolLM3Tokenizer as SmolLMTokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_backbone import (
+    SmolVLM2Backbone as SmolVLM2Backbone,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm import (
+    SmolVLM2CausalLM as SmolVLM2CausalLM,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
+    SmolVLM2CausalLMPreprocessor as SmolVLM2CausalLMPreprocessor,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import (
+    SmolVLM2Tokenizer as SmolVLM2Tokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_vision_encoder import (
+    SmolVLM2VisionEncoder as SmolVLM2VisionEncoder,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone as StableDiffusion3Backbone,
