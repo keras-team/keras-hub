@@ -309,7 +309,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
                 audio_mask
             )
 
-        return output, response_mask
+        return convert_preprocessing_outputs_python((output, response_mask))
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
