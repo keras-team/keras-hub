@@ -100,7 +100,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         )
 
         # 4x4 image → grid [1, 2, 2] → 4 merged tokens (merge_size=1).
-        image = np.ones((4, 4, 3))
+        image = np.ones((4, 4, 3), dtype="float32")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
 
         out = preprocessor.generate_preprocess(
@@ -149,7 +149,10 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
 
         # Image 1: 4x4 → grid [1,2,2] → 4 tokens.
         # Image 2: 8x8 → grid [1,4,4] → 16 tokens.
-        images = [np.ones((4, 4, 3)), np.ones((8, 8, 3))]
+        images = [
+            np.ones((4, 4, 3), dtype="float32"),
+            np.ones((8, 8, 3), dtype="float32"),
+        ]
         prompt = "<|image_pad|> air <|image_pad|>"
 
         out = preprocessor.generate_preprocess(
@@ -172,7 +175,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         )
 
         # 4 frames of 4x4 → grid [2, 2, 2] → 8 merged tokens.
-        video = np.ones((4, 4, 4, 3))
+        video = np.ones((4, 4, 4, 3), dtype="float32")
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
 
         out = preprocessor.generate_preprocess(
@@ -199,7 +202,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
             preprocessor.generate_preprocess(
                 {
                     "prompts": "<|image_pad|> air",
-                    "images": [np.ones((4, 4, 3))],
+                    "images": [np.ones((4, 4, 3), dtype="float32")],
                 }
             )
 

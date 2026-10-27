@@ -118,7 +118,7 @@ class Qwen2VLCausalLMTest(TestCase):
         causal_lm = Qwen2VLCausalLM(
             backbone=backbone, preprocessor=preprocessor
         )
-        image = np.ones((4, 4, 3))
+        image = np.ones((4, 4, 3), dtype="float32")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
         output = causal_lm.generate(
             {"prompts": prompt, "images": image},
