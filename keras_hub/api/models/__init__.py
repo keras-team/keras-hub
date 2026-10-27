@@ -556,6 +556,21 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral3.mistral3_backbone import (
+    Mistral3Backbone as Mistral3Backbone,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm import (
+    Mistral3CausalLM as Mistral3CausalLM,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
+    Mistral3CausalLMPreprocessor as Mistral3CausalLMPreprocessor,
+)
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3VisionEncoder as Mistral3VisionEncoder,
+)
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import (
     MiTImageClassifier as MiTImageClassifier,
@@ -622,6 +637,24 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
+    MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
+    MuseGlimmerBackbone as MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm import (
+    MuseGlimmerCausalLM as MuseGlimmerCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor import (
+    MuseGlimmerCausalLMPreprocessor as MuseGlimmerCausalLMPreprocessor,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
+    MuseGlimmerTokenizer as MuseGlimmerTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoder as MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
