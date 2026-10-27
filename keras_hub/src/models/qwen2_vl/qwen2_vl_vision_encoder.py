@@ -139,13 +139,10 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
             return ops.fori_loop(0, num_chunks, _attend_chunk, out)
 
         if isinstance(seq_len, int):
-            # Static shape (JAX/eager): dispatch in Python — `ops.cond`
-            # traces both branches under JAX and the chunked path's
-            # fixed-size slice is invalid when seq_len < chunk.
+            # Static shape (JAX/eager)
             out = _full() if seq_len <= chunk else _chunked()
         else:
-            # Symbolic shape (tf.function): runtime dispatch; the predicate
-            # guarantees seq_len > chunk inside _chunked.
+            # Symbolic shape (tf.function)
             out = ops.cond(seq_len <= chunk, _full, _chunked)
 
         out = ops.transpose(out, (1, 0, 2))  # (S, H, D)

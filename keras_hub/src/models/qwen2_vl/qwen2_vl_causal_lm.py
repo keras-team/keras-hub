@@ -223,11 +223,6 @@ class Qwen2VLCausalLM(CausalLM):
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
 
-        # `<|endoftext|>` doubles as the pad token and is also a generation
-        # stop token — the sampler's stop check scans the pad region and
-        # would halt immediately. Pad positions are never fed to the model
-        # (masked in prefill, overwritten as tokens are generated), so
-        # re-label them with a benign id.
         token_ids = ops.where(
             padding_mask, token_ids, ops.zeros_like(token_ids)
         )
@@ -411,8 +406,6 @@ class Qwen2VLCausalLM(CausalLM):
         stop_token_ids="auto",
         strip_prompt=False,
     ):
-        # If `auto`, add `<|endoftext|>` as a stop token too — base-model
-        # generations terminate with it rather than `<|im_end|>`.
         if self.preprocessor is None and stop_token_ids == "auto":
             raise ValueError(
                 "A `preprocessor` must be attached to the model if "

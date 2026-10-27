@@ -123,8 +123,6 @@ class Qwen2VLBackbone(Backbone):
 
         # === Functional Model ===
         if not text_only_model:
-            # Vision tensors are flat-packed across the batch: the leading
-            # dim is the total patch/image count, not the batch dim.
             pixel_values_input = keras.Input(
                 shape=(
                     vision_encoder.temporal_patch_size,
@@ -223,9 +221,8 @@ class Qwen2VLBackbone(Backbone):
         ``pixel_values``, ``image_grid_thw``, ``vision_indices`` or
         ``position_ids`` keys), this injects zero-sized vision tensors and
         sequential position IDs (equivalent to standard 1-D RoPE) so the
-        functional graph receives all required keys. This follows the
-        Gemma3/Qwen3.5 pattern and allows users to call the backbone with
-        only ``token_ids`` and ``padding_mask``.
+        functional graph receives all required keys. This allows users
+        to call the backbone with only ``token_ids`` and ``padding_mask``.
         """
         if not isinstance(inputs, dict) or self.text_only_model:
             return inputs
