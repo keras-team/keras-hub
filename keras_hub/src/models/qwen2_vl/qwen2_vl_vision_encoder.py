@@ -3,6 +3,8 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.api_export import keras_hub_export
+
 
 class Qwen2VLVisionAttention(keras.layers.Layer):
     """Multi-head self-attention for vision tokens with 2D RoPE.
@@ -331,6 +333,7 @@ class Qwen2VLPatchMerger(keras.layers.Layer):
         return config
 
 
+@keras_hub_export("keras_hub.models.Qwen2VLVisionEncoder")
 class Qwen2VLVisionEncoder(keras.Model):
     """Vision encoder for Qwen2-VL (ViT with spatial patch merger).
 

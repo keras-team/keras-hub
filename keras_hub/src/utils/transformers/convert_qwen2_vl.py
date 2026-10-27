@@ -102,6 +102,18 @@ def load_image_converter_config(preset, transformers_config):
     }
 
 
+def load_video_converter_config(preset, transformers_config):
+    """Return kwargs for ``Qwen2VLVideoConverter``, or None if text-only.
+
+    Qwen2-VL applies identical preprocessing to videos and images, and its
+    checkpoints do not ship a ``video_preprocessor_config.json``, so this
+    delegates to ``load_image_converter_config``.
+    """
+    if "vision_config" not in transformers_config:
+        return None
+    return load_image_converter_config(preset, transformers_config)
+
+
 def convert_weights(backbone, loader, transformers_config):
     # ── helpers ──────────────────────────────────────────────────────
     def transpose_and_reshape(x, shape):
