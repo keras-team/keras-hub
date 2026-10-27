@@ -4,6 +4,12 @@ import numpy as np
 import pytest
 from keras import ops
 
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_converter import (
+    Qwen3OmniAudioConverter,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
+    Qwen3OmniAudioEncoder,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
     Qwen3OmniBackbone,
 )
@@ -13,8 +19,14 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
     Qwen3OmniCausalLMPreprocessor,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
+    Qwen3OmniImageConverter,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
     Qwen3OmniTokenizer,
+)
+from keras_hub.src.models.qwen3_omni.qwen3_omni_vision_encoder import (
+    Qwen3OmniVisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
 
@@ -77,6 +89,74 @@ class Qwen3OmniCausalLMTest(TestCase):
                 7,
                 self.preprocessor.tokenizer.vocabulary_size(),
             ),
+        )
+
+    def test_multimodal_causal_lm_init(self):
+        # `from_preset` builds a multimodal backbone inside the task,
+        # so `__init__` must tolerate symbolic batch dims when filling
+        # in default vision/audio inputs.
+        vision_encoder = Qwen3OmniVisionEncoder(
+            depth=1,
+            hidden_size=32,
+            num_heads=4,
+            intermediate_size=64,
+            patch_size=2,
+            temporal_patch_size=2,
+            spatial_merge_size=2,
+            out_hidden_size=8,
+            num_position_embeddings=49,
+            deepstack_visual_indexes=[0],
+        )
+        audio_encoder = Qwen3OmniAudioEncoder(
+            num_mel_bins=80,
+            d_model=32,
+            encoder_layers=1,
+            encoder_attention_heads=4,
+            encoder_ffn_dim=64,
+            output_dim=8,
+            max_source_positions=100,
+            scale_embedding=False,
+        )
+        preprocessor = Qwen3OmniCausalLMPreprocessor(
+            self.preprocessor.tokenizer,
+            sequence_length=7,
+            image_converter=Qwen3OmniImageConverter(
+                patch_size=2, temporal_patch_size=2
+            ),
+            audio_converter=Qwen3OmniAudioConverter(num_mels=80),
+        )
+        backbone = Qwen3OmniBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            moe_intermediate_dim=4,
+            head_dim=2,
+            num_experts=4,
+            num_experts_per_tok=2,
+            mrope_section=(1, 0, 0),
+            vision_encoder=vision_encoder,
+            audio_encoder=audio_encoder,
+        )
+        causal_lm = Qwen3OmniCausalLM(
+            backbone=backbone, preprocessor=preprocessor
+        )
+        # Text-only prompts must still receive empty vision/audio
+        # placeholders so the multimodal graph inputs are satisfied.
+        pp = preprocessor.generate_preprocess(self.train_data[0])
+        for key in (
+            "pixel_values",
+            "image_grid_thw",
+            "vision_indices",
+            "audio_features",
+            "audio_indices",
+        ):
+            self.assertIn(key, pp)
+        out = causal_lm(pp)
+        self.assertEqual(
+            out.shape[-1], self.preprocessor.tokenizer.vocabulary_size()
         )
 
     def test_generate(self):

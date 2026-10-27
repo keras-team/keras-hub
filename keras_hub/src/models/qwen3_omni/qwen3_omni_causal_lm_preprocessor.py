@@ -222,11 +222,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         if image_grid_thw is None:
             return []
         merge = self._spatial_merge_size()
-        grid_np = (
-            image_grid_thw.numpy()
-            if hasattr(image_grid_thw, "numpy")
-            else np.asarray(image_grid_thw)
-        )
+        grid_np = ops.convert_to_numpy(image_grid_thw)
         if grid_np.ndim == 1:
             grid_np = grid_np[None, :]
         return [
@@ -245,11 +241,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         """
         if audio_features is None:
             return []
-        feat_np = (
-            audio_features.numpy()
-            if hasattr(audio_features, "numpy")
-            else np.asarray(audio_features)
-        )
+        feat_np = ops.convert_to_numpy(audio_features)
         if feat_np.ndim == 2:
             feat_np = feat_np[None, ...]
         counts = []
@@ -370,27 +362,39 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         so Keras input-spec validation passes cleanly.
         """
         # Resolve encoder attributes for static placeholder shapes.
+        # The attached converters are the primary source: a preprocessor
+        # loaded from a preset always carries them, while `backbone` is
+        # only available when a caller wires it in explicitly.
         ve = getattr(backbone, "vision_encoder", None) if backbone else None
         ae = getattr(backbone, "audio_encoder", None) if backbone else None
+        conv_img = self.image_converter or self.video_converter
+        conv_aud = self.audio_converter
         has_vision = (
-            getattr(backbone, "has_vision", False) if backbone else False
-        ) or image_pixel_values is not None
+            image_pixel_values is not None
+            or conv_img is not None
+            or ve is not None
+            or (getattr(backbone, "has_vision", False) if backbone else False)
+        )
         has_audio = (
-            getattr(backbone, "has_audio", False) if backbone else False
-        ) or audio_features is not None
+            audio_features is not None
+            or conv_aud is not None
+            or ae is not None
+            or (getattr(backbone, "has_audio", False) if backbone else False)
+        )
 
         if has_vision:
+            dim_src = ve if ve is not None else conv_img
             if image_pixel_values is not None:
                 output["pixel_values"] = image_pixel_values
-            elif ve is not None:
+            elif dim_src is not None:
                 output["pixel_values"] = np.zeros(
                     (
                         0,
                         0,
-                        ve.temporal_patch_size,
-                        ve.patch_size,
-                        ve.patch_size,
-                        ve.in_channels,
+                        dim_src.temporal_patch_size,
+                        dim_src.patch_size,
+                        dim_src.patch_size,
+                        getattr(dim_src, "in_channels", 3),
                     ),
                     dtype="float32",
                 )
@@ -406,11 +410,15 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         if has_audio:
+            mel_src = ae if ae is not None else conv_aud
             if audio_features is not None:
                 output["audio_features"] = audio_features
-            elif ae is not None:
+            elif mel_src is not None:
+                num_mels = getattr(
+                    mel_src, "num_mel_bins", getattr(mel_src, "num_mels", 128)
+                )
                 output["audio_features"] = np.zeros(
-                    (0, 0, ae.num_mel_bins), dtype="float32"
+                    (0, 0, num_mels), dtype="float32"
                 )
             output["audio_indices"] = (
                 audio_indices
@@ -441,6 +449,15 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
             }
+            self._add_multimodal_to_output(
+                x,
+                None,
+                None,
+                None,
+                None,
+                None,
+                backbone=getattr(self, "backbone", None),
+            )
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
@@ -541,7 +558,17 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             token_ids, padding_mask = self.packer(
                 x, sequence_length=sequence_length, add_end_value=False
             )
-            return {"token_ids": token_ids, "padding_mask": padding_mask}
+            result = {"token_ids": token_ids, "padding_mask": padding_mask}
+            self._add_multimodal_to_output(
+                result,
+                None,
+                None,
+                None,
+                None,
+                None,
+                backbone=getattr(self, "backbone", None),
+            )
+            return result
 
         prompts, _ = self._flatten_prompts(x["prompts"])
         audio_features, image_out, video_out = self._process_multimodal_inputs(

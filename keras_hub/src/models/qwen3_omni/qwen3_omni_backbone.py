@@ -332,12 +332,11 @@ class Qwen3OmniBackbone(Backbone):
         # Normalise every value to a tensor before injecting defaults to
         # keep Keras's type-uniformity check happy.
         inputs = {k: ops.convert_to_tensor(v) for k, v in inputs.items()}
-        batch_size = inputs["token_ids"].shape[0]
+        batch_size = ops.shape(inputs["token_ids"])[0]
         if self.has_vision:
             ve = self.vision_encoder
-            inputs.setdefault(
-                "pixel_values",
-                ops.zeros(
+            if "pixel_values" not in inputs:
+                inputs["pixel_values"] = ops.zeros(
                     (
                         batch_size,
                         0,
@@ -346,26 +345,25 @@ class Qwen3OmniBackbone(Backbone):
                         ve.patch_size,
                         ve.in_channels,
                     )
-                ),
-            )
-            inputs.setdefault(
-                "image_grid_thw",
-                ops.zeros((batch_size, 0, 3), dtype="int32"),
-            )
-            inputs.setdefault(
-                "vision_indices",
-                ops.zeros((batch_size, 0), dtype="int32"),
-            )
+                )
+            if "image_grid_thw" not in inputs:
+                inputs["image_grid_thw"] = ops.zeros(
+                    (batch_size, 0, 3), dtype="int32"
+                )
+            if "vision_indices" not in inputs:
+                inputs["vision_indices"] = ops.zeros(
+                    (batch_size, 0), dtype="int32"
+                )
         if self.has_audio:
             ae = self.audio_encoder
-            inputs.setdefault(
-                "audio_features",
-                ops.zeros((batch_size, 0, ae.num_mel_bins)),
-            )
-            inputs.setdefault(
-                "audio_indices",
-                ops.zeros((batch_size, 0), dtype="int32"),
-            )
+            if "audio_features" not in inputs:
+                inputs["audio_features"] = ops.zeros(
+                    (batch_size, 0, ae.num_mel_bins)
+                )
+            if "audio_indices" not in inputs:
+                inputs["audio_indices"] = ops.zeros(
+                    (batch_size, 0), dtype="int32"
+                )
         return inputs
 
     def __call__(self, inputs, *args, **kwargs):
