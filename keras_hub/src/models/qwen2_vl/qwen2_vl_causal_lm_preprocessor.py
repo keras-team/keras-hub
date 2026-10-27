@@ -242,6 +242,10 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
 
         all_pos = np.zeros((batch_size, 3, seq_len), dtype=np.int32)
 
+        # Image/video grids are consumed in prompt order across the batch —
+        # keep running offsets so each row indexes its own media's grids.
+        img_idx = 0
+        vid_idx = 0
         for b in range(batch_size):
             ids = token_ids_np[b]
             t_pos = np.zeros(seq_len, dtype=np.int32)
@@ -249,8 +253,6 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             w_pos = np.zeros(seq_len, dtype=np.int32)
 
             current_pos = 0
-            img_idx = 0
-            vid_idx = 0
             i = 0
             while i < seq_len:
                 is_image = (
@@ -496,13 +498,24 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         else:
             prompts_list = [str(prompts)]
 
-        # 4. Tokenize with special-token-aware splitting.
-        expanded_sequences = [
-            self._tokenize_with_special_tokens(
-                prompt_str, num_image_tokens, num_video_tokens
+        # 4. Tokenize with special-token-aware splitting. Media are consumed
+        # in prompt order across the batch, so each prompt gets the slice of
+        # token counts corresponding to the markers it contains.
+        expanded_sequences = []
+        img_offset = 0
+        vid_offset = 0
+        for prompt_str in prompts_list:
+            n_img = prompt_str.count(self.image_token)
+            n_vid = prompt_str.count(self.video_token)
+            expanded_sequences.append(
+                self._tokenize_with_special_tokens(
+                    prompt_str,
+                    num_image_tokens[img_offset : img_offset + n_img],
+                    num_video_tokens[vid_offset : vid_offset + n_vid],
+                )
             )
-            for prompt_str in prompts_list
-        ]
+            img_offset += n_img
+            vid_offset += n_vid
 
         # 5. Pack to fixed length. `sequence_length` acts as a minimum
         # pad target — truncating inside an expanded vision span would

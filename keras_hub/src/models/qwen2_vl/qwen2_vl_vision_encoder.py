@@ -136,7 +136,15 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
 
             return ops.fori_loop(0, num_chunks, _attend_chunk, out)
 
-        out = ops.cond(seq_len <= chunk, _full, _chunked)
+        if isinstance(seq_len, int):
+            # Static shape (JAX/eager): dispatch in Python — `ops.cond`
+            # traces both branches under JAX and the chunked path's
+            # fixed-size slice is invalid when seq_len < chunk.
+            out = _full() if seq_len <= chunk else _chunked()
+        else:
+            # Symbolic shape (tf.function): runtime dispatch; the predicate
+            # guarantees seq_len > chunk inside _chunked.
+            out = ops.cond(seq_len <= chunk, _full, _chunked)
 
         out = ops.transpose(out, (1, 0, 2))  # (S, H, D)
         out = ops.reshape(out, (seq_len, self.embed_dim))
@@ -442,95 +450,96 @@ class Qwen2VLVisionEncoder(keras.Model):
             self.merger.build((None, self.embed_dim))
         super().build(input_shape)
 
-    def _rot_pos_emb(self, grid_thw):
-        """Compute 2D axial RoPE (cos, sin) for all image patches.
+    def _per_patch_layout(self, grid_thw, seq_len):
+        """Per-patch (row, col, segment_id) indices for the vision tower.
 
-        Produces block-major (merge-block-ordered) h/w indices per image,
-        repeated for each temporal frame — matching HF
-        ``get_vision_position_ids``.
+        Fully vectorized over ``seq_len``: every output shape is static and
+        only *values* depend on the grids — required for ``jax.jit`` /
+        ``tf.function`` compilation, where grid values are dynamic.
 
-        Implemented with tensor ops only so it traces under ``tf.function``
-        (generate compiles ``generate_step``).
+        Patches are laid out contiguously per image, frame-major: within an
+        image, ``s = frame * h * w + spatial_index``, and spatial indices
+        follow the block-major merge ordering
+        ``(h//ms, w//ms, ms, ms)`` — matching HF ``get_vision_position_ids``
+        and ``cu_seqlens``.
 
         Args:
-            grid_thw: int tensor ``(num_images, 3)`` with [T, H, W] per image.
+            grid_thw: int tensor ``(num_images, 3)`` with [T, H, W] per
+                image.
+            seq_len: int. Total patch count across all images.
         Returns:
-            (cos_emb, sin_emb): each ``(total_tokens, head_dim)``.
+            ``(row_idx, col_idx, segment_ids)``, each ``(seq_len,)`` int32.
+            ``row_idx``/``col_idx`` are grid positions used by 2D RoPE;
+            ``segment_ids`` is the global (image, frame) attention segment.
         """
         grid_thw = ops.cast(grid_thw, "int32")
         ms = self.spatial_merge_size
-        n = grid_thw.shape[0]
-        max_hw = ops.max(grid_thw[:, 1:])
+
+        t = grid_thw[:, 0]
+        h = grid_thw[:, 1]
+        w = grid_thw[:, 2]
+        hw = h * w
+        merged_w = w // ms
+
+        # Image index per patch via cumulative end offsets.
+        per_img = t * hw
+        ends = ops.cumsum(per_img)
+        p = ops.arange(seq_len, dtype="int32")
+        img_idx = ops.sum(
+            ops.cast(
+                ops.expand_dims(p, 1) >= ops.expand_dims(ends, 0), "int32"
+            ),
+            axis=1,
+        )
+        img_idx = ops.minimum(img_idx, grid_thw.shape[0] - 1)
+        starts = ends - per_img
+        within = p - ops.take(starts, img_idx, axis=0)
+
+        hw_i = ops.take(hw, img_idx, axis=0)
+        mw_i = ops.take(merged_w, img_idx, axis=0)
+        frame = within // hw_i
+        j = within - frame * hw_i  # spatial index, block-major order
+
+        ms2 = ms * ms
+        block = j // ms2
+        intra = j - block * ms2
+        row_idx = (block // mw_i) * ms + intra // ms
+        col_idx = (block % mw_i) * ms + intra % ms
+
+        # Each frame is its own attention segment (HF `cu_seqlens`).
+        frame_offsets = ops.cumsum(t) - t
+        segment_ids = frame + ops.take(frame_offsets, img_idx, axis=0)
+        return row_idx, col_idx, ops.cast(segment_ids, "int32")
+
+    def _rot_pos_emb(self, grid_thw, seq_len):
+        """Compute 2D axial RoPE (cos, sin) for all image patches.
+
+        Args:
+            grid_thw: int tensor ``(num_images, 3)`` with [T, H, W] per
+                image.
+            seq_len: int. Total patch count across all images.
+        Returns:
+            (cos_emb, sin_emb): each ``(total_tokens, head_dim)``.
+        """
         inv_freq = ops.cast(ops.array(self._inv_freq), "float32")
-        positions = ops.cast(ops.arange(max_hw), "float32")
-        freq_table = ops.einsum("i,j->ij", positions, inv_freq)  # (hw, hd//4)
-
-        all_embeds = []
-        for idx in range(n):
-            t_val = grid_thw[idx][0]
-            h_val = grid_thw[idx][1]
-            w_val = grid_thw[idx][2]
-            merged_h = h_val // ms
-            merged_w = w_val // ms
-
-            # Block-major merge ordering: (merged_h, merged_w, ms, ms).
-            row_idx = ops.expand_dims(
-                ops.arange(merged_h), axis=(1, 2, 3)
-            ) * ms + ops.expand_dims(
-                ops.arange(ms), axis=(0, 1, 3)
-            )  # (merged_h, 1, ms, 1)
-            col_idx = ops.expand_dims(
-                ops.arange(merged_w), axis=(0, 2, 3)
-            ) * ms + ops.expand_dims(
-                ops.arange(ms), axis=(0, 1, 2)
-            )  # (1, merged_w, 1, ms)
-            row_idx = ops.broadcast_to(row_idx, (merged_h, merged_w, ms, ms))
-            col_idx = ops.broadcast_to(col_idx, (merged_h, merged_w, ms, ms))
-            row_idx = ops.reshape(row_idx, (-1,))
-            col_idx = ops.reshape(col_idx, (-1,))
-
-            row_freqs = ops.take(freq_table, row_idx, axis=0)  # (h*w, hd//4)
-            col_freqs = ops.take(freq_table, col_idx, axis=0)
-            spatial_emb = ops.concatenate(
-                [row_freqs, col_freqs], axis=-1
-            )  # (h*w, head_dim//2)
-
-            # Tile the spatial embedding across all temporal frames.
-            n_hw = ops.shape(spatial_emb)[0]
-            h_dim = ops.shape(spatial_emb)[1]
-            spatial_emb = ops.broadcast_to(
-                ops.expand_dims(spatial_emb, axis=0), (t_val, n_hw, h_dim)
-            )
-            spatial_emb = ops.reshape(spatial_emb, (-1, h_dim))
-
-            all_embeds.append(spatial_emb)
-
-        rotary = ops.concatenate(all_embeds, axis=0)  # (N, head_dim // 2)
+        row_idx, col_idx, _ = self._per_patch_layout(grid_thw, seq_len)
+        row_freqs = ops.einsum(
+            "i,j->ij", ops.cast(row_idx, "float32"), inv_freq
+        )  # (S, head_dim//4)
+        col_freqs = ops.einsum(
+            "i,j->ij", ops.cast(col_idx, "float32"), inv_freq
+        )
+        rotary = ops.concatenate(
+            [row_freqs, col_freqs], axis=-1
+        )  # (S, head_dim // 2)
         # Duplicate to full head_dim, matching HF `cat([emb, emb], -1)`.
         rotary = ops.concatenate([rotary, rotary], axis=-1)
         return ops.cos(rotary), ops.sin(rotary)
 
-    def _segment_ids(self, grid_thw):
-        """Per-patch (image, frame) segment ids for attention.
-
-        Each of the ``t`` frames of an image is its own attention segment
-        (HF ``cu_seqlens`` semantics). Returns a ``(total_patches,)`` int32
-        tensor; the loop bound ``num_images`` is a static shape so this
-        stays traceable under ``tf.function``.
-        """
-        grid_thw = ops.cast(grid_thw, "int32")
-        t_counts = grid_thw[:, 0]
-        hw = grid_thw[:, 1] * grid_thw[:, 2]
-        # Segment id of frame 0 for each image.
-        seg_offsets = ops.cumsum(t_counts) - t_counts
-        segments = []
-        for i in range(grid_thw.shape[0]):
-            t_i = t_counts[i]
-            hw_i = hw[i]
-            # Patch index within the image → frame index.
-            frame_of_patch = ops.arange(t_i * hw_i) // hw_i
-            segments.append(frame_of_patch + seg_offsets[i])
-        return ops.cast(ops.concatenate(segments, axis=0), "int32")
+    def _segment_ids(self, grid_thw, seq_len):
+        """Per-patch (image, frame) segment ids for attention."""
+        _, _, segment_ids = self._per_patch_layout(grid_thw, seq_len)
+        return segment_ids
 
     def call(self, pixel_values, grid_thw):
         """Forward pass through the vision encoder.
@@ -573,8 +582,9 @@ class Qwen2VLVisionEncoder(keras.Model):
         )
         hidden_states = ops.cast(hidden_states, "float32")
 
-        position_embeddings = self._rot_pos_emb(grid_thw)
-        segment_ids = self._segment_ids(grid_thw)
+        seq_len = ops.shape(hidden_states)[0]
+        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
+        segment_ids = self._segment_ids(grid_thw, seq_len)
 
         for blk in self.blocks:
             hidden_states = blk(hidden_states, position_embeddings, segment_ids)
