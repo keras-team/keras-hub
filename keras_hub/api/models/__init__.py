@@ -734,6 +734,9 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_causal_lm_preprocessor import (
 from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import (
     Qwen2VLTokenizer as Qwen2VLTokenizer,
 )
+from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
+    Qwen2VLVisionEncoder as Qwen2VLVisionEncoder,
+)
 from keras_hub.src.models.qwen3.qwen3_backbone import (
     Qwen3Backbone as Qwen3Backbone,
 )

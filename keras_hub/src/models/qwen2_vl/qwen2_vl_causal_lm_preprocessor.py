@@ -11,6 +11,9 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
     Qwen2VLImageConverter,
 )
 from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import Qwen2VLTokenizer
+from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
+    Qwen2VLVideoConverter,
+)
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
@@ -30,7 +33,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
     preprocessor also:
 
     1. Converts images/videos to patch tensors via
-       ``Qwen2VLImageConverter``.
+       ``Qwen2VLImageConverter``/``Qwen2VLVideoConverter``.
     2. Replaces each ``<|image_pad|>``/``<|video_pad|>`` marker in the prompt
        with the correct number of vision placeholder tokens.
     3. Computes flat ``vision_indices`` for scattering visual embeddings
@@ -45,6 +48,9 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             the tokenizer's vocabulary automatically.
         image_converter: A ``Qwen2VLImageConverter`` instance, or ``None``
             for text-only mode.
+        video_converter: A ``Qwen2VLVideoConverter`` instance, or ``None``.
+            Falls back to ``image_converter`` when unset, since Qwen2-VL
+            applies identical preprocessing to video frames and images.
         sequence_length: int. Total padded sequence length. Default 1024.
         add_start_token: bool. Prepend BOS token. Default ``False``.
         add_end_token: bool. Append EOS token. Default ``True``.
@@ -53,6 +59,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
     backbone_cls = Qwen2VLBackbone
     tokenizer_cls = Qwen2VLTokenizer
     image_converter_cls = Qwen2VLImageConverter
+    video_converter_cls = Qwen2VLVideoConverter
 
     _SPECIAL_TOKEN_ATTRS = [
         "im_start_token",
@@ -67,6 +74,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         self,
         tokenizer,
         image_converter=None,
+        video_converter=None,
         sequence_length=1024,
         add_start_token=False,
         add_end_token=True,
@@ -80,6 +88,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             **kwargs,
         )
         self.image_converter = image_converter
+        self.video_converter = video_converter
 
         # Token strings — these are static.
         self.image_token = getattr(
@@ -357,7 +366,7 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         }
 
     def _preprocess_videos(self, videos):
-        """Convert raw videos to patch tensors using the image converter.
+        """Convert raw videos to patch tensors using the video converter.
 
         Args:
             videos: A single video ``(T, H, W, C)``, a list of videos, or a
@@ -381,10 +390,11 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         else:
             flat_videos = [videos]
 
+        converter = self.video_converter or self.image_converter
         all_patches = []
         all_grid_thw = []
         for vid in flat_videos:
-            result = self.image_converter(vid)
+            result = converter(vid)
             patches = result["patches"]
             grid_thw = result["grid_thw"]
 
@@ -434,13 +444,25 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         assert_tf_installed("Qwen2VLCausalLMPreprocessor with images/videos")
         if not self.built:
             self.build(None)
-        if self.image_converter is None:
+        if images is not None and self.image_converter is None:
             raise ValueError(
                 "This preprocessor was created without an "
-                "`image_converter`, so it cannot process images or videos. "
-                "To process multimodal inputs, pass an "
-                "`image_converter` when creating the preprocessor, or "
-                "load a preset that includes one."
+                "`image_converter`, so it cannot process images. "
+                "To process image inputs, pass an `image_converter` when "
+                "creating the preprocessor, or load a preset that includes "
+                "one."
+            )
+        if (
+            videos is not None
+            and self.image_converter is None
+            and (self.video_converter is None)
+        ):
+            raise ValueError(
+                "This preprocessor was created without an "
+                "`image_converter` or `video_converter`, so it cannot "
+                "process videos. To process video inputs, pass a converter "
+                "when creating the preprocessor, or load a preset that "
+                "includes one."
             )
 
         sequence_length = sequence_length or self.sequence_length
@@ -463,7 +485,8 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
             vision_out_videos = self._preprocess_videos(videos)
 
         # 2. Compute merged token counts per image/video.
-        merge_size = getattr(self.image_converter, "merge_size", 2)
+        vision_converter = self.image_converter or self.video_converter
+        merge_size = getattr(vision_converter, "merge_size", 2)
 
         num_image_tokens = []
         if vision_out_images is not None:
@@ -615,9 +638,6 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         return output
 
     def get_config(self):
-        config = super().get_config()
-        if self.image_converter is not None:
-            config["image_converter"] = keras.layers.serialize(
-                self.image_converter
-            )
-        return config
+        # `image_converter` and `video_converter` are serialized by the base
+        # `Preprocessor.get_config`.
+        return super().get_config()
