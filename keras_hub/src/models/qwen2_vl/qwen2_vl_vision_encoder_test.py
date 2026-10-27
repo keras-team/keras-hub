@@ -137,7 +137,7 @@ class Qwen2VLVisionEncoderTest(TestCase):
 
         # grid [1, 2, 2] → 4 patches, head_dim = 64/4 = 16.
         grid_thw = np.array([[1, 2, 2]], dtype="int32")
-        cos, sin = encoder._rot_pos_emb(grid_thw)
+        cos, sin = encoder._rot_pos_emb(grid_thw, seq_len=4)
 
         self.assertEqual(tuple(cos.shape), (4, 16))
         self.assertEqual(tuple(sin.shape), (4, 16))
