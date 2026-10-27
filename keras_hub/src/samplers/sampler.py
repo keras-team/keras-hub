@@ -80,6 +80,7 @@ class Sampler:
         stop_token_ids=None,
         hidden_states=None,
         model=None,
+        **kwargs,
     ):
         max_length = ops.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
@@ -144,7 +145,7 @@ class Sampler:
         if keras.config.backend() == "jax":
             import itertools
 
-            if model:
+            if hasattr(model, "trainable_variables"):
                 model_trainable_variables = model.trainable_variables
                 model_non_trainable_variables = model.non_trainable_variables
             else:

@@ -15,6 +15,16 @@ class TestTask(TestCase):
         model.generate([prompt], max_length=15)
 
     @pytest.mark.extra_large
+    def test_backbone_from_hf_preset(self):
+        model = Gemma3Backbone.from_preset(
+            "hf://microsoft/harrier-oss-v1-270m",
+            load_weights=False,
+        )
+        # harrier 270m: hidden_dim=640, num_layers=18
+        self.assertEqual(model.hidden_dim, 640)
+        self.assertEqual(model.num_layers, 18)
+
+    @pytest.mark.extra_large
     def test_class_detection(self):
         preset_name = "google/gemma-3-1b-it"
         model = CausalLM.from_preset(

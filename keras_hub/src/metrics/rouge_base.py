@@ -1,6 +1,8 @@
 import keras
 from keras import ops
 
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
@@ -47,6 +49,7 @@ class RougeBase(keras.metrics.Metric):
         name="rouge",
         **kwargs,
     ):
+        assert_tf_installed(self.__class__.__name__)
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if rouge_scorer is None:
@@ -153,7 +156,7 @@ class RougeBase(keras.metrics.Metric):
             self._rouge_f1_score.assign_add(score[2])
 
         self._number_of_samples.assign_add(
-            ops.cast(batch_size, dtype=self.dtype)
+            ops.cast(convert_to_numpy(batch_size), dtype=self.dtype)
         )
 
     def result(self):

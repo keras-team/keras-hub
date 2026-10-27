@@ -1,6 +1,5 @@
 import keras
 import numpy as np
-import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -15,8 +14,14 @@ from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
     Gemma3nImageConverter,
 )
 from keras_hub.src.models.gemma3n.gemma3n_tokenizer import Gemma3nTokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.Gemma3nCausalLMPreprocessor")
@@ -238,6 +243,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         num_audio_tokens_per_audio=188,
         **kwargs,
     ):
+        assert_tf_installed("Gemma3nCausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,
@@ -492,9 +498,9 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
         images = self.image_converter(images)
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(images):
             images = images.cpu()
         # Recover the rank.
         images = tf.reshape(
@@ -656,7 +662,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )
@@ -827,6 +833,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         response_mask = segment_ids == 1
@@ -846,7 +853,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             }
 
         # === Multimodal processing ===
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = (
             self.image_converter.image_size[0] if self.image_converter else 0
         )

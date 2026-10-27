@@ -9,6 +9,56 @@ from keras_hub.src.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
 
 class T5TransformerLayer(keras.layers.Layer):
+    """A single encoder or decoder layer of a T5 stack.
+
+    Decoder layers add a cross-attention block over the encoder output, and
+    support a static key/value cache for both attention blocks so that
+    generation does not recompute the states of already seen tokens. See
+    `T5MultiHeadAttention` for the caching modes.
+
+    Args:
+        is_decoder: bool. Whether this layer belongs to the decoder stack.
+            Decoder layers add a cross-attention block and mask causally.
+        hidden_dim: int. The size of the layer output.
+        intermediate_dim: int. The output dimension of the first dense layer
+            of the feedforward block.
+        key_value_dim: int. The size of each attention head.
+        dropout: float. Dropout probability for the layer.
+        activation: string. The activation to use in the feedforward block.
+        layer_norm_epsilon: float. Epsilon factor for the layer normalization
+            layers.
+        num_heads: int. The number of attention heads.
+        use_gated_activation: bool. Whether to gate the inner dense block of
+            the feedforward network.
+        use_relative_attention_bias: bool. Whether the self-attention block
+            owns the relative attention bias weights. Only the first layer of
+            a stack should set this to `True`.
+
+    Call arguments:
+        position_bias: Optional relative attention bias returned by an earlier
+            layer of the same stack. The first layer of a stack computes it,
+            along with the causal mask, and the rest reuse it.
+        use_causal_mask: bool. Whether to build a causal mask and combine it
+            with `attention_mask`. The mask is rectangular during cached
+            decoding, where the queries are a slice of the cached sequence.
+        self_attention_cache: Optional key/value cache for the self-attention
+            block, of shape
+            `(batch_size, 2, target_length, num_heads, key_value_dim)`.
+        self_attention_cache_update_index: Optional int or int tensor, the
+            index at which to update `self_attention_cache`.
+        cross_attention_cache: Optional key/value cache for the
+            cross-attention block, of shape
+            `(batch_size, 2, source_length, num_heads, key_value_dim)`.
+        cross_attention_cache_update_index: Optional int or int tensor, the
+            index at which to update `cross_attention_cache`. Pass `None` to
+            reuse the cache without recomputing the encoder projections.
+
+    Returns:
+        A `(hidden_states, position_bias)` tuple, or a
+        `(hidden_states, position_bias, self_attention_cache,
+        cross_attention_cache)` tuple when `self_attention_cache` is set.
+    """
+
     def __init__(
         self,
         is_decoder,
@@ -112,22 +162,32 @@ class T5TransformerLayer(keras.layers.Layer):
         encoder_hidden_states=None,
         encoder_attention_mask=None,
         use_causal_mask=False,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
+        cross_attention_cache=None,
+        cross_attention_cache_update_index=None,
         training=False,
     ):
-        if use_causal_mask:
-            shape = ops.shape(hidden_states)
-            batch_size, length = shape[0], shape[1]
-            causal_mask = compute_causal_mask(batch_size, length, length)
-            attention_mask = causal_mask & ops.cast(attention_mask, "bool")
+        # Only the first layer of a stack builds the mask; the rest inherit it
+        # through `position_bias`, which already has it folded in.
+        if use_causal_mask and position_bias is None:
+            attention_mask = self._compute_self_attention_mask(
+                hidden_states,
+                attention_mask,
+                self_attention_cache,
+                self_attention_cache_update_index,
+            )
 
         x = hidden_states  # Intermediate result.
 
         residual = x
         x = self.self_attention_layer_norm(x)
-        x, position_bias = self.self_attention(
+        x, position_bias, self_attention_cache = self.self_attention(
             x,
             mask=attention_mask,
             position_bias=position_bias,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
             training=training,
         )
         x = self.self_attention_dropout(x, training=training)
@@ -136,10 +196,12 @@ class T5TransformerLayer(keras.layers.Layer):
         if self.is_decoder:
             residual = x
             x = self.cross_attention_layer_norm(x)
-            x, _ = self.cross_attention(
+            x, _, cross_attention_cache = self.cross_attention(
                 x,
                 key_value_states=encoder_hidden_states,
                 mask=encoder_attention_mask,
+                cache=cross_attention_cache,
+                cache_update_index=cross_attention_cache_update_index,
                 training=training,
             )
             x = self.cross_attention_dropout(x, training=training)
@@ -158,7 +220,36 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.dropout_layer(x, training=training)
         x = x + residual
 
-        if position_bias is not None:
-            return x, position_bias
-        else:
-            return x
+        # Keras rejects `None` inside a functional model's output structure, so
+        # the caches are only returned when the caller actually passed some.
+        if self_attention_cache is not None:
+            return x, position_bias, self_attention_cache, cross_attention_cache
+        return x, position_bias
+
+    def _compute_self_attention_mask(
+        self,
+        hidden_states,
+        attention_mask,
+        self_attention_cache,
+        self_attention_cache_update_index,
+    ):
+        batch_size = ops.shape(hidden_states)[0]
+        input_length = output_length = ops.shape(hidden_states)[1]
+        # We need a rectangular causal mask when doing cached decoding. For
+        # generative inference `hidden_states` will generally be length 1,
+        # while the cache spans the full generation length.
+        if self_attention_cache is not None:
+            input_length = ops.shape(self_attention_cache)[2]
+        causal_mask = compute_causal_mask(
+            batch_size,
+            input_length,
+            output_length,
+            (
+                0
+                if self_attention_cache_update_index is None
+                else self_attention_cache_update_index
+            ),
+        )
+        if attention_mask is None:
+            return causal_mask
+        return causal_mask & ops.cast(attention_mask, "bool")

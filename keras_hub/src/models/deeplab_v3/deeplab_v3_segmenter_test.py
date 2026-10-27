@@ -72,7 +72,8 @@ class DeepLabV3ImageSegmenterTest(TestCase):
         )
 
     @pytest.mark.skip(
-        reason="TODO: Bug with DeepLabV3ImageSegmenter liteRT export"
+        reason="TODO: DeepLabV3ImageSegmenter LiteRT export fails with "
+        "'symbolic tf.Tensor used as a Python bool' while tracing for export."
     )
     def test_litert_export(self):
         self.run_litert_export_test(

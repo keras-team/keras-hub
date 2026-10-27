@@ -40,6 +40,12 @@ def convert_backbone_config(transformers_config, cls, **kwargs):
                 3,
             )
 
+        rope_theta = backbone_config.get("rope_parameters", {}).get(
+            "rope_theta"
+        )
+        if rope_theta is None:
+            rope_theta = backbone_config["rope_theta"]
+
         # Vision Encoder.
         vision_encoder_config = {
             "image_shape": image_shape,
@@ -56,7 +62,7 @@ def convert_backbone_config(transformers_config, cls, **kwargs):
                 3,
             ),
             "hidden_activation": backbone_config["hidden_act"],
-            "rope_theta": backbone_config["rope_theta"],
+            "rope_theta": rope_theta,
             "window_size": backbone_config["window_size"],
             "global_attn_indexes": backbone_config["global_attn_indexes"],
             "attention_dropout_rate": backbone_config["attention_dropout"],

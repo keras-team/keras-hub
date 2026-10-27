@@ -18,7 +18,7 @@ class FluxTextToImagePreprocessor(Preprocessor):
 
     Args:
         clip_l_preprocessor: A `keras_hub.models.CLIPPreprocessor` instance.
-        t5_preprocessor: A optional `keras_hub.models.T5Preprocessor` instance.
+        t5_preprocessor: An optional `keras_hub.models.T5Preprocessor` instance.
     """
 
     backbone_cls = FluxBackbone

@@ -5,9 +5,9 @@ import pathlib
 import re
 import tempfile
 
+import grain
 import keras
 import numpy as np
-import packaging.version
 import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
@@ -36,6 +36,127 @@ def convert_to_comparible_type(x):
     if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
+
+
+def _to_host_leaf(x):
+    """Move a backend tensor leaf (e.g. a torch CUDA tensor) to NumPy.
+
+    `tf.data` cannot consume tensors that live on an accelerator. Native `tf`
+    tensors are left as is (unlike `_to_grain_leaf`), since converting a
+    `tf.RaggedTensor` yields a non-rectangular list that `from_tensor_slices`
+    rejects. Other leaves are passed through unchanged.
+    """
+    if isinstance(x, list):
+        return [_to_host_leaf(e) for e in x]
+    if ops.is_tensor(x) and not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+        return ops.convert_to_numpy(x)
+    return x
+
+
+def _to_grain_leaf(x):
+    """Convert a single data leaf to a Grain friendly Python/NumPy object."""
+    if isinstance(x, tf.RaggedTensor):
+        x = x.to_list()
+    elif isinstance(x, tf.Tensor):
+        x = x.numpy()
+    elif not isinstance(x, (list, np.ndarray)) and ops.is_tensor(x):
+        x = ops.convert_to_numpy(x)
+    if isinstance(x, np.ndarray) and x.dtype.kind in ("S", "U", "O"):
+        x = x.tolist()
+    if isinstance(x, list):
+        x = tree.map_structure(
+            lambda e: e.decode("utf-8") if isinstance(e, bytes) else e, x
+        )
+    return x
+
+
+def _map_leaves(fn, *structures):
+    """Like `tree.map_structure`, but only dicts and tuples are structures.
+
+    This mirrors `tf.data.Dataset.from_tensor_slices`, where lists, arrays and
+    tensors are data leaves. Treating lists as leaves also allows zipping
+    ragged lists of differing lengths across `structures`.
+    """
+    x = structures[0]
+    if isinstance(x, dict):
+        return {
+            k: _map_leaves(fn, *(s[k] for s in structures)) for k in x.keys()
+        }
+    if isinstance(x, tuple):
+        return tuple(_map_leaves(fn, *vs) for vs in zip(*structures))
+    return fn(*structures)
+
+
+def _flatten_leaves(x):
+    """Like `tree.flatten`, but only dicts and tuples are structures."""
+    if isinstance(x, dict):
+        return [e for v in x.values() for e in _flatten_leaves(v)]
+    if isinstance(x, tuple):
+        return [e for v in x for e in _flatten_leaves(v)]
+    return [x]
+
+
+def grain_source_from_tensor_slices(input_data):
+    """`grain.MapDataset` analog of `tf.data.Dataset.from_tensor_slices`.
+
+    Every data leaf in `input_data` is sliced along its first axis, and each
+    element of the returned dataset has the same nested structure as
+    `input_data` with one slice per leaf. Elements are plain Python objects and
+    NumPy arrays, never tf or backend tensors.
+    """
+    input_data = _map_leaves(_to_grain_leaf, input_data)
+    lengths = set(len(x) for x in _flatten_leaves(input_data))
+    if len(lengths) != 1:
+        raise ValueError(
+            "All leaves of `input_data` must have the same first dimension. "
+            f"Received lengths: {sorted(lengths)}"
+        )
+    records = [
+        _map_leaves(lambda x: x[i], input_data) for i in range(lengths.pop())
+    ]
+    return grain.MapDataset.source(records)
+
+
+def grain_ragged_batch(elements):
+    """A Grain `batch_fn` that stacks dense leaves and lists ragged ones.
+
+    This is the Grain analog of `tf.data.Dataset.ragged_batch`. Leaves whose
+    shapes agree across elements are stacked into a NumPy array. All other
+    leaves (ragged lists, strings) are collected in a Python list, matching the
+    lists-of-lists convention of the Python preprocessing path.
+    """
+
+    def batch(*leaves):
+        if all(isinstance(x, np.ndarray) for x in leaves):
+            if len(set(x.shape for x in leaves)) == 1:
+                return np.stack(leaves)
+            return [x.tolist() for x in leaves]
+        if all(isinstance(x, (int, float, bool, np.generic)) for x in leaves):
+            return np.array(leaves)
+        return list(leaves)
+
+    return _map_leaves(batch, *elements)
+
+
+def assert_grain_safe_types(x):
+    """Assert `x` only contains NumPy arrays and plain Python objects.
+
+    Grain pickles every element across worker process boundaries, so
+    preprocessing outputs inside a Grain pipeline must never be tf or backend
+    tensors.
+    """
+
+    def check(leaf):
+        if leaf is None or isinstance(leaf, (str, bytes, int, float, bool)):
+            return
+        if isinstance(leaf, (np.ndarray, np.generic)):
+            return
+        raise AssertionError(
+            "Preprocessing outputs inside a Grain pipeline must be NumPy "
+            f"arrays or plain Python objects. Received: {type(leaf)}"
+        )
+
+    tree.map_structure(check, x)
 
 
 class TestCase(tf.test.TestCase, parameterized.TestCase):
@@ -229,11 +350,45 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output_ds = ds.batch(1_000).map(layer)
         self.assertAllClose(output, output_ds.get_single_element())
 
+        # Check Grain parity with the direct call and the tf.data path.
+        self.run_grain_preprocessing_test(layer, input_data, output)
+
         if expected_output:
             self.assertAllClose(output, expected_output)
 
         if return_output:
             return output
+
+    def run_grain_preprocessing_test(self, layer, input_data, expected_output):
+        """Check a preprocessing layer runs in Grain and matches direct calls.
+
+        Runs the layer inside a `grain.MapDataset` both on an unbatched source
+        (one record per sample, followed by a ragged-aware batch) and on a
+        batched source (the full `input_data` as a single record). Both must
+        match `expected_output`, and every Grain output must be a NumPy array
+        or plain Python object so it can be pickled across Grain workers.
+        """
+        if isinstance(input_data, tuple):
+            # Mimic tf.data unpacking behavior for preprocessing layers.
+            def map_fn(x):
+                return layer(*x)
+        else:
+            map_fn = layer
+
+        # Run with an unbatched dataset.
+        ds = grain_source_from_tensor_slices(input_data)
+        output_ds = ds.map(map_fn)
+        for element in output_ds:
+            assert_grain_safe_types(element)
+        output_ds = output_ds.batch(len(ds), batch_fn=grain_ragged_batch)
+        (grain_output,) = list(output_ds)
+        self.assertAllClose(expected_output, grain_output)
+
+        # Run with a batched dataset.
+        ds = grain.MapDataset.source([_map_leaves(_to_grain_leaf, input_data)])
+        (grain_output,) = list(ds.map(map_fn))
+        assert_grain_safe_types(grain_output)
+        self.assertAllClose(expected_output, grain_output)
 
     def run_preprocessor_test(
         self,
@@ -244,13 +399,18 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_detokenize_output=None,
         token_id_key="token_ids",
     ):
-        """Run basic tests for a Model Preprocessor layer."""
-        self.run_preprocessing_layer_test(
+        """Run basic tests for a Model Preprocessor layer.
+
+        Returns the output of calling the preprocessor directly on
+        `input_data`, for any additional assertions a test wants to make.
+        """
+        direct_output = self.run_preprocessing_layer_test(
             cls,
             init_kwargs,
             input_data,
             expected_output=expected_output,
             expected_detokenize_output=expected_detokenize_output,
+            return_output=True,
         )
 
         layer = cls(**self.init_kwargs)
@@ -270,6 +430,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         shape = ops.shape(output[token_id_key])
         self.assertEqual(shape[-1], 17)
+
+        # Check the updated sequence length is respected inside Grain, and that
+        # (x, y, sample_weight) outputs come back as Grain safe NumPy/Python
+        # types after batching.
+        if isinstance(input_data, tuple):
+
+            def map_fn(x):
+                return layer(*x)
+        else:
+            map_fn = layer
+        ds = grain_source_from_tensor_slices(input_data).map(map_fn)
+        (grain_output,) = list(ds.batch(len(ds), batch_fn=grain_ragged_batch))
+        assert_grain_safe_types(grain_output)
+        grain_output, _, _ = keras.utils.unpack_x_y_sample_weight(grain_output)
+        self.assertEqual(np.shape(grain_output[token_id_key])[-1], 17)
+        return direct_output
 
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
@@ -553,6 +729,50 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 f"{keras_type}, LiteRT returns {litert_type}"
             )
 
+    @staticmethod
+    def _build_litert_torch_input_signature(input_data):
+        """Build a concrete input signature for torch-backend LiteRT export.
+
+        The torch export path does not support dynamic shapes, so it needs a
+        fully specified `keras.InputSpec` tree derived from the sample data.
+        """
+        dtype_map = {
+            "float64": "float32",
+            "int64": "int32",
+        }
+
+        def _to_spec(x):
+            x = ops.convert_to_numpy(x)
+            dtype = keras.backend.standardize_dtype(x.dtype)
+            dtype = dtype_map.get(dtype, dtype)
+            return keras.InputSpec(shape=x.shape, dtype=dtype)
+
+        return [tree.map_structure(_to_spec, input_data)]
+
+    @staticmethod
+    def _map_litert_torch_inputs(converted_input_data, sig_inputs):
+        """Map dict inputs to their torch-export signature input names.
+
+        Depending on the litert-torch version, a flattened dict input is
+        named either with the original key suffixed (`args_0_<key>`) or
+        purely positionally (`args_0`, `args_1`, ...). Prefer an exact key
+        match; otherwise fall back to positional order (the model's input
+        definition order, which the test ``input_data`` mirrors).
+        """
+        keys = list(converted_input_data.keys())
+        stripped = {re.sub(r"^args_\d+_", "", n): n for n in sig_inputs}
+        if all(key in stripped for key in keys):
+            return {stripped[key]: converted_input_data[key] for key in keys}
+
+        def _index(name):
+            match = re.search(r"\d+", name)
+            return int(match.group()) if match else 0
+
+        ordered = sorted(sig_inputs, key=_index)
+        return {
+            ordered[i]: converted_input_data[key] for i, key in enumerate(keys)
+        }
+
     def run_litert_export_test(
         self,
         cls=None,
@@ -588,29 +808,38 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 Example: {"output1": {"max": 1e-4, "mean": 1e-5},
                          "*": {"max": 1e-3, "mean": 1e-4}}
             **export_kwargs: Additional keyword arguments to pass to
-                model.export(), such as allow_custom_ops=True or
-                enable_select_tf_ops=True.
+                model.export().
         """
-        # Skip test if Keras version is less than 3.13
-        if packaging.version.Version(
-            keras.__version__
-        ) < packaging.version.Version("3.13.0"):
-            self.skipTest("LiteRT export requires Keras >= 3.13")
-
-        self.skipTest(
-            "#TODO: [#2572] Re-enable LiteRT tests after a new tf release. "
-            "Can't test with tf 2.20 due to tf.lite module deprecation."
-        )
-
         # Extract comparison_mode from export_kwargs if provided
         comparison_mode = export_kwargs.pop("comparison_mode", "strict")
-        if keras.backend.backend() != "tensorflow":
-            self.skipTest("LiteRT export only supports TensorFlow backend")
+        backend = keras.backend.backend()
 
+        # The rewritten LiteRT export path currently runs on the PyTorch
+        # backend only.
+        if backend != "torch":
+            self.skipTest(
+                "LiteRT export is supported on the PyTorch backend only."
+            )
+
+        # The torch export path is provided by the optional litert-torch
+        # package.
+        try:
+            import litert_torch  # noqa: F401
+        except (ImportError, ModuleNotFoundError):
+            self.skipTest(
+                "litert-torch is required for LiteRT export with the "
+                "torch backend"
+            )
+
+        # Use the ai-edge-litert interpreter exclusively. The legacy
+        # tf.lite.Interpreter is deprecated and removed in recent TensorFlow
+        # releases, so we intentionally do not fall back to it.
         try:
             from ai_edge_litert.interpreter import Interpreter
         except ImportError:
-            Interpreter = tf.lite.Interpreter
+            self.skipTest(
+                "LiteRT export tests require the 'ai-edge-litert' package."
+            )
 
         if output_thresholds is None:
             output_thresholds = {"*": {"max": 10.0, "mean": 0.1}}
@@ -627,6 +856,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 export_path = os.path.join(temp_dir, "model.tflite")
+
+                # The torch export path needs a concrete input signature, since
+                # it does not support dynamic shapes.
+                if "input_signature" not in export_kwargs:
+                    export_kwargs["input_signature"] = (
+                        self._build_litert_torch_input_signature(input_data)
+                    )
 
                 # Step 1: Export model and get Keras output
                 model.export(export_path, format="litert", **export_kwargs)
@@ -661,18 +897,15 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
                 # Verify input signature
                 if isinstance(input_data, dict):
-                    expected_inputs = set(input_data.keys())
-                    actual_inputs = set(sig_inputs)
-                    # Check that all expected inputs are in the signature
-                    # (allow signature to have additional optional inputs)
-                    missing_inputs = expected_inputs - actual_inputs
-                    if missing_inputs:
-                        self.fail(
-                            f"Missing inputs in SignatureDef: "
-                            f"{sorted(missing_inputs)}. "
-                            f"Expected: {sorted(expected_inputs)}, "
-                            f"SignatureDef has: {sorted(actual_inputs)}"
-                        )
+                    # torch export renames inputs to `args_0_<key>`, so we
+                    # only check the input count here.
+                    self.assertEqual(
+                        len(input_data),
+                        len(sig_inputs),
+                        f"Input count mismatch: model has "
+                        f"{len(input_data)} inputs but SignatureDef has "
+                        f"{len(sig_inputs)}: {sig_inputs}",
+                    )
                 else:
                     # For numpy arrays, just verify we have exactly one input
                     # (since we're passing a single tensor)
@@ -700,34 +933,41 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 runner = interpreter.get_signature_runner("serving_default")
 
                 # Convert input data dtypes to match TFLite expectations
+                dtype_map = {
+                    "bool": "int32",
+                    "float64": "float32",
+                    "int64": "int32",
+                }
+
                 def convert_for_tflite(x):
                     """Convert tensor/array to TFLite-compatible dtypes."""
-                    if hasattr(x, "dtype"):
-                        if isinstance(x, np.ndarray):
-                            if x.dtype == bool:
-                                return x.astype(np.int32)
-                            elif x.dtype == np.float64:
-                                return x.astype(np.float32)
-                            elif x.dtype == np.int64:
-                                return x.astype(np.int32)
-                        else:  # TensorFlow tensor
-                            if x.dtype == tf.bool:
-                                return ops.cast(x, "int32").numpy()
-                            elif x.dtype == tf.float64:
-                                return ops.cast(x, "float32").numpy()
-                            elif x.dtype == tf.int64:
-                                return ops.cast(x, "int32").numpy()
-                            else:
-                                return x.numpy() if hasattr(x, "numpy") else x
-                    elif hasattr(x, "numpy"):
-                        return x.numpy()
+                    x = ops.convert_to_numpy(x)
+                    dtype = keras.backend.standardize_dtype(x.dtype)
+                    target = dtype_map.get(dtype)
+                    if target is not None:
+                        x = x.astype(target)
                     return x
 
                 if isinstance(input_data, dict):
                     converted_input_data = tree.map_structure(
                         convert_for_tflite, input_data
                     )
-                    litert_output = runner(**converted_input_data)
+                    # litert-torch renames dict inputs (positionally as
+                    # `args_<n>` or as `args_<n>_<key>`); map them back and
+                    # cast to the interpreter's expected dtype.
+                    runner_kwargs = self._map_litert_torch_inputs(
+                        converted_input_data, sig_inputs
+                    )
+                    expected_dtypes = {
+                        d["name"]: d["dtype"]
+                        for d in interpreter.get_input_details()
+                    }
+                    for sig_name, value in list(runner_kwargs.items()):
+                        for dname, dtype in expected_dtypes.items():
+                            if sig_name in dname and value.dtype != dtype:
+                                runner_kwargs[sig_name] = value.astype(dtype)
+                                break
+                    litert_output = runner(**runner_kwargs)
                 else:
                     # For single tensor inputs, get the input name
                     sig_inputs = serving_sig.get("inputs", [])
@@ -1016,13 +1256,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         train_data,
         expected_output_shape=None,
         batch_size=2,
+        compile_kwargs=None,
+        atol=1e-6,
+        rtol=1e-6,
     ):
         """Run basic tests for a backbone, including compilation."""
         task = cls(**init_kwargs)
+        if compile_kwargs:
+            task.compile(**compile_kwargs)
         # Check serialization (without a full save).
         self.run_serialization_test(task)
         preprocessor = task.preprocessor
-        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
+        # `tf.data` cannot consume tensors that live on an accelerator, so move
+        # them back to the host first.
+        host_data = _map_leaves(_to_host_leaf, train_data)
+        ds = tf.data.Dataset.from_tensor_slices(host_data)
+        ds = ds.batch(batch_size)
         x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
 
         # Test: the tree struct output by the
@@ -1041,12 +1290,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
         output_ds = task.predict(ds)
-        self.assertAllClose(output, output_ds)
+        self.assertAllClose(output, output_ds, atol=atol, rtol=rtol)
         # With split preprocessing.
         task.preprocessor = None
         output_split = task.predict(ds.map(preprocessor))
         task.preprocessor = preprocessor
-        self.assertAllClose(output, output_split)
+        self.assertAllClose(output, output_split, atol=atol, rtol=rtol)
 
         # Test fit.
         task.fit(x, y, sample_weight=sw)

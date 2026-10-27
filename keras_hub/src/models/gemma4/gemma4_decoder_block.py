@@ -362,6 +362,13 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
 
         self.built = True
 
+    @property
+    def is_sliding_attention(self):
+        """Whether this layer restricts attention to a sliding window."""
+        return (
+            self.use_sliding_window_attention and not self.is_global_attention
+        )
+
     def _compute_image_bidirectional_attention_mask(self, vision_mask):
         """Allow image tokens to attend to each other within the same image."""
         bidirectional_mask = vision_mask
@@ -426,7 +433,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # This matches HF's ordering: (causal AND sliding) OR vision_bidirec.
         # Doing the AND after the OR would incorrectly block vision tokens that
         # are in the same image but more than sliding_window_size apart.
-        if self.use_sliding_window_attention and not self.is_global_attention:
+        if self.is_sliding_attention:
             causal_mask = self.attention._mask_sliding_window(
                 causal_mask,
                 cache_update_index=cache_update_index,
@@ -439,6 +446,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # (e.g. HF 2B has use_bidirectional_attention=None → purely causal.)
         if (
             vision_mask is not None
+            and cache is None
             and self.use_vision_bidirectional_attention
             and not self.is_global_attention
         ):
@@ -464,6 +472,7 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         per_layer_input=None,
         shared_kv=None,
         positions=None,
+        attention_mask=None,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -473,9 +482,14 @@ class Gemma4TextDecoderBlock(keras.layers.Layer):
         # === Attention sub-block ===
         residual = x
         normalized_x = self.pre_attention_norm(x)
-        attention_mask = self._compute_attention_mask(
-            normalized_x, padding_mask, vision_mask, cache, cache_update_index
-        )
+        if attention_mask is None:
+            attention_mask = self._compute_attention_mask(
+                normalized_x,
+                padding_mask,
+                vision_mask,
+                cache,
+                cache_update_index,
+            )
         if cache is not None:
             attention, new_cache = self.attention(
                 normalized_x,

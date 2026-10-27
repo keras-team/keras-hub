@@ -4,6 +4,63 @@ from keras import ops
 
 
 class T5MultiHeadAttention(keras.layers.Layer):
+    """Multi-head attention with T5 relative position bias and cache support.
+
+    This layer implements the attention variant used by T5, where positional
+    information is injected as a learned bias added to the attention scores
+    rather than as a position embedding. Only the first layer of an encoder or
+    decoder stack computes the bias; the remaining layers receive it through
+    the `position_bias` call argument.
+
+    The layer can be used for both self-attention and cross-attention, and
+    supports a static key/value cache for autoregressive decoding. The forward
+    pass can happen in one of three modes:
+
+    - No cache (`cache` is `None`), same as regular multi-head attention.
+    - Static cache (`cache` is set, `cache_update_index` is `None`). The cached
+      key/value projections are used as is and the inputs are ignored. This is
+      how cross-attention reuses the encoder projections during generation.
+    - Updated cache (`cache` and `cache_update_index` are both set). New
+      key/value projections are computed from the inputs and spliced into the
+      cache at `cache_update_index`.
+
+    Note that caching is useful only during inference and should not be used
+    during training.
+
+    Args:
+        is_decoder: bool. Whether this layer belongs to the decoder stack. The
+            relative position bias is unidirectional for the decoder and
+            bidirectional for the encoder.
+        hidden_dim: int. The size of the layer output.
+        key_value_dim: int. The size of each attention head.
+        num_heads: int. The number of attention heads.
+        dropout: float. Dropout probability applied to the attention weights.
+        use_relative_attention_bias: bool. Whether this layer owns the relative
+            attention bias weights. Only the first layer of a stack should set
+            this to `True`.
+
+    Call arguments:
+        mask: Optional mask of shape
+            `(batch_size, target_length, source_length)`, where a `1` marks a
+            position that can be attended to. It is folded into the returned
+            `position_bias`, so it is ignored when `position_bias` is passed.
+        key_value_states: Optional key/value input of shape
+            `(batch_size, source_length, dim)`, which makes this a
+            cross-attention layer. When `None`, the layer attends over
+            `hidden_states`.
+        position_bias: Optional bias of shape
+            `(batch_size, num_heads, target_length, source_length)` returned by
+            an earlier layer of the same stack, reused as is.
+        cache: Optional key/value cache of shape
+            `(batch_size, 2, source_length, num_heads, key_value_dim)`.
+        cache_update_index: Optional int or int tensor, the index along the
+            sequence axis at which to update `cache`.
+
+    Returns:
+        An `(attention_output, position_bias, cache)` tuple. `cache` is `None`
+        when no cache was passed in.
+    """
+
     # This layer is adapted from Hugging Face
     # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
     def __init__(
@@ -137,9 +194,14 @@ class T5MultiHeadAttention(keras.layers.Layer):
         )
         return relative_buckets
 
-    def compute_bias(self, query_length, key_length):
-        """Compute binned relative position bias"""
-        context_position = ops.arange(query_length)[:, None]
+    def compute_bias(self, query_length, key_length, query_start_index=0):
+        """Compute binned relative position bias.
+
+        `query_start_index` is the absolute position of the first query. It is
+        non-zero during cached decoding, where the queries are a short slice
+        of a longer sequence and the keys span the whole cache.
+        """
+        context_position = ops.arange(query_length)[:, None] + query_start_index
         memory_position = ops.arange(key_length)[None, :]
         relative_position = (
             memory_position - context_position
@@ -164,124 +226,74 @@ class T5MultiHeadAttention(keras.layers.Layer):
         mask=None,
         key_value_states=None,
         position_bias=None,
-        past_key_value=None,
-        layer_head_mask=None,
-        query_length=None,
+        cache=None,
+        cache_update_index=None,
         training=False,
     ):
-        # Input is (batch_size, query_length, dim)
-        # past_key_value[0] is (batch_size, num_heads, q_len - 1, dim_per_head)
+        # Input is (batch_size, query_length, dim).
         batch_size, seq_length = ops.shape(hidden_states)[:2]
 
-        real_seq_length = seq_length
-
-        if past_key_value is not None:
-            if len(past_key_value) != 2:
-                raise ValueError(
-                    f"Argument `past_key_value` should have 2 past states: "
-                    f"keys and values. Got {len(past_key_value)} past states."
-                )
-            real_seq_length += (
-                ops.shape(past_key_value[0])[2]
-                if query_length is None
-                else query_length
-            )
-
-        key_length = (
-            real_seq_length
-            if key_value_states is None
-            else ops.shape(key_value_states)[1]
-        )
-
-        def shape(hidden_states):
-            return ops.transpose(
-                ops.reshape(
-                    hidden_states,
-                    (batch_size, -1, self.num_heads, self.key_value_dim),
-                ),
-                axes=(0, 2, 1, 3),
-            )
-
-        def unshape(hidden_states):
+        def shape(states):
+            # (batch_size, length, dim) -> (batch_size, length, heads, head_dim)
             return ops.reshape(
-                ops.transpose(hidden_states, axes=(0, 2, 1, 3)),
-                (batch_size, -1, self.inner_dim),
+                states,
+                (batch_size, -1, self.num_heads, self.key_value_dim),
             )
 
-        def project(
-            hidden_states, proj_layer, key_value_states, past_key_value
-        ):
-            """projects hidden states correctly to key/query states"""
-            if key_value_states is None:
-                # self-attention
-                # (batch_size, num_heads, seq_length, dim_per_head)
-                hidden_states = shape(proj_layer(hidden_states))
-            elif past_key_value is None:
-                # cross-attention
-                # (batch_size, num_heads, seq_length, dim_per_head)
-                hidden_states = shape(proj_layer(key_value_states))
+        query_states = shape(self.query_projector(hidden_states))
 
-            if past_key_value is not None:
-                if key_value_states is None:
-                    # self-attention
-                    # (batch_size, num_heads, key_length, dim_per_head)
-                    hidden_states = ops.concat(
-                        [past_key_value, hidden_states], axis=2
-                    )
-                else:
-                    # cross-attention
-                    hidden_states = past_key_value
-            return hidden_states
-
-        # get query
-        query_states = shape(
-            self.query_projector(hidden_states)
-        )  # (batch_size, num_heads, query_length, dim_per_head)
-
-        # get key/value
-        key_states = project(
-            hidden_states,
-            self.key_projector,
-            key_value_states,
-            past_key_value[0] if past_key_value is not None else None,
+        # Self-attention projects the inputs; cross-attention projects the
+        # encoder states passed as `key_value_states`.
+        key_value_inputs = (
+            hidden_states if key_value_states is None else key_value_states
         )
-        value_states = project(
-            hidden_states,
-            self.value_projector,
-            key_value_states,
-            past_key_value[1] if past_key_value is not None else None,
-        )
+        if cache is not None:
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            if cache_update_index is None:
+                key_states = key_cache
+                value_states = value_cache
+            else:
+                key_update = shape(self.key_projector(key_value_inputs))
+                value_update = shape(self.value_projector(key_value_inputs))
+                start = [0, cache_update_index, 0, 0]
+                key_states = ops.slice_update(key_cache, start, key_update)
+                value_states = ops.slice_update(
+                    value_cache, start, value_update
+                )
+                cache = ops.stack((key_states, value_states), axis=1)
+        else:
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
+                )
+            key_states = shape(self.key_projector(key_value_inputs))
+            value_states = shape(self.value_projector(key_value_inputs))
+
+        key_length = ops.shape(key_states)[1]
 
         scores = ops.einsum(
-            "bnqd,bnkd->bnqk", query_states, key_states
+            "bqnd,bknd->bnqk", query_states, key_states
         )  # (batch_size, num_heads, query_length, key_length)
 
         if position_bias is None:
             if not self.use_relative_attention_bias:
                 position_bias = ops.zeros(
-                    (1, self.num_heads, real_seq_length, key_length),
+                    (1, self.num_heads, seq_length, key_length),
                     self.compute_dtype,
                 )
             else:
-                position_bias = self.compute_bias(real_seq_length, key_length)
-
-            # if key and values are already calculated we want only
-            # the last query position bias
-            if past_key_value is not None:
-                if not self.use_relative_attention_bias:
-                    position_bias = position_bias[:, :, -seq_length:, :]
-                else:
-                    # we might have a padded past structure,
-                    # in which case we want to fetch the position bias slice
-                    # right after the most recently filled past index
-                    most_recently_filled_past_index = ops.amax(
-                        ops.where(past_key_value[0][0, 0, :, 0] != 0.0)
-                    )
-                    position_bias = ops.slice(
-                        position_bias,
-                        (0, 0, most_recently_filled_past_index + 1, 0),
-                        (1, self.num_heads, seq_length, real_seq_length),
-                    )
+                # During cached decoding the queries are a slice of a longer
+                # sequence, so the bias rows start at the cache index.
+                position_bias = self.compute_bias(
+                    seq_length,
+                    key_length,
+                    query_start_index=(
+                        0 if cache_update_index is None else cache_update_index
+                    ),
+                )
 
             if mask is not None:
                 # Add a new mask axis for the head dim.
@@ -298,13 +310,11 @@ class T5MultiHeadAttention(keras.layers.Layer):
             weights, training=training
         )  # (batch_size, num_heads, query_length, key_length)
 
-        # Optionally mask heads
-        if layer_head_mask is not None:
-            weights = ops.reshape(layer_head_mask, (1, -1, 1, 1)) * weights
-
-        attention_output = ops.matmul(
-            weights, value_states
-        )  # (batch_size, num_heads, query_length, dim_per_head)
-
-        attention_output = self.output_projector(unshape(attention_output))
-        return (attention_output, position_bias)
+        attention_output = ops.einsum(
+            "bnqk,bknd->bqnd", weights, value_states
+        )  # (batch_size, query_length, num_heads, head_dim)
+        attention_output = ops.reshape(
+            attention_output, (batch_size, -1, self.inner_dim)
+        )
+        attention_output = self.output_projector(attention_output)
+        return (attention_output, position_bias, cache)

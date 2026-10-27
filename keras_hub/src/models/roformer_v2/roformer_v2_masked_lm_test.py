@@ -1,3 +1,5 @@
+import numpy as np
+
 from keras_hub.src.models.roformer_v2.roformer_v2_backbone import (
     RoformerV2Backbone,
 )
@@ -51,3 +53,30 @@ class RoformerV2MaskedLMTest(TestCase):
             train_data=self.train_data,
             expected_output_shape=(2, 5, 10),
         )
+
+
+class RoformerV2MaskedLMDynamicMaskTest(TestCase):
+    def test_dynamic_mask_positions(self):
+        backbone = RoformerV2Backbone(
+            vocabulary_size=10,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=4,
+            intermediate_dim=8,
+            head_size=2,
+        )
+        model = RoformerV2MaskedLM(
+            backbone=backbone,
+            preprocessor=None,
+        )
+        inputs = {
+            "token_ids": np.array([[1, 2, 3, 4, 5]] * 2, dtype="int32"),
+            "segment_ids": np.zeros((2, 5), dtype="int32"),
+        }
+
+        for mask_count in (2, 4):
+            inputs["mask_positions"] = np.tile(
+                np.arange(mask_count, dtype="int32"), (2, 1)
+            )
+            outputs = model(inputs)
+            self.assertEqual(outputs.shape, (2, mask_count, 10))

@@ -2,7 +2,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -15,8 +14,14 @@ from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import Qwen3_5Tokenizer
 from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
     Qwen3_5VideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.Qwen3_5CausalLMPreprocessor")
@@ -487,6 +492,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
             )
 
         # Multimodal path.
+        assert_tf_installed("Qwen3_5CausalLMPreprocessor with images or videos")
         if not self.built:
             self.build(None)
 
@@ -580,6 +586,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, padding_mask = self.packer(
             token_ids_ragged,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
 

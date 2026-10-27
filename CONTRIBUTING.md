@@ -28,7 +28,7 @@ maintain two lists of github tags for contributors:
 If you would like propose a new symbol or feature, please first review our
 design guide and roadmap linked above, and open an issue to discuss. If you have
 a specific design in mind, please include a Colab notebook showing the proposed
-design in a end-to-end example. Keep in mind that design for a new feature or
+design in an end-to-end example. Keep in mind that design for a new feature or
 use case may take longer than contributing to an open issue with a
 vetted-design.
 
@@ -78,6 +78,19 @@ request gets approved by the reviewer.
 ### Step 6. Merging
 
 Once the pull request is approved, a team member will take care of merging.
+
+## GitHub Actions Security Validation
+
+Pull requests modifying GitHub Actions workflows are automatically validated using Zizmor.
+Before requesting review:
+
+- Resolve all Zizmor findings whenever possible.
+- Run Zizmor locally when modifying workflow files (e.g., using `uvx zizmor .github/` or `pipx run zizmor .github/`).
+- Use `# zizmor: ignore[rule-name]` only for verified false positives.
+  - Examples: `# zizmor: ignore[cache-poisoning]`, `# zizmor: ignore[insecure-pull-request-target]`.
+  - For a full list of rules, see the [Zizmor Rules Documentation](https://docs.zizmor.sh/audits/).
+- Every suppression must include a clear justification explaining why the finding is safe.
+- Pull requests containing undocumented suppressions may be rejected during review.
 
 ## Setting up an Environment
 

@@ -6,6 +6,7 @@ from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.clip.clip_backbone import CLIPBackbone
 from keras_hub.src.models.clip.clip_image_converter import CLIPImageConverter
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -116,6 +117,7 @@ class CLIPPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
         images, prompts = x["images"], x["prompts"]
         if self.to_lower:
+            assert_tf_installed("CLIPPreprocessor with to_lower=True")
             prompts = tf.strings.lower(prompts)
         prompts = self.tokenizer(prompts)
         if images is not None and self.image_converter:

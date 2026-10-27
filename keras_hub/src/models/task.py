@@ -58,6 +58,9 @@ class Task(PipelineModel):
             # Default compilation.
             self.compile()
 
+    def build(self, input_shape=None):
+        self.built = True
+
     def preprocess_samples(self, x, y=None, sample_weight=None):
         # If `preprocessor` is `None`, return inputs unaltered.
         if self.preprocessor is None:
@@ -97,6 +100,35 @@ class Task(PipelineModel):
     @preprocessor.setter
     def preprocessor(self, value):
         self._preprocessor = value
+
+    def quantize(self, mode=None, config=None, filters=None, **kwargs):
+        """Quantize the task, skipping all preprocessing layers.
+
+        Preprocessing layers (tokenizers, packers, converters) hold no
+        quantizable weights and are usually not built until they are first
+        called, which makes `keras.Model.quantize` raise
+        `"Cannot quantize a layer that isn't yet built"`. They are excluded
+        here; `filters` is still applied to all remaining layers.
+        """
+        preprocessor_layer_ids = set()
+        if isinstance(self.preprocessor, keras.layers.Layer):
+            preprocessor_layer_ids = set(
+                id(layer) for layer in self.preprocessor._flatten_layers()
+            )
+
+        if preprocessor_layer_ids:
+            user_filters = filters
+
+            def filters(layer):
+                if id(layer) in preprocessor_layer_ids:
+                    return False
+                if user_filters is not None:
+                    return user_filters(layer)
+                return True
+
+        return super().quantize(
+            mode=mode, config=config, filters=filters, **kwargs
+        )
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
@@ -204,11 +236,11 @@ class Task(PipelineModel):
                 "The filename must end in `.weights.h5`. "
                 f"Received: filepath={filepath}"
             )
-        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        backbone_layers = list(self.backbone._flatten_layers())
         keras.saving.load_weights(
             self,
             filepath,
-            objects_to_skip=backbone_layer_ids,
+            objects_to_skip=backbone_layers,
         )
 
     def has_task_weights(self):
@@ -224,7 +256,7 @@ class Task(PipelineModel):
                 f"Received: filepath={filepath}"
             )
 
-        backbone_layer_ids = set(id(w) for w in self.backbone._flatten_layers())
+        backbone_layers = list(self.backbone._flatten_layers())
         if not self.has_task_weights():
             raise ValueError(
                 f"Task {self} has no weights not in the `backbone`. "
@@ -233,7 +265,7 @@ class Task(PipelineModel):
         keras.saving.save_weights(
             self,
             filepath=filepath,
-            objects_to_skip=backbone_layer_ids,
+            objects_to_skip=backbone_layers,
         )
 
     def save_to_preset(self, preset_dir, max_shard_size=10):

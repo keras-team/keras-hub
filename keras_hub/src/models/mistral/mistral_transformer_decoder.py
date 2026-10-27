@@ -26,11 +26,18 @@ class MistralTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
+        head_dim=None,
+        llama_4_scaling_beta=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -40,10 +47,17 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
+        self.rope_type = rope_type
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.llama_4_scaling_beta = llama_4_scaling_beta
+        self.attention_factor = attention_factor
 
         self.dropout = dropout
 
         self.sliding_window = sliding_window
+        self.head_dim = head_dim
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -60,7 +74,16 @@ class MistralTransformerDecoder(keras.layers.Layer):
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             rope_scaling_factor=self.rope_scaling_factor,
+            rope_type=self.rope_type,
+            beta_fast=self.beta_fast,
+            beta_slow=self.beta_slow,
+            original_max_position_embeddings=(
+                self.original_max_position_embeddings
+            ),
             sliding_window=self.sliding_window,
+            head_dim=self.head_dim,
+            llama_4_scaling_beta=self.llama_4_scaling_beta,
+            attention_factor=self.attention_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dropout=self.dropout,
             dtype=self.dtype_policy,
@@ -240,8 +263,17 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "num_query_heads": self.num_query_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
+                "rope_type": self.rope_type,
+                "beta_fast": self.beta_fast,
+                "beta_slow": self.beta_slow,
+                "original_max_position_embeddings": (
+                    self.original_max_position_embeddings
+                ),
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
+                "head_dim": self.head_dim,
+                "llama_4_scaling_beta": self.llama_4_scaling_beta,
+                "attention_factor": self.attention_factor,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(

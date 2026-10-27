@@ -14,6 +14,10 @@ def convert_backbone_config(transformers_config):
     if encoder_config.get("hidden_activation") == "gelu_pytorch_tanh":
         encoder_config["hidden_activation"] = "gelu_approximate"
 
+    rope_theta = decoder_config.get("rope_parameters", {}).get("rope_theta")
+    if rope_theta is None:
+        rope_theta = decoder_config["rope_theta"]
+
     backbone_config = {
         "vocabulary_size": decoder_config["vocab_size"],
         "encoder_hidden_dim": encoder_config["hidden_size"],
@@ -44,7 +48,7 @@ def convert_backbone_config(transformers_config):
         "cross_attention_hidden_size": encoder_config["hidden_size"],
         "attn_logit_softcapping": decoder_config["attn_logit_softcapping"],
         "final_logit_softcapping": decoder_config["final_logit_softcapping"],
-        "rope_max_wavelength": decoder_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
     }
     return backbone_config
 

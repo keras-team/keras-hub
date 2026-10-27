@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -8,6 +9,7 @@ from keras_hub.src.models.t5gemma2.t5gemma2_seq_2_seq_lm_preprocessor import (
 )
 from keras_hub.src.models.t5gemma2.t5gemma2_tokenizer import T5Gemma2Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
@@ -30,8 +32,12 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         )
 
     def test_preprocessor_basics(self):
-        preprocessor = T5Gemma2Seq2SeqLMPreprocessor(**self.init_kwargs)
-        output = preprocessor(*self.input_data)
+        output = self.run_preprocessor_test(
+            cls=T5Gemma2Seq2SeqLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            token_id_key="decoder_token_ids",
+        )
         x, y, sample_weight = output
 
         # Verify output keys.
@@ -130,3 +136,10 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_requires_tensorflow(self):
+        # `call` is TensorFlow only, so the layer asserts at construction
+        # rather than failing cryptically on first call.
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                T5Gemma2Seq2SeqLMPreprocessor(**self.init_kwargs)

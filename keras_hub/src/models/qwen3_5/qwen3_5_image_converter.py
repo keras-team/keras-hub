@@ -1,6 +1,5 @@
 import math
 
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -8,6 +7,11 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.qwen3_5.qwen3_5_backbone import Qwen3_5Backbone
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 def _compute_target_size(h, w, min_pixels, max_pixels, patch_stride):

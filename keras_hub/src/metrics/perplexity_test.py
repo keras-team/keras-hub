@@ -136,7 +136,7 @@ class PerplexityTest(TestCase):
             ]
         )
         perplexity_val = perplexity(y_true_2, y_pred_2)
-        self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 3.8563, delta=1e-3)
 
     def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
@@ -252,7 +252,59 @@ class PerplexityTest(TestCase):
 
         perplexity.update_state(y_true_2, y_pred_2)
         perplexity_val = perplexity.result()
-        self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 3.8563, delta=1e-3)
+
+    def test_unequal_batch_sizes(self):
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
+
+        # Batch 1: size 3, 6 active tokens
+        y_true_1 = ops.array([[1, 2, 0], [2, 1, 0], [1, 1, 0]])
+        y_pred_1 = ops.ones((3, 3, 4))
+        perplexity.update_state(y_true_1, y_pred_1)
+
+        # Batch 2: size 1, 1 active token
+        y_true_2 = ops.array([[1, 0, 0]])
+        y_pred_2 = ops.ones((1, 3, 4))
+        perplexity.update_state(y_true_2, y_pred_2)
+
+        # Total loss sum: 7 tokens * log(4)
+        # Total tokens: 7
+        # Expected: exp(log(4)) = 4.0
+        self.assertAlmostEqual(perplexity.result(), 4.0, delta=1e-3)
+
+    def test_multi_batch_fractional_weights(self):
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
+
+        y_pred_1 = ops.array(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ]
+            ]
+        )
+        y_true_1 = ops.array([[1, 3, 0]])
+        sw_1 = ops.array([[0.5, 0.1, 0.9]])
+
+        y_pred_2 = ops.array(
+            [
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ]
+            ]
+        )
+        y_true_2 = ops.array([[2, 1, 3]])
+        sw_2 = ops.array([[1, 0.7, 0.5]])
+
+        # Split update_state calls
+        perplexity.update_state(y_true_1, y_pred_1, sw_1)
+        perplexity.update_state(y_true_2, y_pred_2, sw_2)
+
+        # Result should match the single-batch calculation (2.9442)
+        self.assertAlmostEqual(perplexity.result(), 2.9442, delta=1e-3)
 
     def test_get_config(self):
         perplexity = Perplexity(

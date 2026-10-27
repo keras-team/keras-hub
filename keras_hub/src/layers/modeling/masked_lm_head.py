@@ -162,16 +162,9 @@ class MaskedLMHead(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, mask_positions):
-        if keras.config.backend() == "tensorflow":
-            import tensorflow as tf
-
-            # On the tf backend, we need to work around an issue with dynamic
-            # shape broadcasting in take_along_axis.
-            x = tf.gather(inputs, mask_positions, batch_dims=1)
-        else:
-            # Gather the encoded tokens at the masked indices.
-            mask_positions = ops.expand_dims(mask_positions, axis=-1)
-            x = ops.take_along_axis(inputs, mask_positions, axis=1)
+        # Gather the encoded tokens at the masked indices.
+        mask_positions = ops.expand_dims(mask_positions, axis=-1)
+        x = ops.take_along_axis(inputs, mask_positions, axis=1)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._intermediate_dense(x)

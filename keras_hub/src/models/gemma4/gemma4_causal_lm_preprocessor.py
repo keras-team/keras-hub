@@ -3,7 +3,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -21,8 +20,14 @@ from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 def _get_num_vision_tokens(
@@ -171,6 +176,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         video_fps=24.0,
         **kwargs,
     ):
+        assert_tf_installed("Gemma4CausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,
@@ -540,10 +546,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         pixel_values = images_dict["pixel_values"]
         pixel_position_ids = images_dict["pixel_position_ids"]
 
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
         if keras.config.backend() == "torch":
-            if not isinstance(pixel_values, tf.Tensor):
+            if keras.ops.is_tensor(pixel_values):
                 pixel_values = pixel_values.cpu()
-            if not isinstance(pixel_position_ids, tf.Tensor):
+            if keras.ops.is_tensor(pixel_position_ids):
                 pixel_position_ids = pixel_position_ids.cpu()
 
         pixel_values = tf.reshape(
@@ -592,9 +600,8 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         # The audio converter runs as a Keras layer and may return a CUDA
         # torch tensor on GPU. Move to CPU so subsequent TF ops can accept it
         # (mirrors the same guard in _preprocess_images).
-        if keras.config.backend() == "torch":
-            if not isinstance(mel, tf.Tensor):
-                mel = mel.cpu()
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(mel):
+            mel = mel.cpu()
 
         # Expand dims to model expectation of Clips step: (B, 1, Seq, Feat)
         mel = tf.expand_dims(mel, axis=1)
@@ -639,10 +646,12 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         pixel_values = videos_dict["pixel_values"]
         pixel_position_ids = videos_dict["pixel_position_ids"]
 
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
         if keras.config.backend() == "torch":
-            if not isinstance(pixel_values, tf.Tensor):
+            if keras.ops.is_tensor(pixel_values):
                 pixel_values = pixel_values.cpu()
-            if not isinstance(pixel_position_ids, tf.Tensor):
+            if keras.ops.is_tensor(pixel_position_ids):
                 pixel_position_ids = pixel_position_ids.cpu()
 
         return {
@@ -966,7 +975,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
 
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:
@@ -1131,6 +1140,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length or self.sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         response_mask = segment_ids == 1
@@ -1149,7 +1159,7 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
                 ),
             }
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:

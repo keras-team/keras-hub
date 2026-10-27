@@ -1,5 +1,8 @@
+from unittest import mock
+
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class RWKVTokenizerTest(TestCase):
@@ -64,8 +67,8 @@ class RWKVTokenizerTest(TestCase):
             self.tokenizer.id_to_token(-1)
 
     def test_config(self):
-        config = self.tokenizer.get_config()
-        cloned = RWKVTokenizer.from_config(config)
+        self.run_serialization_test(self.tokenizer)
+        cloned = RWKVTokenizer.from_config(self.tokenizer.get_config())
         cloned.set_vocabulary(self.vocab)
         inputs = ["hello world"]
         self.assertAllEqual(self.tokenizer(inputs), cloned(inputs))
@@ -98,3 +101,10 @@ class RWKVTokenizerTest(TestCase):
             pad_token_id=0,
         )
         self.assertEqual(tok.vocabulary_size(), 2)
+
+    def test_requires_tensorflow(self):
+        # `tokenize` is TensorFlow only, so the tokenizer asserts at
+        # construction rather than failing cryptically on first call.
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                RWKVTokenizer(vocabulary=self.vocab)

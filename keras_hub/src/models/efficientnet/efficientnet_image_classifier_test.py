@@ -1,5 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.efficientnet.efficientnet_backbone import (
     EfficientNetBackbone,
@@ -18,7 +18,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class EfficientNetImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 16, 16, 3))
+        self.images = np.ones((2, 16, 16, 3), dtype="float32")
         self.labels = [0, 3]
         backbone = EfficientNetBackbone(
             width_coefficient=1.0,
@@ -51,14 +51,11 @@ class EfficientNetImageClassifierTest(TestCase):
         self.train_data = (self.images, self.labels)
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=EfficientNetImageClassifier,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 2),
+            expected_output_shape=(2, 1000),
         )
 
     @pytest.mark.extra_large

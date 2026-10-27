@@ -61,3 +61,15 @@ class DebertaV3TokenizerTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        proto = os.path.join(
+            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
+        )
+        self.init_kwargs = {"proto": proto, "_allow_python_workflow": False}
+        self.tokenizer = DebertaV3Tokenizer(**self.init_kwargs)

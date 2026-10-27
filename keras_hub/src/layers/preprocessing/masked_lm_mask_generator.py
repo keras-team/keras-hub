@@ -1,6 +1,15 @@
+import random
+
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
+)
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
+from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
 )
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -137,6 +146,15 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             )
         self.mask_token_id = mask_token_id
 
+        # The `tf_text` selectors are only needed on the TensorFlow path, so
+        # they are created lazily to keep `tensorflow-text` optional.
+        self._random_selector = None
+        self._mask_values_chooser = None
+
+    def _maybe_initialize_tf(self):
+        if self._random_selector is not None:
+            return
+        assert_tf_libs_installed(self.__class__.__name__)
         max_selections = self.mask_selection_length
         if max_selections is None:
             # Set a large number to remove the `max_selections_per_batch` cap.
@@ -154,7 +172,8 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
         )
 
     @preprocessing_function
-    def call(self, inputs):
+    def _call_tf(self, inputs):
+        self._maybe_initialize_tf()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
         (
@@ -192,6 +211,129 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             "mask_ids": mask_ids,
             "mask_weights": mask_weights,
         }
+
+    def _canonicalize_inputs_python(self, inputs):
+        """Force inputs to a 2D list of lists."""
+        if isinstance(inputs, np.ndarray):
+            inputs = inputs.tolist()
+        if not isinstance(inputs, tuple):
+            inputs = (inputs,)
+        if not inputs:
+            raise ValueError(
+                "At least one input is required for packing. "
+                f"Received: `inputs={inputs}`"
+            )
+
+        # canonicalize_python_inputs returns (x, batched) pairs.
+        pairs = [canonicalize_python_inputs(x) for x in inputs]
+        x, batched = list(zip(*pairs))
+        if len(set(batched)) != 1:
+            raise ValueError(
+                "All inputs for packing must have the same rank. "
+                f"Received: `inputs={inputs}`."
+            )
+        return x[0], batched[0]
+
+    def _call_python(self, inputs):
+        inputs, is_batched = self._canonicalize_inputs_python(inputs)
+
+        out_token_ids = []
+        out_mask_positions = []
+        out_mask_ids = []
+        out_mask_weights = []
+
+        for seq in inputs:
+            eligible_positions = [
+                i
+                for i, token_id in enumerate(seq)
+                if token_id not in self.unselectable_token_ids
+            ]
+
+            # Select positions
+            selected_positions = [
+                pos
+                for pos in eligible_positions
+                if random.random() < self.mask_selection_rate
+            ]
+
+            # Cap the selection if mask_selection_length is set
+            if (
+                self.mask_selection_length is not None
+                and len(selected_positions) > self.mask_selection_length
+            ):
+                random.shuffle(selected_positions)
+                selected_positions = selected_positions[
+                    : self.mask_selection_length
+                ]
+                selected_positions.sort()
+
+            seq_token_ids = list(seq)
+            seq_mask_positions = []
+            seq_mask_ids = []
+            seq_mask_weights = []
+
+            for pos in selected_positions:
+                orig_token = seq_token_ids[pos]
+                seq_mask_positions.append(pos)
+                seq_mask_ids.append(orig_token)
+                seq_mask_weights.append(1.0)
+
+                # Determine replacement value
+                r = random.random()
+                if r < self.mask_token_rate:
+                    new_token = self.mask_token_id
+                elif r < self.mask_token_rate + self.random_token_rate:
+                    new_token = random.randint(0, self.vocabulary_size - 1)
+                else:
+                    new_token = orig_token
+                seq_token_ids[pos] = new_token
+
+            # Padding if mask_selection_length is set
+            if self.mask_selection_length is not None:
+                padding_len = self.mask_selection_length - len(
+                    selected_positions
+                )
+                seq_mask_positions.extend([0] * padding_len)
+                seq_mask_ids.extend([0] * padding_len)
+                seq_mask_weights.extend([0.0] * padding_len)
+
+            out_token_ids.append(seq_token_ids)
+            out_mask_positions.append(seq_mask_positions)
+            out_mask_ids.append(seq_mask_ids)
+            out_mask_weights.append(seq_mask_weights)
+
+        if not is_batched:
+            out_token_ids = out_token_ids[0]
+            out_mask_positions = out_mask_positions[0]
+            out_mask_ids = out_mask_ids[0]
+            out_mask_weights = out_mask_weights[0]
+
+        def _canonicalize_outputs(outputs, dtype=None):
+            # Ragged outputs stay as (lists of) python lists. Rectangular
+            # outputs are converted to backend tensors, or NumPy arrays inside
+            # a Grain pipeline.
+            try:
+                arr = np.array(outputs, dtype=dtype or "int32")
+                if arr.dtype == object:
+                    return outputs
+                return convert_preprocessing_outputs_python(arr)
+            except (ValueError, TypeError):
+                return outputs
+
+        return {
+            "token_ids": _canonicalize_outputs(out_token_ids, "int32"),
+            "mask_positions": _canonicalize_outputs(
+                out_mask_positions, "int32"
+            ),
+            "mask_ids": _canonicalize_outputs(out_mask_ids, "int32"),
+            "mask_weights": _canonicalize_outputs(out_mask_weights, "float32"),
+        }
+
+    def call(self, inputs):
+        if self._use_tf_workflow():
+            return self._call_tf(inputs)
+        else:
+            return self._call_python(inputs)
 
     def get_config(self):
         config = super().get_config()

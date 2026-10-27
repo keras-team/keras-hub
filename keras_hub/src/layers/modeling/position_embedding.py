@@ -2,6 +2,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.vllm.context import get_vllm_context
 
 
 @keras_hub_export("keras_hub.layers.PositionEmbedding")
@@ -104,12 +105,8 @@ class PositionEmbedding(keras.layers.Layer):
         # than the sequence_length of the layer.
         position_embeddings = ops.convert_to_tensor(self.position_embeddings)
         if positions is None:
-            position_embeddings = ops.slice(
-                position_embeddings,
-                (start_index, 0),
-                (sequence_length, feature_length),
-            )
-        else:
+            positions = _vllm_serving_positions()  # None outside serving
+        if positions is not None:
             # Take care of unbatched `positions`.
             if len(ops.shape(positions)) == 1:
                 positions = ops.expand_dims(positions, axis=0)
@@ -117,8 +114,35 @@ class PositionEmbedding(keras.layers.Layer):
             position_embeddings = ops.take(
                 position_embeddings, positions, axis=0
             )
+        else:
+            position_embeddings = ops.slice(
+                position_embeddings,
+                (start_index, 0),
+                (sequence_length, feature_length),
+            )
 
         return ops.broadcast_to(position_embeddings, shape)
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+
+def _vllm_serving_positions():
+    """vLLM's per-token positions, or ``None`` outside serving.
+
+    Under vLLM's paged decode, tokens from many requests are packed into one
+    flat sequence, each at its own absolute position, so a contiguous
+    ``0..seq_len`` slice would not line up with the paged KV cache.
+    """
+    ctx = get_vllm_context()
+    if ctx is not None and ctx.positions is not None:
+        # (num_tokens, 1) matches the flattened serving token layout.
+        return ops.reshape(ctx.positions, (-1, 1))
+    if ctx is not None and ctx.paged_attention_func is not None:
+        # Serving with no positions would misplace every learned embedding;
+        # fail loudly instead of falling back to 0..seq_len.
+        raise ValueError(
+            "vLLM serving context is active but carries no per-token "
+            "positions; learned position embeddings cannot be computed."
+        )
+    return None

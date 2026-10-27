@@ -21,7 +21,7 @@ is considered as a common noun and not an abbreviation anymore.
 ## Naming of Models and Presets
 
 Naming of models and presets is a difficult and important element of our
-library usability. In general we try to to follow the branding of "upstream"
+library usability. In general we try to follow the branding of "upstream"
 model naming, subject to the consistency constraints laid out here.
 
 - The model and preset names should be recognizable to users familiar with the

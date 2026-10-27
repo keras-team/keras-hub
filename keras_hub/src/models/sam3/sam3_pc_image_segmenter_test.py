@@ -1,3 +1,6 @@
+from unittest import mock
+
+import keras
 import numpy as np
 import pytest
 
@@ -19,6 +22,7 @@ from keras_hub.src.models.sam3.sam3_text_encoder import SAM3TextEncoder
 from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
 from keras_hub.src.models.sam3.sam3_vision_encoder import SAM3VisionEncoder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils import tensor_utils
 
 
 class SAM3PromptableConceptImageSegmenterTest(TestCase):
@@ -165,6 +169,10 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
                 },
             )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="torchvision::nms is not registered in the torch.export op set.",
+    )
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
@@ -173,3 +181,12 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             comparison_mode="statistical",
             output_thresholds={"*": {"max": 1e-2, "mean": 5e-3}},
         )
+
+    def test_preprocessor_requires_tensorflow(self):
+        # The preprocessor's `call` is TensorFlow only, so it asserts at
+        # construction rather than failing cryptically on first call.
+        with mock.patch.object(tensor_utils, "tf", None):
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                SAM3PromptableConceptImageSegmenterPreprocessor(
+                    self.tokenizer, self.image_converter
+                )

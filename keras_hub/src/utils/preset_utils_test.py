@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 import keras
 import pytest
@@ -14,7 +15,18 @@ from keras_hub.src.models.gemma.gemma_backbone import GemmaBackbone
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
+from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
+
+try:
+    from kagglehub.exceptions import KaggleApiHTTPError
+except ImportError:
+    KaggleApiHTTPError = None
+
+try:
+    from huggingface_hub.utils import EntryNotFoundError
+except ImportError:
+    EntryNotFoundError = None
 
 
 class PresetUtilsTest(TestCase):
@@ -193,3 +205,47 @@ class PresetUtilsTest(TestCase):
         # Verify error handling.
         with self.assertRaisesRegex(ValueError, "is an invalid json"):
             upload_preset("kaggle://test/test/test", local_preset_dir)
+
+    def test_get_file_raises_file_not_found(self):
+        local_dir = self.get_temp_dir()
+        fake_path = "does_not_exist.json"
+
+        with self.assertRaises(FileNotFoundError):
+            get_file(local_dir, fake_path)
+
+    @pytest.mark.skipif(
+        KaggleApiHTTPError is None, reason="kagglehub is not installed"
+    )
+    def test_kaggle_error_translation(self):
+        preset = "kaggle://keras/bert/keras/bert_base_en"
+        # A 404 is a plain missing file.
+        error = KaggleApiHTTPError("404 Client Error.")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(FileNotFoundError, "doesn't exist"):
+                get_file(preset, "missing.json")
+        # A 403 is still FileNotFoundError (check_file_exists relies on
+        # it), but the message points at gated-model consent.
+        error = KaggleApiHTTPError("403 Client Error: Forbidden")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(FileNotFoundError, "accept its terms"):
+                get_file(preset, "missing.json")
+        # Any other Kaggle API error should surface as-is, not as a
+        # missing file.
+        error = KaggleApiHTTPError("1994")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(ValueError, "1994"):
+                get_file(preset, "vocabulary.json")
+        # Unrelated ValueErrors propagate as-is, never as a missing file.
+        error = ValueError("some other error")
+        with mock.patch("kagglehub.model_download", side_effect=error):
+            with self.assertRaisesRegex(ValueError, "some other error"):
+                get_file(preset, "vocabulary.json")
+
+    @pytest.mark.skipif(
+        EntryNotFoundError is None, reason="huggingface_hub is not installed"
+    )
+    def test_hf_missing_entry_translation(self):
+        error = EntryNotFoundError("404 Client Error")
+        with mock.patch("huggingface_hub.hf_hub_download", side_effect=error):
+            with self.assertRaises(FileNotFoundError):
+                get_file("hf://username/bert_base_en", "missing.json")

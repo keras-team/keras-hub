@@ -181,6 +181,10 @@ def convert_backbone_config(transformers_config):
             "hidden_activation", "gelu_approximate"
         )
 
+    rope_theta = text_config.get("rope_parameters", {}).get("rope_theta")
+    if rope_theta is None:
+        rope_theta = text_config["rope_theta"]
+
     return {
         "text_vocab_size": text_config["vocab_size"],
         "text_hidden_size": text_config["hidden_size"],
@@ -193,7 +197,7 @@ def convert_backbone_config(transformers_config):
         "hidden_activation": hidden_activation,
         "layer_types": text_config["layer_types"],
         "sliding_window": text_config["sliding_window"],
-        "rope_theta": text_config["rope_theta"],
+        "rope_theta": rope_theta,
         "max_position_embeddings": text_config["max_position_embeddings"],
         "vocab_size_per_layer_input": text_config["vocab_size_per_layer_input"],
         "hidden_size_per_layer_input": text_config[

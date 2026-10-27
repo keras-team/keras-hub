@@ -197,32 +197,23 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
             0,
         )
 
-        # We define cache as tuple
-        cache = (s_cache, c_cache)
+        # We define cache as tuple. The encoder tensors ride along so the
+        # sampler body closes over nothing: OpenVINO requires a `while_loop`
+        # body to reference only its own loop variables, and `BeamSampler`
+        # expands every cache leaf to `num_samples` for us.
+        cache = (s_cache, c_cache, encoder_hidden_states, encoder_padding_mask)
         hidden_states = ops.zeros_like(token_0, dtype="float32")
 
         def next(prompt, cache, index):
-            s_c, c_c = cache
-
-            # Handle beam search replication if needed
-            curr_batch = ops.shape(prompt)[0]
-            enc_batch = ops.shape(encoder_hidden_states)[0]
-
-            enc_states = encoder_hidden_states
-            enc_mask = encoder_padding_mask
-
-            if curr_batch != enc_batch:
-                repeats = curr_batch // enc_batch
-                enc_states = ops.repeat(enc_states, repeats, axis=0)
-                enc_mask = ops.repeat(enc_mask, repeats, axis=0)
+            s_c, c_c, encoder_hidden_states, encoder_padding_mask = cache
 
             cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
             prompt_slice = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             logits, h_states, next_s, next_c = self.call_decoder_with_cache(
-                enc_states,
-                enc_mask,
+                encoder_hidden_states,
+                encoder_padding_mask,
                 prompt_slice,
                 None,
                 s_c,
@@ -231,16 +222,12 @@ class EdRecSeq2SeqLM(Seq2SeqLM):
                 None,  # Cross cache re-use
             )
 
-            # If the backbone returns the full sequence, we only need the last
-            # token.
-            if ops.shape(logits)[1] != 1:
-                logits = ops.take(logits, [cache_index], axis=1)
-                h_states = ops.take(h_states, [cache_index], axis=1)
-
+            # `prompt_slice` is a single token, so `logits` and `h_states`
+            # already have a sequence dim of 1.
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(h_states, axis=1),
-                (next_s, next_c),
+                (next_s, next_c, encoder_hidden_states, encoder_padding_mask),
             )
 
         new_tokens = self.sampler(

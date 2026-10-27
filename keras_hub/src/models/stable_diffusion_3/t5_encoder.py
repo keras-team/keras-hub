@@ -77,14 +77,12 @@ class T5Encoder(keras.Model):
         encoder_attention_mask = encoder_padding_mask_input[:, None, :]
         position_bias = None
         for transformer_layer in self.encoder_transformer_layers:
-            output = transformer_layer(
+            x, position_bias = transformer_layer(
                 x,
                 attention_mask=encoder_attention_mask,
                 position_bias=position_bias,
                 use_causal_mask=False,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
         x = self.encoder_layer_norm(x)
         x = self.encoder_dropout(x)
         sequence_output = x

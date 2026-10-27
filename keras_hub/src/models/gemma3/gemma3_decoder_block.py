@@ -210,7 +210,7 @@ class Gemma3DecoderBlock(keras.layers.Layer):
         batch_size = ops.shape(x)[0]
         input_length = output_length = ops.shape(x)[1]
         if cache is not None:
-            input_length = ops.shape(cache)[2]
+            input_length = ops.shape(cache[0])[1]
 
         if self.use_bidirectional_attention:
             # `output_length` and `input_length` will be the same in this case

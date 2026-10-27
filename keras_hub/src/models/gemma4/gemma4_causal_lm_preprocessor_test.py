@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -8,6 +10,7 @@ from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter,
 )
+from keras_hub.src.models.gemma4.gemma4_tokenizer import Gemma4Tokenizer
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
@@ -157,6 +160,15 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_text_generate_preprocess_no_start_token(self):
+        input_data = "the quick brown fox"
+        preprocessor = Gemma4CausalLMPreprocessor(
+            **self.init_text_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
+
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <|image|>",
@@ -172,6 +184,31 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["padding_mask"], [1] * 12 + [0] * 8)
         self.assertAllEqual(x["vision_indices"], list(range(6, 11)) + [0] * 5)
         self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
+        self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
+
+    def test_generate_preprocess_no_start_token(self):
+        input_data = {
+            "prompts": "the quick brown fox <|image|>",
+            "pixel_values": np.ones((2, 1, 48), dtype="float32"),
+            "pixel_position_ids": np.ones((2, 1, 2), dtype="int32"),
+        }
+        preprocessor = Gemma4CausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x["token_ids"],
+            [9, 14, 10, 12, 4, 8, 8, 8, 8, 8, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(
+            x["padding_mask"],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        self.assertAllEqual(x["vision_indices"], [5, 6, 7, 8, 9, 0, 0, 0, 0, 0])
+        self.assertAllEqual(
+            x["vision_mask"],
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
         self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
 
     def test_text_generate_postprocess(self):
@@ -312,6 +349,48 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertEqual(
             expanded_cleared.numpy()[0], expanded_default.numpy()[0]
         )
+
+    def test_generate_preprocess_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        )
+        tokenizer = Gemma4Tokenizer(proto=proto_path)
+        image_converter = Gemma4ImageConverter(image_size=(4, 4), patch_size=4)
+        preprocessor = Gemma4CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        prompts = ["the quick brown fox", "the quick"]
+        output = preprocessor.generate_preprocess(prompts, sequence_length=20)
+        self.assertEqual(output["token_ids"].shape[0], 2)
+        self.assertEqual(output["padding_mask"].shape[0], 2)
+
+    def test_call_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma4_test_vocab.spm"
+        )
+        tokenizer = Gemma4Tokenizer(proto=proto_path)
+        # image_converter must be set: the text-only branch of `call()`
+        # returns before `token_ids` is used to compute `batch_size`.
+        image_converter = Gemma4ImageConverter(image_size=(4, 4), patch_size=4)
+        preprocessor = Gemma4CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        input_data = {
+            "prompts": ["the quick brown fox", "the quick"],
+            "responses": ["round", "round"],
+        }
+        output = preprocessor(input_data)
+        self.assertEqual(output[0]["token_ids"].shape[0], 2)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

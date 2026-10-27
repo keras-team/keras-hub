@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -7,6 +9,7 @@ from keras_hub.src.models.gemma3.gemma3_causal_lm_preprocessor import (
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter,
 )
+from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 
@@ -130,6 +133,15 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    def test_text_generate_preprocess_no_start_token(self):
+        input_data = "the quick brown fox"
+        preprocessor = Gemma3CausalLMPreprocessor(
+            **self.init_text_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
+
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <start_of_image>",
@@ -144,6 +156,24 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["padding_mask"], [1] * 14 + [0] * 6)
         self.assertAllEqual(x["vision_indices"], list(range(7, 12)) + [0] * 5)
         self.assertAllEqual(x["vision_mask"], [0] * 7 + [1] * 5 + [0] * 8)
+        self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
+
+    def test_generate_preprocess_no_start_token(self):
+        input_data = {
+            "prompts": "the quick brown fox <start_of_image>",
+            "images": np.ones((8, 8, 3)),
+        }
+        preprocessor = Gemma3CausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x["token_ids"],
+            [9, 14, 10, 12, 16, 4] + [8] * 5 + [5, 16] + [0] * 7,
+        )
+        self.assertAllEqual(x["padding_mask"], [1] * 13 + [0] * 7)
+        self.assertAllEqual(x["vision_indices"], list(range(6, 11)) + [0] * 5)
+        self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
         self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
 
     def test_text_generate_postprocess(self):
@@ -180,6 +210,48 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
                 "responses": ["hello", "", ""],
             }
             self.text_preprocessor(input_data)
+
+    def test_generate_preprocess_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma3_test_vocab.spm"
+        )
+        tokenizer = Gemma3Tokenizer(proto=proto_path)
+        image_converter = Gemma3ImageConverter(image_size=(4, 4))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        prompts = ["the quick brown fox", "the quick"]
+        output = preprocessor.generate_preprocess(prompts, sequence_length=20)
+        self.assertEqual(output["token_ids"].shape[0], 2)
+        self.assertEqual(output["padding_mask"].shape[0], 2)
+
+    def test_call_with_python_only_tokenizer(self):
+        proto_path = os.path.join(
+            self.get_test_data_dir(), "gemma3_test_vocab.spm"
+        )
+        tokenizer = Gemma3Tokenizer(proto=proto_path)
+        # image_converter must be set: the text-only branch of `call()`
+        # returns before `token_ids` is used to compute `batch_size`.
+        image_converter = Gemma3ImageConverter(image_size=(4, 4))
+        preprocessor = Gemma3CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            image_converter=image_converter,
+            sequence_length=20,
+            max_images_per_prompt=2,
+            num_vision_tokens_per_image=5,
+        )
+        # Prompts tokenize to different lengths -> non-rectangular list.
+        input_data = {
+            "prompts": ["the quick brown fox", "the quick"],
+            "responses": ["round", "round"],
+        }
+        output = preprocessor(input_data)
+        self.assertEqual(output[0]["token_ids"].shape[0], 2)
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large

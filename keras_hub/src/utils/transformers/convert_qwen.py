@@ -7,6 +7,11 @@ backbone_cls = QwenBackbone
 
 
 def convert_backbone_config(transformers_config):
+    rope_theta = transformers_config.get("rope_parameters", {}).get(
+        "rope_theta"
+    )
+    if rope_theta is None:
+        rope_theta = transformers_config["rope_theta"]
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "hidden_dim": transformers_config["hidden_size"],
@@ -15,7 +20,7 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "intermediate_dim": transformers_config["intermediate_size"],
         "layer_norm_epsilon": transformers_config["rms_norm_eps"],
-        "rope_max_wavelength": transformers_config["rope_theta"],
+        "rope_max_wavelength": rope_theta,
         "use_sliding_window": transformers_config["use_sliding_window"],
         "sliding_window_size": transformers_config["sliding_window"],
         "tie_word_embeddings": transformers_config["tie_word_embeddings"],
@@ -132,6 +137,12 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
+
+    # Handle different merge formats
+    if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
+        # Convert list of lists format [["Ġ", "a"], ["Ġ", "b"]]
+        # to space-separated strings
+        merges = [" ".join(merge) for merge in merges]
 
     # Load all special tokens with the exception of "reserved" ones.
     special_tokens = set()

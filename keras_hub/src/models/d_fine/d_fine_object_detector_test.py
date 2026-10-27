@@ -174,6 +174,10 @@ class DFineObjectDetectorTest(TestCase):
             input_data=self.images,
         )
 
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="D-FINE's multi-scale features hit a torch.export shape guard.",
+    )
     def test_litert_export(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
         init_kwargs = {

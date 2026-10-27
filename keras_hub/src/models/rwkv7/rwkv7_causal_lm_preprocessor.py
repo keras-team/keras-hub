@@ -6,6 +6,7 @@ from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -158,6 +159,8 @@ class RWKV7CausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(x, str):
             x = [x]
 
+        # This method is implemented with TensorFlow ops only.
+        assert_tf_installed("RWKV7CausalLMPreprocessor.generate_preprocess()")
         if not self.built:
             self.build(None)
         # Align with Keras API

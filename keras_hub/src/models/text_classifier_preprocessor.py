@@ -5,6 +5,7 @@ from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_hub.src.models.preprocessor import Preprocessor
+from keras_hub.src.utils.tensor_utils import compute_padding_mask
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -79,11 +80,6 @@ class TextClassifierPreprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.truncate = truncate
 
-        # TODO(hongyu): Since `MultiSegmentPacker` requires TF workflow, we
-        # currently disable the Python workflow for
-        # `TextClassifierPreprocessor`.
-        self.tokenizer._allow_python_workflow = False
-
     def build(self, input_shape):
         super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer
@@ -97,7 +93,7 @@ class TextClassifierPreprocessor(Preprocessor):
         )
 
     @preprocessing_function
-    def call(self, x, y=None, sample_weight=None):
+    def _call_tf(self, x, y=None, sample_weight=None):
         x = x if isinstance(x, tuple) else (x,)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, segment_ids = self.packer(x)
@@ -107,6 +103,26 @@ class TextClassifierPreprocessor(Preprocessor):
             "segment_ids": segment_ids,
         }
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def _call_python(self, x, y=None, sample_weight=None):
+        x = x if isinstance(x, tuple) else (x,)
+        x = tuple(self.tokenizer(segment) for segment in x)
+        token_ids, segment_ids = self.packer(x)
+        padding_mask = compute_padding_mask(
+            token_ids, self.tokenizer.pad_token_id
+        )
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+            "segment_ids": segment_ids,
+        }
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+    def call(self, x, y=None, sample_weight=None):
+        if self._use_tf_workflow():
+            return self._call_tf(x, y, sample_weight)
+        else:
+            return self._call_python(x, y, sample_weight)
 
     def get_config(self):
         config = super().get_config()

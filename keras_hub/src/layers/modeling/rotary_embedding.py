@@ -35,8 +35,13 @@ class RotaryEmbedding(keras.layers.Layer):
         original_max_position_embeddings: int. Original maximum position
             embeddings for YaRN scaling. Only used when rope_type="yarn".
             Defaults to 4096.
-        truncate: bool. Whether to apply truncation for YaRN scaling. Only used
-            when rope_type="yarn". Defaults to False.
+        truncate: bool. Whether to round the YaRN correction range to whole
+            dimensions. Only used when rope_type="yarn". Defaults to True,
+            matching the reference YaRN implementation.
+        attention_factor: float. The YaRN temperature scale applied to the
+            cos/sin embeddings. Only used when rope_type="yarn". Defaults to
+            `None`, which derives the scale as `0.1 * log(scaling_factor) +
+            1.0`. Pass an explicit value to override this default.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -85,10 +90,11 @@ class RotaryEmbedding(keras.layers.Layer):
         beta_fast=32.0,
         beta_slow=1.0,
         original_max_position_embeddings=4096,
-        truncate=False,
+        truncate=True,
         sequence_axis=1,
         feature_axis=-1,
         denominator_dim=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -104,6 +110,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.original_max_position_embeddings = original_max_position_embeddings
         self.truncate = truncate
         self.denominator_dim = denominator_dim
+        self.attention_factor = attention_factor
         self.built = True
 
     def _normalize_axes(self, input_shape):
@@ -164,7 +171,7 @@ class RotaryEmbedding(keras.layers.Layer):
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         x1, x2 = ops.split(tensor, 2, axis=-1)
-        # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
+        # Avoid `ops.concatenate` for now, to avoid an obscure bug with XLA
         # compilation on jax. We should be able to remove this once the
         # following PR is in all jax releases we care about:
         # https://github.com/openxla/xla/pull/7875
@@ -198,16 +205,6 @@ class RotaryEmbedding(keras.layers.Layer):
             if len(ops.shape(positions)) == 1:
                 positions = ops.expand_dims(positions, axis=batch_axis)
 
-        if (
-            self.rope_type == "yarn"
-            and self.truncate
-            and self.original_max_position_embeddings is not None
-        ):
-            positions = ops.minimum(
-                positions,
-                ops.cast(self.original_max_position_embeddings, "float32"),
-            )
-
         freq = ops.einsum("bi,j->bij", positions, inverse_freq)
 
         embedding = ops.stack((freq, freq), axis=-2)
@@ -223,14 +220,22 @@ class RotaryEmbedding(keras.layers.Layer):
         sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
 
         if self.rope_type == "yarn":
-            # YaRN temperature scaling
-            factor = ops.add(
-                ops.multiply(
-                    ops.cast(0.1, self.compute_dtype),
-                    ops.log(ops.cast(self.scaling_factor, self.compute_dtype)),
-                ),
-                ops.cast(1.0, self.compute_dtype),
-            )
+            # YaRN temperature scaling. Defaults to the standard
+            # `mscale=1.0` formula; `attention_factor` overrides it for
+            # checkpoints that derive a different scale from
+            # `mscale`/`mscale_all_dim`.
+            if self.attention_factor is not None:
+                factor = ops.cast(self.attention_factor, self.compute_dtype)
+            else:
+                factor = ops.add(
+                    ops.multiply(
+                        ops.cast(0.1, self.compute_dtype),
+                        ops.log(
+                            ops.cast(self.scaling_factor, self.compute_dtype)
+                        ),
+                    ),
+                    ops.cast(1.0, self.compute_dtype),
+                )
             cos_emb = cos_emb * factor
             sin_emb = sin_emb * factor
         return cos_emb, sin_emb
@@ -245,7 +250,10 @@ class RotaryEmbedding(keras.layers.Layer):
             "float32",
         )
         freq_range = idx / denom
-        inv = ops.power(ops.cast(self.max_wavelength, "float32"), -freq_range)
+        # Divide by the power, as HF does. `power(base, -x)` rounds
+        # differently in `float32`.
+        base = ops.cast(self.max_wavelength, "float32")
+        inv = 1.0 / ops.power(base, freq_range)
 
         if self.rope_type == "linear":
             return inv / ops.cast(self.scaling_factor, "float32")
@@ -300,7 +308,7 @@ class RotaryEmbedding(keras.layers.Layer):
 
         # Clamp to valid range
         low = ops.maximum(low, ops.cast(0, "float32"))
-        high = ops.minimum(high, ops.cast(rotary_dim // 2 - 1, "float32"))
+        high = ops.minimum(high, ops.cast(rotary_dim - 1, "float32"))
 
         # Linear ramp function
         dim_half = rotary_dim // 2
@@ -340,6 +348,7 @@ class RotaryEmbedding(keras.layers.Layer):
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
                 "denominator_dim": self.denominator_dim,
+                "attention_factor": self.attention_factor,
             }
         )
         return config

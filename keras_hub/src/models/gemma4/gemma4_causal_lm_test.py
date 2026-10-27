@@ -24,11 +24,12 @@ from keras_hub.src.models.gemma4.gemma4_image_converter import (
 from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
     Gemma4VisionEncoder,
 )
+from keras_hub.src.tests.mocks.mock_attention import assert_fused_attention_used
+from keras_hub.src.tests.mocks.mock_attention import patch_dot_product_attention
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
@@ -180,16 +181,10 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the JAX backend.")
 
-        with patch(
-            "keras.src.backend.nn.dot_product_attention",
-            wraps=keras.src.backend.nn.dot_product_attention,
-        ) as mock_func:
+        with patch_dot_product_attention() as mock_func:
             causal_lm = Gemma4CausalLM(**self.text_init_kwargs)
             causal_lm.generate("the quick brown fox")
-            if running_on_gpu():
-                mock_func.assert_called()
-            else:
-                mock_func.assert_not_called()
+            assert_fused_attention_used(mock_func)
 
     def test_text_early_stopping(self):
         causal_lm = Gemma4CausalLM(**self.text_init_kwargs)

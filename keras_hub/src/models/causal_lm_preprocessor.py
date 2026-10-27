@@ -3,9 +3,9 @@ import keras
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.preprocessor import Preprocessor
-from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+from keras_hub.src.utils.tensor_utils import strip_to_ragged_python
 
 
 @keras_hub_export("keras_hub.models.CausalLMPreprocessor")
@@ -67,10 +67,7 @@ class CausalLMPreprocessor(Preprocessor):
         add_end_token=True,
         **kwargs,
     ):
-        _allow_python_workflow = kwargs.pop("_allow_python_workflow", True)
-        super().__init__(
-            _allow_python_workflow=_allow_python_workflow, **kwargs
-        )
+        super().__init__(**kwargs)
         self.tokenizer = tokenizer
         self.packer = None
         self.sequence_length = sequence_length
@@ -89,7 +86,7 @@ class CausalLMPreprocessor(Preprocessor):
         )
         self.built = True
 
-    def _call(self, x, y=None, sample_weight=None, sequence_length=None):
+    def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         sequence_length = sequence_length or self.sequence_length
         x = self.tokenizer(x)
         # Pad with one extra token to account for the truncation below.
@@ -110,12 +107,12 @@ class CausalLMPreprocessor(Preprocessor):
 
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
-        return self._call(
+        return self._call_python(
             x, y=y, sample_weight=sample_weight, sequence_length=sequence_length
         )
 
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        if in_tf_function():
+        if self._use_tf_workflow():
             return self._call_tf(
                 x,
                 y=y,
@@ -123,20 +120,23 @@ class CausalLMPreprocessor(Preprocessor):
                 sequence_length=sequence_length,
             )
         else:
-            return self._call(
+            return self._call_python(
                 x,
                 y=y,
                 sample_weight=sample_weight,
                 sequence_length=sequence_length,
             )
 
-    def _generate_preprocess(self, x, sequence_length=None):
+    def _generate_preprocess_python(self, x, sequence_length=None):
         if not self.built:
             self.build(None)
 
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
+            x,
+            sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
+            add_end_value=False,
         )
         return {
             "token_ids": token_ids,
@@ -145,7 +145,9 @@ class CausalLMPreprocessor(Preprocessor):
 
     @preprocessing_function
     def _generate_preprocess_tf(self, x, sequence_length=None):
-        return self._generate_preprocess(x, sequence_length=sequence_length)
+        return self._generate_preprocess_python(
+            x, sequence_length=sequence_length
+        )
 
     def generate_preprocess(self, x, sequence_length=None):
         """Convert strings to integer token input for generation.
@@ -159,35 +161,24 @@ class CausalLMPreprocessor(Preprocessor):
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
-        if in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_preprocess_tf(
                 x, sequence_length=sequence_length
             )
         else:
-            return self._generate_preprocess(x, sequence_length=sequence_length)
+            return self._generate_preprocess_python(
+                x, sequence_length=sequence_length
+            )
 
-    def _generate_postprocess(self, x):
+    def _generate_postprocess_python(self, x):
         if not self.built:
             self.build(None)
 
-        def _strip_to_ragged(token_ids, masks, ids_to_strip):
-            """Remove masked and special tokens from a sequence."""
-            for id in ids_to_strip:
-                masks = masks & (token_ids != id)
-            if token_ids.ndim == 1:
-                token_ids = token_ids[masks].tolist()
-            else:
-                ragged_ids = []
-                for i in range(token_ids.shape[0]):
-                    ragged_ids.append(token_ids[i][masks[i]].tolist())
-                token_ids = ragged_ids
-            return token_ids
-
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         ids_to_strip = getattr(self.tokenizer, "special_token_ids", [])
-        token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
-        padding_mask = keras.ops.convert_to_numpy(padding_mask).astype("bool")
-        token_ids = _strip_to_ragged(token_ids, padding_mask, ids_to_strip)
+        token_ids = strip_to_ragged_python(
+            token_ids, padding_mask, ids_to_strip
+        )
         return self.tokenizer.detokenize(token_ids)
 
     @preprocessing_function
@@ -208,10 +199,10 @@ class CausalLMPreprocessor(Preprocessor):
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
-        if in_tf_function():
+        if self._use_tf_workflow():
             return self._generate_postprocess_tf(x)
         else:
-            return self._generate_postprocess(x)
+            return self._generate_postprocess_python(x)
 
     def get_config(self):
         config = super().get_config()

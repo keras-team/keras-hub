@@ -7,6 +7,7 @@ import numpy as np
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -256,6 +257,8 @@ class RWKVTokenizer(tokenizer.Tokenizer):
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"
             )
+        # `tokenize` and `detokenize` are implemented with TensorFlow ops only.
+        assert_tf_installed("RWKVTokenizer")
 
         super().__init__(dtype=dtype, **kwargs)
 
