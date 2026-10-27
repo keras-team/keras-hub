@@ -16,6 +16,7 @@ from keras_hub.src.utils.transformers import convert_diffusion_gemma
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
+from keras_hub.src.utils.transformers import convert_embedding_gemma2
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
@@ -32,6 +33,8 @@ from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import (
     convert_openai_privacy_filter,  # noqa: E501
 )
+from keras_hub.src.utils.transformers import convert_muse_glimmer
+from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -84,6 +87,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "embedding_gemma2":
+            self.converter = convert_embedding_gemma2
         elif model_type == "gemma4_assistant":
             self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
@@ -99,6 +104,10 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
+        elif model_type == "muse_glimmer":
+            self.converter = convert_muse_glimmer
+        elif model_type == "muse_glimmer_assistant":
+            self.converter = convert_muse_glimmer_assistant
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":
