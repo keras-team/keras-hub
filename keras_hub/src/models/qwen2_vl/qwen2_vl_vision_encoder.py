@@ -89,7 +89,11 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
         # slice is exactly `chunk` rows (dynamic slice *sizes* are not
         # XLA-compilable inside generate_step); the overlapping tail chunk
         # rewrites identical values.
-        chunk = 2048
+        #
+        # `chunk` also bounds the (heads, chunk, seq) score tensor below
+        # 2**31 elements: several TF GPU kernels index with int32 and fault
+        # past that (e.g. 16 heads x 2048 x 80k patches overflows).
+        chunk = 1024
 
         def _attend_queries(q_c, seg_c):
             """(H, chunk, D) queries vs all keys -> (H, chunk, D)."""
