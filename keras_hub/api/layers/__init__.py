@@ -96,6 +96,9 @@ from keras_hub.src.models.densenet.densenet_image_converter import (
 from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
     DepthAnythingImageConverter as DepthAnythingImageConverter,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_image_converter import (
+    DiffusionGemmaImageConverter as DiffusionGemmaImageConverter,
+)
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
 )
@@ -104,6 +107,15 @@ from keras_hub.src.models.dinov3.dinov3_image_converter import (
 )
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (
+    EmbeddingGemma2AudioConverter as EmbeddingGemma2AudioConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter import (
+    EmbeddingGemma2ImageConverter as EmbeddingGemma2ImageConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (
+    EmbeddingGemma2VideoConverter as EmbeddingGemma2VideoConverter,
 )
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,

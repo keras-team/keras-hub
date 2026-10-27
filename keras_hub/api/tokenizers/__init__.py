@@ -28,11 +28,17 @@ from keras_hub.src.models.clip.clip_tokenizer import (
 from keras_hub.src.models.deberta_v3.deberta_v3_tokenizer import (
     DebertaV3Tokenizer as DebertaV3Tokenizer,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_tokenizer import (
+    DiffusionGemmaTokenizer as DiffusionGemmaTokenizer,
+)
 from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer as DistilBertTokenizer,
 )
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer as EmbeddingGemma2Tokenizer,
 )
 from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_tokenizer import (
