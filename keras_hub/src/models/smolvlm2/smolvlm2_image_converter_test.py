@@ -343,26 +343,35 @@ class SmolVLM2ImageConverterTest(TestCase):
         """
         import tensorflow as tf
 
-        for size in (512, 2048, 8192):
-            converter = SmolVLM2ImageConverter(
-                max_image_size=16, size=size, do_image_splitting=False
-            )
-            for h, w in [
-                (480, 640),
-                (640, 480),
-                (333, 517),
-                (517, 333),
-                (1, 1),
-                (7, 5),
-                (2500, 5000),
-                (5000, 2500),
-            ]:
-                expected = converter._sizes_for(h, w)
-                got = converter._sizes_for_dynamic(
-                    tf.constant(h, "int32"), tf.constant(w, "int32")
+        cases = [
+            (480, 640),
+            (640, 480),
+            (333, 517),
+            (517, 333),
+            (1, 1),
+            (7, 5),
+            (2500, 5000),
+            (5000, 2500),
+        ]
+        # In production this helper only runs from `_call_tf`, which
+        # `@preprocessing_function` already pins to CPU. Calling it directly
+        # here would place it on the GPU when one is visible, where TF's
+        # float64 `Floor` is a JIT kernel that needs libdevice and fails on
+        # the GPU CI runners. Match the production placement.
+        with tf.device("/CPU:0"):
+            for size in (512, 2048, 8192):
+                converter = SmolVLM2ImageConverter(
+                    max_image_size=16, size=size, do_image_splitting=False
                 )
-                got = (int(got[0].numpy()), int(got[1].numpy()))
-                self.assertEqual(got, expected, msg=f"size={size} hw={h, w}")
+                for h, w in cases:
+                    expected = converter._sizes_for(h, w)
+                    got = converter._sizes_for_dynamic(
+                        tf.constant(h, "int32"), tf.constant(w, "int32")
+                    )
+                    got = (int(got[0].numpy()), int(got[1].numpy()))
+                    self.assertEqual(
+                        got, expected, msg=f"size={size} hw={h, w}"
+                    )
 
     def _pillow_pipeline(self, image, converter):
         """HF's two Pillow resizes: longest edge to `size`, then square."""
