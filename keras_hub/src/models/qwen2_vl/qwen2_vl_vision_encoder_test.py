@@ -111,8 +111,8 @@ class Qwen2VLVisionEncoderTest(TestCase):
         # atol is loose enough for fp32 reduction-order noise on GPU
         # (different total sequence lengths → different matmul tiling),
         # but far tighter than a real cross-segment attention leak.
-        np.testing.assert_allclose(joint[:n_a], out_a, atol=5e-3, rtol=5e-3)
-        np.testing.assert_allclose(joint[n_a:], out_b, atol=5e-3, rtol=5e-3)
+        np.testing.assert_allclose(joint[:n_a], out_a, atol=1e-3, rtol=1e-3)
+        np.testing.assert_allclose(joint[n_a:], out_b, atol=1e-3, rtol=1e-3)
 
     def test_empty_input(self):
         """Zero-patch input returns an empty output (text-only path)."""
