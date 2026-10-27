@@ -288,7 +288,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         response_mask = segment_ids == 1
 
         if not is_batched:
-            reshape = tf.reshape if is_tf_tensor else np.reshape
+            reshape = tf.reshape if is_tf_tensor else keras.ops.reshape
             token_ids = reshape(token_ids, (sequence_length,))
             padding_mask = reshape(padding_mask, (sequence_length,))
             response_mask = reshape(response_mask, (sequence_length,))
