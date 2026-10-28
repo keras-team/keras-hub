@@ -35,6 +35,12 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
         self.assertEqual(tokenizer.pad_token_id, self.vocab["<|endoftext|>"])
         self.assertIsNone(tokenizer.start_token_id)
 
+    def test_errors_missing_special_tokens(self):
+        vocab = dict(self.vocab)
+        del vocab["<|endoftext|>"]
+        with self.assertRaises(ValueError):
+            OpenAIPrivacyFilterTokenizer(vocabulary=vocab, merges=self.merges)
+
     def test_python_workflow_uses_o200k_split(self):
         # The o200k pattern splits digit runs into groups of at most three
         # and keeps a run of spaces before a word separate from the word.

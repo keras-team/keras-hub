@@ -11,24 +11,21 @@ backbone_cls = OpenAIPrivacyFilterBackbone
 
 
 def convert_task_config(transformers_config):
-    return {"num_classes": len(transformers_config["id2label"])}
+    return {
+        "num_classes": len(transformers_config["id2label"]),
+        "classifier_dropout": transformers_config["classifier_dropout"],
+    }
 
 
 def convert_backbone_config(transformers_config):
     rope_params = transformers_config.get("rope_parameters", {})
     if rope_params.get("rope_type") != "yarn":
         raise ValueError("rope_type must be 'yarn'")
-    if rope_params.get("beta_fast") != 32:
-        raise ValueError("beta_fast must be 32")
-    if rope_params.get("beta_slow") != 1:
-        raise ValueError("beta_slow must be 1")
-    if rope_params.get("original_max_position_embeddings") != 4096:
-        raise ValueError("original_max_position_embeddings must be 4096")
-    if rope_params.get("truncate", False) is not False:
-        raise ValueError("truncate must be False")
     if transformers_config.get("attention_bias", True) is not True:
         raise ValueError("attention_bias must be True")
 
+    # HF config.json omits swiglu_alpha and swiglu_limit when they match
+    # defaults.
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -36,17 +33,22 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": transformers_config["num_key_value_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
-        "head_dim": transformers_config.get("head_dim", 64),
+        "head_dim": transformers_config["head_dim"],
         "num_experts": transformers_config["num_local_experts"],
         "top_k": transformers_config["num_experts_per_tok"],
-        "rope_max_wavelength": rope_params.get(
-            "rope_theta",
-            transformers_config.get("rope_theta", 150000.0),
-        ),
-        "rope_scaling_factor": rope_params.get("factor", 32.0),
-        "rms_norm_eps": transformers_config.get("rms_norm_eps", 1e-5),
-        "sliding_window": transformers_config.get("sliding_window", 128),
-        "attention_dropout": transformers_config.get("attention_dropout", 0.0),
+        "rope_max_wavelength": rope_params["rope_theta"],
+        "rope_scaling_factor": rope_params["factor"],
+        "beta_fast": rope_params["beta_fast"],
+        "beta_slow": rope_params["beta_slow"],
+        "original_max_position_embeddings": rope_params[
+            "original_max_position_embeddings"
+        ],
+        "truncate": rope_params["truncate"],
+        "swiglu_alpha": transformers_config.get("swiglu_alpha", 1.702),
+        "swiglu_limit": transformers_config.get("swiglu_limit", 7.0),
+        "rms_norm_eps": transformers_config["rms_norm_eps"],
+        "sliding_window": transformers_config["sliding_window"],
+        "attention_dropout": transformers_config["attention_dropout"],
     }
 
 

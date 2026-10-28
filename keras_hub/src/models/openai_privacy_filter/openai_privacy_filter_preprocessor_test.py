@@ -121,6 +121,25 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         self.assertEqual(config["sequence_length"], 8)
         self.assertEqual(config["truncate"], "round_robin")
 
+    def test_backend_tensor_sample_weight(self):
+        # A backend tensor passed as sample_weight on the Python path
+        # should be converted safely.
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        sw = keras.ops.convert_to_tensor([1.0, 0.5])
+        if keras.backend.backend() == "torch":
+            sw = sw.requires_grad_()
+        sample = ("airplane at airport", [1, 2], sw)
+        # Check it does not raise.
+        x, y, sample_weight = preprocessor(*sample)
+        self.assertEqual(list(sample_weight), [1.0, 0.5] + [0.0] * 6)
+
+    def test_multi_segment_raises(self):
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        # Multi-segment input is a tuple of batches, one per segment. It has
+        # to be passed as `x=`: a positional 2-tuple is unpacked as `(x, y)`.
+        with self.assertRaisesRegex(ValueError, "Multi-segment"):
+            preprocessor(x=(["airplane at airport"], ["airport"]))
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in OpenAIPrivacyFilterPreprocessor.presets:

@@ -23,6 +23,17 @@ from keras_hub.src.utils.tensor_utils import try_import_tensorflow
 tf = try_import_tensorflow()
 
 
+def _single_segment(x):
+    if isinstance(x, tuple):
+        if len(x) > 1:
+            raise ValueError(
+                "Multi-segment input is not supported for token classification."
+            )
+    else:
+        x = (x,)
+    return x
+
+
 @keras_hub_export(
     "keras_hub.models.OpenAIPrivacyFilterPreprocessor",
 )
@@ -48,8 +59,8 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
 
     Args:
         tokenizer: A `OpenAIPrivacyFilterTokenizer` instance.
-        sequence_length: int. The length of the packed inputs.
-            Defaults to `512`.
+        sequence_length: int. The length of the packed inputs. Sequences
+            longer than this will be truncated. Defaults to `512`.
         truncate: string. The algorithm to truncate a list of batched
             segments. Defaults to `"round_robin"`.
     """
@@ -111,7 +122,10 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
             return sw
         # The packer returns backend tensors on the Python path; work in numpy
         # and convert back the same way the packer does.
-        padding_mask = keras.ops.convert_to_numpy(padding_mask)
+        if not isinstance(sample_weight, (list, tuple)):
+            sample_weight = keras.ops.convert_to_numpy(sample_weight)
+        if not isinstance(padding_mask, (list, tuple)):
+            padding_mask = keras.ops.convert_to_numpy(padding_mask)
         # A ragged list of lists has `np.ndim == 1`; detect it by its first
         # element instead.
         is_nested = isinstance(sample_weight, (list, tuple)) and (
@@ -134,7 +148,7 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
 
     @preprocessing_function
     def _call_tf(self, x, y=None, sample_weight=None, sequence_length=None):
-        x = x if isinstance(x, tuple) else (x,)
+        x = _single_segment(x)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, _ = self.packer(x, sequence_length=sequence_length)
         padding_mask = token_ids != self.tokenizer.pad_token_id
@@ -153,7 +167,7 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
-        x = x if isinstance(x, tuple) else (x,)
+        x = _single_segment(x)
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, _ = self.packer(x, sequence_length=sequence_length)
         padding_mask = compute_padding_mask(

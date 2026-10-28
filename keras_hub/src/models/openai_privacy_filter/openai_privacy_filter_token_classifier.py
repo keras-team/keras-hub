@@ -23,10 +23,13 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
     Args:
         backbone: A `OpenAIPrivacyFilterBackbone` instance.
         num_classes: int. Number of output classes (BIOES labels).
-            Defaults to `33`.
         classifier_dropout: float. Dropout rate before the classification
             head. Defaults to `0.0`.
-        preprocessor: A `OpenAIPrivacyFilterPreprocessor` or `None`.
+        activation: Optional `str` or callable. The activation function to use
+            on the model outputs. Set `activation="softmax"` to return output
+            probabilities. Defaults to `None`.
+        preprocessor: A `OpenAIPrivacyFilterPreprocessor` or `None`. To change
+            the maximum sequence length, set `preprocessor.sequence_length`.
 
     Example:
     ```python
@@ -49,8 +52,9 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
     def __init__(
         self,
         backbone,
-        num_classes=33,
+        num_classes,
         classifier_dropout=0.0,
+        activation=None,
         preprocessor=None,
         **kwargs,
     ):
@@ -67,7 +71,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
 
         self._classifier_dense = keras.layers.Dense(
             num_classes,
-            activation=None,
+            activation=activation,
             dtype=backbone.dtype_policy,
             name="classifier",
         )
@@ -83,6 +87,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
         self.backbone = backbone
         self.num_classes = num_classes
         self.classifier_dropout = classifier_dropout
+        self.activation = keras.activations.get(activation)
         self.preprocessor = preprocessor
 
     def get_config(self):
@@ -91,6 +96,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
             {
                 "num_classes": self.num_classes,
                 "classifier_dropout": self.classifier_dropout,
+                "activation": keras.activations.serialize(self.activation),
             }
         )
         return config

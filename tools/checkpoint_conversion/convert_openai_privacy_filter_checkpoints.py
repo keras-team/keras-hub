@@ -35,6 +35,11 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
 )
+flags.DEFINE_string(
+    "dtype",
+    "bfloat16",
+    "The dtype for the Keras model and the saved preset.",
+)
 
 
 def compute_hf_output(hf_model, hf_tokenizer, text):
@@ -100,7 +105,6 @@ def main(_):
             print(f"    {tok}: {label}")
 
     hf_params = hf_model.num_parameters()
-    del hf_model
     print(f"\n  HF params: {hf_params:,}")
 
     # === Load KerasHub tokenizer and preprocessor ===
@@ -147,13 +151,12 @@ def main(_):
             + "\n".join(mismatches)
         )
     print("  ✅ Preprocessor parity verified")
-    del hf_tokenizer
 
     # === Load KerasHub classifier ===
     print("\n→ Loading KerasHub token classifier...")
     keras_classifier = (
         keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
-            f"hf://{hf_preset}"
+            f"hf://{hf_preset}", dtype=FLAGS.dtype
         )
     )
     print("  ✅ KerasHub classifier loaded")
@@ -166,53 +169,64 @@ def main(_):
     print(f"  KerasHub total:      {keras_total_params:,}")
     print(f"    backbone:          {keras_backbone_params:,}")
     print(f"    classifier head:   {head_params:,} (={head_params})")
-    assert keras_total_params == hf_params, (
-        f"Parameter count mismatch: keras={keras_total_params}, hf={hf_params}"
-    )
+    if keras_total_params != hf_params:
+        raise ValueError(
+            "Parameter count mismatch: "
+            f"keras={keras_total_params}, hf={hf_params}"
+        )
     print("  ✅ Parameter count matches")
-
-    # === Compute KerasHub outputs using HF token IDs for fair comparison ===
-    keras_logits = compute_keras_output(keras_classifier, hf_token_ids)
-    print(f"  KerasHub output shape: {keras_logits.shape}")
-
-    # === Numerical parity ===
-    print("\n→ Checking numerical parity...")
-    max_diff = np.max(np.abs(keras_logits - hf_logits))
-    mean_diff = np.mean(np.abs(keras_logits - hf_logits))
-    print(f"  Max absolute diff: {max_diff:.6f}")
-    print(f"  Mean absolute diff: {mean_diff:.6f}")
-
-    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-4, rtol=1e-4)
-    print("  ✅ Numerical parity verified (atol=1e-4, rtol=1e-4)")
-
-    # === Check predictions match ===
-    keras_preds = np.argmax(keras_logits, axis=-1)[0]
-    keras_labels = [id2label[int(p)] for p in keras_preds]
-    print("\n  KerasHub predictions:")
-    for tok, label in zip(hf_tokens, keras_labels):
-        if label != "O":
-            print(f"    {tok}: {label}")
-
-    if np.array_equal(keras_preds, hf_preds):
-        print("  ✅ Prediction parity verified")
-    else:
-        print("  ⚠️  Prediction mismatch:")
-        for i, (kp, hp) in enumerate(zip(keras_preds, hf_preds)):
-            if kp != hp:
-                print(
-                    f"    pos {i}: keras={id2label[int(kp)]}, "
-                    f"hf={id2label[int(hp)]}"
-                )
 
     # === Save preset ===
     print(f"\n→ Saving preset to ./{preset}/")
-    preprocessor = keras_hub.models.OpenAIPrivacyFilterPreprocessor(
-        keras_tokenizer
-    )
     keras_classifier.preprocessor = preprocessor
     keras_classifier.save_to_preset(f"./{preset}")
     print("  ✅ Preset saved")
 
+    # === Check predictions match on varying lengths ===
+    print("\n→ Checking predict([text]) parity...")
+    # Load back the saved preset to ensure it works
+    loaded_classifier = (
+        keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
+            f"./{preset}"
+        )
+    )
+    # The check is about parity; increase sequence_length so we do not truncate.
+    loaded_classifier.preprocessor.sequence_length = 1024
+
+    test_texts = [
+        "My name is John Smith and my email is john@example.com",
+        "John Smith works at Example Corp. " * 30,  # ~210 tokens
+        "Here is another much longer sentence to test. " * 68,  # ~610 tokens
+    ]
+
+    for i, text in enumerate(test_texts):
+        hf_logits, hf_token_ids = compute_hf_output(
+            hf_model, hf_tokenizer, text
+        )
+        hf_preds = np.argmax(hf_logits, axis=-1)[0]
+        valid_len = len(hf_preds)
+        print(f"\n  Text {i + 1} length: {valid_len} tokens")
+
+        keras_logits = loaded_classifier.predict([text], verbose=0)
+        # We only care about unpadded tokens.
+        keras_valid_logits = keras_logits[0][:valid_len]
+        keras_preds = np.argmax(keras_valid_logits, axis=-1)
+        hf_valid_logits = hf_logits[0][:valid_len]
+
+        max_diff = np.max(np.abs(keras_valid_logits - hf_valid_logits))
+        mean_diff = np.mean(np.abs(keras_valid_logits - hf_valid_logits))
+        print(f"    Max absolute diff: {max_diff:.6f}")
+        print(f"    Mean absolute diff: {mean_diff:.6f}")
+
+        if FLAGS.dtype == "float32":
+            np.testing.assert_allclose(
+                keras_valid_logits, hf_valid_logits, atol=1e-4, rtol=1e-4
+            )
+
+        if not np.array_equal(keras_preds, hf_preds):
+            raise ValueError(f"Prediction mismatch for text length {valid_len}")
+
+    print("  ✅ Prediction parity verified for all lengths")
     print("\n🎉 Conversion complete!")
 
 

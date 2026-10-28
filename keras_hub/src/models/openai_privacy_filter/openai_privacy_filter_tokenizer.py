@@ -1,3 +1,5 @@
+import warnings
+
 import tokenizers
 from tokenizers import pre_tokenizers
 
@@ -52,8 +54,20 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
         self.start_token_id = None
+        self._warned_tf_path = False
         self._add_special_token("<|endoftext|>", "pad_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
+
+    def _tokenize_tf(self, inputs):
+        if not getattr(self, "_warned_tf_path", False):
+            warnings.warn(
+                "OpenAIPrivacyFilterTokenizer is taking the tf.data path. "
+                "This uses an approximated regex that differs from the model's "
+                "training regex on digit runs and whitespace, which may affect "
+                "predictions."
+            )
+            self._warned_tf_path = True
+        return super()._tokenize_tf(inputs)
 
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
         super()._set_vocabulary_and_merges_tokenizers(vocabulary, merges)

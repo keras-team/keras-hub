@@ -1,14 +1,16 @@
 import keras
+import numpy as np
 import pytest
 from keras import ops
 
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
-    OpenAIPrivacyFilterAttention,
-)
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_layers import (  # noqa: E501
+    OpenAIPrivacyFilterAttention,
+)
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 # Reference values for `test_small_forward_matches_reference`.
 EXPECTED_FIRST_TOKEN = [
@@ -58,7 +60,11 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 8, 64),
-            run_quantization_check=False,
+            # The shared precision check requires every float weight to use
+            # the policy's variable dtype, but `sinks` is pinned to float32
+            # to match HF. `test_precision_policies` covers the same ground
+            # with that one exception.
+            run_mixed_precision_check=False,
         )
 
     @pytest.mark.large
@@ -79,10 +85,9 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         # values below: SwiGLU `alpha` or `limit`, the `(up + 1)` term, the
         # attention sinks column, the router softmax, the `/ top_k` and
         # `* top_k` scalings, the fp32 attention softmax, and the sliding
-        # window. The expected values were computed once on CPU in float32
-        # and agree across the JAX, TensorFlow and PyTorch backends.
-        import numpy as np
-
+        # fp32 attention softmax, and the sliding window. The expected values
+        # were computed once on CPU in float32 and agree across the JAX,
+        # TensorFlow and PyTorch backends.
         model = OpenAIPrivacyFilterBackbone(
             vocabulary_size=16,
             num_layers=1,
@@ -106,13 +111,12 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         self.assertEqual(out.shape, (1, 6, 8))
         expected_first = EXPECTED_FIRST_TOKEN
         expected_last = EXPECTED_LAST_TOKEN
-        self.assertAllClose(out[0, 0], expected_first, atol=1e-4, rtol=1e-4)
-        self.assertAllClose(out[0, 3], expected_last, atol=1e-4, rtol=1e-4)
+        atol = 2e-3 if running_on_gpu() else 1e-4
+        self.assertAllClose(out[0, 0], expected_first, atol=atol, rtol=atol)
+        self.assertAllClose(out[0, 3], expected_last, atol=atol, rtol=atol)
 
     def test_bidirectional_attention(self):
         """Verify the model is truly bidirectional (not causal)."""
-        import numpy as np
-
         model = OpenAIPrivacyFilterBackbone(**self.init_kwargs)
         # Input where position 0 has a different token than position 7.
         tokens = np.array([[1, 2, 3, 4, 5, 6, 7, 8]], dtype="int32")
@@ -131,8 +135,6 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
 
     def test_sliding_window_mask(self):
         """Verify tokens outside the sliding window don't affect output."""
-        import numpy as np
-
         # Use sliding_window=2 so position 0 can only see positions 0-2.
         kwargs = {**self.init_kwargs, "sliding_window": 2}
         model = OpenAIPrivacyFilterBackbone(**kwargs)
@@ -202,8 +204,13 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
             0.066750452,
             0.154417753,
         ]
-        self.assertAllClose(outputs[0, 0, 0, 9:18], expected_even, atol=1e-4)
-        self.assertAllClose(outputs[0, 0, 0, 41:50], expected_odd, atol=1e-4)
+        atol = 2e-3 if running_on_gpu() else 1e-4
+        self.assertAllClose(
+            outputs[0, 0, 0, 9:18], expected_even, atol=atol, rtol=atol
+        )
+        self.assertAllClose(
+            outputs[0, 0, 0, 41:50], expected_odd, atol=atol, rtol=atol
+        )
 
     def test_attention_get_config_keeps_kernel_initializer(self):
         attention = OpenAIPrivacyFilterAttention(
@@ -240,3 +247,47 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         self.assertNotAllClose(
             attention.key_dense.kernel, attention.value_dense.kernel
         )
+
+    def test_precision_policies(self):
+        # Mirrors `TestCase.run_precision_test`, with one deliberate
+        # exception: `sinks` stays float32 under every policy to match HF,
+        # which keeps it in `_keep_in_fp32_modules_strict`.
+        if keras.config.backend() == "torch":
+            import torch
+
+            if not torch.cuda.is_available():
+                self.skipTest("Torch CPU has no mixed precision support.")
+        for policy_name in ["mixed_float16", "mixed_bfloat16", "bfloat16"]:
+            policy = keras.mixed_precision.Policy(policy_name)
+            model = OpenAIPrivacyFilterBackbone(
+                **{**self.init_kwargs, "dtype": policy}
+            )
+            output = model(self.input_data)
+            self.assertDTypeEqual(output, policy.compute_dtype)
+            for weight in model.weights:
+                if not keras.backend.is_float_dtype(weight.dtype):
+                    continue
+                if weight.path.endswith("sinks"):
+                    self.assertDTypeEqual(weight, "float32")
+                else:
+                    self.assertDTypeEqual(weight, policy.variable_dtype)
+
+    def test_get_config_preserves_new_args(self):
+        # Assert arguments from threads #15 and #16 round-trip.
+        kwargs = {
+            **self.init_kwargs,
+            "beta_fast": 16.0,
+            "beta_slow": 2.0,
+            "original_max_position_embeddings": 2048,
+            "truncate": True,
+            "swiglu_alpha": 1.5,
+            "swiglu_limit": 5.0,
+        }
+        model = OpenAIPrivacyFilterBackbone(**kwargs)
+        restored = OpenAIPrivacyFilterBackbone.from_config(model.get_config())
+        self.assertEqual(restored.beta_fast, 16.0)
+        self.assertEqual(restored.beta_slow, 2.0)
+        self.assertEqual(restored.original_max_position_embeddings, 2048)
+        self.assertEqual(restored.truncate, True)
+        self.assertEqual(restored.swiglu_alpha, 1.5)
+        self.assertEqual(restored.swiglu_limit, 5.0)

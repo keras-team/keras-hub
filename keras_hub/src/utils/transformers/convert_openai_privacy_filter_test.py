@@ -13,6 +13,7 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_clas
 )
 from keras_hub.src.models.token_classifier import TokenClassifier
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.transformers.convert_openai_privacy_filter import (
     convert_backbone_config,
 )
@@ -56,6 +57,7 @@ class TestTask(TestCase):
                 "truncate": False,
             },
             "id2label": {str(i): f"L{i}" for i in range(33)},
+            "classifier_dropout": 0.0,
         }
         config = convert_backbone_config(hf_config)
         self.assertEqual(config["rope_max_wavelength"], 150000.0)
@@ -63,12 +65,35 @@ class TestTask(TestCase):
         self.assertEqual(config["num_experts"], 128)
         self.assertEqual(config["top_k"], 4)
         self.assertEqual(config["sliding_window"], 128)
-        self.assertEqual(convert_task_config(hf_config), {"num_classes": 33})
+        self.assertEqual(config["beta_fast"], 32.0)
+        self.assertEqual(config["beta_slow"], 1.0)
+        self.assertEqual(config["original_max_position_embeddings"], 4096)
+        self.assertEqual(config["truncate"], False)
+        self.assertEqual(config["swiglu_alpha"], 1.702)
+        self.assertEqual(config["swiglu_limit"], 7.0)
+
+        # Test overriding swiglu and rope parameters
+        hf_config_override = {
+            **hf_config,
+            "swiglu_alpha": 1.5,
+            "swiglu_limit": 5.0,
+            "rope_parameters": {
+                **hf_config["rope_parameters"],
+                "beta_fast": 16.0,
+            },
+        }
+        config_override = convert_backbone_config(hf_config_override)
+        self.assertEqual(config_override["beta_fast"], 16.0)
+        self.assertEqual(config_override["swiglu_alpha"], 1.5)
+        self.assertEqual(config_override["swiglu_limit"], 5.0)
+
+        self.assertEqual(
+            convert_task_config(hf_config),
+            {"num_classes": 33, "classifier_dropout": 0.0},
+        )
         # Values the backbone hardcodes must be validated, not ignored.
         for key, value in [
             ("rope_type", "linear"),
-            ("beta_fast", 8.0),
-            ("truncate", True),
         ]:
             bad = {
                 **hf_config,
@@ -225,7 +250,10 @@ class TestTask(TestCase):
         torch = pytest.importorskip("torch")
         transformers = pytest.importorskip("transformers")
         if not hasattr(transformers, "OpenAIPrivacyFilterConfig"):
-            pytest.skip("Needs a transformers release with this model.")
+            pytest.skip(
+                "Needs OpenAIPrivacyFilterConfig, installed "
+                f"transformers={transformers.__version__} does not have it."
+            )
         config = transformers.OpenAIPrivacyFilterConfig(
             vocab_size=64,
             hidden_size=32,
@@ -265,4 +293,5 @@ class TestTask(TestCase):
                 attention_mask=torch.tensor(padding_mask),
             ).logits.numpy()
         real = padding_mask.astype(bool)
-        self.assertAllClose(logits[real], hf_logits[real], atol=1e-4)
+        atol = 1e-2 if running_on_gpu() else 1e-4
+        self.assertAllClose(logits[real], hf_logits[real], atol=atol)

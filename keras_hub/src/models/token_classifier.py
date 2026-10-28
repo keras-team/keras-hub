@@ -15,7 +15,7 @@ class TokenClassifier(Task):
     num_classes)` output so every token position receives its own prediction.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    where `x` is a string (or preprocessed dict) and `y` is an integer tensor
+    where `x` is a string and `y` is an integer tensor
     with values in `[0, num_classes)`. When `x` is a string or list of strings,
     `y` will be padded or truncated to match the model's `sequence_length`.
     Padding positions are automatically masked via `sample_weight`.

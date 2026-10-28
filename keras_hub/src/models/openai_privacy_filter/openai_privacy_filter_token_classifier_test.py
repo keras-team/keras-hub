@@ -72,3 +72,20 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.preprocessor(self.train_data[0]),
         )
+
+    def test_missing_num_classes(self):
+        with self.assertRaises(TypeError):
+            OpenAIPrivacyFilterTokenClassifier(backbone=self.backbone)
+
+    def test_activation(self):
+        model_none = OpenAIPrivacyFilterTokenClassifier(
+            backbone=self.backbone, num_classes=3, activation=None
+        )
+        model_none.compile(optimizer="adam", loss="auto")
+        self.assertTrue(model_none.loss.from_logits)
+
+        model_softmax = OpenAIPrivacyFilterTokenClassifier(
+            backbone=self.backbone, num_classes=3, activation="softmax"
+        )
+        model_softmax.compile(optimizer="adam", loss="auto")
+        self.assertFalse(model_softmax.loss.from_logits)
