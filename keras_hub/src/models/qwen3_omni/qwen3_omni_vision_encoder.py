@@ -188,7 +188,10 @@ class Qwen3OmniVisionAttention(layers.Layer):
     """
 
     def __init__(self, hidden_size, num_heads, dtype=None, **kwargs):
-        super().__init__(dtype=dtype, **kwargs)
+        # autocast=False: the fp32 rotary cos/sin and additive attention
+        # mask must reach `call` uncast — rotary is applied in float32
+        # (matching HF), not in the layer's compute dtype.
+        super().__init__(dtype=dtype, autocast=False, **kwargs)
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
@@ -489,7 +492,10 @@ class Qwen3OmniVisionBlock(layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(dtype=dtype, **kwargs)
+        # autocast=False: forwards fp32 rotary cos/sin and the additive
+        # attention mask to the attention sublayer without casting them
+        # to the compute dtype.
+        super().__init__(dtype=dtype, autocast=False, **kwargs)
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.intermediate_size = intermediate_size
