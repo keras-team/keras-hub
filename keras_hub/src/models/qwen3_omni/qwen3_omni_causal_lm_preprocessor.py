@@ -31,6 +31,26 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_video_converter import (
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
+def _merge_vision_outputs(outputs):
+    """Merge per-item converter outputs into flat batched tensors.
+
+    Each converter call returns ``patches`` ``(N_i, T, P, P, C)`` and
+    ``grid_thw`` ``(3,)`` for a single image or video. The backbone's
+    functional graph consumes them unbatched: all patches concatenated
+    on axis 0 and one ``(n_items, 3)`` grid.
+    """
+    if len(outputs) == 1:
+        out = outputs[0]
+        return {
+            "patches": out["patches"],
+            "grid_thw": ops.expand_dims(out["grid_thw"], 0),
+        }
+    return {
+        "patches": ops.concatenate([out["patches"] for out in outputs], axis=0),
+        "grid_thw": ops.stack([out["grid_thw"] for out in outputs]),
+    }
+
+
 @keras_hub_export(
     "keras_hub.models.Qwen3OmniCausalLMPreprocessor",
 )
@@ -197,15 +217,37 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         """
         audio_features = None
         if "audio" in x and self.audio_converter is not None:
-            audio_features = self.audio_converter(x["audio"])
+            audio = x["audio"]
+            audio_items = audio if isinstance(audio, (list, tuple)) else [audio]
+            feats = []
+            for a in audio_items:
+                f = self.audio_converter(a)
+                # A rank-1 waveform returns squeezed ``(frames, mels)``;
+                # the backbone consumes ``(n_audios, frames, mels)``.
+                if len(ops.shape(f)) == 2:
+                    f = ops.expand_dims(f, 0)
+                feats.append(f)
+            audio_features = (
+                ops.concatenate(feats, axis=0) if len(feats) > 1 else feats[0]
+            )
 
         image_out = None
         if "images" in x and self.image_converter is not None:
-            image_out = self.image_converter(x["images"])
+            images = x["images"]
+            image_items = (
+                images if isinstance(images, (list, tuple)) else [images]
+            )
+            image_out = _merge_vision_outputs(
+                [self.image_converter(img) for img in image_items]
+            )
 
         video_out = None
         if "video" in x and self.video_converter is not None:
-            video_out = self.video_converter(x["video"])
+            video = x["video"]
+            video_items = video if isinstance(video, (list, tuple)) else [video]
+            video_out = _merge_vision_outputs(
+                [self.video_converter(vid) for vid in video_items]
+            )
 
         return audio_features, image_out, video_out
 
@@ -390,7 +432,6 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 output["pixel_values"] = np.zeros(
                     (
                         0,
-                        0,
                         dim_src.temporal_patch_size,
                         dim_src.patch_size,
                         dim_src.patch_size,
@@ -401,12 +442,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             output["image_grid_thw"] = (
                 image_grid_thw
                 if image_grid_thw is not None
-                else np.zeros((0, 0, 3), dtype="int32")
+                else np.zeros((0, 3), dtype="int32")
             )
             output["vision_indices"] = (
                 vision_indices
                 if vision_indices is not None
-                else np.zeros((0, 0), dtype="int32")
+                else np.zeros((0,), dtype="int32")
             )
 
         if has_audio:
@@ -423,7 +464,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             output["audio_indices"] = (
                 audio_indices
                 if audio_indices is not None
-                else np.zeros((0, 0), dtype="int32")
+                else np.zeros((0,), dtype="int32")
             )
 
     @preprocessing_function

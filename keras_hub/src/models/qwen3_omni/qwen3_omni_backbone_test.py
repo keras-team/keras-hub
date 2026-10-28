@@ -155,10 +155,10 @@ class Qwen3OmniBackboneTest(TestCase, parameterized.TestCase):
         token_ids[0, 3] = 5
         padding_mask = np.ones((1, self.sequence_length), dtype="int32")
         pixel_values = (
-            np.random.RandomState(0).randn(1, 1, 2, 2, 2, 3).astype("float32")
+            np.random.RandomState(0).randn(1, 2, 2, 2, 3).astype("float32")
         )
-        image_grid_thw = np.array([[[1, 2, 2]]], dtype="int32")
-        vision_indices = np.array([[3]], dtype="int32")
+        image_grid_thw = np.array([[1, 2, 2]], dtype="int32")
+        vision_indices = np.array([3], dtype="int32")
 
         output_fused = model(
             {

@@ -210,7 +210,6 @@ class Qwen3OmniBackbone(Backbone):
         if self.has_vision:
             pixel_values_input = keras.Input(
                 shape=(
-                    None,
                     vision_encoder.temporal_patch_size,
                     vision_encoder.patch_size,
                     vision_encoder.patch_size,
@@ -219,10 +218,10 @@ class Qwen3OmniBackbone(Backbone):
                 name="pixel_values",
             )
             image_grid_thw_input = keras.Input(
-                shape=(None, 3), dtype="int32", name="image_grid_thw"
+                shape=(3,), dtype="int32", name="image_grid_thw"
             )
             vision_indices_input = keras.Input(
-                shape=(None,), dtype="int32", name="vision_indices"
+                shape=(), dtype="int32", name="vision_indices"
             )
             graph_inputs["pixel_values"] = pixel_values_input
             graph_inputs["image_grid_thw"] = image_grid_thw_input
@@ -245,7 +244,7 @@ class Qwen3OmniBackbone(Backbone):
                 name="audio_features",
             )
             audio_indices_input = keras.Input(
-                shape=(None,), dtype="int32", name="audio_indices"
+                shape=(), dtype="int32", name="audio_indices"
             )
             graph_inputs["audio_features"] = audio_features_input
             graph_inputs["audio_indices"] = audio_indices_input
@@ -332,13 +331,11 @@ class Qwen3OmniBackbone(Backbone):
         # Normalise every value to a tensor before injecting defaults to
         # keep Keras's type-uniformity check happy.
         inputs = {k: ops.convert_to_tensor(v) for k, v in inputs.items()}
-        batch_size = ops.shape(inputs["token_ids"])[0]
         if self.has_vision:
             ve = self.vision_encoder
             if "pixel_values" not in inputs:
                 inputs["pixel_values"] = ops.zeros(
                     (
-                        batch_size,
                         0,
                         ve.temporal_patch_size,
                         ve.patch_size,
@@ -347,23 +344,15 @@ class Qwen3OmniBackbone(Backbone):
                     )
                 )
             if "image_grid_thw" not in inputs:
-                inputs["image_grid_thw"] = ops.zeros(
-                    (batch_size, 0, 3), dtype="int32"
-                )
+                inputs["image_grid_thw"] = ops.zeros((0, 3), dtype="int32")
             if "vision_indices" not in inputs:
-                inputs["vision_indices"] = ops.zeros(
-                    (batch_size, 0), dtype="int32"
-                )
+                inputs["vision_indices"] = ops.zeros((0,), dtype="int32")
         if self.has_audio:
             ae = self.audio_encoder
             if "audio_features" not in inputs:
-                inputs["audio_features"] = ops.zeros(
-                    (batch_size, 0, ae.num_mel_bins)
-                )
+                inputs["audio_features"] = ops.zeros((0, 0, ae.num_mel_bins))
             if "audio_indices" not in inputs:
-                inputs["audio_indices"] = ops.zeros(
-                    (batch_size, 0), dtype="int32"
-                )
+                inputs["audio_indices"] = ops.zeros((0,), dtype="int32")
         return inputs
 
     def __call__(self, inputs, *args, **kwargs):
