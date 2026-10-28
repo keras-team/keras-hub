@@ -398,6 +398,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "batch_norm_momentum": self.batch_norm_momentum,
                 "batch_norm_epsilon": self.batch_norm_epsilon,
                 "projection_activation": self.projection_activation,
+                "data_format": self.data_format,
             }
         )
         return config
