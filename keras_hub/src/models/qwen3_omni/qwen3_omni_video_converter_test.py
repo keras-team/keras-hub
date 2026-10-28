@@ -96,6 +96,55 @@ class Qwen3OmniVideoConverterTest(TestCase):
                 msg=f"patch shape mismatch for {(frames, h, w)}",
             )
 
+    def test_spatial_merge_block_ordering(self):
+        # Patches must be emitted in merge-block order within each
+        # temporal group (each 2x2 block contiguous) like the HF
+        # Qwen2VL video processor — the vision position embeddings and
+        # the patch merger assume that layout.
+        converter = Qwen3OmniVideoConverter(
+            patch_size=16,
+            temporal_patch_size=2,
+            spatial_merge_size=2,
+            min_pixels=0,
+            max_pixels=10**9,
+            scale=1.0,
+            offset=0.0,
+        )
+        rng = np.random.RandomState(0)
+        video = rng.randint(0, 256, (2, 64, 64, 3)).astype("float32")
+        output = converter(video)
+        patches = ops.convert_to_numpy(output["patches"])
+        grid_thw = ops.convert_to_numpy(output["grid_thw"])
+        grid_t, grid_h, grid_w = [int(v) for v in grid_thw]
+        m = 2
+        frame_patches = grid_h * grid_w
+        for t in range(grid_t):
+            for block_row in range(grid_h // m):
+                for block_col in range(grid_w // m):
+                    for m_h in range(m):
+                        for m_w in range(m):
+                            flat = (
+                                t * frame_patches
+                                + (
+                                    (block_row * (grid_w // m) + block_col) * m
+                                    + m_h
+                                )
+                                * m
+                                + m_w
+                            )
+                            row, col = block_row * m + m_h, block_col * m + m_w
+                            # Temporal patch t covers frames 2t and 2t+1.
+                            for f in range(2):
+                                expected = video[
+                                    t * 2 + f,
+                                    row * 16 : (row + 1) * 16,
+                                    col * 16 : (col + 1) * 16,
+                                    :,
+                                ]
+                                np.testing.assert_allclose(
+                                    patches[flat, f], expected, atol=1e-5
+                                )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in Qwen3OmniVideoConverter.presets:
