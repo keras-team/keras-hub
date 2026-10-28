@@ -287,6 +287,21 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         ]
         return ops.concatenate(outputs, axis=0)
 
+    def _conv_downsample(self, hidden_states, training=False):
+        """Run the three stride-2 Conv2D layers with HF-style padding.
+
+        HF convs use `padding=1` (symmetric). Keras "same" pads
+        asymmetrically (0, 1) on even-length axes, shifting every
+        receptive field — so we pad explicitly and the convs are
+        configured `padding="valid"`.
+        """
+        pad2d = [[0, 0], [1, 1], [1, 1], [0, 0]]
+        for conv in (self.conv2d1, self.conv2d2, self.conv2d3):
+            hidden_states = ops.pad(hidden_states, pad2d)
+            hidden_states = conv(hidden_states, training=training)
+            hidden_states = ops.gelu(hidden_states)
+        return hidden_states
+
     def _encode_single(self, input_features, training=False):
         """Encode one `(1, time, mels)` clip to `(valid, output_dim)`."""
         batch_size = 1
@@ -317,21 +332,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         )
         hidden_states = ops.expand_dims(hidden_states, axis=-1)
 
-        # HF convs use `padding=1` (symmetric). Keras "same" pads
-        # asymmetrically (0, 1) on even-length axes, shifting every
-        # receptive field — pad explicitly and use "valid" to match.
-        pad2d = [[0, 0], [1, 1], [1, 1], [0, 0]]
-        hidden_states = ops.pad(hidden_states, pad2d)
-        hidden_states = self.conv2d1(hidden_states, training=training)
-        hidden_states = ops.gelu(hidden_states)
-
-        hidden_states = ops.pad(hidden_states, pad2d)
-        hidden_states = self.conv2d2(hidden_states, training=training)
-        hidden_states = ops.gelu(hidden_states)
-
-        hidden_states = ops.pad(hidden_states, pad2d)
-        hidden_states = self.conv2d3(hidden_states, training=training)
-        hidden_states = ops.gelu(hidden_states)
+        hidden_states = self._conv_downsample(hidden_states, training=training)
 
         # Flatten spatial dimensions and project
         chunk_after_cnn = -(-chunk_len // 8)

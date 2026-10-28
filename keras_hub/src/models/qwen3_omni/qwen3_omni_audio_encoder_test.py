@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -126,6 +127,71 @@ class Qwen3OmniAudioEncoderTest(TestCase):
                 if i // 2 == j // 2:
                     expected[i, j] = True
         np.testing.assert_array_equal(mask[0], expected)
+
+    def test_conv_stack_matches_torch_padding1(self):
+        # HF convs use padding=1 (symmetric); Keras "same" pads (0,1)
+        # on even axes, shifting receptive fields. Drive the encoder's
+        # conv stack on an even-length input and compare against a
+        # manual symmetric-pad reference.
+        encoder = Qwen3OmniAudioEncoder(
+            num_mel_bins=16,
+            d_model=32,
+            encoder_layers=1,
+            encoder_attention_heads=4,
+            encoder_ffn_dim=64,
+            output_dim=16,
+            downsample_hidden_size=8,
+            max_source_positions=100,
+            scale_embedding=False,
+            n_window=4,
+            dtype="float32",
+        )
+        rng = np.random.RandomState(0)
+        x = rng.randn(1, 8, 16, 1).astype("float32")  # one 8-frame chunk
+
+        def ref_conv(x, conv):
+            # torch.nn.Conv2d(k=3, s=2, padding=1) semantics
+            xp = np.pad(x, [(0, 0), (1, 1), (1, 1), (0, 0)])
+            t_out = (x.shape[1] + 2 - 3) // 2 + 1
+            f_out = (x.shape[2] + 2 - 3) // 2 + 1
+            w = conv.kernel.numpy()
+            b = conv.bias.numpy()
+            acc = np.zeros((1, t_out, f_out, w.shape[-1]), dtype=np.float32)
+            for i in range(3):
+                for j in range(3):
+                    acc += np.einsum(
+                        "btfc,cg->btfg",
+                        xp[:, i : i + 2 * t_out : 2, j : j + 2 * f_out : 2],
+                        w[i, j],
+                    )
+            return acc + b.reshape(1, 1, 1, -1)
+
+        # Convs must be "valid" — the symmetric pad is applied manually.
+        for conv in (encoder.conv2d1, encoder.conv2d2, encoder.conv2d3):
+            self.assertEqual(conv.padding, "valid")
+
+        # Full stack vs reference chain (pad1-conv + gelu each stage).
+        got = ops.convert_to_numpy(encoder._conv_downsample(x))
+        ref_full = x
+        for conv in (encoder.conv2d1, encoder.conv2d2, encoder.conv2d3):
+            ref_full = ops.convert_to_numpy(
+                ops.gelu(ops.convert_to_tensor(ref_conv(ref_full, conv)))
+            )
+        np.testing.assert_allclose(got, ref_full, atol=1e-5)
+
+        # Guard the actual regression: keras "same" on even-length axes
+        # pads asymmetrically and produces a different result.
+        same_conv = keras.layers.Conv2D(
+            encoder.conv2d1.filters, 3, strides=2, padding="same"
+        )
+        _ = same_conv(x)  # build weights
+        same_conv.kernel.assign(encoder.conv2d1.kernel)
+        same_conv.bias.assign(encoder.conv2d1.bias)
+        same_out = ops.convert_to_numpy(same_conv(x))
+        ref1 = ops.convert_to_numpy(
+            ops.gelu(ops.convert_to_tensor(ref_conv(x, encoder.conv2d1)))
+        )
+        self.assertFalse(np.allclose(same_out, ref1, atol=1e-5))
 
     def test_short_audio_mask_is_full(self):
         encoder = Qwen3OmniAudioEncoder(
