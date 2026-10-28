@@ -91,10 +91,12 @@ class Qwen3OmniCausalLMTest(TestCase):
             ),
         )
 
-    def test_multimodal_causal_lm_init(self):
-        # `from_preset` builds a multimodal backbone inside the task,
-        # so `__init__` must tolerate symbolic batch dims when filling
-        # in default vision/audio inputs.
+    def _build_multimodal_lm(
+        self,
+        image_converter=None,
+        audio_converter=None,
+        sequence_length=7,
+    ):
         vision_encoder = Qwen3OmniVisionEncoder(
             depth=1,
             hidden_size=32,
@@ -119,11 +121,9 @@ class Qwen3OmniCausalLMTest(TestCase):
         )
         preprocessor = Qwen3OmniCausalLMPreprocessor(
             self.preprocessor.tokenizer,
-            sequence_length=7,
-            image_converter=Qwen3OmniImageConverter(
-                patch_size=2, temporal_patch_size=2
-            ),
-            audio_converter=Qwen3OmniAudioConverter(num_mels=80),
+            sequence_length=sequence_length,
+            image_converter=image_converter,
+            audio_converter=audio_converter,
         )
         backbone = Qwen3OmniBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
@@ -143,6 +143,18 @@ class Qwen3OmniCausalLMTest(TestCase):
         causal_lm = Qwen3OmniCausalLM(
             backbone=backbone, preprocessor=preprocessor
         )
+        return causal_lm, preprocessor
+
+    def test_multimodal_causal_lm_init(self):
+        # `from_preset` builds a multimodal backbone inside the task,
+        # so `__init__` must tolerate symbolic batch dims when filling
+        # in default vision/audio inputs.
+        causal_lm, preprocessor = self._build_multimodal_lm(
+            image_converter=Qwen3OmniImageConverter(
+                patch_size=2, temporal_patch_size=2
+            ),
+            audio_converter=Qwen3OmniAudioConverter(num_mels=80),
+        )
         # Text-only prompts must still receive empty vision/audio
         # placeholders so the multimodal graph inputs are satisfied.
         pp = preprocessor.generate_preprocess(self.train_data[0])
@@ -154,6 +166,39 @@ class Qwen3OmniCausalLMTest(TestCase):
             "audio_indices",
         ):
             self.assertIn(key, pp)
+        out = causal_lm(pp)
+        self.assertEqual(
+            out.shape[-1], self.preprocessor.tokenizer.vocabulary_size()
+        )
+
+    def test_multimodal_generate_preprocess_dict_call(self):
+        # `generate_preprocess` emits precomputed `initial_embeddings`
+        # (+ `deepstack_features`/`visual_pos_mask`) for the eager
+        # encoder path. Feeding that dict straight into `causal_lm(...)`
+        # must drop the extras rather than misalign the Functional
+        # input-spec mapping (keras < 3.16 flattens dicts positionally).
+        causal_lm, preprocessor = self._build_multimodal_lm(
+            image_converter=Qwen3OmniImageConverter(
+                patch_size=2,
+                temporal_patch_size=2,
+                min_pixels=32 * 32,
+                max_pixels=64 * 64,
+            ),
+            sequence_length=200,
+        )
+        prompt = (
+            "<|im_start|>user\n<|vision_start|><|image_pad|>"
+            "<|vision_end|> airplane<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+        image = np.random.default_rng(0).integers(
+            0, 255, (32, 32, 3), dtype=np.uint8
+        )
+        pp = preprocessor.generate_preprocess(
+            {"prompts": [prompt], "images": [image]}
+        )
+        self.assertIn("initial_embeddings", pp)
+        self.assertIn("deepstack_features", pp)
         out = causal_lm(pp)
         self.assertEqual(
             out.shape[-1], self.preprocessor.tokenizer.vocabulary_size()

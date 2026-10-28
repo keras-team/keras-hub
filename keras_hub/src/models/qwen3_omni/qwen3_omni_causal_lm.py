@@ -403,6 +403,62 @@ class Qwen3OmniCausalLM(CausalLM):
             **kwargs,
         )
 
+    def _strip_generate_preprocess_inputs(self, inputs):
+        """Drop tensors produced by ``generate_preprocess``.
+
+        ``initial_embeddings`` / ``deepstack_features`` /
+        ``visual_pos_mask`` are consumed by ``generate_step`` /
+        ``call_with_cache`` only; the Functional graph recomputes them
+        from the raw multimodal inputs. Stripping them keeps the
+        dict-to-input-spec match exact — extra keys can misalign
+        positional input flattening on some Keras versions.
+        """
+        if not isinstance(inputs, dict):
+            return inputs
+        return {
+            k: v
+            for k, v in inputs.items()
+            if k
+            not in (
+                "initial_embeddings",
+                "deepstack_features",
+                "visual_pos_mask",
+            )
+        }
+
+    def call(self, inputs, *args, **kwargs):
+        inputs = self._strip_generate_preprocess_inputs(inputs)
+        return super().call(inputs, *args, **kwargs)
+
+    def __call__(self, inputs, *args, **kwargs):
+        inputs = self._strip_generate_preprocess_inputs(inputs)
+        return super().__call__(inputs, *args, **kwargs)
+
+    def _standardize_inputs(self, inputs):
+        inputs = self._strip_generate_preprocess_inputs(inputs)
+        return super()._standardize_inputs(inputs)
+
+    def stateless_call(
+        self,
+        trainable_variables,
+        non_trainable_variables,
+        *args,
+        return_losses=False,
+        **kwargs,
+    ):
+        if args:
+            args = (
+                self._strip_generate_preprocess_inputs(args[0]),
+                *args[1:],
+            )
+        return super().stateless_call(
+            trainable_variables,
+            non_trainable_variables,
+            *args,
+            return_losses=return_losses,
+            **kwargs,
+        )
+
     def compile(
         self,
         optimizer="auto",
