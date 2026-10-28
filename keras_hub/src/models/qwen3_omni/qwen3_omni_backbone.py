@@ -246,11 +246,18 @@ class Qwen3OmniBackbone(Backbone):
             audio_indices_input = keras.Input(
                 shape=(), dtype="int32", name="audio_indices"
             )
+            audio_lengths_input = keras.Input(
+                shape=(), dtype="int32", name="audio_lengths"
+            )
             graph_inputs["audio_features"] = audio_features_input
             graph_inputs["audio_indices"] = audio_indices_input
+            graph_inputs["audio_lengths"] = audio_lengths_input
 
             audio_embeddings = self.audio_encoder(
-                {"input_features": audio_features_input}
+                {
+                    "input_features": audio_features_input,
+                    "feature_lengths": audio_lengths_input,
+                }
             )
 
         # Multimodal M-RoPE positions are supplied by the preprocessor
@@ -364,6 +371,8 @@ class Qwen3OmniBackbone(Backbone):
                 inputs["audio_features"] = ops.zeros((0, 0, ae.num_mel_bins))
             if "audio_indices" not in inputs:
                 inputs["audio_indices"] = ops.zeros((0,), dtype="int32")
+            if "audio_lengths" not in inputs:
+                inputs["audio_lengths"] = ops.zeros((0,), dtype="int32")
         if self.is_multimodal and "position_ids" not in inputs:
             inputs["position_ids"] = ops.transpose(
                 _expand_position_ids_from_padding_mask(inputs["padding_mask"]),

@@ -242,36 +242,61 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         )
         return ops.expand_dims(same_block, axis=0)
 
-    def _call_with_inputs(self, input_features, training=False):
+    def _call_with_inputs(
+        self, input_features, feature_lengths=None, training=False
+    ):
         """Encode mel-spectrogram features into output embeddings.
 
         Args:
             input_features: Tensor with shape
-                `(batch_size, time_steps, num_mel_bins)`.
+                `(num_audios, time_steps, num_mel_bins)`, batch-padded
+                on the time axis.
+            feature_lengths: Optional int tensor ``(num_audios,)`` of
+                true mel-frame counts per clip (HF's
+                ``feature_attention_mask.sum(-1)``). Defaults to every
+                clip spanning the full padded length.
             training: bool. Whether the model is in training mode.
 
         Returns:
-            Tensor with shape `(batch_size, seq_len, output_dim)`.
+            Tensor with shape `(total_valid_positions, output_dim)` —
+            the per-clip valid positions concatenated, matching HF.
         """
-        # Early-exit for zero-length time axis (text-only forward
-        # through a multimodal backbone).
+        # Early-exit for empty inputs (text-only forward through a
+        # multimodal backbone).
+        batch_size = ops.shape(input_features)[0]
         time_steps = ops.shape(input_features)[1]
-        if time_steps == 0:
-            batch_size = ops.shape(input_features)[0]
-            return ops.zeros(
-                (batch_size, 0, self.output_dim),
-                dtype=self.compute_dtype,
-            )
+        if batch_size == 0 or time_steps == 0:
+            return ops.zeros((0, self.output_dim), dtype=self.compute_dtype)
 
         input_features = ops.cast(input_features, self.compute_dtype)
-        batch_size = ops.shape(input_features)[0]
+        lens = (
+            [int(time_steps)] * int(batch_size)
+            if feature_lengths is None
+            else [
+                int(v)
+                for v in ops.convert_to_numpy(feature_lengths).reshape(-1)
+            ]
+        )
+        if len(lens) != int(batch_size):
+            lens = [int(time_steps)] * int(batch_size)
+        outputs = [
+            self._encode_single(
+                input_features[i : i + 1, :n], training=training
+            )
+            for i, n in enumerate(lens)
+        ]
+        return ops.concatenate(outputs, axis=0)
+
+    def _encode_single(self, input_features, training=False):
+        """Encode one `(1, time, mels)` clip to `(valid, output_dim)`."""
+        batch_size = 1
 
         # HF splits the mel axis into chunks of `n_window * 2` frames and
         # runs the conv stack per chunk; each full chunk yields
         # `ceil(chunk_len / 8)` tokens and chunk boundaries reset both
         # the conv receptive field and the sinusoidal positions.
         chunk_len = int(self.n_window) * 2
-        time_steps = int(time_steps)
+        time_steps = int(ops.shape(input_features)[1])
         n_chunks = -(-time_steps // chunk_len)
         pad = n_chunks * chunk_len - time_steps
         if pad:
@@ -369,7 +394,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         hidden_states = self.proj2(hidden_states)
         hidden_states = self.dropout_layer(hidden_states, training=training)
 
-        return hidden_states
+        return hidden_states[0]
 
     def build(self, input_shape=None):
         mel_after_conv1 = (self.num_mel_bins + 1) // 2
@@ -413,29 +438,27 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         """Process a dict of inputs through the audio encoder.
 
         Args:
-            inputs: dict. A dictionary with `"input_features"` key containing
-                mel-spectrogram tensor with shape
-                `(batch_size, time_steps, num_mel_bins)`.
+            inputs: dict. A dictionary with `"input_features"` key
+                containing a mel-spectrogram tensor with shape
+                `(num_audios, time_steps, num_mel_bins)`, and an
+                optional `"feature_lengths"` int tensor ``(num_audios,)``
+                of true mel-frame counts per clip.
             training: bool. Whether the model is in training mode.
 
         Returns:
-            Tensor with shape `(batch_size, seq_len, output_dim)`.
+            Tensor with shape `(total_valid_positions, output_dim)`.
         """
         return self._call_with_inputs(
-            inputs["input_features"], training=training
+            inputs["input_features"],
+            feature_lengths=inputs.get("feature_lengths"),
+            training=training,
         )
 
     def compute_output_spec(self, input_spec, **kwargs):
         """Compute output shape for symbolic tracing."""
         input_features_spec = input_spec["input_features"]
-        batch_size = input_features_spec.shape[0]
-        seq_len = (
-            (input_features_spec.shape[1] + 7) // 8
-            if input_features_spec.shape[1]
-            else None
-        )
         return keras.KerasTensor(
-            shape=(batch_size, seq_len, self.output_dim),
+            shape=(None, self.output_dim),
             dtype=input_features_spec.dtype,
         )
 

@@ -25,9 +25,12 @@ class Qwen3OmniAudioConverter(AudioConverter):
             frames while computing STFT. Defaults to `160`.
         sampling_rate: int. The sample rate of the audio. Defaults to
             `16000`.
-        max_audio_length: int. The length of each audio chunk in
-            seconds. The input audio tensor will be padded/trimmed to
-            `max_audio_length * sampling_rate`. Defaults to `300`.
+        max_audio_length: int. The maximum audio length in seconds.
+            Longer inputs are trimmed to `max_audio_length *
+            sampling_rate`. Defaults to `300`.
+        min_length: int. Clips shorter than this many samples are
+            zero-padded up to it, matching the reference Qwen3-ASR
+            pipeline. Defaults to `8000`.
 
     Examples:
     ```python
@@ -48,6 +51,7 @@ class Qwen3OmniAudioConverter(AudioConverter):
         stride=160,
         sampling_rate=16000,
         max_audio_length=300,
+        min_length=8000,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -61,6 +65,7 @@ class Qwen3OmniAudioConverter(AudioConverter):
         self.stride = stride
         self.sampling_rate = sampling_rate
         self.max_audio_length = max_audio_length
+        self.min_length = min_length
         self.num_samples = self.sampling_rate * self.max_audio_length
         self.mel_filters = self._get_mel_filters()
 
@@ -175,12 +180,14 @@ class Qwen3OmniAudioConverter(AudioConverter):
         if rank_1_input:
             audio = ops.expand_dims(audio, 0)
 
+        # HF's extractor zero-pads clips shorter than `min_length` and
+        # trims beyond `n_samples` — it never pads up to the max, so
+        # mel time stays proportional to the true audio length.
         current_len = ops.shape(audio)[-1]
-        if current_len < self.num_samples:
-            pad_width = [[0, 0], [0, self.num_samples - current_len]]
+        if current_len < self.min_length:
+            pad_width = [[0, 0], [0, self.min_length - current_len]]
             audio = ops.pad(audio, pad_width, mode="constant")
-        else:
-            audio = audio[:, : self.num_samples]
+        audio = audio[:, : self.num_samples]
 
         log_spec = self._extract_audio_features(audio)
 
@@ -198,6 +205,7 @@ class Qwen3OmniAudioConverter(AudioConverter):
                 "stride": self.stride,
                 "sampling_rate": self.sampling_rate,
                 "max_audio_length": self.max_audio_length,
+                "min_length": self.min_length,
             }
         )
         return config

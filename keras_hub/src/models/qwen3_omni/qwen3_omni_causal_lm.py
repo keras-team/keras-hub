@@ -488,6 +488,7 @@ class Qwen3OmniCausalLM(CausalLM):
         token_ids,
         audio_features=None,
         audio_indices=None,
+        audio_lengths=None,
         pixel_values=None,
         image_grid_thw=None,
         vision_indices=None,
@@ -508,7 +509,10 @@ class Qwen3OmniCausalLM(CausalLM):
         audio_embeds = None
         if audio_features is not None and getattr(backbone, "has_audio", False):
             audio_embeds = backbone.audio_encoder(
-                {"input_features": audio_features}
+                {
+                    "input_features": audio_features,
+                    "feature_lengths": audio_lengths,
+                }
             )
 
         if getattr(backbone, "is_multimodal", False) and (
@@ -623,6 +627,7 @@ class Qwen3OmniCausalLM(CausalLM):
         cache_update_index,
         audio_features=None,
         audio_indices=None,
+        audio_lengths=None,
         pixel_values=None,
         image_grid_thw=None,
         vision_indices=None,
@@ -648,6 +653,8 @@ class Qwen3OmniCausalLM(CausalLM):
             audio_features: float tensor or None. Log-mel input.
             audio_indices: int tensor or None. Flat positions where
                 audio embeddings land in the text sequence.
+            audio_lengths: int tensor or None. ``(num_audios,)`` true
+                mel-frame counts per clip.
             pixel_values: float tensor or None. Image patches.
             image_grid_thw: int tensor or None. ``(batch, num_images,
                 3)`` grid dims.
@@ -677,6 +684,7 @@ class Qwen3OmniCausalLM(CausalLM):
                     token_ids,
                     audio_features=audio_features,
                     audio_indices=audio_indices,
+                    audio_lengths=audio_lengths,
                     pixel_values=pixel_values,
                     image_grid_thw=image_grid_thw,
                     vision_indices=vision_indices,
@@ -728,6 +736,7 @@ class Qwen3OmniCausalLM(CausalLM):
         token_ids,
         audio_features=None,
         audio_indices=None,
+        audio_lengths=None,
         pixel_values=None,
         image_grid_thw=None,
         vision_indices=None,
@@ -798,6 +807,7 @@ class Qwen3OmniCausalLM(CausalLM):
             0,
             audio_features=audio_features,
             audio_indices=audio_indices,
+            audio_lengths=audio_lengths,
             pixel_values=pixel_values,
             image_grid_thw=image_grid_thw,
             vision_indices=vision_indices,
@@ -829,6 +839,7 @@ class Qwen3OmniCausalLM(CausalLM):
             token_ids,
             audio_features=inputs.get("audio_features"),
             audio_indices=inputs.get("audio_indices"),
+            audio_lengths=inputs.get("audio_lengths"),
             pixel_values=inputs.get("pixel_values"),
             image_grid_thw=inputs.get("image_grid_thw"),
             vision_indices=inputs.get("vision_indices"),
@@ -891,6 +902,7 @@ class Qwen3OmniCausalLM(CausalLM):
         target_ids=None,
         audio_features=None,
         audio_indices=None,
+        audio_lengths=None,
         pixel_values=None,
         image_grid_thw=None,
         vision_indices=None,
@@ -938,6 +950,7 @@ class Qwen3OmniCausalLM(CausalLM):
                     token_ids,
                     audio_features=audio_features,
                     audio_indices=audio_indices,
+                    audio_lengths=audio_lengths,
                     pixel_values=pixel_values,
                     image_grid_thw=image_grid_thw,
                     vision_indices=vision_indices,

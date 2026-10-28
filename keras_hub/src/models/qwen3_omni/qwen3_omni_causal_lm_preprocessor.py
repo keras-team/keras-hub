@@ -243,7 +243,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         if isinstance(value, (list, tuple)):
             return list(value)
         if isinstance(value, tf.RaggedTensor):
-            return [value[i].to_tensor() for i in range(int(value.nrows()))]
+            # Rows of a singly-ragged tensor are already dense; only
+            # deeper raggedness needs ``to_tensor``.
+            return [
+                row.to_tensor() if isinstance(row, tf.RaggedTensor) else row
+                for row in value
+            ]
         if value is not None and len(ops.shape(value)) == batched_rank:
             return [value[i] for i in range(int(ops.shape(value)[0]))]
         return [value]
@@ -257,7 +262,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         encoder calls, and the M-RoPE positions all require the per-
         modality identity to be preserved.
         """
-        audio_features = None
+        audio_features, audio_lens = None, None
         if "audio" in x and self.audio_converter is not None:
             feats = []
             for a in self._as_item_list(x["audio"], 2):
@@ -267,6 +272,23 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 if len(ops.shape(f)) == 2:
                     f = ops.expand_dims(f, 0)
                 feats.append(f)
+            # HF pads the batch to the longest clip and tracks true
+            # lengths through ``feature_attention_mask``; we keep the
+            # per-item frame counts in ``audio_lens`` instead.
+            audio_lens = [int(ops.shape(f)[-2]) for f in feats]
+            max_len = max(audio_lens)
+            feats = [
+                ops.pad(
+                    f,
+                    [
+                        [0, 0],
+                        [0, max_len - int(ops.shape(f)[-2])],
+                        [0, 0],
+                    ],
+                    mode="constant",
+                )
+                for f in feats
+            ]
             audio_features = (
                 ops.concatenate(feats, axis=0) if len(feats) > 1 else feats[0]
             )
@@ -289,7 +311,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 ]
             )
 
-        return audio_features, image_out, video_out
+        return audio_features, audio_lens, image_out, video_out
 
     def _spatial_merge_size(self):
         """Resolve the spatial merge factor from the attached converter."""
@@ -317,7 +339,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         padding_mask,
         image_grid_thw,
         video_grid_thw,
-        audio_features,
+        audio_lens,
         use_audio_in_video=False,
     ):
         """NumPy M-RoPE positions ``(batch, 3, seq)`` + per-batch deltas."""
@@ -325,14 +347,11 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             _compute_mrope_index,
         )
 
-        audio_seqlens = None
-        if audio_features is not None:
-            feat_np = ops.convert_to_numpy(audio_features)
-            if feat_np.ndim == 2:
-                feat_np = feat_np[None, ...]
-            audio_seqlens = np.full(
-                feat_np.shape[0], feat_np.shape[1], dtype=np.int64
-            )
+        audio_seqlens = (
+            None
+            if audio_lens is None
+            else np.asarray(audio_lens, dtype=np.int64)
+        )
         n_videos = (
             0
             if video_grid_thw is None
@@ -392,26 +411,19 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         ae = getattr(getattr(self, "backbone", None), "audio_encoder", None)
         return int(getattr(ae, "n_window", 50)) * 2
 
-    def _num_audio_tokens(self, audio_features):
+    def _num_audio_tokens(self, audio_lens):
         """Return per-audio post-CNN token counts.
 
-        ``audio_features`` is expected to be ``(num_audios, time,
-        num_mel_bins)`` from the converter; we treat the time axis as
-        the input length to the encoder downsampler.
+        ``audio_lens`` is the list of true mel-frame counts per clip
+        (``feature_attention_mask.sum(-1)`` in HF terms).
         """
-        if audio_features is None:
+        if not audio_lens:
             return []
-        feat_np = ops.convert_to_numpy(audio_features)
-        if feat_np.ndim == 2:
-            feat_np = feat_np[None, ...]
         chunk_len = self._audio_chunk_len()
-        counts = []
-        for i in range(feat_np.shape[0]):
-            time_len = int(feat_np[i].shape[0])
-            counts.append(
-                int(_get_feat_extract_output_length(time_len, chunk_len))
-            )
-        return counts
+        return [
+            int(_get_feat_extract_output_length(int(n), chunk_len))
+            for n in audio_lens
+        ]
 
     def _tokenize_with_special_tokens(
         self,
@@ -516,6 +528,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         image_pixel_values,
         image_grid_thw,
         vision_indices,
+        audio_lens=None,
         backbone=None,
     ):
         """Write all multimodal keys into ``output``.
@@ -587,6 +600,11 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 if audio_indices is not None
                 else np.zeros((0,), dtype="int32")
             )
+            output["audio_lengths"] = (
+                np.asarray(audio_lens, dtype="int32")
+                if audio_lens
+                else np.zeros((0,), dtype="int32")
+            )
 
     @preprocessing_function
     def call(
@@ -631,9 +649,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         prompts, _ = self._flatten_prompts(x["prompts"])
         responses_text = x.get("responses", None)
         use_audio_in_video = bool(x.get("use_audio_in_video", False))
-        audio_features, image_out, video_out = self._process_multimodal_inputs(
-            x
-        )
+        (
+            audio_features,
+            audio_lens,
+            image_out,
+            video_out,
+        ) = self._process_multimodal_inputs(x)
 
         image_grid_thw = (
             image_out["grid_thw"] if image_out is not None else None
@@ -643,7 +664,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         )
         num_image_tokens = self._num_image_tokens(image_grid_thw)
         num_video_tokens = self._num_image_tokens(video_grid_thw)
-        num_audio_tokens = self._num_audio_tokens(audio_features)
+        num_audio_tokens = self._num_audio_tokens(audio_lens)
 
         prompt_ids = [
             self._tokenize_with_special_tokens(
@@ -705,7 +726,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             x["padding_mask"],
             image_grid_thw,
             video_grid_thw,
-            audio_features,
+            audio_lens,
             use_audio_in_video=use_audio_in_video,
         )
         self._add_multimodal_to_output(
@@ -715,6 +736,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             pixel_values,
             merged_grid_thw,
             vision_indices,
+            audio_lens=audio_lens,
             backbone=getattr(self, "backbone", None),
         )
         if self._has_multimodal_converters():
@@ -752,9 +774,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             return result
 
         prompts, _ = self._flatten_prompts(x["prompts"])
-        audio_features, image_out, video_out = self._process_multimodal_inputs(
-            x
-        )
+        (
+            audio_features,
+            audio_lens,
+            image_out,
+            video_out,
+        ) = self._process_multimodal_inputs(x)
         image_grid_thw = (
             image_out["grid_thw"] if image_out is not None else None
         )
@@ -763,7 +788,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         )
         num_image_tokens = self._num_image_tokens(image_grid_thw)
         num_video_tokens = self._num_image_tokens(video_grid_thw)
-        num_audio_tokens = self._num_audio_tokens(audio_features)
+        num_audio_tokens = self._num_audio_tokens(audio_lens)
 
         prompt_ids = [
             self._tokenize_with_special_tokens(
@@ -792,7 +817,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             padding_mask,
             image_grid_thw,
             video_grid_thw,
-            audio_features,
+            audio_lens,
             use_audio_in_video=bool(x.get("use_audio_in_video", False)),
         )
         result = {
@@ -806,6 +831,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             pixel_values,
             merged_grid_thw,
             vision_indices,
+            audio_lens=audio_lens,
             backbone=getattr(self, "backbone", None),
         )
         if self._has_multimodal_converters():
@@ -852,7 +878,10 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         audio_embeddings = None
         if has_audio and getattr(backbone, "has_audio", False):
             audio_embeddings = backbone.audio_encoder(
-                {"input_features": audio_features}
+                {
+                    "input_features": audio_features,
+                    "feature_lengths": result.get("audio_lengths"),
+                }
             )
 
         result["initial_embeddings"] = backbone.interleave_embeddings(
