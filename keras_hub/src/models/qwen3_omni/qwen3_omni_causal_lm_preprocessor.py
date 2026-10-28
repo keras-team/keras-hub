@@ -2,7 +2,6 @@ import re
 
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
@@ -31,7 +30,13 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_tokenizer import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_video_converter import (
     Qwen3OmniVideoConverter,
 )
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 def _merge_vision_outputs(outputs):
@@ -147,6 +152,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         add_end_token=True,
         **kwargs,
     ):
+        assert_tf_installed("Qwen3OmniCausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,
@@ -242,7 +248,7 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         """
         if isinstance(value, (list, tuple)):
             return list(value)
-        if isinstance(value, tf.RaggedTensor):
+        if tf is not None and isinstance(value, tf.RaggedTensor):
             # Rows of a singly-ragged tensor are already dense; only
             # deeper raggedness needs ``to_tensor``.
             return [
@@ -496,20 +502,22 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         functional graph reshapes per-batch shapes as needed).
         """
         if not target_token_ids:
-            return tf.zeros((0,), dtype="int32")
+            return ops.zeros((0,), dtype="int32")
         token_ids_np = ops.convert_to_numpy(token_ids).reshape(-1)
         mask = np.zeros_like(token_ids_np, dtype=bool)
         for tid in target_token_ids:
             if tid is None:
                 continue
             mask |= token_ids_np == tid
-        return tf.constant(np.where(mask)[0].astype(np.int32))
+        return ops.convert_to_tensor(
+            np.where(mask)[0].astype(np.int32), dtype="int32"
+        )
 
     def _flatten_prompts(self, prompts):
         """Flatten a string / Tensor / list of prompts to a list of str."""
         if isinstance(prompts, str):
             return [prompts], False
-        if isinstance(prompts, tf.Tensor):
+        if tf is not None and isinstance(prompts, tf.Tensor):
             if len(prompts.shape) == 0:
                 return [prompts.numpy().decode("utf-8")], False
             return [p.numpy().decode("utf-8") for p in prompts], True
