@@ -862,8 +862,12 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             audio_embeddings=audio_embeddings,
             audio_indices=result.get("audio_indices"),
         )
-        if deepstack_features is not None:
-            result["deepstack_features"] = deepstack_features
+        if deepstack_features:
+            # Stack into one tensor: a list value would break the
+            # Functional input mapping when the dict is passed to
+            # `model()`, and `deepstack_features[i]` works the same on
+            # the stacked tensor.
+            result["deepstack_features"] = ops.stack(deepstack_features, axis=0)
             result["visual_pos_mask"] = _vision_indices_to_mask(
                 result["vision_indices"], result["initial_embeddings"]
             )
