@@ -19,6 +19,9 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
 from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
     Qwen3OmniBackbone,
 )
+from keras_hub.src.models.qwen3_omni.qwen3_omni_backbone import (
+    _vision_indices_to_mask,
+)
 from keras_hub.src.models.qwen3_omni.qwen3_omni_image_converter import (
     Qwen3OmniImageConverter,
 )
@@ -49,6 +52,27 @@ def _merge_vision_outputs(outputs):
         "patches": ops.concatenate([out["patches"] for out in outputs], axis=0),
         "grid_thw": ops.stack([out["grid_thw"] for out in outputs]),
     }
+
+
+def _merge_patches_and_grids(image_out, video_out):
+    """Merge image / video converter outputs for the shared encoder.
+
+    Returns ``(pixel_values, grid_thw)`` as flat concatenated tensors in
+    ``[images..., videos...]`` order, or ``(None, None)`` when neither
+    modality is present.
+    """
+    patches, grids = [], []
+    for out in (image_out, video_out):
+        if out is not None:
+            patches.append(out["patches"])
+            grids.append(out["grid_thw"])
+    if not patches:
+        return None, None
+    pixel_values = (
+        ops.concatenate(patches, axis=0) if len(patches) > 1 else patches[0]
+    )
+    grid_thw = ops.concatenate(grids, axis=0) if len(grids) > 1 else grids[0]
+    return pixel_values, grid_thw
 
 
 @keras_hub_export(
@@ -206,6 +230,24 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             sequence_length=self.sequence_length,
         )
 
+    @staticmethod
+    def _as_item_list(value, batched_rank):
+        """Normalize a modality input to a list of per-item tensors.
+
+        ``convert_preprocessing_inputs`` collapses a list of same-shape
+        arrays into a single stacked tensor, so multi-item inputs can
+        arrive as a Python list, a ``tf.RaggedTensor``, or a dense
+        tensor with a leading item axis. ``batched_rank`` is the rank
+        of a stacked batch (image 4, video 5, audio 2).
+        """
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        if isinstance(value, tf.RaggedTensor):
+            return [value[i].to_tensor() for i in range(int(value.nrows()))]
+        if value is not None and len(ops.shape(value)) == batched_rank:
+            return [value[i] for i in range(int(ops.shape(value)[0]))]
+        return [value]
+
     def _process_multimodal_inputs(self, x):
         """Run modality-specific converters on a sample dict.
 
@@ -217,10 +259,8 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         """
         audio_features = None
         if "audio" in x and self.audio_converter is not None:
-            audio = x["audio"]
-            audio_items = audio if isinstance(audio, (list, tuple)) else [audio]
             feats = []
-            for a in audio_items:
+            for a in self._as_item_list(x["audio"], 2):
                 f = self.audio_converter(a)
                 # A rank-1 waveform returns squeezed ``(frames, mels)``;
                 # the backbone consumes ``(n_audios, frames, mels)``.
@@ -233,20 +273,20 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
 
         image_out = None
         if "images" in x and self.image_converter is not None:
-            images = x["images"]
-            image_items = (
-                images if isinstance(images, (list, tuple)) else [images]
-            )
             image_out = _merge_vision_outputs(
-                [self.image_converter(img) for img in image_items]
+                [
+                    self.image_converter(img)
+                    for img in self._as_item_list(x["images"], 4)
+                ]
             )
 
         video_out = None
         if "video" in x and self.video_converter is not None:
-            video = x["video"]
-            video_items = video if isinstance(video, (list, tuple)) else [video]
             video_out = _merge_vision_outputs(
-                [self.video_converter(vid) for vid in video_items]
+                [
+                    self.video_converter(vid)
+                    for vid in self._as_item_list(x["video"], 5)
+                ]
             )
 
         return audio_features, image_out, video_out
@@ -258,6 +298,79 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             "spatial_merge_size",
             2,
         )
+
+    def _position_id_per_seconds(self):
+        return getattr(
+            getattr(self, "backbone", None), "position_id_per_seconds", 25
+        )
+
+    def _has_multimodal_converters(self):
+        return (
+            self.image_converter is not None
+            or self.video_converter is not None
+            or self.audio_converter is not None
+        )
+
+    def _compute_position_ids(
+        self,
+        token_ids,
+        padding_mask,
+        image_grid_thw,
+        video_grid_thw,
+        audio_features,
+        use_audio_in_video=False,
+    ):
+        """NumPy M-RoPE positions ``(batch, 3, seq)`` + per-batch deltas."""
+        from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm import (
+            _compute_mrope_index,
+        )
+
+        audio_seqlens = None
+        if audio_features is not None:
+            feat_np = ops.convert_to_numpy(audio_features)
+            if feat_np.ndim == 2:
+                feat_np = feat_np[None, ...]
+            audio_seqlens = np.full(
+                feat_np.shape[0], feat_np.shape[1], dtype=np.int64
+            )
+        n_videos = (
+            0
+            if video_grid_thw is None
+            else int(ops.convert_to_numpy(video_grid_thw).shape[0])
+        )
+        second_per_grids = (
+            np.ones(n_videos, dtype=np.float64) if n_videos else None
+        )
+        pos_np, deltas_np = _compute_mrope_index(
+            ops.convert_to_numpy(token_ids),
+            image_grid_thw=(
+                None
+                if image_grid_thw is None
+                else ops.convert_to_numpy(image_grid_thw)
+            ),
+            video_grid_thw=(
+                None
+                if video_grid_thw is None
+                else ops.convert_to_numpy(video_grid_thw)
+            ),
+            audio_seqlens=audio_seqlens,
+            second_per_grids=second_per_grids,
+            attention_mask=ops.convert_to_numpy(padding_mask),
+            use_audio_in_video=use_audio_in_video,
+            image_token_id=self.image_token_id,
+            video_token_id=self.video_token_id,
+            audio_token_id=self.audio_token_id,
+            vision_start_token_id=getattr(
+                self.tokenizer, "vision_start_token_id", None
+            ),
+            audio_start_token_id=getattr(
+                self.tokenizer, "audio_start_token_id", None
+            ),
+            position_id_per_seconds=self._position_id_per_seconds(),
+            spatial_merge_size=self._spatial_merge_size(),
+            audio_chunk_len=self._audio_chunk_len(),
+        )
+        return np.transpose(pos_np, (1, 0, 2)).astype("int32"), deltas_np
 
     def _num_image_tokens(self, image_grid_thw):
         """Return per-image visual token counts."""
@@ -274,6 +387,11 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             for i in range(grid_np.shape[0])
         ]
 
+    def _audio_chunk_len(self):
+        """Mel frames per audio-encoder chunk (``n_window * 2``)."""
+        ae = getattr(getattr(self, "backbone", None), "audio_encoder", None)
+        return int(getattr(ae, "n_window", 50)) * 2
+
     def _num_audio_tokens(self, audio_features):
         """Return per-audio post-CNN token counts.
 
@@ -286,10 +404,13 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         feat_np = ops.convert_to_numpy(audio_features)
         if feat_np.ndim == 2:
             feat_np = feat_np[None, ...]
+        chunk_len = self._audio_chunk_len()
         counts = []
         for i in range(feat_np.shape[0]):
             time_len = int(feat_np[i].shape[0])
-            counts.append(int(_get_feat_extract_output_length(time_len)))
+            counts.append(
+                int(_get_feat_extract_output_length(time_len, chunk_len))
+            )
         return counts
 
     def _tokenize_with_special_tokens(
@@ -499,12 +620,17 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 None,
                 backbone=getattr(self, "backbone", None),
             )
+            if self._has_multimodal_converters():
+                x["position_ids"], _ = self._compute_position_ids(
+                    x["token_ids"], x["padding_mask"], None, None, None
+                )
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
             return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
         # Multimodal dict input.
         prompts, _ = self._flatten_prompts(x["prompts"])
         responses_text = x.get("responses", None)
+        use_audio_in_video = bool(x.get("use_audio_in_video", False))
         audio_features, image_out, video_out = self._process_multimodal_inputs(
             x
         )
@@ -571,18 +697,28 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             x["token_ids"], [self.audio_token_id]
         )
 
-        image_pixel_values = (
-            image_out["patches"] if image_out is not None else None
+        pixel_values, merged_grid_thw = _merge_patches_and_grids(
+            image_out, video_out
+        )
+        pos_ids, _ = self._compute_position_ids(
+            x["token_ids"],
+            x["padding_mask"],
+            image_grid_thw,
+            video_grid_thw,
+            audio_features,
+            use_audio_in_video=use_audio_in_video,
         )
         self._add_multimodal_to_output(
             x,
             audio_features,
             audio_indices,
-            image_pixel_values,
-            image_grid_thw,
+            pixel_values,
+            merged_grid_thw,
             vision_indices,
             backbone=getattr(self, "backbone", None),
         )
+        if self._has_multimodal_converters():
+            x["position_ids"] = pos_ids
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     @preprocessing_function
@@ -609,6 +745,10 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
                 None,
                 backbone=getattr(self, "backbone", None),
             )
+            if self._has_multimodal_converters():
+                result["position_ids"], _ = self._compute_position_ids(
+                    token_ids, padding_mask, None, None, None
+                )
             return result
 
         prompts, _ = self._flatten_prompts(x["prompts"])
@@ -644,8 +784,16 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
         )
         audio_indices = self._compute_indices(token_ids, [self.audio_token_id])
 
-        image_pixel_values = (
-            image_out["patches"] if image_out is not None else None
+        pixel_values, merged_grid_thw = _merge_patches_and_grids(
+            image_out, video_out
+        )
+        pos_ids, _ = self._compute_position_ids(
+            token_ids,
+            padding_mask,
+            image_grid_thw,
+            video_grid_thw,
+            audio_features,
+            use_audio_in_video=bool(x.get("use_audio_in_video", False)),
         )
         result = {
             "token_ids": token_ids,
@@ -655,9 +803,67 @@ class Qwen3OmniCausalLMPreprocessor(CausalLMPreprocessor):
             result,
             audio_features,
             audio_indices,
-            image_pixel_values,
-            image_grid_thw,
+            pixel_values,
+            merged_grid_thw,
             vision_indices,
             backbone=getattr(self, "backbone", None),
         )
+        if self._has_multimodal_converters():
+            result["position_ids"] = pos_ids
+        self._add_initial_embeddings(result)
         return result
+
+    def _add_initial_embeddings(self, result):
+        """Fold vision / audio encoder outputs into text embeddings.
+
+        The encoders contain eager-only Python (per-item grid loops,
+        dynamic shapes), which cannot run inside ``generate_step``'s
+        ``tf.function``. ``generate_preprocess`` runs eagerly, so we run
+        the encoders here and hand the model a ready-made
+        ``initial_embeddings`` tensor (plus ``deepstack_features`` and
+        ``visual_pos_mask`` when vision features exist). Requires the
+        owning ``Qwen3OmniCausalLM`` to have wired ``self.backbone``.
+        """
+        backbone = getattr(self, "backbone", None)
+        if backbone is None:
+            return
+        pixel_values = result.get("pixel_values")
+        audio_features = result.get("audio_features")
+        has_pixels = (
+            pixel_values is not None and int(ops.shape(pixel_values)[0]) > 0
+        )
+        has_audio = (
+            audio_features is not None and int(ops.shape(audio_features)[0]) > 0
+        )
+        if not has_pixels and not has_audio:
+            return
+
+        text_embeddings = backbone.token_embedding(result["token_ids"])
+        vision_embeddings = deepstack_features = None
+        if has_pixels and getattr(backbone, "has_vision", False):
+            vision_out = backbone.vision_encoder(
+                {
+                    "pixel_values": pixel_values,
+                    "grid_thw": result["image_grid_thw"],
+                }
+            )
+            vision_embeddings = vision_out["pooler_output"]
+            deepstack_features = vision_out.get("deepstack_features")
+        audio_embeddings = None
+        if has_audio and getattr(backbone, "has_audio", False):
+            audio_embeddings = backbone.audio_encoder(
+                {"input_features": audio_features}
+            )
+
+        result["initial_embeddings"] = backbone.interleave_embeddings(
+            text_embeddings=text_embeddings,
+            vision_embeddings=vision_embeddings,
+            vision_indices=result.get("vision_indices"),
+            audio_embeddings=audio_embeddings,
+            audio_indices=result.get("audio_indices"),
+        )
+        if deepstack_features is not None:
+            result["deepstack_features"] = deepstack_features
+            result["visual_pos_mask"] = _vision_indices_to_mask(
+                result["vision_indices"], result["initial_embeddings"]
+            )

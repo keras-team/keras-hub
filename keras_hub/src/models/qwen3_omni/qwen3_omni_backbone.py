@@ -253,6 +253,16 @@ class Qwen3OmniBackbone(Backbone):
                 {"input_features": audio_features_input}
             )
 
+        # Multimodal M-RoPE positions are supplied by the preprocessor
+        # as a ``(batch, 3, seq)`` input; text-only calls fall back to
+        # padding-mask positions via ``_fill_missing_multimodal_inputs``.
+        position_ids_input = None
+        if self.is_multimodal:
+            position_ids_input = keras.Input(
+                shape=(3, None), dtype="int32", name="position_ids"
+            )
+            graph_inputs["position_ids"] = position_ids_input
+
         if self.is_multimodal:
             x = self.interleave_embeddings(
                 text_embeddings=text_embeddings,
@@ -264,11 +274,12 @@ class Qwen3OmniBackbone(Backbone):
         else:
             x = text_embeddings
 
-        # Text-only positions derived from padding mask; multimodal
-        # M-RoPE positions are threaded in by the causal LM.
-        position_ids = _expand_position_ids_from_padding_mask(
-            padding_mask_input
-        )
+        if position_ids_input is not None:
+            position_ids = ops.transpose(position_ids_input, (1, 0, 2))
+        else:
+            position_ids = _expand_position_ids_from_padding_mask(
+                padding_mask_input
+            )
 
         visual_pos_mask_tensor = None
         if self.has_vision and deepstack_features is not None:
@@ -353,6 +364,11 @@ class Qwen3OmniBackbone(Backbone):
                 inputs["audio_features"] = ops.zeros((0, 0, ae.num_mel_bins))
             if "audio_indices" not in inputs:
                 inputs["audio_indices"] = ops.zeros((0,), dtype="int32")
+        if self.is_multimodal and "position_ids" not in inputs:
+            inputs["position_ids"] = ops.transpose(
+                _expand_position_ids_from_padding_mask(inputs["padding_mask"]),
+                (1, 0, 2),
+            )
         return inputs
 
     def __call__(self, inputs, *args, **kwargs):

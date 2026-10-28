@@ -264,10 +264,33 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             )
 
         input_features = ops.cast(input_features, self.compute_dtype)
+        batch_size = ops.shape(input_features)[0]
 
-        # Apply convolutional downsampling
-        # Input: (batch, time, mel_bins) -> (batch, time, mel_bins, 1)
-        hidden_states = ops.expand_dims(input_features, axis=-1)
+        # HF splits the mel axis into chunks of `n_window * 2` frames and
+        # runs the conv stack per chunk; each full chunk yields
+        # `ceil(chunk_len / 8)` tokens and chunk boundaries reset both
+        # the conv receptive field and the sinusoidal positions.
+        chunk_len = int(self.n_window) * 2
+        time_steps = int(time_steps)
+        n_chunks = -(-time_steps // chunk_len)
+        pad = n_chunks * chunk_len - time_steps
+        if pad:
+            input_features = ops.concatenate(
+                [
+                    input_features,
+                    ops.zeros(
+                        (batch_size, pad, self.num_mel_bins),
+                        dtype=input_features.dtype,
+                    ),
+                ],
+                axis=1,
+            )
+
+        # (batch, chunks, chunk_len, mels) -> (batch*chunks, len, mels, 1)
+        hidden_states = ops.reshape(
+            input_features, (-1, chunk_len, self.num_mel_bins)
+        )
+        hidden_states = ops.expand_dims(hidden_states, axis=-1)
 
         hidden_states = self.conv2d1(hidden_states, training=training)
         hidden_states = ops.gelu(hidden_states)
@@ -279,21 +302,53 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         hidden_states = ops.gelu(hidden_states)
 
         # Flatten spatial dimensions and project
-        batch_size = ops.shape(hidden_states)[0]
-        seq_len = ops.shape(hidden_states)[1]
+        chunk_after_cnn = -(-chunk_len // 8)
         hidden_states = ops.transpose(hidden_states, [0, 1, 3, 2])
-        hidden_states = ops.reshape(hidden_states, [batch_size, seq_len, -1])
+        flattened = ops.shape(hidden_states)[2] * ops.shape(hidden_states)[3]
+        hidden_states = ops.reshape(
+            hidden_states, (-1, chunk_after_cnn, flattened)
+        )
         hidden_states = self.conv_out(hidden_states)
 
         # Scale embeddings
         hidden_states = hidden_states * self.embed_scale
 
-        # Add position embeddings
+        # Add position embeddings (reset per chunk, matching HF).
         positions = ops.cast(
-            self.positional_embedding[:seq_len, :], hidden_states.dtype
+            self.positional_embedding[:chunk_after_cnn, :],
+            hidden_states.dtype,
         )
         hidden_states = hidden_states + positions
 
+        # (batch*chunks, chunk_after_cnn, d) -> (batch, chunks*len, d),
+        # then keep only the first `feat_len(L_i)` slots of each chunk
+        # (the tail chunk is shorter than `chunk_len`). This is what
+        # HF's `get_valid_indices` selects.
+        hidden_states = ops.reshape(
+            hidden_states,
+            (batch_size, n_chunks * chunk_after_cnn, self.d_model),
+        )
+        chunk_lens = np.minimum(
+            chunk_len,
+            time_steps - np.arange(n_chunks) * chunk_len,
+        )
+        keep = np.array(
+            [
+                _get_feat_extract_output_length(int(l), chunk_len)
+                for l in chunk_lens
+            ],
+            dtype=np.int64,
+        )
+        keep_mask = (
+            np.arange(chunk_after_cnn, dtype=np.int64)[None, :] < keep[:, None]
+        )
+        keep_idx = ops.convert_to_tensor(
+            np.where(keep_mask.reshape(-1))[0].astype(np.int64),
+            dtype="int32",
+        )
+        hidden_states = ops.take(hidden_states, keep_idx, axis=1)
+
+        seq_len = ops.shape(hidden_states)[1]
         # Build block-diagonal attention mask
         attention_mask = self._build_window_attention_mask(seq_len)
 

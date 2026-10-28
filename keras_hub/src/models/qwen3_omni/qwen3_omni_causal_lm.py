@@ -15,6 +15,358 @@ from keras_hub.src.models.qwen3_omni.qwen3_omni_causal_lm_preprocessor import (
 )
 from keras_hub.src.utils.tensor_utils import any_equal
 
+_DEFAULT_POSITION_ID_PER_SECONDS = 25
+
+
+def _compute_mrope_index(
+    token_ids,
+    *,
+    image_grid_thw=None,
+    video_grid_thw=None,
+    audio_seqlens=None,
+    second_per_grids=None,
+    attention_mask=None,
+    use_audio_in_video=False,
+    image_token_id=None,
+    video_token_id=None,
+    audio_token_id=None,
+    vision_start_token_id=None,
+    audio_start_token_id=None,
+    position_id_per_seconds=_DEFAULT_POSITION_ID_PER_SECONDS,
+    spatial_merge_size=2,
+    audio_chunk_len=100,
+):
+    """Pure-NumPy M-RoPE position ids, mirroring HF ``get_rope_index``.
+
+    Returns ``(position_ids, deltas)`` with shapes ``(3, batch, seq)``
+    and ``(batch,)``. See ``compute_multimodal_rope_index`` for the
+    argument contract.
+    """
+    from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
+        _get_feat_extract_output_length,
+    )
+
+    token_ids = np.asarray(token_ids, dtype=np.int64)
+    if token_ids.ndim != 2:
+        raise ValueError(
+            f"token_ids must be 2-D (batch, seq); got {token_ids.shape}"
+        )
+    batch_size, seq_len = token_ids.shape
+
+    attn_bool = (
+        (np.asarray(attention_mask, dtype=np.int64) == 1)
+        if attention_mask is not None
+        else np.ones_like(token_ids, dtype=bool)
+    )
+
+    def _to_np(arr, dtype):
+        if arr is None:
+            return None
+        arr = np.asarray(arr, dtype=dtype)
+        return None if arr.size == 0 else arr
+
+    image_grid_thw = _to_np(image_grid_thw, np.int64)
+    video_grid_thw = _to_np(video_grid_thw, np.int64)
+    audio_seqlens = _to_np(audio_seqlens, np.int64)
+    second_per_grids = _to_np(second_per_grids, np.float64)
+
+    # Text-only fallback: cumsum-based positions broadcast to 3 channels.
+    if (
+        image_grid_thw is None
+        and video_grid_thw is None
+        and audio_seqlens is None
+    ):
+        cumulative = np.cumsum(attn_bool.astype(np.int64), -1) - 1
+        cumulative = np.where(attn_bool, cumulative, np.ones_like(cumulative))
+        position_ids = np.broadcast_to(
+            cumulative[None], (3, batch_size, seq_len)
+        ).copy()
+        deltas = (
+            position_ids.max(axis=0).max(axis=-1) + 1 - attn_bool.sum(axis=-1)
+        )
+        return position_ids.astype(np.int64), deltas.astype(np.int64)
+
+    position_ids = np.zeros((3, batch_size, seq_len), dtype=np.int64)
+    deltas = np.zeros((batch_size,), dtype=np.int64)
+    image_idx = video_idx = audio_idx = 0
+
+    def _vision_pos(start_idx, vision_idx, t_index, grid_hs, grid_ws):
+        """``(3, T*llm_h*llm_w)`` M-RoPE positions for one vision clip."""
+        llm_h = int(grid_hs[vision_idx]) // spatial_merge_size
+        llm_w = int(grid_ws[vision_idx]) // spatial_merge_size
+        t_index = np.asarray(t_index, dtype=np.int64)
+        t_rep = np.repeat(t_index, llm_h * llm_w)
+        h_rep = np.tile(
+            np.repeat(np.arange(llm_h, dtype=np.int64), llm_w),
+            len(t_index),
+        )
+        w_rep = np.tile(np.arange(llm_w, dtype=np.int64), len(t_index) * llm_h)
+        return np.stack([t_rep, h_rep, w_rep], axis=0) + start_idx
+
+    def _const(length, start):
+        """``(3, length)`` block holding ``arange(length) + start``."""
+        return (
+            np.broadcast_to(
+                np.arange(length, dtype=np.int64), (3, length)
+            ).copy()
+            + start
+        )
+
+    def _try_index(needle, start):
+        try:
+            return tokens.index(int(needle), start)
+        except ValueError:
+            return len(tokens) + 1
+
+    for b in range(batch_size):
+        valid = attn_bool[b]
+        row = token_ids[b][valid]
+        tokens = row.tolist()
+        seq_pos_ids = []
+        st = 0
+
+        # Count modality occurrences.
+        vs_idx = (
+            np.where(row == vision_start_token_id)[0]
+            if vision_start_token_id is not None
+            else np.array([], dtype=np.int64)
+        )
+        following = (
+            row[np.minimum(vs_idx + 1, len(row) - 1)]
+            if vs_idx.size
+            else np.array([], dtype=row.dtype)
+        )
+        audio_nums = (
+            int(np.sum(row == audio_start_token_id))
+            if audio_start_token_id is not None
+            else 0
+        )
+        image_nums = (
+            int(np.sum(following == image_token_id))
+            if image_token_id is not None
+            else 0
+        )
+        if use_audio_in_video and audio_start_token_id is not None:
+            video_nums = int(np.sum(following == audio_start_token_id))
+        elif video_token_id is not None:
+            video_nums = int(np.sum(following == video_token_id))
+        else:
+            video_nums = 0
+
+        remain_images, remain_videos, remain_audios = (
+            image_nums,
+            video_nums,
+            audio_nums,
+        )
+        multimodal_nums = (
+            image_nums + audio_nums
+            if use_audio_in_video
+            else image_nums + video_nums + audio_nums
+        )
+
+        for _ in range(multimodal_nums):
+            st_idx = int(seq_pos_ids[-1].max() + 1) if seq_pos_ids else 0
+
+            # Locate the next vision_start / audio_start.
+            ed_vs = (
+                _try_index(vision_start_token_id, st)
+                if (
+                    vision_start_token_id is not None
+                    and (remain_videos > 0 or remain_images > 0)
+                    and (
+                        (
+                            image_token_id is not None
+                            and image_token_id in tokens
+                        )
+                        or (
+                            video_token_id is not None
+                            and video_token_id in tokens
+                        )
+                    )
+                )
+                else len(tokens) + 1
+            )
+            ed_as = (
+                _try_index(audio_start_token_id, st)
+                if (
+                    audio_start_token_id is not None
+                    and audio_token_id is not None
+                    and audio_token_id in tokens
+                    and remain_audios > 0
+                )
+                else len(tokens) + 1
+            )
+            min_ed = min(ed_vs, ed_as)
+
+            # Text run preceding the next multimodal marker.
+            text_len = min_ed - st
+            if text_len > 0:
+                seq_pos_ids.append(_const(text_len, st_idx))
+                st_idx += text_len
+
+            # BOS / EOS lengths (2 each for audio-in-video, else 1).
+            aiv = use_audio_in_video and min_ed == ed_vs and ed_vs + 1 == ed_as
+            bos_len = eos_len = 2 if aiv else 1
+            seq_pos_ids.append(_const(bos_len, st_idx))
+            st_idx += bos_len
+
+            if min_ed == ed_as:
+                # Audio-only branch.
+                if audio_seqlens is None:
+                    raise ValueError(
+                        "audio_seqlens required for audio markers."
+                    )
+                audio_len = int(
+                    _get_feat_extract_output_length(
+                        int(audio_seqlens[audio_idx]), audio_chunk_len
+                    )
+                )
+                seq_pos_ids.append(_const(audio_len, st_idx))
+                st += int(text_len + bos_len + audio_len + eos_len)
+                audio_idx += 1
+                remain_audios -= 1
+
+            elif (
+                min_ed == ed_vs
+                and image_token_id is not None
+                and ed_vs + 1 < len(tokens)
+                and tokens[ed_vs + 1] == image_token_id
+            ):
+                # Image-only branch.
+                grid_t = int(image_grid_thw[image_idx][0])
+                t_index = (
+                    np.arange(grid_t, dtype=np.int64) * position_id_per_seconds
+                )
+                seq_pos_ids.append(
+                    _vision_pos(
+                        st_idx,
+                        image_idx,
+                        t_index,
+                        image_grid_thw[:, 1],
+                        image_grid_thw[:, 2],
+                    )
+                )
+                image_len = int(
+                    np.prod(image_grid_thw[image_idx])
+                    // (spatial_merge_size**2)
+                )
+                st += int(text_len + bos_len + image_len + eos_len)
+                image_idx += 1
+                remain_images -= 1
+
+            elif (
+                min_ed == ed_vs
+                and not use_audio_in_video
+                and video_token_id is not None
+                and ed_vs + 1 < len(tokens)
+                and tokens[ed_vs + 1] == video_token_id
+            ):
+                # Video-only branch.
+                if video_grid_thw is None or second_per_grids is None:
+                    raise ValueError(
+                        "video_grid_thw and second_per_grids required"
+                        " for video markers."
+                    )
+                grid_t = int(video_grid_thw[video_idx][0])
+                t_index = (
+                    np.arange(grid_t, dtype=np.float64)
+                    * float(second_per_grids[video_idx])
+                    * position_id_per_seconds
+                ).astype(np.int64)
+                seq_pos_ids.append(
+                    _vision_pos(
+                        st_idx,
+                        video_idx,
+                        t_index,
+                        video_grid_thw[:, 1],
+                        video_grid_thw[:, 2],
+                    )
+                )
+                video_len = int(
+                    np.prod(video_grid_thw[video_idx])
+                    // (spatial_merge_size**2)
+                )
+                st += int(text_len + bos_len + video_len + eos_len)
+                video_idx += 1
+                remain_videos -= 1
+
+            elif aiv:
+                # Audio-in-Video (interleaved).
+                if (
+                    video_grid_thw is None
+                    or second_per_grids is None
+                    or audio_seqlens is None
+                ):
+                    raise ValueError(
+                        "video_grid_thw, second_per_grids, and"
+                        " audio_seqlens required for use_audio_in_video."
+                    )
+                audio_len = int(
+                    _get_feat_extract_output_length(
+                        int(audio_seqlens[audio_idx]), audio_chunk_len
+                    )
+                )
+                audio_pos = _const(audio_len, st_idx)
+                grid_t = int(video_grid_thw[video_idx][0])
+                t_index = (
+                    np.arange(grid_t, dtype=np.float64)
+                    * float(second_per_grids[video_idx])
+                    * position_id_per_seconds
+                ).astype(np.int64)
+                video_pos = _vision_pos(
+                    st_idx,
+                    video_idx,
+                    t_index,
+                    video_grid_thw[:, 1],
+                    video_grid_thw[:, 2],
+                )
+                # Merge sorted by temporal channel.
+                v, a = 0, 0
+                while v < video_pos.shape[-1] and a < audio_pos.shape[-1]:
+                    if video_pos[0][v] <= audio_pos[0][a]:
+                        seq_pos_ids.append(video_pos[:, v : v + 1])
+                        v += 1
+                    else:
+                        seq_pos_ids.append(audio_pos[:, a : a + 1])
+                        a += 1
+                if v < video_pos.shape[-1]:
+                    seq_pos_ids.append(video_pos[:, v:])
+                if a < audio_pos.shape[-1]:
+                    seq_pos_ids.append(audio_pos[:, a:])
+                video_len = int(
+                    np.prod(video_grid_thw[video_idx])
+                    // (spatial_merge_size**2)
+                )
+                st += int(text_len + bos_len + audio_len + video_len + eos_len)
+                audio_idx += 1
+                video_idx += 1
+                remain_videos -= 1
+                remain_audios -= 1
+            else:
+                break  # Defensive: avoids infinite loop on bad input.
+
+            st_idx = int(seq_pos_ids[-1].max() + 1)
+            seq_pos_ids.append(_const(eos_len, st_idx))
+
+        # Trailing text after the last multimodal block.
+        if st < len(tokens):
+            st_idx = int(seq_pos_ids[-1].max() + 1) if seq_pos_ids else 0
+            seq_pos_ids.append(_const(len(tokens) - st, st_idx))
+
+        flat = (
+            np.concatenate(seq_pos_ids, axis=1)
+            if seq_pos_ids
+            else np.zeros((3, 0), dtype=np.int64)
+        )
+        # A packer-truncated prompt can leave fewer real positions than
+        # the expanded multimodal span; clip rather than misalign.
+        flat = flat[:, : len(tokens)]
+        full = np.zeros((3, seq_len), dtype=np.int64)
+        full[:, valid] = flat
+        position_ids[:, b, :] = full
+        deltas[b] = int(flat.max() + 1 - len(tokens)) if flat.size else 0
+    return position_ids, deltas
+
 
 @keras_hub_export("keras_hub.models.Qwen3OmniCausalLM")
 class Qwen3OmniCausalLM(CausalLM):
@@ -35,6 +387,13 @@ class Qwen3OmniCausalLM(CausalLM):
     def __init__(self, backbone, preprocessor=None, **kwargs):
         self.backbone = backbone
         self.preprocessor = preprocessor
+        if preprocessor is not None:
+            # Lets the preprocessor run the encoders eagerly inside
+            # `generate_preprocess`, so `generate_step` stays free of
+            # the encoders' eager-only Python under `tf.function`. The
+            # `object.__setattr__` keeps the backbone out of the
+            # preprocessor's layer tracking (it is not a sub-layer).
+            object.__setattr__(preprocessor, "backbone", backbone)
         inputs = backbone.input
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
@@ -169,356 +528,37 @@ class Qwen3OmniCausalLM(CausalLM):
             sub-bands; ``deltas`` is the per-batch offset between the
             max M-RoPE position and the trailing-text cursor.
         """
-        token_ids = np.asarray(token_ids, dtype=np.int64)
-        if token_ids.ndim != 2:
-            raise ValueError(
-                f"token_ids must be 2-D (batch, seq); got {token_ids.shape}"
-            )
-        batch_size, seq_len = token_ids.shape
-
-        attn_bool = (
-            (np.asarray(attention_mask, dtype=np.int64) == 1)
-            if attention_mask is not None
-            else np.ones_like(token_ids, dtype=bool)
-        )
-
-        # Resolve special-token IDs from the tokenizer when not given.
-        image_token_id = image_token_id or self._get_token_id("image_token_id")
-        video_token_id = video_token_id or self._get_token_id("video_token_id")
-        audio_token_id = audio_token_id or self._get_token_id("audio_token_id")
-        vision_start_token_id = vision_start_token_id or self._get_token_id(
-            "vision_start_token_id"
-        )
-        audio_start_token_id = audio_start_token_id or self._get_token_id(
-            "audio_start_token_id"
-        )
-
-        position_id_per_seconds = self.backbone.position_id_per_seconds
-        spatial_merge_size = getattr(
-            self.backbone.vision_encoder, "spatial_merge_size", 2
-        )
-
-        from keras_hub.src.models.qwen3_omni.qwen3_omni_audio_encoder import (
-            _get_feat_extract_output_length,
-        )
-
-        def _to_np(arr, dtype):
-            if arr is None:
-                return None
-            arr = np.asarray(arr, dtype=dtype)
-            return None if arr.size == 0 else arr
-
-        image_grid_thw = _to_np(image_grid_thw, np.int64)
-        video_grid_thw = _to_np(video_grid_thw, np.int64)
-        audio_seqlens = _to_np(audio_seqlens, np.int64)
-        second_per_grids = _to_np(second_per_grids, np.float64)
-
-        # Text-only fallback: cumsum-based positions broadcast to 3 channels.
-        if (
-            image_grid_thw is None
-            and video_grid_thw is None
-            and audio_seqlens is None
-        ):
-            cumulative = np.cumsum(attn_bool.astype(np.int64), -1) - 1
-            cumulative = np.where(
-                attn_bool, cumulative, np.ones_like(cumulative)
-            )
-            position_ids = np.broadcast_to(
-                cumulative[None], (3, batch_size, seq_len)
-            ).copy()
-            deltas = (
-                position_ids.max(axis=0).max(axis=-1)
-                + 1
-                - attn_bool.sum(axis=-1)
-            )
-            return position_ids.astype(np.int64), deltas.astype(np.int64)
-
-        position_ids = np.zeros((3, batch_size, seq_len), dtype=np.int64)
-        deltas = np.zeros((batch_size,), dtype=np.int64)
-        image_idx = video_idx = audio_idx = 0
-
-        def _vision_pos(start_idx, vision_idx, t_index, grid_hs, grid_ws):
-            """``(3, T*llm_h*llm_w)`` M-RoPE positions for one vision clip."""
-            llm_h = int(grid_hs[vision_idx]) // spatial_merge_size
-            llm_w = int(grid_ws[vision_idx]) // spatial_merge_size
-            t_index = np.asarray(t_index, dtype=np.int64)
-            t_rep = np.repeat(t_index, llm_h * llm_w)
-            h_rep = np.tile(
-                np.repeat(np.arange(llm_h, dtype=np.int64), llm_w),
-                len(t_index),
-            )
-            w_rep = np.tile(
-                np.arange(llm_w, dtype=np.int64), len(t_index) * llm_h
-            )
-            return np.stack([t_rep, h_rep, w_rep], axis=0) + start_idx
-
-        def _const(length, start):
-            """``(3, length)`` block holding ``arange(length) + start``."""
-            return (
-                np.broadcast_to(
-                    np.arange(length, dtype=np.int64), (3, length)
-                ).copy()
-                + start
-            )
-
-        def _try_index(needle, start):
-            try:
-                return tokens.index(int(needle), start)
-            except ValueError:
-                return len(tokens) + 1
-
-        for b in range(batch_size):
-            valid = attn_bool[b]
-            row = token_ids[b][valid]
-            tokens = row.tolist()
-            seq_pos_ids = []
-            st = 0
-
-            # Count modality occurrences.
-            vs_idx = (
-                np.where(row == vision_start_token_id)[0]
-                if vision_start_token_id is not None
-                else np.array([], dtype=np.int64)
-            )
-            following = (
-                row[np.minimum(vs_idx + 1, len(row) - 1)]
-                if vs_idx.size
-                else np.array([], dtype=row.dtype)
-            )
-            audio_nums = (
-                int(np.sum(row == audio_start_token_id))
-                if audio_start_token_id is not None
-                else 0
-            )
-            image_nums = (
-                int(np.sum(following == image_token_id))
-                if image_token_id is not None
-                else 0
-            )
-            if use_audio_in_video and audio_start_token_id is not None:
-                video_nums = int(np.sum(following == audio_start_token_id))
-            elif video_token_id is not None:
-                video_nums = int(np.sum(following == video_token_id))
-            else:
-                video_nums = 0
-
-            remain_images, remain_videos, remain_audios = (
-                image_nums,
-                video_nums,
-                audio_nums,
-            )
-            multimodal_nums = (
-                image_nums + audio_nums
-                if use_audio_in_video
-                else image_nums + video_nums + audio_nums
-            )
-
-            for _ in range(multimodal_nums):
-                st_idx = int(seq_pos_ids[-1].max() + 1) if seq_pos_ids else 0
-
-                # Locate the next vision_start / audio_start.
-                ed_vs = (
-                    _try_index(vision_start_token_id, st)
-                    if (
-                        vision_start_token_id is not None
-                        and (remain_videos > 0 or remain_images > 0)
-                        and (
-                            (
-                                image_token_id is not None
-                                and image_token_id in tokens
-                            )
-                            or (
-                                video_token_id is not None
-                                and video_token_id in tokens
-                            )
-                        )
-                    )
-                    else len(tokens) + 1
+        return _compute_mrope_index(
+            token_ids,
+            image_grid_thw=image_grid_thw,
+            video_grid_thw=video_grid_thw,
+            audio_seqlens=audio_seqlens,
+            second_per_grids=second_per_grids,
+            attention_mask=attention_mask,
+            use_audio_in_video=use_audio_in_video,
+            image_token_id=image_token_id
+            or self._get_token_id("image_token_id"),
+            video_token_id=video_token_id
+            or self._get_token_id("video_token_id"),
+            audio_token_id=audio_token_id
+            or self._get_token_id("audio_token_id"),
+            vision_start_token_id=vision_start_token_id
+            or self._get_token_id("vision_start_token_id"),
+            audio_start_token_id=audio_start_token_id
+            or self._get_token_id("audio_start_token_id"),
+            position_id_per_seconds=self.backbone.position_id_per_seconds,
+            spatial_merge_size=getattr(
+                self.backbone.vision_encoder, "spatial_merge_size", 2
+            ),
+            audio_chunk_len=int(
+                getattr(
+                    getattr(self.backbone, "audio_encoder", None),
+                    "n_window",
+                    50,
                 )
-                ed_as = (
-                    _try_index(audio_start_token_id, st)
-                    if (
-                        audio_start_token_id is not None
-                        and audio_token_id is not None
-                        and audio_token_id in tokens
-                        and remain_audios > 0
-                    )
-                    else len(tokens) + 1
-                )
-                min_ed = min(ed_vs, ed_as)
-
-                # Text run preceding the next multimodal marker.
-                text_len = min_ed - st
-                if text_len > 0:
-                    seq_pos_ids.append(_const(text_len, st_idx))
-                    st_idx += text_len
-
-                # BOS / EOS lengths (2 each for audio-in-video, else 1).
-                aiv = (
-                    use_audio_in_video
-                    and min_ed == ed_vs
-                    and ed_vs + 1 == ed_as
-                )
-                bos_len = eos_len = 2 if aiv else 1
-                seq_pos_ids.append(_const(bos_len, st_idx))
-                st_idx += bos_len
-
-                if min_ed == ed_as:
-                    # Audio-only branch.
-                    if audio_seqlens is None:
-                        raise ValueError(
-                            "audio_seqlens required for audio markers."
-                        )
-                    audio_len = int(
-                        _get_feat_extract_output_length(
-                            int(audio_seqlens[audio_idx])
-                        )
-                    )
-                    seq_pos_ids.append(_const(audio_len, st_idx))
-                    st += int(text_len + bos_len + audio_len + eos_len)
-                    audio_idx += 1
-                    remain_audios -= 1
-
-                elif (
-                    min_ed == ed_vs
-                    and image_token_id is not None
-                    and ed_vs + 1 < len(tokens)
-                    and tokens[ed_vs + 1] == image_token_id
-                ):
-                    # Image-only branch.
-                    grid_t = int(image_grid_thw[image_idx][0])
-                    t_index = (
-                        np.arange(grid_t, dtype=np.int64)
-                        * position_id_per_seconds
-                    )
-                    seq_pos_ids.append(
-                        _vision_pos(
-                            st_idx,
-                            image_idx,
-                            t_index,
-                            image_grid_thw[:, 1],
-                            image_grid_thw[:, 2],
-                        )
-                    )
-                    image_len = int(
-                        np.prod(image_grid_thw[image_idx])
-                        // (spatial_merge_size**2)
-                    )
-                    st += int(text_len + bos_len + image_len + eos_len)
-                    image_idx += 1
-                    remain_images -= 1
-
-                elif (
-                    min_ed == ed_vs
-                    and not use_audio_in_video
-                    and video_token_id is not None
-                    and ed_vs + 1 < len(tokens)
-                    and tokens[ed_vs + 1] == video_token_id
-                ):
-                    # Video-only branch.
-                    if video_grid_thw is None or second_per_grids is None:
-                        raise ValueError(
-                            "video_grid_thw and second_per_grids required"
-                            " for video markers."
-                        )
-                    grid_t = int(video_grid_thw[video_idx][0])
-                    t_index = (
-                        np.arange(grid_t, dtype=np.float64)
-                        * float(second_per_grids[video_idx])
-                        * position_id_per_seconds
-                    ).astype(np.int64)
-                    seq_pos_ids.append(
-                        _vision_pos(
-                            st_idx,
-                            video_idx,
-                            t_index,
-                            video_grid_thw[:, 1],
-                            video_grid_thw[:, 2],
-                        )
-                    )
-                    video_len = int(
-                        np.prod(video_grid_thw[video_idx])
-                        // (spatial_merge_size**2)
-                    )
-                    st += int(text_len + bos_len + video_len + eos_len)
-                    video_idx += 1
-                    remain_videos -= 1
-
-                elif aiv:
-                    # Audio-in-Video (interleaved).
-                    if (
-                        video_grid_thw is None
-                        or second_per_grids is None
-                        or audio_seqlens is None
-                    ):
-                        raise ValueError(
-                            "video_grid_thw, second_per_grids, and"
-                            " audio_seqlens required for use_audio_in_video."
-                        )
-                    audio_len = int(
-                        _get_feat_extract_output_length(
-                            int(audio_seqlens[audio_idx])
-                        )
-                    )
-                    audio_pos = _const(audio_len, st_idx)
-                    grid_t = int(video_grid_thw[video_idx][0])
-                    t_index = (
-                        np.arange(grid_t, dtype=np.float64)
-                        * float(second_per_grids[video_idx])
-                        * position_id_per_seconds
-                    ).astype(np.int64)
-                    video_pos = _vision_pos(
-                        st_idx,
-                        video_idx,
-                        t_index,
-                        video_grid_thw[:, 1],
-                        video_grid_thw[:, 2],
-                    )
-                    # Merge sorted by temporal channel.
-                    v, a = 0, 0
-                    while v < video_pos.shape[-1] and a < audio_pos.shape[-1]:
-                        if video_pos[0][v] <= audio_pos[0][a]:
-                            seq_pos_ids.append(video_pos[:, v : v + 1])
-                            v += 1
-                        else:
-                            seq_pos_ids.append(audio_pos[:, a : a + 1])
-                            a += 1
-                    if v < video_pos.shape[-1]:
-                        seq_pos_ids.append(video_pos[:, v:])
-                    if a < audio_pos.shape[-1]:
-                        seq_pos_ids.append(audio_pos[:, a:])
-                    video_len = int(
-                        np.prod(video_grid_thw[video_idx])
-                        // (spatial_merge_size**2)
-                    )
-                    st += int(
-                        text_len + bos_len + audio_len + video_len + eos_len
-                    )
-                    audio_idx += 1
-                    video_idx += 1
-                    remain_videos -= 1
-                    remain_audios -= 1
-                else:
-                    break  # Defensive: avoids infinite loop on bad input.
-
-                st_idx = int(seq_pos_ids[-1].max() + 1)
-                seq_pos_ids.append(_const(eos_len, st_idx))
-
-            # Trailing text after the last multimodal block.
-            if st < len(tokens):
-                st_idx = int(seq_pos_ids[-1].max() + 1) if seq_pos_ids else 0
-                seq_pos_ids.append(_const(len(tokens) - st, st_idx))
-
-            flat = (
-                np.concatenate(seq_pos_ids, axis=1)
-                if seq_pos_ids
-                else np.zeros((3, 0), dtype=np.int64)
             )
-            full = np.zeros((3, seq_len), dtype=np.int64)
-            full[:, valid] = flat
-            position_ids[:, b, :] = full
-            deltas[b] = int(flat.max() + 1 - len(tokens)) if flat.size else 0
-        return position_ids, deltas
+            * 2,
+        )
 
     def call_with_cache(
         self,
@@ -531,6 +571,9 @@ class Qwen3OmniCausalLM(CausalLM):
         image_grid_thw=None,
         vision_indices=None,
         position_ids=None,
+        initial_embeddings=None,
+        deepstack_features=None,
+        visual_pos_mask=None,
     ):
         """KV-cached forward pass for prompt ingestion and decode.
 
@@ -565,7 +608,14 @@ class Qwen3OmniCausalLM(CausalLM):
             ``(batch, seq, hidden_dim)``, and ``cache`` matches the
             shape of the input cache.
         """
-        if audio_features is not None or pixel_values is not None:
+        if initial_embeddings is not None:
+            # Vision/audio encoders already ran eagerly in
+            # `generate_preprocess`; `deepstack_features` and
+            # `visual_pos_mask` came along in the inputs dict. Pure
+            # tensors from here, so the whole path stays safe inside
+            # `generate_step`'s `tf.function`.
+            x = initial_embeddings
+        elif audio_features is not None or pixel_values is not None:
             x, deepstack_features, visual_pos_mask = (
                 self._compute_initial_embeddings(
                     token_ids,
@@ -626,11 +676,18 @@ class Qwen3OmniCausalLM(CausalLM):
         image_grid_thw=None,
         vision_indices=None,
         padding_mask=None,
+        position_ids=None,
+        initial_embeddings=None,
+        deepstack_features=None,
+        visual_pos_mask=None,
     ):
         """Allocate the KV cache and seed it with the prompt forward pass.
 
-        Caches the per-batch M-RoPE delta on ``self`` when an image grid
-        is supplied so trailing-text decode positions stay aligned.
+        ``position_ids`` is the ``(batch, 3, seq)`` tensor emitted by the
+        preprocessor; the per-batch M-RoPE delta is derived from it with
+        tensor ops so this stays traceable inside ``generate_step``. An
+        eager NumPy fallback remains for direct calls that only pass a
+        non-empty ``image_grid_thw``.
         """
         batch_size = ops.shape(token_ids)[0]
         max_length = ops.shape(token_ids)[1]
@@ -644,10 +701,25 @@ class Qwen3OmniCausalLM(CausalLM):
         ]
         cache = ops.zeros(cache_shape, dtype=self.compute_dtype)
 
-        position_ids = None
         self._mrope_position_deltas = None
         image_token_id = self._get_token_id("image_token_id")
-        if image_grid_thw is not None and image_token_id is not None:
+        if position_ids is not None:
+            # (batch, 3, seq) -> (3, batch, seq); delta = max + 1 - valid.
+            valid_len = (
+                ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+                if padding_mask is not None
+                else max_length
+            )
+            deltas = (
+                ops.max(ops.max(position_ids, axis=-1), axis=-1) + 1 - valid_len
+            )
+            self._mrope_position_deltas = ops.cast(deltas, "int32")
+            position_ids = ops.transpose(position_ids, (1, 0, 2))
+        elif (
+            image_grid_thw is not None
+            and image_grid_thw.shape[0] != 0
+            and image_token_id is not None
+        ):
             pos_np, deltas_np = self.compute_multimodal_rope_index(
                 ops.convert_to_numpy(token_ids),
                 image_grid_thw=ops.convert_to_numpy(image_grid_thw),
@@ -674,6 +746,9 @@ class Qwen3OmniCausalLM(CausalLM):
             image_grid_thw=image_grid_thw,
             vision_indices=vision_indices,
             position_ids=position_ids,
+            initial_embeddings=initial_embeddings,
+            deepstack_features=deepstack_features,
+            visual_pos_mask=visual_pos_mask,
         )
         return hidden_states, cache
 
@@ -702,6 +777,10 @@ class Qwen3OmniCausalLM(CausalLM):
             image_grid_thw=inputs.get("image_grid_thw"),
             vision_indices=inputs.get("vision_indices"),
             padding_mask=padding_mask,
+            position_ids=inputs.get("position_ids"),
+            initial_embeddings=inputs.get("initial_embeddings"),
+            deepstack_features=inputs.get("deepstack_features"),
+            visual_pos_mask=inputs.get("visual_pos_mask"),
         )
         index = ops.min(ops.sum(ops.cast(padding_mask, "int32"), axis=-1))
 
