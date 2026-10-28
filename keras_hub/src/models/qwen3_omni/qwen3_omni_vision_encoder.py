@@ -162,18 +162,16 @@ def _apply_rotary_pos_emb_vision(q, k, cos, sin):
     Returns:
         Tuple of (q_embed, k_embed) with rotary embeddings applied.
     """
-    # Reshape for broadcasting: (1, 1, seq_len, head_dim). cos/sin are
-    # computed in float32; cast to the query dtype so mixed-precision
-    # encoders don't hit strict dtype-mismatch kernels.
-    cos = ops.cast(
-        ops.expand_dims(ops.expand_dims(cos, axis=0), axis=0), q.dtype
-    )
-    sin = ops.cast(
-        ops.expand_dims(ops.expand_dims(sin, axis=0), axis=0), q.dtype
-    )
+    # Match HF: apply rotary in float32, then cast back to the
+    # query/key dtype. cos/sin are already float32.
+    orig_dtype = q.dtype
+    q = ops.cast(q, "float32")
+    k = ops.cast(k, "float32")
+    cos = ops.expand_dims(ops.expand_dims(cos, axis=0), axis=0)
+    sin = ops.expand_dims(ops.expand_dims(sin, axis=0), axis=0)
     q_embed = (q * cos) + (_rotate_half(q) * sin)
     k_embed = (k * cos) + (_rotate_half(k) * sin)
-    return q_embed, k_embed
+    return ops.cast(q_embed, orig_dtype), ops.cast(k_embed, orig_dtype)
 
 
 class Qwen3OmniVisionAttention(layers.Layer):
@@ -216,7 +214,13 @@ class Qwen3OmniVisionAttention(layers.Layer):
         self.proj.build(proj_shape)
         self.built = True
 
-    def call(self, hidden_states, position_embeddings=None, training=False):
+    def call(
+        self,
+        hidden_states,
+        position_embeddings=None,
+        attention_mask=None,
+        training=False,
+    ):
         """Forward pass.
 
         Args:
@@ -224,6 +228,10 @@ class Qwen3OmniVisionAttention(layers.Layer):
                 `(batch_size, seq_len, hidden_size)`.
             position_embeddings: Tuple of (cos, sin) tensors for RoPE,
                 each of shape `(seq_len, head_dim)`.
+            attention_mask: Optional additive attention mask of shape
+                `(1, 1, seq_len, seq_len)` — `-inf` blocks cross-segment
+                attention so each image / temporal frame attends only
+                within itself.
             training: bool. Whether in training mode.
 
         Returns:
@@ -248,14 +256,30 @@ class Qwen3OmniVisionAttention(layers.Layer):
             cos, sin = position_embeddings
             query, key = _apply_rotary_pos_emb_vision(query, key, cos, sin)
 
-        # Scaled dot-product attention (non-causal)
-        attn_weights = (
-            ops.matmul(query, ops.transpose(key, [0, 1, 3, 2])) * self.scaling
+        # Scaled dot-product attention (non-causal, block-diagonal over
+        # per-image / per-temporal-frame segments). Chunked over query
+        # rows so the (seq, seq) score tensor stays bounded for large
+        # patch counts — softmax is row-wise, so chunking is exact.
+        key_t = ops.transpose(key, [0, 1, 3, 2])
+        chunk = 2048
+        seq = int(ops.convert_to_numpy(seq_len))
+        attn_outputs = []
+        for start in range(0, seq, chunk):
+            q_chunk = query[:, :, start : start + chunk]
+            scores = ops.matmul(q_chunk, key_t) * self.scaling
+            if attention_mask is not None:
+                scores = scores + ops.cast(
+                    attention_mask[:, :, start : start + chunk],
+                    scores.dtype,
+                )
+            scores = ops.softmax(ops.cast(scores, "float32"), axis=-1)
+            scores = ops.cast(scores, self.compute_dtype)
+            attn_outputs.append(ops.matmul(scores, value))
+        attn_output = (
+            ops.concatenate(attn_outputs, axis=2)
+            if len(attn_outputs) > 1
+            else attn_outputs[0]
         )
-        attn_weights = ops.softmax(ops.cast(attn_weights, "float32"), axis=-1)
-        attn_weights = ops.cast(attn_weights, self.compute_dtype)
-
-        attn_output = ops.matmul(attn_weights, value)
         attn_output = ops.transpose(attn_output, [0, 2, 1, 3])
         attn_output = ops.reshape(
             attn_output, [batch_size, seq_len, self.hidden_size]
@@ -506,6 +530,7 @@ class Qwen3OmniVisionBlock(layers.Layer):
         self,
         hidden_states,
         position_embeddings=None,
+        attention_mask=None,
         training=False,
     ):
         """Forward pass.
@@ -514,6 +539,8 @@ class Qwen3OmniVisionBlock(layers.Layer):
             hidden_states: Tensor with shape
                 `(batch_size, sequence_length, hidden_size)`.
             position_embeddings: Tuple of (cos, sin) for RoPE, or None.
+            attention_mask: Optional additive attention mask of shape
+                `(1, 1, sequence_length, sequence_length)`.
             training: bool. Whether the layer is in training mode.
 
         Returns:
@@ -522,6 +549,7 @@ class Qwen3OmniVisionBlock(layers.Layer):
         hidden_states = hidden_states + self.attn(
             self.norm1(hidden_states),
             position_embeddings=position_embeddings,
+            attention_mask=attention_mask,
             training=training,
         )
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
@@ -921,6 +949,42 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
 
         return ops.concatenate(patch_pos_embeds_list, axis=0)
 
+    def _compute_attention_mask(self, grid_thw):
+        """Build a block-diagonal additive attention mask.
+
+        Each grid row ``(t, h, w)`` contributes ``t`` attention segments of
+        ``h * w`` tokens each — matching the HuggingFace ``cu_seqlens``
+        convention with ``merge_temporal=False``, where every image and
+        every temporal frame of a video is an independent segment.
+
+        Args:
+            grid_thw: Integer tensor of shape ``(num_images_or_videos, 3)``.
+
+        Returns:
+            Tensor of shape ``(1, 1, total_tokens, total_tokens)`` with
+            ``0`` within a segment and a large negative value across
+            segments, or ``None`` when there is only a single segment.
+        """
+        seg_ids_list = []
+        segment = 0
+        num_rows = int(ops.convert_to_numpy(ops.shape(grid_thw)[0]))
+        for idx in range(num_rows):
+            t = int(ops.convert_to_numpy(grid_thw[idx, 0]))
+            hw = int(ops.convert_to_numpy(grid_thw[idx, 1] * grid_thw[idx, 2]))
+            for _ in range(t):
+                seg_ids_list.append(ops.full([hw], segment, dtype="int32"))
+                segment += 1
+        if segment <= 1:
+            return None
+        seg_ids = ops.concatenate(seg_ids_list, axis=0)
+        same_segment = ops.equal(
+            ops.expand_dims(seg_ids, 1), ops.expand_dims(seg_ids, 0)
+        )
+        # 0 within a segment, -1e9 across segments (fp32 softmax in the
+        # attention flushes the blocked entries to zero).
+        mask = (1.0 - ops.cast(same_segment, "float32")) * -1e9
+        return ops.reshape(mask, [1, 1, ops.shape(mask)[0], -1])
+
     def call(self, inputs, training=False):
         """Forward pass.
 
@@ -1004,12 +1068,19 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
         cos, sin = self._compute_rot_pos_emb(grid_thw)
         position_embeddings = (cos, sin)
 
+        # Block-diagonal attention mask: each image / temporal frame is
+        # its own attention segment (HF's ``merge_temporal=False``
+        # convention), so video frames do not attend across time and
+        # batched images do not attend across images.
+        attention_mask = self._compute_attention_mask(grid_thw)
+
         # Apply transformer blocks and collect deepstack features
         deepstack_feature_lists = []
         for layer_num, blk in enumerate(self.blocks):
             hidden_states = blk(
                 hidden_states,
                 position_embeddings=position_embeddings,
+                attention_mask=attention_mask,
                 training=training,
             )
             if layer_num in self.deepstack_visual_indexes:

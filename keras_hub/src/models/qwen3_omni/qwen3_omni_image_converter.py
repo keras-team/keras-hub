@@ -165,11 +165,22 @@ class Qwen3OmniImageConverter(ImageConverter):
         grid_h = target_h // self.patch_size
         grid_w = target_w // self.patch_size
 
+        m = self.spatial_merge_size
+        ghm = grid_h // m
+        gwm = grid_w // m
         image = tf.reshape(
             image,
-            (grid_h, self.patch_size, grid_w, self.patch_size, 3),
+            (
+                ghm,
+                m,
+                self.patch_size,
+                gwm,
+                m,
+                self.patch_size,
+                3,
+            ),
         )
-        image = tf.transpose(image, (0, 2, 1, 3, 4))
+        image = tf.transpose(image, (0, 3, 1, 4, 2, 5, 6))
         num_patches = grid_h * grid_w
         image = tf.reshape(
             image, (num_patches, self.patch_size, self.patch_size, 3)
@@ -218,11 +229,22 @@ class Qwen3OmniImageConverter(ImageConverter):
         grid_h = target_h // self.patch_size
         grid_w = target_w // self.patch_size
 
+        m = self.spatial_merge_size
+        ghm = grid_h // m
+        gwm = grid_w // m
         image = ops.reshape(
             image,
-            (grid_h, self.patch_size, grid_w, self.patch_size, 3),
+            (
+                ghm,
+                m,
+                self.patch_size,
+                gwm,
+                m,
+                self.patch_size,
+                3,
+            ),
         )
-        image = ops.transpose(image, (0, 2, 1, 3, 4))
+        image = ops.transpose(image, (0, 3, 1, 4, 2, 5, 6))
         num_patches = grid_h * grid_w
         image = ops.reshape(
             image, (num_patches, self.patch_size, self.patch_size, 3)

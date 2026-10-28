@@ -188,19 +188,24 @@ class Qwen3OmniVideoConverter(VideoConverter):
         grid_h = target_h // self.patch_size
         grid_w = target_w // self.patch_size
 
+        m = self.spatial_merge_size
         video_reshaped = tf.reshape(
             padded_video,
             (
                 grid_t,
                 self.temporal_patch_size,
-                grid_h,
+                grid_h // m,
+                m,
                 self.patch_size,
-                grid_w,
+                grid_w // m,
+                m,
                 self.patch_size,
                 3,
             ),
         )
-        video_transposed = tf.transpose(video_reshaped, (0, 2, 4, 1, 3, 5, 6))
+        video_transposed = tf.transpose(
+            video_reshaped, (0, 2, 5, 3, 6, 1, 4, 7, 8)
+        )
         total_patches = grid_t * grid_h * grid_w
         patches = tf.reshape(
             video_transposed,
@@ -284,19 +289,24 @@ class Qwen3OmniVideoConverter(VideoConverter):
         grid_h = target_h // self.patch_size
         grid_w = target_w // self.patch_size
 
+        m = self.spatial_merge_size
         video_reshaped = ops.reshape(
             video,
             (
                 grid_t,
                 self.temporal_patch_size,
-                grid_h,
+                grid_h // m,
+                m,
                 self.patch_size,
-                grid_w,
+                grid_w // m,
+                m,
                 self.patch_size,
                 3,
             ),
         )
-        video_transposed = ops.transpose(video_reshaped, (0, 2, 4, 1, 3, 5, 6))
+        video_transposed = ops.transpose(
+            video_reshaped, (0, 2, 5, 3, 6, 1, 4, 7, 8)
+        )
         total_patches = grid_t * grid_h * grid_w
         patches = ops.reshape(
             video_transposed,
