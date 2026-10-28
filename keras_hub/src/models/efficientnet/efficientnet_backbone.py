@@ -360,6 +360,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.batch_norm_momentum = batch_norm_momentum
         self.batch_norm_epsilon = batch_norm_epsilon
         self.projection_activation = projection_activation
+        self.num_features = num_features
 
     def get_config(self):
         config = super().get_config()
@@ -398,6 +399,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "batch_norm_momentum": self.batch_norm_momentum,
                 "batch_norm_epsilon": self.batch_norm_epsilon,
                 "projection_activation": self.projection_activation,
+                "num_features": self.num_features,
                 "data_format": self.data_format,
             }
         )
