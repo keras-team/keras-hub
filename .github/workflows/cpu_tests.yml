@@ -80,7 +80,7 @@ jobs:
         SHARD_COUNT: ${{ inputs.shard_count }}
         SHARD: ${{ matrix.shard }}
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
+        pytest keras_hub/ -n 12 --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
     - name: Run integration tests
       if: ${{ matrix.shard == 1 }}
       run: |

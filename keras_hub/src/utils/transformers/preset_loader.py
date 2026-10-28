@@ -27,9 +27,12 @@ from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
+from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_mpnet
+from keras_hub.src.utils.transformers import convert_muse_glimmer
+from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen3
@@ -40,6 +43,7 @@ from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_roberta
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
+from keras_hub.src.utils.transformers import convert_smolvlm2
 from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
@@ -99,6 +103,12 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
+        elif model_type == "mistral3":
+            self.converter = convert_mistral3
+        elif model_type == "muse_glimmer":
+            self.converter = convert_muse_glimmer
+        elif model_type == "muse_glimmer_assistant":
+            self.converter = convert_muse_glimmer_assistant
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":
@@ -125,6 +135,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_xlm_roberta
         elif model_type == "smollm3":
             self.converter = convert_smollm3
+        elif model_type == "smolvlm":
+            self.converter = convert_smolvlm2
         elif model_type == "swin":
             self.converter = convert_swin_transformer
         elif model_type == "t5gemma":
