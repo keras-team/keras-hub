@@ -48,8 +48,9 @@ def _compute_scale_offset(image_mean, image_std, rescale_factor=1.0 / 255):
     return scale, offset
 
 
-def convert_backbone_config(transformers_config):
+def convert_backbone_config(transformers_config, cls=None, **kwargs):
     """Convert HuggingFace Qwen3-Omni config to KerasHub config."""
+    dtype = kwargs.pop("dtype", None)
     thinker_config = transformers_config.get("thinker_config", {})
     text_config = thinker_config.get("text_config", transformers_config)
     rope_params = text_config.get("rope_parameters") or text_config.get(
@@ -57,6 +58,7 @@ def convert_backbone_config(transformers_config):
     )
     mrope_section = rope_params.get("mrope_section", [24, 20, 20])
     backbone_config = {
+        "dtype": dtype,
         "vocabulary_size": text_config["vocab_size"],
         "hidden_dim": text_config["hidden_size"],
         "head_dim": text_config["head_dim"],
@@ -109,6 +111,7 @@ def convert_backbone_config(transformers_config):
             n_window=audio_config.get("n_window", 100),
             n_window_infer=audio_config.get("n_window_infer", 400),
             conv_chunksize=audio_config.get("conv_chunksize", 500),
+            dtype=dtype,
         )
 
     vision_config = thinker_config.get("vision_config")
@@ -131,6 +134,7 @@ def convert_backbone_config(transformers_config):
             in_channels=vision_config.get("in_channels", 3),
             spatial_merge_size=vision_config.get("spatial_merge_size", 2),
             temporal_patch_size=vision_config.get("temporal_patch_size", 2),
+            dtype=dtype,
         )
 
     return backbone_config
