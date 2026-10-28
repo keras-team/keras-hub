@@ -12,8 +12,6 @@ jobs:
   cpu_tests:
     uses: ./.github/workflows/cpu_tests.yml # zizmor: ignore[self-repository]
     with:
-      shards: '[1]'
-      shard_count: 1
       timeout: 240
   nightly:
     name: Build Wheel file and upload
