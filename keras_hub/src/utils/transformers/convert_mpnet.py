@@ -5,6 +5,9 @@ from keras_hub.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers import convert_bert
+from keras_hub.src.utils.transformers.convert_roberta import (
+    transpose_and_reshape,
+)
 
 backbone_cls = MPNetBackbone
 
@@ -40,12 +43,8 @@ def convert_backbone_config(transformers_config):
         "dropout": transformers_config["hidden_dropout_prob"],
         "max_sequence_length": transformers_config["max_position_embeddings"]
         - _POSITION_OFFSET,
-        "layer_norm_epsilon": transformers_config.get("layer_norm_eps", 1e-5),
+        "layer_norm_epsilon": transformers_config["layer_norm_eps"],
     }
-
-
-def transpose_and_reshape(x, shape):
-    return np.reshape(np.transpose(x), shape)
 
 
 def convert_weights(backbone, loader, transformers_config):
@@ -144,10 +143,10 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
-    lowercase = tokenizer_config.get("do_lower_case", True)
+    lowercase = tokenizer_config["do_lower_case"]
     # `strip_accents=None` means accents are stripped if and only if the text
     # is lowercased.
-    strip_accents = tokenizer_config.get("strip_accents")
+    strip_accents = tokenizer_config["strip_accents"]
     if strip_accents is None:
         strip_accents = lowercase
     return cls(
