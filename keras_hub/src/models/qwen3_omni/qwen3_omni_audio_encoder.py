@@ -157,7 +157,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             downsample_hidden_size,
             kernel_size=3,
             strides=2,
-            padding="same",
+            padding="valid",
             dtype=dtype,
             name="conv2d1",
         )
@@ -165,7 +165,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             downsample_hidden_size,
             kernel_size=3,
             strides=2,
-            padding="same",
+            padding="valid",
             dtype=dtype,
             name="conv2d2",
         )
@@ -173,7 +173,7 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
             downsample_hidden_size,
             kernel_size=3,
             strides=2,
-            padding="same",
+            padding="valid",
             dtype=dtype,
             name="conv2d3",
         )
@@ -317,12 +317,19 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
         )
         hidden_states = ops.expand_dims(hidden_states, axis=-1)
 
+        # HF convs use `padding=1` (symmetric). Keras "same" pads
+        # asymmetrically (0, 1) on even-length axes, shifting every
+        # receptive field — pad explicitly and use "valid" to match.
+        pad2d = [[0, 0], [1, 1], [1, 1], [0, 0]]
+        hidden_states = ops.pad(hidden_states, pad2d)
         hidden_states = self.conv2d1(hidden_states, training=training)
         hidden_states = ops.gelu(hidden_states)
 
+        hidden_states = ops.pad(hidden_states, pad2d)
         hidden_states = self.conv2d2(hidden_states, training=training)
         hidden_states = ops.gelu(hidden_states)
 
+        hidden_states = ops.pad(hidden_states, pad2d)
         hidden_states = self.conv2d3(hidden_states, training=training)
         hidden_states = ops.gelu(hidden_states)
 
