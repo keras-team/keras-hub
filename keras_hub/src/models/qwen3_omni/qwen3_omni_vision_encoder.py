@@ -162,9 +162,15 @@ def _apply_rotary_pos_emb_vision(q, k, cos, sin):
     Returns:
         Tuple of (q_embed, k_embed) with rotary embeddings applied.
     """
-    # Reshape for broadcasting: (1, 1, seq_len, head_dim)
-    cos = ops.expand_dims(ops.expand_dims(cos, axis=0), axis=0)
-    sin = ops.expand_dims(ops.expand_dims(sin, axis=0), axis=0)
+    # Reshape for broadcasting: (1, 1, seq_len, head_dim). cos/sin are
+    # computed in float32; cast to the query dtype so mixed-precision
+    # encoders don't hit strict dtype-mismatch kernels.
+    cos = ops.cast(
+        ops.expand_dims(ops.expand_dims(cos, axis=0), axis=0), q.dtype
+    )
+    sin = ops.cast(
+        ops.expand_dims(ops.expand_dims(sin, axis=0), axis=0), q.dtype
+    )
     q_embed = (q * cos) + (_rotate_half(q) * sin)
     k_embed = (k * cos) + (_rotate_half(k) * sin)
     return q_embed, k_embed
@@ -827,7 +833,9 @@ class Qwen3OmniVisionEncoder(keras.layers.Layer):
         merge_size = self.spatial_merge_size
         n = self.num_grid_per_side
 
-        pos_embed_weight = self.pos_embed.embeddings
+        # Bilinear interpolation in float32 (the weights `w_*` are fp32);
+        # the caller casts the result to `hidden_states.dtype`.
+        pos_embed_weight = ops.cast(self.pos_embed.embeddings, "float32")
 
         patch_pos_embeds_list = []
         for i in range(int(ops.convert_to_numpy(ops.shape(grid_thw)[0]))):
