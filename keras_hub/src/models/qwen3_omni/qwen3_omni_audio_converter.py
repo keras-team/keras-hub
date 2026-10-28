@@ -66,7 +66,7 @@ class Qwen3OmniAudioConverter(AudioConverter):
         self.sampling_rate = sampling_rate
         self.max_audio_length = max_audio_length
         self.min_length = min_length
-        self.num_samples = self.sampling_rate * self.max_audio_length
+        self.num_samples = int(self.sampling_rate * self.max_audio_length)
         self.mel_filters = self._get_mel_filters()
 
     def audio_shape(self):
@@ -184,9 +184,8 @@ class Qwen3OmniAudioConverter(AudioConverter):
         # trims beyond `n_samples` — it never pads up to the max, so
         # mel time stays proportional to the true audio length.
         current_len = ops.shape(audio)[-1]
-        if current_len < self.min_length:
-            pad_width = [[0, 0], [0, self.min_length - current_len]]
-            audio = ops.pad(audio, pad_width, mode="constant")
+        pad_amount = ops.maximum(int(self.min_length) - current_len, 0)
+        audio = ops.pad(audio, [[0, 0], [0, pad_amount]], mode="constant")
         audio = audio[:, : self.num_samples]
 
         log_spec = self._extract_audio_features(audio)
