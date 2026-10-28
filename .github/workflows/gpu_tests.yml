@@ -73,7 +73,23 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -r requirements-${{ matrix.backend }}-cuda.txt --progress-bar off --timeout 1000
+        # pip retries connection errors but not a download that completes
+        # corrupt and fails its hash check, which the multi-hundred-MB CUDA
+        # wheels occasionally do. Retry the whole install a few times, with
+        # --no-cache-dir so a retry re-downloads instead of re-reading the
+        # bad body from pip's HTTP cache (the container is fresh per job, so
+        # the cache never helps here anyway).
+        for attempt in 1 2 3; do
+          if pip install -r requirements-${{ matrix.backend }}-cuda.txt --no-cache-dir --progress-bar off --timeout 1000; then
+            break
+          fi
+          if [ "$attempt" = 3 ]; then
+            echo "pip install failed after 3 attempts"
+            exit 1
+          fi
+          echo "pip install failed (attempt $attempt), retrying in 30s"
+          sleep 30
+        done
         pip install huggingface_hub --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
