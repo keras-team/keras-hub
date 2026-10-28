@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 from absl.testing import parameterized
@@ -16,6 +17,7 @@ from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class ModernBertTextEmbedderTest(TestCase):
@@ -111,6 +113,13 @@ class ModernBertTextEmbedderTest(TestCase):
                 input_data=self.input_data,
             )
 
+    def _mean_pooled_backbone_output(self):
+        """Masked mean of the backbone hidden states, computed in NumPy."""
+        hidden = ops.convert_to_numpy(self.backbone(self.input_data))
+        mask = ops.convert_to_numpy(self.input_data["padding_mask"])
+        mask = mask.astype("float32")[..., None]
+        return (hidden * mask).sum(axis=1) / mask.sum(axis=1)
+
     def test_output_is_normalized(self):
         embedder = ModernBertTextEmbedder(**self.init_kwargs)
         output = embedder(self.input_data)
@@ -118,20 +127,29 @@ class ModernBertTextEmbedderTest(TestCase):
         self.assertAllClose(norms, np.ones(norms.shape), atol=1e-5)
 
     def test_output_not_normalized(self):
+        """`normalize=False` returns the raw mean-pooled backbone output."""
         embedder = ModernBertTextEmbedder(**self.init_kwargs, normalize=False)
-        output = embedder(self.input_data)
+        output = ops.convert_to_numpy(embedder(self.input_data))
         self.assertEqual(output.shape, (2, 16))
-        norms = ops.sqrt(ops.sum(ops.square(output), axis=-1))
-        self.assertNotAllClose(norms, np.ones(norms.shape))
+        self.assertTrue(np.all(np.isfinite(output)))
+        self.assertAllClose(
+            output, self._mean_pooled_backbone_output(), atol=1e-5, rtol=1e-5
+        )
+        # Not unit length, so no normalization was applied.
+        norms = np.linalg.norm(output, axis=-1)
+        self.assertTrue(np.all(np.abs(norms - 1.0) > 1e-3))
+        # `normalize=True` returns exactly the L2-normalized raw vector.
+        normalized = ModernBertTextEmbedder(**self.init_kwargs)(self.input_data)
+        self.assertAllClose(
+            normalized, output / norms[:, None], atol=1e-5, rtol=1e-5
+        )
 
     def test_mean_pooling_matches_backbone(self):
         embedder = ModernBertTextEmbedder(**self.init_kwargs, normalize=False)
         output = embedder(self.input_data)
-        hidden = ops.convert_to_numpy(self.backbone(self.input_data))
-        mask = ops.convert_to_numpy(self.input_data["padding_mask"])
-        mask = mask.astype("float32")[..., None]
-        expected = (hidden * mask).sum(axis=1) / mask.sum(axis=1)
-        self.assertAllClose(output, expected, atol=1e-5, rtol=1e-5)
+        self.assertAllClose(
+            output, self._mean_pooled_backbone_output(), atol=1e-5, rtol=1e-5
+        )
 
     def test_cls_pooling_matches_backbone(self):
         embedder = ModernBertTextEmbedder(
@@ -173,6 +191,56 @@ class ModernBertTextEmbedderTest(TestCase):
         self.assertAllClose(pooled_partial, [[2.0, 3.0]])
         self.assertAllClose(pooled_full, [[14.0 / 3, 26.0 / 3]], atol=1e-5)
 
+    def test_mean_pooling_accumulates_in_float32(self):
+        # 8192 tokens of value 10 sum to 81920, above the float16 maximum
+        # (65504), so a float16 accumulator overflows to `inf` (or stalls).
+        sequence_output = ops.full((1, 8192, 2), 10.0, dtype="float16")
+        padding_mask = np.ones((1, 8192), dtype="int32")
+        pooled = ModernBertTextEmbedder._mean_pooling(
+            sequence_output, padding_mask
+        )
+        self.assertEqual(
+            keras.backend.standardize_dtype(pooled.dtype), "float16"
+        )
+        self.assertAllClose(pooled, [[10.0, 10.0]])
+
+    def test_l2_normalize_accumulates_in_float32(self):
+        # The sum of squares, 768 * 10**2 = 76800, overflows float16, which
+        # turns the embedding into all zeros.
+        embeddings = ops.full((1, 768), 10.0, dtype="float16")
+        normalized = ModernBertTextEmbedder._l2_normalize(embeddings)
+        self.assertEqual(
+            keras.backend.standardize_dtype(normalized.dtype), "float16"
+        )
+        normalized = ops.convert_to_numpy(normalized).astype("float32")
+        # The result is cast back to float16, so allow float16 precision.
+        self.assertAllClose(
+            np.linalg.norm(normalized, axis=-1), [1.0], atol=1e-3
+        )
+
+    def test_mixed_precision_output_dtype(self):
+        """The symbolic output dtype must match the eager output dtype."""
+        backbone = ModernBertBackbone.from_config(
+            {**self.backbone.get_config(), "dtype": "mixed_bfloat16"}
+        )
+        for pooling_mode in ("mean", "cls", "max"):
+            for normalize in (True, False):
+                with self.subTest(
+                    pooling_mode=pooling_mode, normalize=normalize
+                ):
+                    embedder = ModernBertTextEmbedder(
+                        backbone=backbone,
+                        preprocessor=self.preprocessor,
+                        pooling_mode=pooling_mode,
+                        normalize=normalize,
+                    )
+                    output = embedder(self.input_data)
+                    self.assertEqual(embedder.output.dtype, "bfloat16")
+                    self.assertEqual(
+                        keras.backend.standardize_dtype(output.dtype),
+                        "bfloat16",
+                    )
+
     @parameterized.named_parameters(
         ("mean", "mean"),
         ("cls", "cls"),
@@ -196,7 +264,10 @@ class ModernBertTextEmbedderTest(TestCase):
         short_output = embedder(self.preprocessor(texts))
         long_output = embedder(long_preprocessor(texts))
         self.assertFalse(np.isnan(ops.convert_to_numpy(long_output)).any())
-        self.assertAllClose(short_output, long_output, atol=1e-5, rtol=1e-5)
+        # On GPU the two sequence lengths can go through different (e.g.
+        # TF32) matmul kernels, so only near-equality holds there.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(short_output, long_output, atol=tol, rtol=tol)
 
     def test_encode_and_similarity(self):
         embedder = ModernBertTextEmbedder(**self.init_kwargs)
@@ -211,6 +282,9 @@ class ModernBertTextEmbedderTest(TestCase):
         # Normalized embeddings, so an identical text has similarity 1.
         self.assertAllClose(sims[0, 0], 1.0, atol=1e-5)
         self.assertTrue(np.all(sims <= 1.0 + 1e-5))
+        # A different text scores strictly below 1. This fails if pooling or
+        # `similarity` collapses every input to the same vector.
+        self.assertLess(sims[0, 2], 1.0 - 1e-3)
 
     def test_preprocessed_inputs_have_no_segment_ids(self):
         self.assertIn("token_ids", self.input_data)

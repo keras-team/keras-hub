@@ -32,6 +32,12 @@ class ModernBertTextEmbedder(TextEmbedder):
     `fit()`, `predict()`, and `evaluate()`. This is done by default when
     creating the model with `from_preset()`.
 
+    Task prefixes (prompts) are not added automatically. Some checkpoints
+    expect them on their inputs, e.g. `nomic-ai/modernbert-embed-base`
+    expects `"search_query: "` on queries and `"search_document: "` on
+    documents. Prepend them to the input strings yourself, as the examples
+    below do. Without them, the embeddings are silently worse.
+
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
 
@@ -52,14 +58,23 @@ class ModernBertTextEmbedder(TextEmbedder):
 
     Raw string data.
     ```python
+    # Inputs are padded to the checkpoint's 8192-token limit by default.
+    # Load the preprocessor with a shorter length for faster inference on
+    # short texts. On an already loaded model, setting
+    # `embedder.preprocessor.sequence_length = 512` works too.
+    preprocessor = (
+        keras_hub.models.ModernBertTextEmbedderPreprocessor.from_preset(
+            "hf://nomic-ai/modernbert-embed-base",
+            sequence_length=512,
+        )
+    )
     embedder = keras_hub.models.ModernBertTextEmbedder.from_preset(
         "hf://nomic-ai/modernbert-embed-base",
+        preprocessor=preprocessor,
     )
-    # Inputs are padded to the checkpoint's 8192-token limit by default. Use
-    # a shorter length for faster inference on short texts.
-    embedder.preprocessor.sequence_length = 512
 
-    # Semantic search. This model expects task prefixes on its inputs.
+    # Semantic search. This checkpoint expects task prefixes, which are not
+    # added for you.
     query = "search_query: Which planet is known as the Red Planet?"
     documents = [
         "search_document: Mars is often referred to as the Red Planet.",
@@ -137,13 +152,18 @@ class ModernBertTextEmbedder(TextEmbedder):
 
     @staticmethod
     def _mean_pooling(sequence_output, padding_mask):
-        """Attention-mask-aware mean pooling over token embeddings."""
-        mask = ops.cast(
-            ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
-        )
+        """Attention-mask-aware mean pooling over token embeddings.
+
+        Both sums are accumulated in `float32` and the mean is cast back to
+        the input dtype. In `float16`, summing thousands of tokens overflows
+        to `inf` or stalls, and the presets accept up to 8192 tokens.
+        """
+        dtype = sequence_output.dtype
+        mask = ops.cast(ops.expand_dims(padding_mask, axis=-1), "float32")
+        sequence_output = ops.cast(sequence_output, "float32")
         sum_embeddings = ops.sum(sequence_output * mask, axis=1)
         sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-5)
-        return sum_embeddings / sum_mask
+        return ops.cast(sum_embeddings / sum_mask, dtype)
 
     @staticmethod
     def _max_pooling(sequence_output, padding_mask):
@@ -157,8 +177,18 @@ class ModernBertTextEmbedder(TextEmbedder):
 
     @staticmethod
     def _l2_normalize(embeddings):
-        """L2 normalize embeddings to unit length."""
-        return ops.nn.normalize(embeddings, axis=-1, order=2)
+        """L2 normalize embeddings to unit length.
+
+        The norm is computed in `float32`, since the sum of squares can
+        overflow in `float16`. The result is cast back to the input dtype:
+        `ops.nn.normalize` reports a `float32` symbolic output for any input
+        dtype, which would otherwise make the functional model's output spec
+        disagree with its eager output under mixed precision.
+        """
+        dtype = embeddings.dtype
+        embeddings = ops.cast(embeddings, "float32")
+        normalized = ops.nn.normalize(embeddings, axis=-1, order=2)
+        return ops.cast(normalized, dtype)
 
     def get_config(self):
         config = super().get_config()

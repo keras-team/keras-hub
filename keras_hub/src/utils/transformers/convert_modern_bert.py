@@ -9,12 +9,17 @@ from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = ModernBertBackbone
 
-# Single sentence-transformers pooling strategies supported by
-# `ModernBertTextEmbedder`, keyed by their `1_Pooling/config.json` flag.
-_SENTENCE_TRANSFORMERS_POOLING_MODES = {
+# sentence-transformers pooling modes, keyed by the boolean flag that older
+# sentence-transformers versions write to `1_Pooling/config.json`, in the
+# order sentence-transformers concatenates them. `ModernBertTextEmbedder`
+# supports `"cls"`, `"mean"` and `"max"` under the same names.
+_SENTENCE_TRANSFORMERS_POOLING_FLAGS = {
     "pooling_mode_cls_token": "cls",
-    "pooling_mode_mean_tokens": "mean",
     "pooling_mode_max_tokens": "max",
+    "pooling_mode_mean_tokens": "mean",
+    "pooling_mode_mean_sqrt_len_tokens": "mean_sqrt_len_tokens",
+    "pooling_mode_weightedmean_tokens": "weightedmean",
+    "pooling_mode_lasttoken": "lasttoken",
 }
 
 
@@ -283,6 +288,33 @@ def convert_tokenizer(cls, preset, **kwargs):
     return cls(vocabulary=vocab, merges=merges, **kwargs)
 
 
+def _read_pooling_mode(pooling_config):
+    """Read the pooling mode from a sentence-transformers pooling config.
+
+    Accepts both formats sentence-transformers writes to
+    `1_Pooling/config.json`: the `pooling_mode` string (or list of strings)
+    written by recent versions, e.g. `"pooling_mode": "mean"`, and the
+    boolean `pooling_mode_*` flags written by older ones. As in
+    sentence-transformers, `pooling_mode` takes precedence over the flags,
+    and a config with no mode enabled means mean pooling.
+
+    Several modes are joined with `"+"` (e.g. `"cls+mean"`). Modes that
+    `ModernBertTextEmbedder` does not support are returned by name, so
+    building the embedder raises an error naming them.
+    """
+    if "pooling_mode" in pooling_config:
+        modes = pooling_config["pooling_mode"]
+        if isinstance(modes, str):
+            modes = [modes]
+    else:
+        modes = [
+            mode
+            for flag, mode in _SENTENCE_TRANSFORMERS_POOLING_FLAGS.items()
+            if pooling_config.get(flag, False)
+        ]
+    return "+".join(mode.lower() for mode in modes) or "mean"
+
+
 def load_task_config(preset, transformers_config):
     """Detect sentence-transformers pipeline settings.
 
@@ -292,13 +324,15 @@ def load_task_config(preset, transformers_config):
       example, `nomic-ai/modernbert-embed-base` includes a `Normalize`
       module, while `Alibaba-NLP/gte-modernbert-base` does not.
     - `1_Pooling/config.json`: determines the pooling strategy (`"cls"`,
-      `"mean"` or `"max"`).
+      `"mean"` or `"max"`), in either the string or the boolean-flag format.
 
     Returns kwargs suitable for `ModernBertTextEmbedder`. A pooling config
-    that `ModernBertTextEmbedder` does not support (e.g. weighted-mean, or
-    several concatenated strategies) is passed through verbatim, so building
-    the embedder raises a descriptive error rather than silently falling
-    back to a different pooling strategy.
+    that `ModernBertTextEmbedder` does not support (e.g. `"weightedmean"`,
+    or several concatenated strategies) is passed through by name, so
+    building the embedder raises an error naming the unsupported mode
+    rather than silently falling back to a different pooling strategy.
+    Other ModernBERT tasks do not take these kwargs, and the Keras
+    functional model constructor drops them.
     """
     del transformers_config
     kwargs = {}
@@ -312,20 +346,7 @@ def load_task_config(preset, transformers_config):
     pooling_config_file = "1_Pooling/config.json"
     if check_file_exists(preset, pooling_config_file):
         pooling_config = load_json(preset, pooling_config_file)
-        enabled_modes = [
-            key
-            for key, value in pooling_config.items()
-            if key.startswith("pooling_mode_") and value is True
-        ]
-        if (
-            len(enabled_modes) == 1
-            and enabled_modes[0] in _SENTENCE_TRANSFORMERS_POOLING_MODES
-        ):
-            kwargs["pooling_mode"] = _SENTENCE_TRANSFORMERS_POOLING_MODES[
-                enabled_modes[0]
-            ]
-        else:
-            kwargs["pooling_mode"] = "+".join(enabled_modes) or "none"
+        kwargs["pooling_mode"] = _read_pooling_mode(pooling_config)
 
     return kwargs
 
@@ -337,12 +358,31 @@ def load_preprocessor_config(preset, transformers_config):
     as `max_seq_length` in `sentence_bert_config.json`, which can differ
     from `max_position_embeddings` in `config.json`. For example,
     `nomic-ai/modernbert-embed-base` specifies `8192`.
+
+    Without `max_seq_length` (e.g. `Alibaba-NLP/gte-modernbert-base` ships
+    no `sentence_bert_config.json`), sentence-transformers uses the
+    tokenizer's `model_max_length`, capped at `max_position_embeddings`.
+    The same length is used here, so `hf://` loads and converted presets
+    truncate exactly like sentence-transformers. Checkpoints that are not
+    sentence-transformers models (no `modules.json`), such as
+    `answerdotai/ModernBERT-base`, keep the preprocessor's default.
     """
-    del transformers_config
     st_config_file = "sentence_bert_config.json"
     if check_file_exists(preset, st_config_file):
         st_config = load_json(preset, st_config_file)
         max_seq_length = st_config.get("max_seq_length")
         if max_seq_length is not None:
             return {"sequence_length": max_seq_length}
-    return {}
+
+    max_position_embeddings = transformers_config.get("max_position_embeddings")
+    if max_position_embeddings is None or not check_file_exists(
+        preset, "modules.json"
+    ):
+        return {}
+    sequence_length = max_position_embeddings
+    if check_file_exists(preset, "tokenizer_config.json"):
+        tokenizer_config = load_json(preset, "tokenizer_config.json")
+        model_max_length = tokenizer_config.get("model_max_length")
+        if model_max_length is not None:
+            sequence_length = min(sequence_length, int(model_max_length))
+    return {"sequence_length": sequence_length}

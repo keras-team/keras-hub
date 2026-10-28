@@ -36,9 +36,11 @@ class ModernBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
         tokenizer: A `keras_hub.models.ModernBertTokenizer` instance.
         sequence_length: int. The length of the packed inputs. Defaults to
             `256`. When loading from a Hugging Face sentence-transformers
-            checkpoint, this is overridden by `max_seq_length` from
-            `sentence_bert_config.json` (e.g. `8192` for
-            `nomic-ai/modernbert-embed-base`). Every input is padded to this
+            checkpoint, this is overridden by the length sentence-transformers
+            uses: `max_seq_length` from `sentence_bert_config.json` (e.g.
+            `8192` for `nomic-ai/modernbert-embed-base`), or otherwise the
+            model's maximum length (e.g. `8192` for
+            `Alibaba-NLP/gte-modernbert-base`). Every input is padded to this
             length, so for faster inference on short texts, pass a smaller
             `sequence_length` to this class's `from_preset()` or set the
             `sequence_length` attribute after loading.

@@ -44,7 +44,7 @@ backbone_presets = {
             "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/modernbert/keras/modern_bert_embed_base_en/1"
+            "kaggle://keras/modernbert-embed/keras/modern_bert_embed_base_en/1"
         ),
     },
     "gte_modern_bert_base_en": {
@@ -60,7 +60,7 @@ backbone_presets = {
             "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/modernbert/keras/gte_modern_bert_base_en/1"
+            "kaggle://keras/gte-modernbert/keras/gte_modern_bert_base_en/1"
         ),
     },
 }
