@@ -326,17 +326,21 @@ class Qwen3OmniAudioEncoder(keras.layers.Layer):
                 axis=1,
             )
 
-        # (batch, chunks, chunk_len, mels) -> (batch*chunks, len, mels, 1)
+        # (batch, chunks, chunk_len, mels) -> (batch*chunks, mels, len, 1)
+        # HF convs over (mel, time) spatial dims — mel must be on the
+        # height axis so the kernel's spatial offsets line up.
         hidden_states = ops.reshape(
             input_features, (-1, chunk_len, self.num_mel_bins)
         )
+        hidden_states = ops.transpose(hidden_states, [0, 2, 1])
         hidden_states = ops.expand_dims(hidden_states, axis=-1)
 
         hidden_states = self._conv_downsample(hidden_states, training=training)
 
-        # Flatten spatial dimensions and project
+        # Flatten spatial dimensions and project. HF permutes
+        # (chunks, C, f', t') -> (chunks, t', C, f') before flattening.
         chunk_after_cnn = -(-chunk_len // 8)
-        hidden_states = ops.transpose(hidden_states, [0, 1, 3, 2])
+        hidden_states = ops.transpose(hidden_states, [0, 2, 3, 1])
         flattened = ops.shape(hidden_states)[2] * ops.shape(hidden_states)[3]
         hidden_states = ops.reshape(
             hidden_states, (-1, chunk_after_cnn, flattened)
