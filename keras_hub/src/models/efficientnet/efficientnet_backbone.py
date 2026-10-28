@@ -351,6 +351,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         )
         self.stackwise_strides = stackwise_strides
         self.stackwise_block_types = stackwise_block_types
+        self.stackwise_nores_option = stackwise_nores_option
 
         self.stackwise_force_input_filters = stackwise_force_input_filters
         self.include_stem_padding = include_stem_padding
@@ -385,6 +386,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                     self.stackwise_squeeze_and_excite_ratios
                 ),
                 "stackwise_strides": self.stackwise_strides,
+                "stackwise_nores_option": self.stackwise_nores_option,
                 "stackwise_block_types": self.stackwise_block_types,
                 "stackwise_force_input_filters": (
                     self.stackwise_force_input_filters

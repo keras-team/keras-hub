@@ -236,6 +236,9 @@ class QwenMoeBackbone(Backbone):
                 "decoder_sparse_step": self.decoder_sparse_step,
                 "mlp_only_layers": self.mlp_only_layers,
                 "output_router_logits": self.output_router_logits,
+                "router_aux_loss_coefficient": (
+                    self.router_aux_loss_coefficient
+                ),
             }
         )
         return config

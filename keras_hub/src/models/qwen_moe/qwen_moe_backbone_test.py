@@ -37,6 +37,17 @@ class QwenMoeBackboneTest(TestCase):
             "padding_mask": ops.ones((2, 7), dtype="int32"),
         }
 
+    def test_router_aux_loss_coefficient_is_serialized(self):
+        # `run_serialization_test` compares config to config, so a key that is
+        # missing from `get_config` is missing on both sides and matches.
+        backbone = QwenMoeBackbone(**self.init_kwargs)
+        coefficient = self.init_kwargs["router_aux_loss_coefficient"]
+        self.assertEqual(
+            backbone.get_config()["router_aux_loss_coefficient"], coefficient
+        )
+        revived = QwenMoeBackbone.from_config(backbone.get_config())
+        self.assertEqual(revived.router_aux_loss_coefficient, coefficient)
+
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=QwenMoeBackbone,
