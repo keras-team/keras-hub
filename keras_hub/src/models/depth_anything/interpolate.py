@@ -58,5 +58,27 @@ def interpolate(x, size, data_format=None):
         if data_format == "channels_last":
             x = ops.transpose(x, (0, 2, 3, 1))
     else:
-        raise NotImplementedError(f"Unsupported backend: {backend.backend()}")
+        # Backend-agnostic fallback, mirroring the JAX branch above via
+        # `keras.ops`. Used by backends without a native `F.interpolate`
+        # equivalent, such as OpenVINO and NumPy.
+        if data_format == "channels_first":
+            x = ops.transpose(x, (0, 2, 3, 1))
+        scale = ops.convert_to_tensor(
+            [
+                (size[0] - 1.0) / (x.shape[1] - 1.0),
+                (size[1] - 1.0) / (x.shape[2] - 1.0),
+            ]
+        )
+        translation = -(scale / 2.0 - 0.5)
+        x = ops.image.scale_and_translate(
+            x,
+            (x.shape[0], *size, x.shape[-1]),
+            scale=scale,
+            translation=translation,
+            spatial_dims=(1, 2),
+            method="bilinear",
+            antialias=False,
+        )
+        if data_format == "channels_first":
+            x = ops.transpose(x, (0, 3, 1, 2))
     return x
