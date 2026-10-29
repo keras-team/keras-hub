@@ -78,14 +78,16 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
             OpenAIPrivacyFilterTokenClassifier(backbone=self.backbone)
 
     def test_activation(self):
+        # `from_logits` is read from the loss config rather than the attribute,
+        # which is not public on every Keras version.
         model_none = OpenAIPrivacyFilterTokenClassifier(
             backbone=self.backbone, num_classes=3, activation=None
         )
         model_none.compile(optimizer="adam", loss="auto")
-        self.assertTrue(model_none.loss.from_logits)
+        self.assertTrue(model_none.loss.get_config()["from_logits"])
 
         model_softmax = OpenAIPrivacyFilterTokenClassifier(
             backbone=self.backbone, num_classes=3, activation="softmax"
         )
         model_softmax.compile(optimizer="adam", loss="auto")
-        self.assertFalse(model_softmax.loss.from_logits)
+        self.assertFalse(model_softmax.loss.get_config()["from_logits"])
