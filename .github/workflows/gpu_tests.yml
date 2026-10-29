@@ -87,5 +87,24 @@ jobs:
         KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       run: |
+        mkdir -p .github/test_durations
         pytest keras_hub --check_gpu --run_large --cov=keras_hub \
-          --durations=50 --splits 4 --group ${{ matrix.shard }}
+          --durations=50 --splits 4 --group ${{ matrix.shard }} \
+          --splitting-algorithm least_duration \
+          --durations-path .github/test_durations/${{ matrix.backend }}.json \
+          --store-durations --clean-durations
+
+    # pytest-split balances the shards by the per-test durations committed in
+    # .github/test_durations/<backend>.json; tests missing from the file get
+    # the average. --clean-durations rewrites that file with only this shard's
+    # fresh timings, so to refresh the committed files download the
+    # `durations-*` artifacts of a run and union the four shard files per
+    # backend.
+    - name: Upload test durations
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: durations-${{ matrix.backend }}-${{ matrix.shard }}
+        path: .github/test_durations/${{ matrix.backend }}.json
+        if-no-files-found: ignore
+        retention-days: 90
