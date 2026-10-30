@@ -31,4 +31,36 @@ backbone_presets = {
             "kaggle://keras/modernbert/keras/modern_bert_large_en/1"
         ),
     },
+    "modern_bert_embed_base_en": {
+        "metadata": {
+            "description": (
+                "22-layer ModernBERT Base sentence embedding model from Nomic "
+                "AI (nomic-ai/modernbert-embed-base). Produces "
+                "768-dimensional, L2-normalized, mean-pooled embeddings for "
+                "inputs of up to 8192 tokens. Prefix queries with "
+                "'search_query: ' and documents with 'search_document: '."
+            ),
+            "params": 149014272,
+            "path": "modern_bert",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/modernbert-embed/keras/modern_bert_embed_base_en/1"
+        ),
+    },
+    "gte_modern_bert_base_en": {
+        "metadata": {
+            "description": (
+                "22-layer ModernBERT Base sentence embedding model from "
+                "Alibaba-NLP (Alibaba-NLP/gte-modernbert-base). Produces "
+                "768-dimensional [CLS]-pooled embeddings that are not "
+                "normalized, so compare them with cosine similarity. The "
+                "model supports inputs of up to 8192 tokens."
+            ),
+            "params": 149014272,
+            "path": "modern_bert",
+        },
+        "kaggle_handle": (
+            "kaggle://keras/gte-modernbert/keras/gte_modern_bert_base_en/1"
+        ),
+    },
 }
