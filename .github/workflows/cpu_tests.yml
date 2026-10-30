@@ -89,7 +89,7 @@ jobs:
     # own fresh timings; master runs upload them so the committed files can be
     # refreshed with tools/admin/merge_test_durations.py --cpu.
     - name: Upload test durations
-      if: always()
+      if: always() && github.event_name == 'push'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: cpu-durations-${{ matrix.config.backend }}-${{ matrix.config.version }}-${{ matrix.shard }}
