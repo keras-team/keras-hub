@@ -100,14 +100,13 @@ jobs:
     # The interleaving `least_duration` algorithm balances too, but splitting
     # a file across shards makes every shard recompile every model (+105 min
     # on jax, measured). --clean-durations rewrites the durations file with only
-    # this shard's fresh timings; to refresh the committed files download the
-    # `durations-*` artifacts of a run and union the four shard files per
-    # backend.
+    # this shard's fresh timings; master pushes upload them so the committed
+    # files can be refreshed with tools/admin/merge_test_durations.py.
     - name: Upload test durations
-      if: always()
+      if: always() && github.event_name == 'push'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: durations-${{ matrix.backend }}-${{ matrix.shard }}
         path: .github/test_durations/${{ matrix.backend }}.json
         if-no-files-found: ignore
-        retention-days: 90
+        retention-days: 14
