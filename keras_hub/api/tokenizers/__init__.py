@@ -126,6 +126,9 @@ from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
 )
+from keras_hub.src.models.qwen3_vl.qwen3_vl_tokenizer import (
+    Qwen3_VLTokenizer as Qwen3_VLTokenizer,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import (
     QwenMoeTokenizer as QwenMoeTokenizer,
 )
