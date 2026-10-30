@@ -51,6 +51,8 @@ def latest_master_run(repo):
             "gpu_tests.yml",
             "--branch",
             "master",
+            "--event",
+            "push",
             "--status",
             "completed",
             "--limit",
