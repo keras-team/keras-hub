@@ -1,6 +1,5 @@
 import copy
 import os
-from unittest.mock import patch
 
 import keras
 import numpy as np
@@ -187,52 +186,26 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             assert_fused_attention_used(mock_func)
 
     def test_text_early_stopping(self):
-        causal_lm = Gemma4CausalLM(**self.text_init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favour end_token_id."""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.text_preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the quick"]
-            output = causal_lm.generate(prompt)
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt=["the quick brown fox", "the quick"],
+        )
 
     def test_text_multitoken_stopping(self):
-        causal_lm = Gemma4CausalLM(**self.text_init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favour end_token_id."""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.text_preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
-
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
-            prompt = ["the quick brown fox", "the quick"]
-            output = causal_lm.generate(prompt, stop_token_ids=(3,))
-            self.assertEqual(prompt, output)
+        self.run_early_stopping_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt=["the quick brown fox", "the quick"],
+            stop_token_ids=(3,),
+        )
 
     def test_text_generate_compilation(self):
-        causal_lm = Gemma4CausalLM(**self.text_init_kwargs)
-        # Assert we do not recompile with successive calls.
-        causal_lm.generate("the quick brown fox")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate("the quick brown fox")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=Gemma4CausalLM,
+            init_kwargs=self.text_init_kwargs,
+            prompt="the quick brown fox",
+        )
 
     @parameterized.named_parameters(
         ("text_and_vision", "text_and_vision"), ("text_only", "text_only")

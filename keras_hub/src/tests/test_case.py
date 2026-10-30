@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import tempfile
+from unittest.mock import patch
 
 import grain
 import keras
@@ -1309,6 +1310,58 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         task = cls(**init_kwargs, compile=False)
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
             task.fit(ds)
+
+    def run_generate_test(self, cls, init_kwargs, prompt, num_prompt_tokens=5):
+        """Check `generate` on raw strings and on preprocessed token ids."""
+        causal_lm = cls(**init_kwargs)
+        output = causal_lm.generate(prompt)
+        self.assertTrue(prompt in output)
+        # Without a preprocessor, the prompt tokens must be passed through.
+        prompt_ids = causal_lm.preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.assertAllEqual(
+            outputs["token_ids"][:, :num_prompt_tokens],
+            prompt_ids["token_ids"][:, :num_prompt_tokens],
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :num_prompt_tokens],
+            prompt_ids["padding_mask"][:, :num_prompt_tokens],
+        )
+
+    def run_generate_compilation_test(self, cls, init_kwargs, prompt):
+        """Check the generate function is reused until `compile` is called."""
+        causal_lm = cls(**init_kwargs)
+        causal_lm.generate(prompt)
+        first_fn = causal_lm.generate_function
+        # Assert we do not recompile with successive calls.
+        causal_lm.generate(prompt)
+        second_fn = causal_lm.generate_function
+        self.assertEqual(first_fn, second_fn)
+        # Assert we do recompile after compile is called.
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)
+
+    def run_early_stopping_test(
+        self, cls, init_kwargs, prompt, **generate_kwargs
+    ):
+        """Check generation stops at once when the end token is favored."""
+        causal_lm = cls(**init_kwargs)
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = causal_lm.preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            output = causal_lm.generate(prompt, **generate_kwargs)
+            # We should immediately abort and output the prompt.
+            self.assertEqual(prompt, output)
 
     def run_preset_test(
         self,
