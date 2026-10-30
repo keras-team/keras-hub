@@ -183,6 +183,45 @@ def convert_backbone_config(transformers_config):
     return result
 
 
+def is_text_only_config(transformers_config):
+    """Return True for a text-only Qwen3.5 HF config.
+
+    Text-only exports (e.g. `Qwen3_5ForCausalLM`) use the flat
+    `Qwen3_5TextConfig` with `model_type` ending in `_text` and no
+    `vision_config`. Multimodal exports nest the text config under
+    `text_config` and carry a `vision_config`.
+    """
+    model_type = transformers_config.get("model_type", "")
+    if model_type.endswith("_text"):
+        return True
+    return "vision_config" not in transformers_config
+
+
+def resolve_text_prefix(loader, transformers_config):
+    """Return the HF key prefix of the text decoder weights.
+
+    Multimodal checkpoints store the decoder under
+    `model.language_model.*`; text-only exports store it under
+    `model.*`. The config decides which prefix is tried first, and the
+    checkpoint's weight keys decide which one is used, so a mislabelled
+    config still loads.
+
+    The check is an exact key match (`SafetensorLoader.has_key`) rather
+    than `get_tensor`, because the loader's suffix matching would accept
+    `model.embed_tokens.weight` against
+    `model.language_model.embed_tokens.weight`.
+    """
+    if is_text_only_config(transformers_config):
+        candidates = ["model", "model.language_model"]
+    else:
+        candidates = ["model.language_model", "model"]
+
+    for candidate in candidates:
+        if loader.has_key(f"{candidate}.embed_tokens.weight"):
+            return candidate
+    return candidates[0]
+
+
 def convert_weights(backbone, loader, transformers_config):
     # ----------------------------------------------------------------
     # Track which HF keys we actually port so we can audit at the end.
@@ -197,17 +236,17 @@ def convert_weights(backbone, loader, transformers_config):
     # ------------------------------------------------------------------
     # Text model weights
     # ------------------------------------------------------------------
-    # The HF weight prefix is "model.language_model." but the
-    # SafetensorLoader.get_prefixed_key() auto-discovers the prefix on
-    # the first lookup, so we use short keys like "model.layers.{i}".
-    # For Qwen3.5 the safetensors keys start with
-    # "model.language_model." — the loader handles this transparently.
+    # Multimodal checkpoints keep the decoder under
+    # "model.language_model.*"; text-only exports (Qwen3_5ForCausalLM)
+    # keep it under "model.*". The loader's prefix discovery can only
+    # add a prefix, never drop one, so pick the right one up front.
     # ------------------------------------------------------------------
+    text_prefix = resolve_text_prefix(loader, transformers_config)
 
     # Embedding.
     _port(
         backbone.get_layer("token_embedding").embeddings,
-        "model.language_model.embed_tokens.weight",
+        f"{text_prefix}.embed_tokens.weight",
     )
     if not backbone.tie_word_embeddings:
         _port(
@@ -219,7 +258,7 @@ def convert_weights(backbone, loader, transformers_config):
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
         layer_type = decoder_layer.layer_type
-        prefix = f"model.language_model.layers.{i}"
+        prefix = f"{text_prefix}.layers.{i}"
 
         # Input layernorm.
         _port(
@@ -357,7 +396,7 @@ def convert_weights(backbone, loader, transformers_config):
     # Final normalization layer.
     _port(
         backbone.get_layer("sequence_output_layernorm").scale,
-        "model.language_model.norm.weight",
+        f"{text_prefix}.norm.weight",
     )
 
     # ------------------------------------------------------------------

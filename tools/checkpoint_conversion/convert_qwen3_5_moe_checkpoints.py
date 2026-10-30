@@ -89,6 +89,14 @@ flags.DEFINE_bool(
     "If True, skip all text generation steps and only run "
     "numerical logit validation.",
 )
+flags.DEFINE_string(
+    "hf_preset",
+    None,
+    "Optional HuggingFace repo id to convert instead of the one mapped from "
+    "`--preset`. Use this for text-only exports (`Qwen3_5MoeForCausalLM`, "
+    "model_type `qwen3_5_moe_text`) such as fine-tunes that drop the "
+    "vision tower.",
+)
 
 
 def _load_test_image():
@@ -599,9 +607,22 @@ def save_preset(keras_model, preset_name):
 # Main
 # ---------------------------------------------------------------
 def _is_text_only(hf_preset):
-    """Check if a HuggingFace preset is text-only (no vision weights)."""
+    """Check if a HuggingFace preset is text-only (no vision weights).
+
+    Covers both `language_model_only` configs and text-only exports
+    (`Qwen3_5MoeForCausalLM`, model_type `qwen3_5_moe_text`), which do
+    not set that flag but have no `vision_config`.
+    """
     config = AutoConfig.from_pretrained(hf_preset)
-    return getattr(config, "language_model_only", False)
+    if getattr(config, "language_model_only", False):
+        return True
+    model_type = getattr(config, "model_type", "") or ""
+    architectures = getattr(config, "architectures", None) or []
+    if model_type.endswith("_text"):
+        return True
+    if any(arch.endswith("ForCausalLM") for arch in architectures):
+        return True
+    return getattr(config, "vision_config", None) is None
 
 
 def main(_):
@@ -612,7 +633,7 @@ def main(_):
             f"{', '.join(PRESET_MAP.keys())}"
         )
 
-    hf_preset = PRESET_MAP[preset]
+    hf_preset = FLAGS.hf_preset or PRESET_MAP[preset]
     text_only = _is_text_only(hf_preset)
 
     # --- Phase 1: Load HF model and precompute all outputs ---

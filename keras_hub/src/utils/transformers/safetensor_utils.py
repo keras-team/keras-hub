@@ -71,6 +71,27 @@ class SafetensorLoader(contextlib.ExitStack):
         self.prefix = ""
         return hf_weight_key
 
+    def _open_file(self, fname):
+        """Open (and cache) a safetensors file by name."""
+        if fname in self.safetensor_files:
+            return self.safetensor_files[fname]
+        path = get_file(self.preset, fname)
+        file = self.enter_context(safetensors.safe_open(path, framework="np"))
+        self.safetensor_files[fname] = file
+        return file
+
+    def has_key(self, hf_weight_key):
+        """Return True if `hf_weight_key` exists exactly in the checkpoint.
+
+        Unlike `get_tensor`, this does no prefix discovery or suffix
+        matching and does not touch the cached prefix, so it is safe for
+        converters that need to decide between candidate key layouts.
+        """
+        if self.safetensor_config is not None:
+            return hf_weight_key in self.safetensor_config["weight_map"]
+        fname = self.fname if self.fname is not None else SAFETENSOR_FILE
+        return hf_weight_key in self._open_file(fname).keys()
+
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
             fname = self.fname if self.fname is not None else SAFETENSOR_FILE
@@ -80,15 +101,7 @@ class SafetensorLoader(contextlib.ExitStack):
             )
             fname = self.safetensor_config["weight_map"][full_key]
 
-        if fname in self.safetensor_files:
-            file = self.safetensor_files[fname]
-        else:
-            path = get_file(self.preset, fname)
-            file = self.enter_context(
-                safetensors.safe_open(path, framework="np")
-            )
-            self.safetensor_files[fname] = file
-
+        file = self._open_file(fname)
         full_key = self.get_prefixed_key(hf_weight_key, file)
         return file.get_tensor(full_key)
 

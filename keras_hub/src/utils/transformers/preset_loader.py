@@ -120,9 +120,9 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
-        elif model_type == "qwen3_5_moe":
+        elif model_type in ("qwen3_5_moe", "qwen3_5_moe_text"):
             self.converter = convert_qwen3_5_moe
-        elif model_type == "qwen3_5":
+        elif model_type in ("qwen3_5", "qwen3_5_text"):
             self.converter = convert_qwen3_5
         elif model_type == "roberta":
             self.converter = convert_roberta
