@@ -30,6 +30,7 @@ from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
 from keras_hub.src.utils.transformers import convert_modern_bert
+from keras_hub.src.utils.transformers import convert_mpnet
 from keras_hub.src.utils.transformers import convert_muse_glimmer
 from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
@@ -69,6 +70,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_distilbert
         elif model_type == "modernbert":
             self.converter = convert_modern_bert
+        elif model_type == "mpnet":
+            self.converter = convert_mpnet
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
         elif model_type == "dinov3_vit":

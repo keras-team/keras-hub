@@ -629,6 +629,18 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
+from keras_hub.src.models.mpnet.mpnet_backbone import (
+    MPNetBackbone as MPNetBackbone,
+)
+from keras_hub.src.models.mpnet.mpnet_text_embedder import (
+    MPNetTextEmbedder as MPNetTextEmbedder,
+)
+from keras_hub.src.models.mpnet.mpnet_text_embedder_preprocessor import (
+    MPNetTextEmbedderPreprocessor as MPNetTextEmbedderPreprocessor,
+)
+from keras_hub.src.models.mpnet.mpnet_tokenizer import (
+    MPNetTokenizer as MPNetTokenizer,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
     MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
 )

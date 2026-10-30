@@ -95,6 +95,9 @@ from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
 )
+from keras_hub.src.models.mpnet.mpnet_tokenizer import (
+    MPNetTokenizer as MPNetTokenizer,
+)
 from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
     MuseGlimmerTokenizer as MuseGlimmerTokenizer,
 )
