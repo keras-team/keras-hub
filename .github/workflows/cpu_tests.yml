@@ -79,8 +79,23 @@ jobs:
       env:
         SHARD_COUNT: ${{ inputs.shard_count }}
         SHARD: ${{ matrix.shard }}
+        DURATIONS: .github/test_durations/cpu-${{ matrix.config.backend }}.json
       run: |
-        pytest keras_hub/ -n 12 --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
+        mkdir -p .github/test_durations
+        pytest keras_hub/ -n 12 --dist loadfile --durations=50 \
+          --splits "$SHARD_COUNT" --group "$SHARD" \
+          --durations-path "$DURATIONS" --store-durations --clean-durations
+    # Each shard rewrites .github/test_durations/cpu-<backend>.json with its
+    # own fresh timings; master runs upload them so the committed files can be
+    # refreshed with tools/admin/merge_test_durations.py --cpu.
+    - name: Upload test durations
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: cpu-durations-${{ matrix.config.backend }}-${{ matrix.config.version }}-${{ matrix.shard }}
+        path: .github/test_durations/cpu-${{ matrix.config.backend }}.json
+        if-no-files-found: ignore
+        retention-days: 14
     - name: Run integration tests
       if: ${{ matrix.shard == 1 }}
       run: |
