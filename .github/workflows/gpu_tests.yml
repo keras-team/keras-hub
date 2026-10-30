@@ -93,15 +93,9 @@ jobs:
           --durations-path .github/test_durations/${{ matrix.backend }}.json \
           --store-durations --clean-durations
 
-    # pytest-split cuts the collection into four contiguous slices of equal
-    # summed time using the per-test durations committed in
-    # .github/test_durations/<backend>.json, so test files are split only at
-    # the three shard boundaries; tests missing from the file get the average.
-    # The interleaving `least_duration` algorithm balances too, but splitting
-    # a file across shards makes every shard recompile every model (+105 min
-    # on jax, measured). --clean-durations rewrites the durations file with only
-    # this shard's fresh timings; master pushes upload them so the committed
-    # files can be refreshed with tools/admin/merge_test_durations.py.
+    # Each shard rewrites .github/test_durations/<backend>.json with its own
+    # fresh timings; master runs upload them so the committed files can be
+    # refreshed with tools/admin/merge_test_durations.py.
     - name: Upload test durations
       if: always() && github.event_name == 'push'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
