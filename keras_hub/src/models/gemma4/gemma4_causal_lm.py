@@ -46,8 +46,8 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
-        final_logit_cap: Deprecated, will be removed in a future release.
-            `None` or float. The final logit soft-cap is applied by the
+        final_logit_cap: `None` or float. Deprecated, will be removed in a
+            future release. The final logit soft-cap is applied by the
             backbone; set it with `Gemma4Backbone(final_logit_soft_cap=...)`.
             If given, it must equal `backbone.final_logit_soft_cap`. If the
             backbone has no cap, the value is moved to the backbone with a
@@ -128,7 +128,8 @@ class Gemma4CausalLM(CausalLM):
                     f"`final_logit_soft_cap={final_logit_cap}`. Set it with "
                     "`Gemma4Backbone(final_logit_soft_cap=...)` instead. If "
                     "this model was loaded with `from_preset()`, re-save it "
-                    "with `save_to_preset()` to keep the cap on the backbone."
+                    "with `save_to_preset()` to keep the cap on the backbone.",
+                    stacklevel=2,
                 )
                 backbone.final_logit_soft_cap = final_logit_cap
                 backbone.token_embedding.logit_soft_cap = final_logit_cap
