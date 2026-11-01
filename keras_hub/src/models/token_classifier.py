@@ -17,8 +17,9 @@ class TokenClassifier(Task):
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
     where `x` is a string and `y` is an integer tensor
     with values in `[0, num_classes)`. When `x` is a string or list of strings,
-    `y` will be padded or truncated to match the model's `sequence_length`.
-    Padding positions are automatically masked via `sample_weight`.
+    `y` will be padded (with label 0) or truncated to match the model's
+    `sequence_length`. Padding positions are automatically masked via
+    `sample_weight`.
 
     All `TokenClassifier` tasks include a `from_preset()` constructor for
     loading pre-trained configs and weights.

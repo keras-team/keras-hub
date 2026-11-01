@@ -264,6 +264,18 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
             )
             output = model(self.input_data)
             self.assertDTypeEqual(output, policy.compute_dtype)
+
+            output_spec = model.compute_output_spec(self.input_data)
+            self.assertDTypeEqual(output_spec, policy.compute_dtype)
+
+            for sublayer in model._flatten_layers():
+                if isinstance(sublayer, keras.layers.Softmax):
+                    continue
+                if isinstance(sublayer, keras.layers.InputLayer):
+                    continue
+                self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
+                self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
+
             for weight in model.weights:
                 if not keras.backend.is_float_dtype(weight.dtype):
                     continue

@@ -187,7 +187,7 @@ def main(_):
     # Load back the saved preset to ensure it works
     loaded_classifier = (
         keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
-            f"./{preset}"
+            f"./{preset}", dtype=FLAGS.dtype
         )
     )
     # The check is about parity; increase sequence_length so we do not truncate.
@@ -226,6 +226,7 @@ def main(_):
         if not np.array_equal(keras_preds, hf_preds):
             raise ValueError(f"Prediction mismatch for text length {valid_len}")
 
+    print(f"  Parity measured at dtype={FLAGS.dtype}")
     print("  ✅ Prediction parity verified for all lengths")
     print("\n🎉 Conversion complete!")
 

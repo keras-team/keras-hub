@@ -569,7 +569,7 @@ class OpenAIPrivacyFilterEncoderLayer(keras.layers.Layer):
         self, hidden_states, attention_mask=None, training=None
     ):
         return keras.KerasTensor(
-            shape=hidden_states.shape, dtype=hidden_states.dtype
+            shape=hidden_states.shape, dtype=self.compute_dtype
         )
 
     def get_config(self):

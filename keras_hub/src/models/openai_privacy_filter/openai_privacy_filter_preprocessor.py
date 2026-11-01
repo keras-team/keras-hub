@@ -22,6 +22,8 @@ from keras_hub.src.utils.tensor_utils import try_import_tensorflow
 
 tf = try_import_tensorflow()
 
+_SHORT_Y_MESSAGE = "A row of `y` is shorter than its unpadded token count."
+
 
 def _single_segment(x):
     if isinstance(x, tuple):
@@ -32,6 +34,33 @@ def _single_segment(x):
     else:
         x = (x,)
     return x
+
+
+def _row_lengths(tensor):
+    """Per-row length of a ragged or dense tensor on the TensorFlow path."""
+    if isinstance(tensor, tf.RaggedTensor):
+        return tf.cast(tensor.row_lengths(), tf.int32)
+    if tensor.shape.rank == 1:
+        return tf.shape(tensor)[0]
+    return tf.shape(tensor)[-1]
+
+
+def _check_label_lengths(token_rows, y):
+    """Raise if a row of `y` has fewer labels than its row has tokens.
+
+    The label packer pads `y` with `0`, usually a real class, and the default
+    `sample_weight` is the token padding mask, so a short `y` would train
+    the unlabeled positions toward class `0` silently.
+    """
+    batched = len(token_rows) > 0 and isinstance(
+        token_rows[0], (list, tuple, np.ndarray)
+    )
+    if not batched:
+        token_rows, y = [token_rows], [y]
+    for tokens, labels in zip(token_rows, y):
+        num_labels = len(labels) if np.ndim(labels) > 0 else 1
+        if num_labels < len(tokens):
+            raise ValueError(_SHORT_Y_MESSAGE)
 
 
 @keras_hub_export(
@@ -46,12 +75,14 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
     ids followed only by padding.
 
     When per-token labels `y` are passed, they are padded or truncated to
-    the same `sequence_length` (pad label `0`). When `sample_weight` is not
-    provided, it defaults to `padding_mask` so that padded positions do not
-    contribute to the loss. When an explicit `sample_weight` is provided,
-    per-token weights are padded or truncated to `sequence_length`;
-    a per-sample weight is broadcast over tokens and multiplied by the
-    padding mask.
+    the same `sequence_length` (pad label `0`). A row of `y` with fewer
+    labels than its text has tokens raises a `ValueError`, since the missing
+    positions would otherwise be trained toward label `0`. When
+    `sample_weight` is not provided, it defaults to `padding_mask` so that
+    padded positions do not contribute to the loss. When an explicit
+    `sample_weight` is provided, per-token weights are padded or truncated
+    to `sequence_length`; a per-sample weight is broadcast over tokens and
+    multiplied by the padding mask.
 
     The pad token is `<|endoftext|>`, as in the Hugging Face checkpoint. A
     literal `<|endoftext|>` inside the input text therefore receives the pad
@@ -152,19 +183,27 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
         x = tuple(self.tokenizer(segment) for segment in x)
         token_ids, _ = self.packer(x, sequence_length=sequence_length)
         padding_mask = token_ids != self.tokenizer.pad_token_id
-        x = {
+        x_dict = {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
         if y is not None:
-            y, _ = self.y_packer((y,), sequence_length=sequence_length)
+            # See `_check_label_lengths`; the assert must be a control
+            # dependency or graph mode prunes it as dead code.
+            check = tf.debugging.assert_greater_equal(
+                _row_lengths(convert_preprocessing_inputs(y)),
+                _row_lengths(x[0]),
+                message=_SHORT_Y_MESSAGE,
+            )
+            with tf.control_dependencies([check]):
+                y, _ = self.y_packer((y,), sequence_length=sequence_length)
             if sample_weight is None:
                 sample_weight = padding_mask
             else:
                 sample_weight = self._pad_sample_weight(
                     sample_weight, padding_mask, sequence_length
                 )
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x_dict, y, sample_weight)
 
     def _call_python(self, x, y=None, sample_weight=None, sequence_length=None):
         x = _single_segment(x)
@@ -173,11 +212,12 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
         padding_mask = compute_padding_mask(
             token_ids, self.tokenizer.pad_token_id
         )
-        x = {
+        x_dict = {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
         if y is not None:
+            _check_label_lengths(x[0], y)
             y, _ = self.y_packer((y,), sequence_length=sequence_length)
             if sample_weight is None:
                 sample_weight = padding_mask
@@ -185,7 +225,7 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
                 sample_weight = self._pad_sample_weight(
                     sample_weight, padding_mask, sequence_length
                 )
-        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        return keras.utils.pack_x_y_sample_weight(x_dict, y, sample_weight)
 
     def call(self, x, y=None, sample_weight=None, sequence_length=None):
         if self._use_tf_workflow():

@@ -65,7 +65,11 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
                 self.run_preprocessor_test(
                     cls=OpenAIPrivacyFilterPreprocessor,
                     init_kwargs=self.init_kwargs,
-                    input_data=(["airplane at airport"], [[1, 2]], sw),
+                    input_data=(
+                        ["airplane at airport"],
+                        [[1, 2, 0, 0, 0]],
+                        sw,
+                    ),
                     expected_output=(
                         {"token_ids": [ids], "padding_mask": [mask]},
                         [labels],
@@ -78,7 +82,7 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         import tensorflow as tf
 
         preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
-        sample = ("airplane at airport", [1, 2], [1.0, 0.5])
+        sample = ("airplane at airport", [1, 2, 0, 0, 0], [1.0, 0.5])
         expected = (
             {"token_ids": ids, "padding_mask": mask},
             labels,
@@ -128,7 +132,7 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         sw = keras.ops.convert_to_tensor([1.0, 0.5])
         if keras.backend.backend() == "torch":
             sw = sw.requires_grad_()
-        sample = ("airplane at airport", [1, 2], sw)
+        sample = ("airplane at airport", [1, 2, 0, 0, 0], sw)
         # Check it does not raise.
         x, y, sample_weight = preprocessor(*sample)
         self.assertEqual(list(sample_weight), [1.0, 0.5] + [0.0] * 6)
@@ -139,6 +143,29 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # to be passed as `x=`: a positional 2-tuple is unpacked as `(x, y)`.
         with self.assertRaisesRegex(ValueError, "Multi-segment"):
             preprocessor(x=(["airplane at airport"], ["airport"]))
+
+    def test_short_y_raises(self):
+        # A `y` row with fewer labels than its tokens would otherwise be
+        # padded with label 0 at weight 1. Both workflows refuse it.
+        import tensorflow as tf
+
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        short = "shorter than its unpadded token count"
+        with self.assertRaisesRegex(ValueError, short):
+            preprocessor(["airplane at airport"], [[1]])
+        with self.assertRaisesRegex(ValueError, short):
+            preprocessor("airplane at airport", [1])
+        with self.assertRaisesRegex(ValueError, short):
+            preprocessor(["airplane at airport", "at"], [[1, 2, 0, 0, 0], [1]])
+
+        ds = tf.data.Dataset.from_tensors(("airplane at airport", [1]))
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, short):
+            ds.map(preprocessor).get_single_element()
+        ds = tf.data.Dataset.from_tensor_slices(
+            (["airplane at airport", "at"], tf.ragged.constant([[1], [1]]))
+        ).batch(2)
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, short):
+            list(ds.map(preprocessor))
 
     @pytest.mark.extra_large
     def test_all_presets(self):

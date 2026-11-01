@@ -18,7 +18,7 @@ def convert_task_config(transformers_config):
 
 
 def convert_backbone_config(transformers_config):
-    rope_params = transformers_config.get("rope_parameters", {})
+    rope_params = transformers_config["rope_parameters"]
     if rope_params.get("rope_type") != "yarn":
         raise ValueError("rope_type must be 'yarn'")
     if transformers_config.get("attention_bias", True) is not True:
