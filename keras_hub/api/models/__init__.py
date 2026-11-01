@@ -782,6 +782,18 @@ from keras_hub.src.models.qwen3_moe.qwen3_moe_causal_lm_preprocessor import (
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
 )
+from keras_hub.src.models.qwen3_vl.qwen3_vl_backbone import (
+    Qwen3_VLBackbone as Qwen3_VLBackbone,
+)
+from keras_hub.src.models.qwen3_vl.qwen3_vl_causal_lm import (
+    Qwen3_VLCausalLM as Qwen3_VLCausalLM,
+)
+from keras_hub.src.models.qwen3_vl.qwen3_vl_causal_lm_preprocessor import (
+    Qwen3_VLCausalLMPreprocessor as Qwen3_VLCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_vl.qwen3_vl_tokenizer import (
+    Qwen3_VLTokenizer as Qwen3_VLTokenizer,
+)
 from keras_hub.src.models.qwen_moe.qwen_moe_backbone import (
     QwenMoeBackbone as QwenMoeBackbone,
 )
