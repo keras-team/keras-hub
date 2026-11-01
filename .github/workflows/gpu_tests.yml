@@ -78,6 +78,7 @@ jobs:
         pip install --no-deps -e "." --progress-bar off
 
     - name: Test with pytest
+      id: pytest
       env:
         # Prevent TF from pre-allocating all GPU memory, leaving room for
         # the primary backend (torch/jax) when TF is used for preprocessing.
@@ -87,5 +88,25 @@ jobs:
         KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       run: |
+        mkdir -p .github/test_durations
         pytest keras_hub --check_gpu --run_large --cov=keras_hub \
-          --durations=50 --splits 4 --group ${{ matrix.shard }}
+          --durations=50 --splits 4 --group ${{ matrix.shard }} \
+          --durations-path .github/test_durations/${{ matrix.backend }}.json \
+          --splitting-algorithm duration_based_chunks \
+          --store-durations --clean-durations
+
+    # Each shard rewrites .github/test_durations/<backend>.json with its own
+    # fresh timings; master runs upload them so the committed files can be
+    # refreshed with tools/admin/merge_test_durations.py. Upload only when
+    # pytest ran: a failed test still gives valid durations, but a failed
+    # install would upload the committed file as if it were fresh.
+    - name: Upload test durations
+      if: |
+        always() && github.event_name == 'push' &&
+        (steps.pytest.outcome == 'success' || steps.pytest.outcome == 'failure')
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: durations-${{ matrix.backend }}-${{ matrix.shard }}
+        path: .github/test_durations/${{ matrix.backend }}.json
+        if-no-files-found: ignore
+        retention-days: 14
