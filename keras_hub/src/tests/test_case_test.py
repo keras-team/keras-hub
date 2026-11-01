@@ -1,4 +1,5 @@
 import collections
+import os
 import random
 import unittest
 from types import MappingProxyType
@@ -16,6 +17,10 @@ from keras_hub.src.tests.test_case import grain_ragged_batch
 from keras_hub.src.tests.test_case import grain_source_from_tensor_slices
 from keras_hub.src.utils.tensor_utils import tf
 
+torch = None
+if keras.config.backend() == "torch":
+    import torch
+
 
 class AssertionsTest(TestCase):
     """The assertions must handle jagged and dict data, not just arrays.
@@ -24,6 +29,94 @@ class AssertionsTest(TestCase):
     `keras.src.testing.TestCase` implementation cannot express.
     """
 
+    @unittest.skipIf(keras.config.backend() != "torch", "Requires Torch")
+    def test_torch_tensor_with_grad(self):
+        t1 = (torch.ones(2, requires_grad=True) * 2,)
+        t2 = (torch.ones(2) * 2,)
+        self.assertAllClose(t1, t2)
+
+        t3 = [torch.ones(2, requires_grad=True) * 2]
+        t4 = [torch.ones(2) * 2]
+        self.assertAllClose(t3, t4)
+
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(t1, (torch.ones(2),))
+
+        def make_a():
+            return torch.ones(2, 3, requires_grad=True) * 2
+
+        def make_b():
+            return torch.ones(4, requires_grad=True)
+
+        # tuple of DIFFERENT-shape grad tensors
+        t_diff_shape = (make_a(), make_b())
+        self.assertAllClose(t_diff_shape, (make_a(), make_b()))
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                t_diff_shape, (make_a(), torch.ones(4, requires_grad=True) * 2)
+            )
+
+        # nested
+        t_nested = [[make_a()], [make_b()]]
+        self.assertAllClose(t_nested, [[make_a()], [make_b()]])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                t_nested, [[make_a()], [torch.ones(4, requires_grad=True) * 2]]
+            )
+
+        # jagged
+        t_jagged = [[make_a(), make_a()], [make_b()]]
+        self.assertAllClose(t_jagged, [[make_a(), make_a()], [make_b()]])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                t_jagged,
+                [[make_a(), torch.ones(2, 3, requires_grad=True)], [make_b()]],
+            )
+
+        # tuple of tuples
+        t_tuple_tuple = ((make_a(),), (make_b(),))
+        self.assertAllClose(t_tuple_tuple, ((make_a(),), (make_b(),)))
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(
+                t_tuple_tuple,
+                ((make_a(),), (torch.ones(4, requires_grad=True) * 2,)),
+            )
+
+    @unittest.skipIf(tf is None, "Requires TF")
+    def test_sparse_tensors(self):
+        st1 = tf.SparseTensor(
+            indices=[[0, 0], [1, 2]], values=[1.0, 2.0], dense_shape=[3, 4]
+        )
+        st2 = tf.SparseTensor(
+            indices=[[1, 2], [0, 0]], values=[2.0, 1.0], dense_shape=[3, 4]
+        )
+        self.assertAllEqual(st1, st2)
+
+        st3 = tf.SparseTensor(
+            indices=[[0, 0], [1, 2]], values=[1.0, 3.0], dense_shape=[3, 4]
+        )
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(st1, st3)
+
+    def test_none_leaves(self):
+        self.assertAllClose(None, None)
+        self.assertAllEqual(None, None)
+        with self.assertRaises(AssertionError):
+            self.assertAllClose(None, [1.0])
+
+    def test_assert_almost_equal(self):
+        self.assertAlmostEqual(1.0, 1.0000001, places=5)
+        self.assertAlmostEqual(1.0, 1.0000001, delta=1e-5)
+        with self.assertRaises(AssertionError):
+            self.assertAlmostEqual(1.0, 1.1, delta=1e-5)
+
+    def test_get_temp_dir_is_cached(self):
+        dir1 = self.get_temp_dir()
+        dir2 = self.get_temp_dir()
+        self.assertEqual(dir1, dir2)
+
+        self.assertTrue(os.path.exists(dir1))
+
     def test_ragged_lists(self):
         self.assertAllEqual(
             [[9, 10, 11, 12], [9, 12]], [[9, 10, 11, 12], [9, 12]]
@@ -31,6 +124,10 @@ class AssertionsTest(TestCase):
         self.assertAllClose([[1.0, 2.0], [3.0]], [[1.0, 2.0], [3.0]])
         self.assertAllEqual(((1, 2), (3,)), [[1, 2], [3]])
         self.assertAllEqual([np.array([1, 2]), np.array([3])], [[1, 2], [3]])
+        self.assertAllEqual(
+            [np.ones((2, 2)), np.ones((1, 2))],
+            [np.ones((2, 2)), np.ones((1, 2))],
+        )
         self.assertAllEqual([[True, False]], [[1, 0]])
 
     def test_ragged_lists_detect_shape_shift(self):
@@ -290,13 +387,6 @@ class GrainHarnessTest(TestCase):
 
 
 class TestCaseTest(TestCase):
-    @unittest.skipIf(
-        keras.config.backend() == "tensorflow",
-        reason=(
-            "The TensorFlow backend cannot boot with an attribute-less "
-            "`tensorflow` planted in `sys.modules`."
-        ),
-    )
     def test_setup_with_empty_tensorflow(self):
         """Pin the `setUp` guard against a partly uninstalled TensorFlow.
 
@@ -321,18 +411,16 @@ class TestCaseTest(TestCase):
                 # Test random is seeded
                 first_random = random.random()
                 first_np = float(np.random.rand())
-                if keras.config.backend() == "torch":
-                    import torch
 
+                if keras.config.backend() == "torch":
                     first_torch = float(torch.rand(1))
 
                 self.setUp()
 
                 second_random = random.random()
                 second_np = float(np.random.rand())
-                if keras.config.backend() == "torch":
-                    import torch
 
+                if keras.config.backend() == "torch":
                     second_torch = float(torch.rand(1))
 
                 self.assertEqual(
@@ -358,13 +446,18 @@ class TestCaseTest(TestCase):
 
         @keras.saving.register_keras_serializable(package="TestDummy")
         class DummyTask(keras.Model):
-            def __init__(self, **kwargs):
+            def __init__(self, preprocessor=None, **kwargs):
                 kwargs.pop("compile", None)
                 inputs = {"inputs": keras.Input(shape=(1,))}
                 super().__init__(
                     inputs=inputs, outputs=inputs["inputs"], **kwargs
                 )
-                self.preprocessor = DummyPreprocessor()
+                # A named parameter keeps the argspec distinct from
+                # Functional.__init__ on Keras 3.14 (whose decorator hides
+                # its signature), otherwise from_config revives the model as
+                # functional and passes inputs twice; it also mirrors real
+                # Task signatures.
+                self.preprocessor = preprocessor or DummyPreprocessor()
 
             def compile(self, **kwargs):
                 self.compiled = True
@@ -396,6 +489,7 @@ class TestCaseTest(TestCase):
                 compile_kwargs={"optimizer": "sgd", "loss": "mse"},
             )
 
+    @unittest.skipIf(tf is None, "Requires TF")
     def test_setup_propagates_unrelated_attribute_error(self):
         """The guard must not swallow an unrelated `AttributeError`.
 
@@ -405,8 +499,6 @@ class TestCaseTest(TestCase):
         swallowing it would leave the whole suite running unseeded with no
         diagnostic.
         """
-        if tf is None:
-            self.skipTest("Requires TensorFlow to be installed.")
 
         def raise_unrelated(seed):
             raise AttributeError("nothing to do with TensorFlow")

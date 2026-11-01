@@ -32,6 +32,8 @@ def convert_to_comparible_type(x):
     are converted to numpy. Ragged tensors are converted to nested lists,
     which is also how the Python preprocessing path represents them.
     """
+    if tf is not None and isinstance(x, tf.SparseTensor):
+        return tf.sparse.to_dense(tf.sparse.reorder(x)).numpy()
     if tf is not None and isinstance(x, (tf.Tensor, tf.RaggedTensor)):
         if x.dtype == tf.string:
             if isinstance(x, tf.RaggedTensor):
@@ -47,6 +49,35 @@ def convert_to_comparible_type(x):
     return x
 
 
+def _to_numpy_leaf(e):
+    if hasattr(e, "__array__") and not isinstance(e, np.ndarray):
+        if tf is not None and isinstance(
+            e,
+            (
+                tf.Tensor,
+                tf.RaggedTensor,
+            ),
+        ):
+            return e
+        return ops.convert_to_numpy(e)
+    return e
+
+
+def _shallow_convert(x):
+    """Shallowly convert elements to numpy arrays.
+
+    Backend tensors on an accelerator or with grad cannot be ingested by
+    `np.asarray`/`np.ndim`. tf objects stay raw for the ragged-vs-dense
+    check and are converted one level down. Namedtuples are left for the
+    `_asdict` path below.
+    """
+    if isinstance(x, list):
+        return [_to_numpy_leaf(e) for e in x]
+    if isinstance(x, tuple) and not hasattr(x, "_asdict"):
+        return tuple(_to_numpy_leaf(e) for e in x)
+    return x
+
+
 def _as_dense_array(x):
     """Return `x` as a dense numpy array, or `None` if it is not dense.
 
@@ -56,13 +87,15 @@ def _as_dense_array(x):
     """
     if isinstance(x, dict):
         return None
+
     try:
         x = np.asarray(x)
-    except ValueError:
-        # Jagged input, e.g. `np.array([[1, 2], [3]])`.
+    except (ValueError, TypeError, RuntimeError):
+        # Fallback to the recursive walk for un-arrayable containers.
         return None
     if x.dtype.kind == "O":
         return None
+
     if x.dtype.kind == "S":
         # Compare all strings as `str`, never as `bytes`. Bytes that are not
         # valid UTF-8 still have to survive the round trip and compare equal.
@@ -80,7 +113,9 @@ def _is_leaf(x):
     try:
         if np.ndim(x) == 0:
             return True
-    except ValueError:
+    except (ValueError, TypeError, RuntimeError):
+        # Containers holding backend tensors on an accelerator or with grad
+        # cannot be viewed as arrays; fall through to the `__len__` check.
         pass
     if not hasattr(x, "__len__"):
         return True
@@ -131,6 +166,8 @@ def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
 
     x1 = convert_to_comparible_type(x1)
     x2 = convert_to_comparible_type(x2)
+    x1 = _shallow_convert(x1)
+    x2 = _shallow_convert(x2)
 
     if x1 is None or x2 is None:
         if x1 is not None or x2 is not None:
@@ -207,7 +244,9 @@ def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
                                 return True
                         except AssertionError:
                             pass
-                except ValueError:
+                except (ValueError, TypeError, RuntimeError):
+                    # Backend tensors on an accelerator or with grad cannot be
+                    # viewed as arrays.
                     pass
 
     for i, (e1, e2) in enumerate(zip(x1, x2)):
