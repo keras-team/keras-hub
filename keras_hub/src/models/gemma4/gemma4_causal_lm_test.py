@@ -30,6 +30,7 @@ from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
@@ -172,6 +173,81 @@ class Gemma4CausalLMTest(TestCase, parameterized.TestCase):
             train_data=train_data,
             expected_output_shape=(2, 20, self.tokenizer.vocabulary_size()),
         )
+
+    @parameterized.named_parameters(
+        ("backbone_and_task_cap", True), ("task_cap_only", False)
+    )
+    def test_final_logit_soft_cap_applied_once(self, backbone_has_cap):
+        cap = 2.0
+        # The model's matmul runs under TF32 on GPU.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        backbone_kwargs = copy.deepcopy(self.text_backbone.get_config())
+        backbone_kwargs["final_logit_soft_cap"] = (
+            cap if backbone_has_cap else None
+        )
+        backbone = Gemma4Backbone.from_config(backbone_kwargs)
+        # The deprecated `final_logit_cap` is passed positionally, as callers
+        # written before the deprecation may do.
+        if backbone_has_cap:
+            # Official presets store the cap in both `config.json` and
+            # `task.json`. It must still only be applied once.
+            causal_lm = Gemma4CausalLM(None, backbone, cap)
+        else:
+            # Older models may set the cap only on the task. It is moved to
+            # the backbone, so it is applied once and saved there.
+            with self.assertWarnsRegex(UserWarning, "final_logit_cap"):
+                causal_lm = Gemma4CausalLM(None, backbone, cap)
+        self.assertNotIn("final_logit_cap", causal_lm.get_config())
+        self.assertEqual(backbone.get_config()["final_logit_soft_cap"], cap)
+
+        embeddings = ops.convert_to_numpy(backbone.token_embedding.embeddings)
+
+        def capped_once(hidden_states):
+            raw = ops.convert_to_numpy(hidden_states) @ embeddings.T
+            once = cap * np.tanh(raw / cap)
+            twice = cap * np.tanh(np.tanh(raw / cap))
+            # Make sure raw logits are large enough to tell the two apart.
+            self.assertGreater(np.max(np.abs(once - twice)), 0.1)
+            return once
+
+        # Functional model, used by `fit()`, `predict()` and `evaluate()`.
+        input_data = self.text_input_data
+        logits = causal_lm(input_data)
+        self.assertAllClose(
+            logits, capped_once(backbone(input_data)), atol=tol, rtol=tol
+        )
+
+        # Cached forward pass, used by `generate()`.
+        token_ids = input_data["token_ids"]
+        batch_size, max_length = ops.shape(token_ids)
+        cache = ops.zeros(
+            (
+                batch_size,
+                backbone.num_layers,
+                2,
+                max_length,
+                backbone.num_key_value_heads,
+                backbone.head_dim,
+            )
+        )
+        logits, hidden_states, _ = causal_lm.call_with_cache(
+            token_ids=token_ids,
+            cache=cache,
+            cache_update_index=0,
+            padding_mask=input_data["padding_mask"],
+        )
+        self.assertAllClose(
+            logits, capped_once(hidden_states), atol=tol, rtol=tol
+        )
+
+    def test_final_logit_cap_mismatch_raises(self):
+        backbone_kwargs = copy.deepcopy(self.text_backbone.get_config())
+        backbone_kwargs["final_logit_soft_cap"] = 2.0
+        backbone = Gemma4Backbone.from_config(backbone_kwargs)
+        with self.assertRaisesRegex(ValueError, "from_preset"):
+            Gemma4CausalLM(
+                preprocessor=None, backbone=backbone, final_logit_cap=30.0
+            )
 
     def test_text_flash_attention_call(self):
         if (

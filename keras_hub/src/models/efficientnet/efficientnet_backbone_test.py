@@ -33,6 +33,22 @@ class EfficientNetBackboneTest(TestCase):
         }
         self.input_data = keras.ops.ones(shape=(8, 224, 224, 3))
 
+    def test_data_format_is_serialized(self):
+        # `run_serialization_test` compares config to config, so a key that is
+        # missing from `get_config` is missing on both sides and matches.
+        # The global format is not flipped here: `data_format` defaults to
+        # "channels_last", and the backbone cannot be built with
+        # "channels_first".
+        backbone = EfficientNetBackbone(**self.init_kwargs)
+        self.assertEqual(
+            backbone.get_config()["data_format"], backbone.data_format
+        )
+
+    def test_num_features_is_serialized(self):
+        backbone = EfficientNetBackbone(**self.init_kwargs, num_features=640)
+        revived = EfficientNetBackbone.from_config(backbone.get_config())
+        self.assertEqual(revived.output.shape[-1], 640)
+
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=EfficientNetBackbone,
