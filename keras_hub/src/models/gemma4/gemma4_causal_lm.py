@@ -1,3 +1,6 @@
+import warnings
+import weakref
+
 import numpy as np
 from keras import ops
 
@@ -43,6 +46,12 @@ class Gemma4CausalLM(CausalLM):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
         backbone: A `keras_hub.models.Gemma4Backbone` instance.
+        final_logit_cap: `None` or float. Deprecated, will be removed in a
+            future release. The final logit soft-cap is applied by the
+            backbone; set it with `Gemma4Backbone(final_logit_soft_cap=...)`.
+            If given, it must equal `backbone.final_logit_soft_cap`. If the
+            backbone has no cap, the value is moved to the backbone with a
+            warning.
 
     Examples:
 
@@ -102,20 +111,47 @@ class Gemma4CausalLM(CausalLM):
         final_logit_cap=None,
         **kwargs,
     ):
+        # TODO: Remove `final_logit_cap` and this block in the next release.
+        # `backbone.token_embedding(..., reverse=True)` already applies
+        # `backbone.final_logit_soft_cap`, so the task must not cap again.
+        # Published `task.json` files store a `final_logit_cap` equal to the
+        # backbone cap, which is ignored here.
+        if final_logit_cap is not None:
+            backbone_cap = backbone.final_logit_soft_cap
+            if backbone_cap is None:
+                # Models built with the cap only on the task used to cap
+                # once. Move it to the backbone so they still do, and so it
+                # is saved there from now on.
+                warnings.warn(
+                    "`final_logit_cap` is deprecated and will be removed in a "
+                    "future release. Moving it to the backbone as "
+                    f"`final_logit_soft_cap={final_logit_cap}`. Set it with "
+                    "`Gemma4Backbone(final_logit_soft_cap=...)` instead. If "
+                    "this model was loaded with `from_preset()`, re-save it "
+                    "with `save_to_preset()` to keep the cap on the backbone.",
+                    stacklevel=2,
+                )
+                backbone.final_logit_soft_cap = final_logit_cap
+                backbone.token_embedding.logit_soft_cap = final_logit_cap
+            elif final_logit_cap != backbone_cap:
+                raise ValueError(
+                    "`final_logit_cap` is deprecated. The final logit "
+                    "soft-cap is applied by the backbone; set it with "
+                    "`Gemma4Backbone(final_logit_soft_cap=...)`, or pass "
+                    "`final_logit_cap=None` to `from_preset()` to load with "
+                    "the backbone's cap only. "
+                    f"Received: final_logit_cap={final_logit_cap}, "
+                    f"backbone.final_logit_soft_cap={backbone_cap}."
+                )
+
         # === Layers ===
         self.preprocessor = preprocessor
         self.backbone = backbone
-        self.final_logit_cap = final_logit_cap
 
         # === Functional Model ===
         inputs = backbone.input
         hidden_state = backbone(inputs=inputs)
         outputs = backbone.token_embedding(hidden_state, reverse=True)
-
-        if final_logit_cap is not None:
-            outputs = outputs / final_logit_cap
-            outputs = ops.tanh(outputs)
-            outputs = outputs * final_logit_cap
 
         super().__init__(
             inputs=inputs,
@@ -351,10 +387,6 @@ class Gemma4CausalLM(CausalLM):
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-        if self.final_logit_cap is not None:
-            logits = logits / self.final_logit_cap
-            logits = ops.tanh(logits)
-            logits = logits * self.final_logit_cap
         return logits, hidden_states, cache
 
     def _build_cache(
@@ -399,15 +431,6 @@ class Gemma4CausalLM(CausalLM):
             cache_update_mask=None,
         )
         return hidden_states, cache
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "final_logit_cap": self.final_logit_cap,
-            }
-        )
-        return config
 
     def generate_step(self, inputs, stop_token_ids=None):
         """A compilable generation function for a single batch of inputs.
@@ -623,10 +646,12 @@ class Gemma4CausalLM(CausalLM):
                     target_kv_source_full_idx=_target_kv_src_full_idx,
                     target_kv_source_local_idx=_target_kv_src_local_idx,
                 )
-                # Apply the same final logit soft-cap as the target model so
-                # that draft and verify logits are on the same scale.
-                if self.final_logit_cap is not None:
-                    cap = ops.cast(self.final_logit_cap, logits.dtype)
+                # The assistant returns uncapped logits. Apply the target
+                # backbone's final logit soft-cap so that draft and verify
+                # logits are on the same scale.
+                final_logit_soft_cap = self.backbone.final_logit_soft_cap
+                if final_logit_soft_cap is not None:
+                    cap = ops.cast(final_logit_soft_cap, logits.dtype)
                     logits = ops.tanh(logits / cap) * cap
                 return (
                     ops.squeeze(logits, axis=1),
@@ -778,11 +803,16 @@ class Gemma4CausalLM(CausalLM):
             # full JIT recompile.
             cached_spec_sampler = getattr(self, "_cached_spec_sampler", None)
             cached_spec_fn = getattr(self, "_cached_spec_generate_fn", None)
+            cached_spec_assistant_ref = getattr(
+                self, "_cached_spec_assistant_ref", None
+            )
 
             if (
                 cached_spec_sampler is not None
                 and cached_spec_sampler.num_speculative_tokens == num_spec
                 and cached_spec_sampler.base_sampler is spec_base_sampler
+                and cached_spec_assistant_ref is not None
+                and cached_spec_assistant_ref() is assistant_model
             ):
                 # Reuse compiled speculative graph.
                 self.sampler = cached_spec_sampler
@@ -796,6 +826,9 @@ class Gemma4CausalLM(CausalLM):
                 )
                 self.generate_function = None  # force recompile
 
+            assistant_was_tracked = self._tracker.is_in_store(
+                "layers", assistant_model
+            )
             self._assistant_model = assistant_model
 
         try:
@@ -805,14 +838,25 @@ class Gemma4CausalLM(CausalLM):
                 stop_token_ids=stop_token_ids,
                 strip_prompt=strip_prompt,
             )
-        finally:
             if assistant_model is not None:
                 self._cached_spec_sampler = self.sampler
                 self._cached_spec_generate_fn = self.generate_function
+                # Cache via weakref to avoid keeping the assistant alive.
+                # Not a Layer, so plain assignment bypasses tracker.
+                self._cached_spec_assistant_ref = weakref.ref(assistant_model)
+        finally:
+            if assistant_model is not None:
                 # Restore the original sampler and compiled graph.
                 # Do not set generate_function = None — that would discard
                 # the baseline compiled graph and force a recompile.
-                self._assistant_model = None
+                # `del` rather than `= None`: assigning None leaves the TF
+                # checkpoint dependency in place, so `tf.train.Checkpoint`
+                # of the target would still save the assistant's variables.
+                del self._assistant_model
+                if not assistant_was_tracked:
+                    self._tracker.untrack(assistant_model)
+                # TODO: Drop the explicit untrack once the minimum Keras
+                # version untracks layers on delete (keras-team/keras#23761).
                 self.sampler = original_sampler
                 self.generate_function = original_generate_function
 

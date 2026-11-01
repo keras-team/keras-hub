@@ -94,7 +94,7 @@ do the following:
 - Docstring text should start on the same line as the opening quotes and
   otherwise follow [PEP 257](https://peps.python.org/pep-0257/).
 - Document the
-  [masking](https://keras.io/guides/understanding_masking_and_padding/) behavior
+  [masking](https://keras.io/api/layers/core_layers/masking/) behavior
   of the layer in the class level docstring as well.
 - Always include usage examples using the full symbol location in `keras_hub`.
 - Include a reference citation if applicable.

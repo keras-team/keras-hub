@@ -586,6 +586,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, padding_mask = self.packer(
             token_ids_ragged,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
 

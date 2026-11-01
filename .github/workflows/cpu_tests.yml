@@ -43,7 +43,7 @@ jobs:
     container:
       image: python:3.11-slim
 
-    runs-on: linux-x86-n2-16
+    runs-on: linux-x86-n4-16
     timeout-minutes: ${{ inputs.timeout }}
     env:
       KERAS_BACKEND: ${{ matrix.config.backend }}
@@ -60,6 +60,10 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
+    - name: Install OpenVINO backend plugin
+      if: ${{ matrix.config.backend == 'openvino' }}
+      run: |
+        pip install git+https://github.com/keras-team/keras-openvino.git --progress-bar off
     - name: Pin Keras 3.14
       if: ${{ matrix.config.version == 'keras-3.14'}}
       run: |
@@ -76,7 +80,7 @@ jobs:
         SHARD_COUNT: ${{ inputs.shard_count }}
         SHARD: ${{ matrix.shard }}
       run: |
-        pytest keras_hub/ -n auto --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
+        pytest keras_hub/ -n 12 --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
     - name: Run integration tests
       if: ${{ matrix.shard == 1 }}
       run: |

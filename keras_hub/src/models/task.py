@@ -101,6 +101,35 @@ class Task(PipelineModel):
     def preprocessor(self, value):
         self._preprocessor = value
 
+    def quantize(self, mode=None, config=None, filters=None, **kwargs):
+        """Quantize the task, skipping all preprocessing layers.
+
+        Preprocessing layers (tokenizers, packers, converters) hold no
+        quantizable weights and are usually not built until they are first
+        called, which makes `keras.Model.quantize` raise
+        `"Cannot quantize a layer that isn't yet built"`. They are excluded
+        here; `filters` is still applied to all remaining layers.
+        """
+        preprocessor_layer_ids = set()
+        if isinstance(self.preprocessor, keras.layers.Layer):
+            preprocessor_layer_ids = set(
+                id(layer) for layer in self.preprocessor._flatten_layers()
+            )
+
+        if preprocessor_layer_ids:
+            user_filters = filters
+
+            def filters(layer):
+                if id(layer) in preprocessor_layer_ids:
+                    return False
+                if user_filters is not None:
+                    return user_filters(layer)
+                return True
+
+        return super().quantize(
+            mode=mode, config=config, filters=filters, **kwargs
+        )
+
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Task constructors.
