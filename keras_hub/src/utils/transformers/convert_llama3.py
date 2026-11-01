@@ -149,14 +149,23 @@ def convert_tokenizer(cls, preset, **kwargs):
     # Llama3 uses the <|end_of_text|> end token for regular models
     # but uses <|eot_id|> for instruction-tuned  variants.
     tokenizer_config2 = load_json(preset, "tokenizer_config.json")
-    bos_token = tokenizer_config2["bos_token"]
-    eos_token = tokenizer_config2["eos_token"]
+    bos_token = tokenizer_config2.get("bos_token")
+    eos_token = tokenizer_config2.get("eos_token")
+    if eos_token is None:
+        eos_token = "<|end_of_text|>"
+
+    # Filter special tokens to only those that exist in vocabulary
+    misc_tokens = {t for t in special_tokens if t in vocab}
+    if bos_token:
+        misc_tokens.discard(bos_token)
+    if eos_token:
+        misc_tokens.discard(eos_token)
 
     kwargs.update(
         {
             "bos_token": bos_token,
             "eos_token": eos_token,
-            "misc_special_tokens": special_tokens,
+            "misc_special_tokens": misc_tokens,
         }
     )
 
