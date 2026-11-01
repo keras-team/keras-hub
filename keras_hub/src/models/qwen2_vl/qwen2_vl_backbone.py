@@ -8,8 +8,8 @@ from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.models.qwen2_vl.qwen2_vl_decoder import (
     Qwen2VLTransformerDecoder,
 )
-from keras_hub.src.models.qwen2_vl.qwen2_vl_layers import (
-    Qwen2VLInterleaveEmbeddings,
+from keras_hub.src.models.qwen3_5.qwen3_5_layers import (
+    Qwen3_5InterleaveEmbeddings,
 )
 
 
@@ -115,7 +115,7 @@ class Qwen2VLBackbone(Backbone):
         self.vision_encoder = vision_encoder
         text_only_model = vision_encoder is None
         if not text_only_model:
-            self.interleave_embeddings = Qwen2VLInterleaveEmbeddings(
+            self.interleave_embeddings = Qwen3_5InterleaveEmbeddings(
                 hidden_dim=hidden_dim,
                 dtype=dtype,
                 name="interleave_embeddings",
