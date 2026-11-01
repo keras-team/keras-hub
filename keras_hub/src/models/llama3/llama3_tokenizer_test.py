@@ -42,6 +42,22 @@ class Llama3TokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             Llama3Tokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
 
+    def test_tokenizer_with_null_bos(self):
+        vocab = dict(self.vocab)
+        vocab.pop("<|begin_of_text|>", None)
+        tokenizer = Llama3Tokenizer(
+            vocabulary=vocab,
+            merges=self.merges,
+            bos_token=None,
+            eos_token="<|end_of_text|>",
+            misc_special_tokens=set(),
+        )
+        self.assertIsNone(tokenizer.start_token)
+        self.assertIsNone(tokenizer.start_token_id)
+        self.assertEqual(tokenizer.end_token, "<|end_of_text|>")
+        tokens = tokenizer("airplane airport")
+        self.assertEqual(tokenizer.detokenize(tokens), "airplane airport")
+
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
