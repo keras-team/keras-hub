@@ -12,10 +12,10 @@ from keras_hub.src.models.text_embedder import TextEmbedder
 class MPNetTextEmbedder(TextEmbedder):
     """An end-to-end MPNet model for generating sentence embeddings.
 
-    This model attaches a pooling and L2 normalization head to a
-    `keras_hub.models.MPNetBackbone` instance, mapping from the backbone
-    outputs to fixed-size sentence embeddings suitable for semantic
-    similarity, clustering, and retrieval tasks.
+    This model attaches a pooling head, optionally followed by L2
+    normalization, to a `keras_hub.models.MPNetBackbone` instance, mapping
+    from the backbone outputs to fixed-size sentence embeddings suitable for
+    semantic similarity, clustering, and retrieval tasks.
 
     This is the architecture used by sentence-transformer models such as
     `all-mpnet-base-v2`. For usage of this model with pre-trained weights, use
@@ -47,7 +47,7 @@ class MPNetTextEmbedder(TextEmbedder):
     Raw string data.
     ```python
     embedder = keras_hub.models.MPNetTextEmbedder.from_preset(
-        "all_mpnet_base_v2_en",
+        "all_mpnet_base_v2",
     )
 
     # Semantic search.
@@ -70,7 +70,7 @@ class MPNetTextEmbedder(TextEmbedder):
     }
 
     embedder = keras_hub.models.MPNetTextEmbedder.from_preset(
-        "all_mpnet_base_v2_en",
+        "all_mpnet_base_v2",
         preprocessor=None,
     )
     embeddings = embedder.predict(features)
@@ -185,8 +185,10 @@ class MPNetTextEmbedder(TextEmbedder):
 
         Computes the dot product between query and document embeddings.
         When embeddings are L2 normalized (the default), this is
-        equivalent to cosine similarity. Returns a similarity matrix
-        of shape `(num_queries, num_documents)`.
+        equivalent to cosine similarity. The `nli_mpnet_base_v2` and
+        `paraphrase_mpnet_base_v2` presets do not normalize their
+        embeddings, so L2 normalize them first to get cosine similarity.
+        Returns a similarity matrix of shape `(num_queries, num_documents)`.
 
         Args:
             query_embeddings: An array or tensor of shape

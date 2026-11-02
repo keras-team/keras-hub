@@ -62,7 +62,7 @@ class MPNetTokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MPNetTokenizer,
-            preset="all_mpnet_base_v2_en",
+            preset="all_mpnet_base_v2",
             input_data=["The quick brown fox."],
             expected_output=[[2000, 4252, 2833, 4423, 1016]],
         )

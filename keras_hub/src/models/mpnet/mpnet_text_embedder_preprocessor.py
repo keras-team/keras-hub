@@ -61,7 +61,7 @@ class MPNetTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_hub.models.MPNetTextEmbedderPreprocessor.from_preset(
-        "all_mpnet_base_v2_en"
+        "all_mpnet_base_v2"
     )
 
     # Tokenize and pack a single sentence.
@@ -74,7 +74,7 @@ class MPNetTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_hub.models.MPNetTextEmbedderPreprocessor.from_preset(
-        "all_mpnet_base_v2_en"
+        "all_mpnet_base_v2"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

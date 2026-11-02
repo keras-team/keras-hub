@@ -66,7 +66,7 @@ class MPNetBackbone(Backbone):
     }
 
     # Pretrained MPNet encoder.
-    model = keras_hub.models.MPNetBackbone.from_preset("all_mpnet_base_v2_en")
+    model = keras_hub.models.MPNetBackbone.from_preset("all_mpnet_base_v2")
     model(input_data)
 
     # Randomly initialized MPNet encoder with a custom config.

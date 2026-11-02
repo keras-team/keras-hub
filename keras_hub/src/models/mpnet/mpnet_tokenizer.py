@@ -47,7 +47,7 @@ class MPNetTokenizer(WordPieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.MPNetTokenizer.from_preset(
-        "all_mpnet_base_v2_en",
+        "all_mpnet_base_v2",
     )
     tokenizer("The quick brown fox jumped.")
 

@@ -34,3 +34,19 @@ class TestTask(TestCase):
         )
         self.assertIsInstance(model, MPNetBackbone)
         self.assertEqual(model.max_sequence_length, 512)
+
+    @pytest.mark.large
+    def test_unnormalized_presets(self):
+        # The NLI and paraphrase checkpoints have no `Normalize` module and
+        # set their own `max_seq_length`.
+        for hf_preset, sequence_length in (
+            ("hf://sentence-transformers/nli-mpnet-base-v2", 75),
+            ("hf://sentence-transformers/paraphrase-mpnet-base-v2", 512),
+        ):
+            model = TextEmbedder.from_preset(hf_preset, load_weights=False)
+            self.assertIsInstance(model, MPNetTextEmbedder)
+            self.assertEqual(model.pooling_mode, "mean")
+            self.assertFalse(model.normalize)
+            self.assertEqual(
+                model.preprocessor.sequence_length, sequence_length
+            )

@@ -68,7 +68,7 @@ class MPNetBackboneTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MPNetBackbone,
-            preset="all_mpnet_base_v2_en",
+            preset="all_mpnet_base_v2",
             input_data={
                 "token_ids": ops.array([[0, 2000, 4252, 2833, 2]], "int32"),
                 "padding_mask": ops.ones((1, 5), dtype="int32"),

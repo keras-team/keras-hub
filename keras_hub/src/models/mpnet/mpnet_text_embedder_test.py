@@ -65,7 +65,7 @@ class MPNetTextEmbedderTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MPNetTextEmbedder,
-            preset="all_mpnet_base_v2_en",
+            preset="all_mpnet_base_v2",
             input_data=self.input_data,
             expected_output_shape=(2, 768),
         )

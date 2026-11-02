@@ -14,7 +14,7 @@ pip install sentence-transformers safetensors huggingface_hub
 Usage:
 ```shell
 python tools/checkpoint_conversion/convert_mpnet_checkpoints.py \
-    --preset all_mpnet_base_v2_en
+    --preset all_mpnet_base_v2
 ```
 
 The Keras backend defaults to torch and can be set with `KERAS_BACKEND`
@@ -49,7 +49,11 @@ from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "all_mpnet_base_v2_en": "sentence-transformers/all-mpnet-base-v2",
+    "all_mpnet_base_v2": "sentence-transformers/all-mpnet-base-v2",
+    "nli_mpnet_base_v2": "sentence-transformers/nli-mpnet-base-v2",
+    "paraphrase_mpnet_base_v2": (
+        "sentence-transformers/paraphrase-mpnet-base-v2"
+    ),
 }
 
 flags.DEFINE_string(
@@ -85,7 +89,9 @@ TEST_TEXTS = [
     " ".join(["The quick brown fox jumps over the lazy dog."] * 60),
 ]
 
-# The maximum absolute difference allowed between L2-normalized embeddings.
+# The maximum absolute difference allowed between the sentence embeddings.
+# Only `all_mpnet_base_v2` L2-normalizes them, the NLI and paraphrase
+# checkpoints do not.
 EMBEDDING_TOLERANCE = 1e-5
 # The maximum absolute difference allowed between the final hidden states.
 HIDDEN_STATE_TOLERANCE = 1e-4
