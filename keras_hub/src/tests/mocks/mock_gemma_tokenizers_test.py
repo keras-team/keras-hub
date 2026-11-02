@@ -1,6 +1,5 @@
 from unittest import mock
 
-import numpy as np
 from keras import ops
 
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
@@ -17,7 +16,17 @@ class MockGemmaTokenizersTest(TestCase):
         self._test_tokenizer_parity(
             MockGemma3Tokenizer,
             "<img> the quick brown fox",
-            ["<img>", "the quick brown fox", "<img> earth is round \n\n <img>"],
+            [
+                "<img>",
+                "the quick brown fox",
+                "<img> earth is round \n\n <img>",
+                "the    fox",
+                " the fox ",
+                "\xa0the fox\xa0",
+                "\u2003the fox\u2003",
+                "\u3000the fox\u3000",
+                "<img>the<end_of_image><img>",
+            ],
         )
 
     def test_gemma3n_parity(self):
@@ -28,6 +37,12 @@ class MockGemmaTokenizersTest(TestCase):
                 "<audio_soft_token>",
                 "the quick brown fox",
                 "<img> earth is round \n\n <audio_soft_token>",
+                "the    fox",
+                " the fox ",
+                "\xa0the fox\xa0",
+                "\u2003the fox\u2003",
+                "\u3000the fox\u3000",
+                "<audio_soft_token>the<end_of_audio><audio_soft_token>",
             ],
         )
 
@@ -39,6 +54,15 @@ class MockGemmaTokenizersTest(TestCase):
                 "<|video|>",
                 "the quick brown fox",
                 "<|image|> earth is round \n\n <|video|>",
+                "the    fox",
+                " the fox ",
+                "\xa0the fox\xa0",
+                "\u2003the fox\u2003",
+                "\u3000the fox\u3000",
+                "<|video|>the<|audio|>",
+                "<|image>the<image|>",
+                "<|video>the<video|>",
+                "<|audio>the<audio|>",
             ],
         )
 
@@ -48,52 +72,30 @@ class MockGemmaTokenizersTest(TestCase):
             self.skipTest("TensorFlow is not installed.")
         tokenizer = MockGemma3Tokenizer()
 
-        # These tokenizers pad special tokens with spaces and never strip, so
-        # a special token at the start or end of the string leaves an empty
-        # field on the outside of it. Splitting on `sep=" "` keeps those empty
-        # fields, and they miss in the vocabulary, so they take `default_value`
-        # 3 (`<unk>`). It is the string boundary that does this, not the
-        # special token -- see the two cases below.
-        # `_tokenize_tf` is wrapped in `@preprocessing_function`, so its output
-        # is a backend tensor. Use `ops.convert_to_numpy` (not `np.array`) so
-        # this works when torch places it on a non-CPU device.
+        # Space-padded special tokens at a string boundary leave an empty
+        # field that misses the vocabulary and becomes `<unk>` (3).
         tf_out = ops.convert_to_numpy(tokenizer._tokenize_tf("<img>")).tolist()
-        py_out = tokenizer._tokenize_python("<img>")
-        if isinstance(py_out, np.ndarray):
-            py_out = py_out.tolist()
-
-        # "<img>" becomes " <img> ", which splits to ["", "<img>", ""] and
-        # maps to [<unk>, <img>, <unk>].
+        py_out = tokenizer._tokenize_python("<img>").tolist()
         self.assertEqual(tf_out, [3, tokenizer.token_to_id("<img>"), 3])
         self.assertEqual(py_out, [3, tokenizer.token_to_id("<img>"), 3])
 
-        # A special token in the middle of the string produces no `<unk>`,
-        # because the spaces it is padded with are absorbed by the spaces
-        # already separating the words.
-        mid = tokenizer._tokenize_python("the <img> fox")
-        if isinstance(mid, np.ndarray):
-            mid = mid.tolist()
+        # Mid-string, the padding is absorbed by the surrounding spaces.
+        mid = tokenizer._tokenize_python("the <img> fox").tolist()
         self.assertNotIn(3, mid)
 
-        # Conversely, leading whitespace alone is enough, with no special
-        # token involved at all.
-        lead = tokenizer._tokenize_python(" the fox")
-        if isinstance(lead, np.ndarray):
-            lead = lead.tolist()
+        # Leading whitespace alone is enough to produce the `<unk>`.
+        lead = tokenizer._tokenize_python(" the fox").tolist()
         self.assertEqual(lead[0], 3)
 
     def test_public_dispatch_uses_python_workflow(self):
-        # Outside a `tf.function` the public entry points must not touch the
-        # TF path. The two paths are value-identical by construction, so
-        # comparing outputs cannot detect a broken dispatcher -- make the TF
-        # privates explode instead.
+        # Eager calls must never hit the TF path; concrete values also pin
+        # `add_bos`, `add_eos` and `detokenize` stripping when `tf is None`.
         cases = [
-            (MockGemma3Tokenizer, "<img> the quick brown fox"),
-            (MockGemma3nTokenizer, "<audio_soft_token> the quick brown fox"),
-            (MockGemma4Tokenizer, "<|video|> the quick brown fox"),
+            (MockGemma3Tokenizer, "the <img> fox", [9, 8, 12]),
+            (MockGemma3nTokenizer, "the <audio_soft_token> fox", [9, 17, 12]),
+            (MockGemma4Tokenizer, "the <|video|> fox", [9, 22, 12]),
         ]
-        for tokenizer_cls, text in cases:
-            tokenizer = tokenizer_cls()
+        for tokenizer_cls, text, expected_ids in cases:
             boom = AssertionError("TF path used outside a tf.function")
             with (
                 mock.patch.object(
@@ -103,25 +105,95 @@ class MockGemmaTokenizersTest(TestCase):
                     tokenizer_cls, "_detokenize_tf", side_effect=boom
                 ),
             ):
-                tokens = tokenizer.tokenize(text)
-                text_out = tokenizer.detokenize(tokens)
-            self.assertAllEqual(tokens, tokenizer._tokenize_python(text))
-            self.assertEqual(text_out, tokenizer._detokenize_python(tokens))
+                tokenizer = tokenizer_cls()
+                self.assertEqual(
+                    tokenizer.tokenize(text).tolist(), expected_ids
+                )
+                self.assertEqual(tokenizer.detokenize(expected_ids), text)
+
+                tokenizer = tokenizer_cls(add_bos=True, add_eos=True)
+                with_specials = [1] + expected_ids + [2]
+                self.assertEqual(
+                    tokenizer.tokenize(text).tolist(), with_specials
+                )
+                self.assertEqual(
+                    tokenizer(text, training=False).tolist(), with_specials
+                )
+                self.assertEqual(
+                    tokenizer.detokenize(with_specials + [0]), text
+                )
 
     def test_tf_data_map_retraces(self):
-        # Pins the `tf.init_scope()` in `_maybe_initialized_tf`: without it
-        # the lookup tables are captured in the first trace's FuncGraph and
-        # the second trace fails.
+        # Pins `tf.init_scope()` in `_maybe_initialized_tf`: without it the
+        # lookup tables are captured by the first trace and the second fails.
         if tf is None:
             self.skipTest("TensorFlow is not installed.")
         tokenizer = MockGemma3Tokenizer()
         for _ in range(2):
-            ds = tf.data.Dataset.from_tensor_slices(["<img> the fox"])
+            ds = tf.data.Dataset.from_tensor_slices(["the <img> fox"])
             ds = ds.map(tokenizer.tokenize)
-            self.assertAllEqual(
-                next(iter(ds)).numpy().tolist(),
-                tokenizer._tokenize_python("<img> the fox").tolist(),
+            self.assertEqual(next(iter(ds)).numpy().tolist(), [9, 8, 12])
+
+    def test_python_tokenize_dtype_string(self):
+        for cls in (
+            MockGemma3Tokenizer,
+            MockGemma3nTokenizer,
+            MockGemma4Tokenizer,
+        ):
+            tokenizer = cls(dtype="string")
+            tokens = tokenizer.tokenize("the fox")
+            self.assertEqual(tokens, ["the", "fox"])
+            self.assertIsInstance(tokens, list)
+            self.assertEqual(
+                tokenizer("the fox", training=False), ["the", "fox"]
             )
+            self.assertEqual(
+                tokenizer.tokenize(["the fox", "unknown"]),
+                [["the", "fox"], ["<unk>"]],
+            )
+
+            tokenizer = cls(dtype="string", add_bos=True, add_eos=True)
+            expected = ["<bos>", "the", "fox", "<eos>"]
+            self.assertEqual(tokenizer.tokenize("the fox"), expected)
+            if tf is not None:
+                # TF string outputs arrive as decoded Python lists.
+                self.assertEqual(tokenizer._tokenize_tf("the fox"), expected)
+
+    def test_tf_is_none_raises_clear_error(self):
+        for cls in (
+            MockGemma3Tokenizer,
+            MockGemma3nTokenizer,
+            MockGemma4Tokenizer,
+        ):
+            with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
+                tokenizer = cls()
+                with self.assertRaisesRegex(
+                    ImportError, rf"{cls.__name__} requires `tensorflow`"
+                ):
+                    cls._tokenize_tf.__wrapped__(tokenizer, ["the fox"])
+                with self.assertRaisesRegex(
+                    ImportError, rf"{cls.__name__} requires `tensorflow`"
+                ):
+                    cls._detokenize_tf.__wrapped__(tokenizer, [9, 12])
+
+    def test_get_config_round_trip(self):
+        for cls in (
+            MockGemma3Tokenizer,
+            MockGemma3nTokenizer,
+            MockGemma4Tokenizer,
+        ):
+            tokenizer = cls(
+                sequence_length=12, dtype="int64", add_bos=True, add_eos=True
+            )
+            reloaded = cls.from_config(tokenizer.get_config())
+            self.assertEqual(reloaded.sequence_length, 12)
+            self.assertEqual(reloaded.compute_dtype, "int64")
+            self.assertTrue(reloaded.add_bos)
+            self.assertTrue(reloaded.add_eos)
+            tokens = reloaded.tokenize("the fox")
+            self.assertEqual(str(tokens.dtype), "int64")
+            self.assertEqual(tokens.tolist(), [1, 9, 12, 2])
+            self.assertEqual(reloaded.detokenize(tokens), "the fox")
 
     def _test_tokenizer_parity(
         self, tokenizer_cls, scalar_input, batched_input
@@ -129,77 +201,49 @@ class MockGemmaTokenizersTest(TestCase):
         # Nothing to compare against when there is no TF path to run.
         if tf is None:
             self.skipTest("TensorFlow is not installed.")
-        for add_bos in [True, False]:
-            for add_eos in [True, False]:
-                tokenizer = tokenizer_cls(add_bos=add_bos, add_eos=add_eos)
-
-                # Test scalar
-                # Backend tensor out of `@preprocessing_function`; see the note
-                # in `test_leading_unk_quirk`.
-                tf_scalar_tokens = ops.convert_to_numpy(
-                    tokenizer._tokenize_tf(scalar_input)
-                )
-                py_scalar_tokens = tokenizer._tokenize_python(scalar_input)
-                self.assertAllEqual(tf_scalar_tokens, py_scalar_tokens)
-
-                tf_scalar_detokenized = tokenizer._detokenize_tf(
-                    tf_scalar_tokens
-                )
-                if hasattr(tf_scalar_detokenized, "numpy"):
-                    tf_scalar_detokenized = tf_scalar_detokenized.numpy()
-                elif hasattr(tf_scalar_detokenized, "item"):
-                    tf_scalar_detokenized = tf_scalar_detokenized.item()
-                if isinstance(tf_scalar_detokenized, bytes):
-                    tf_scalar_detokenized = tf_scalar_detokenized.decode(
-                        "utf-8"
+        for dtype in ["int32", "int64", "string"]:
+            for add_bos in [True, False]:
+                for add_eos in [True, False]:
+                    tokenizer = tokenizer_cls(
+                        add_bos=add_bos, add_eos=add_eos, dtype=dtype
                     )
+                    # Unbatched int outputs: backend tensor (TF) / ndarray
+                    # (Python). String outputs are lists on both paths.
+                    tf_scalar = tokenizer._tokenize_tf(scalar_input)
+                    py_scalar = tokenizer._tokenize_python(scalar_input)
+                    if dtype != "string":
+                        self.assertEqual(str(py_scalar.dtype), dtype)
+                        # JAX truncates int64 to int32 in `convert_to_tensor`
+                        # without x64, so compare against the same conversion.
+                        tf_scalar = ops.convert_to_numpy(tf_scalar)
+                        self.assertEqual(
+                            tf_scalar.dtype,
+                            ops.convert_to_numpy(
+                                ops.convert_to_tensor(py_scalar)
+                            ).dtype,
+                        )
+                        tf_scalar = tf_scalar.tolist()
+                        py_scalar = py_scalar.tolist()
+                    self.assertEqual(tf_scalar, py_scalar)
 
-                py_scalar_detokenized = tokenizer._detokenize_python(
-                    py_scalar_tokens
-                )
-                self.assertEqual(tf_scalar_detokenized, py_scalar_detokenized)
+                    # Pin `_cast_tokens_tf` on the raw tensor `tf.data` sees.
+                    raw = tokenizer._tokenize_tf.__wrapped__(
+                        tokenizer, scalar_input
+                    )
+                    self.assertEqual(raw.dtype, tf.as_dtype(dtype))
 
-                # Test batch
-                tf_batch_tokens = tokenizer._tokenize_tf(batched_input)
-                py_batch_tokens = tokenizer._tokenize_python(batched_input)
+                    # Batched outputs are ragged, so lists on both paths.
+                    tf_batch = tokenizer._tokenize_tf(batched_input)
+                    py_batch = tokenizer._tokenize_python(batched_input)
+                    self.assertEqual(tf_batch, py_batch)
 
-                if hasattr(tf_batch_tokens, "to_list"):
-                    tf_batch_tokens_list = tf_batch_tokens.to_list()
-                elif hasattr(tf_batch_tokens, "numpy"):
-                    tf_batch_tokens_list = tf_batch_tokens.numpy().tolist()
-                else:
-                    tf_batch_tokens_list = tf_batch_tokens
-
-                # For batched_input python outputs a list of lists.
-                if isinstance(py_batch_tokens, np.ndarray):
-                    py_batch_tokens_list = py_batch_tokens.tolist()
-                else:
-                    py_batch_tokens_list = py_batch_tokens
-
-                # Note: assertAllEqual might fail on ragged if omit flat element
-                # but comparing lists directly is safe
-                self.assertEqual(tf_batch_tokens_list, py_batch_tokens_list)
-
-                tf_batch_detokenized = tokenizer._detokenize_tf(tf_batch_tokens)
-                if hasattr(tf_batch_detokenized, "numpy"):
-                    tf_batch_detokenized_list = [
-                        x.decode("utf-8") if isinstance(x, bytes) else x
-                        for x in tf_batch_detokenized.numpy()
-                    ]
-                elif isinstance(tf_batch_detokenized, list):
-                    tf_batch_detokenized_list = [
-                        x.decode("utf-8") if isinstance(x, bytes) else x
-                        for x in tf_batch_detokenized
-                    ]
-                else:
-                    tf_batch_detokenized_list = [
-                        x.decode("utf-8") if isinstance(x, bytes) else x
-                        for x in np.array(tf_batch_detokenized).tolist()
-                    ]
-
-                py_batch_detokenized_list = tokenizer._detokenize_python(
-                    py_batch_tokens
-                )
-                self.assertEqual(
-                    tf_batch_detokenized_list, py_batch_detokenized_list
-                )
+                    if dtype == "string":
+                        continue
+                    self.assertEqual(
+                        tokenizer._detokenize_tf(tf_scalar),
+                        tokenizer._detokenize_python(py_scalar),
+                    )
+                    self.assertEqual(
+                        tokenizer._detokenize_tf(tf_batch),
+                        tokenizer._detokenize_python(py_batch),
+                    )
