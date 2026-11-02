@@ -109,6 +109,12 @@ from keras_hub.src.models.blip2.blip2_seq_2_seq_lm_preprocessor import (
 from keras_hub.src.models.blip2.blip2_vision_encoder import (
     BLIP2VisionEncoder as BLIP2VisionEncoder,
 )
+from keras_hub.src.models.block_diffusion_lm import (
+    BlockDiffusionLM as BlockDiffusionLM,
+)
+from keras_hub.src.models.block_diffusion_lm_preprocessor import (
+    BlockDiffusionLMPreprocessor as BlockDiffusionLMPreprocessor,
+)
 from keras_hub.src.models.bloom.bloom_backbone import (
     BloomBackbone as BloomBackbone,
 )
@@ -220,6 +226,18 @@ from keras_hub.src.models.depth_estimator import (
 from keras_hub.src.models.depth_estimator_preprocessor import (
     DepthEstimatorPreprocessor as DepthEstimatorPreprocessor,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_backbone import (
+    DiffusionGemmaBackbone as DiffusionGemmaBackbone,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm import (
+    DiffusionGemmaBlockDiffusionLM as DiffusionGemmaBlockDiffusionLM,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_block_diffusion_lm_preprocessor import (
+    DiffusionGemmaBlockDiffusionLMPreprocessor as DiffusionGemmaBlockDiffusionLMPreprocessor,
+)
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_tokenizer import (
+    DiffusionGemmaTokenizer as DiffusionGemmaTokenizer,
+)
 from keras_hub.src.models.dinov2.dinov2_backbone import (
     DINOV2Backbone as DINOV2Backbone,
 )
@@ -270,6 +288,18 @@ from keras_hub.src.models.electra.electra_backbone import (
 )
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
+    EmbeddingGemma2Backbone as EmbeddingGemma2Backbone,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder import (
+    EmbeddingGemma2TextEmbedder as EmbeddingGemma2TextEmbedder,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (
+    EmbeddingGemma2TextEmbedderPreprocessor as EmbeddingGemma2TextEmbedderPreprocessor,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer as EmbeddingGemma2Tokenizer,
 )
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESM2Backbone
 from keras_hub.src.models.esm.esm_backbone import ESMBackbone as ESMBackbone
@@ -517,6 +547,21 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral3.mistral3_backbone import (
+    Mistral3Backbone as Mistral3Backbone,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm import (
+    Mistral3CausalLM as Mistral3CausalLM,
+)
+from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
+    Mistral3CausalLMPreprocessor as Mistral3CausalLMPreprocessor,
+)
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3VisionEncoder as Mistral3VisionEncoder,
+)
 from keras_hub.src.models.mit.mit_backbone import MiTBackbone as MiTBackbone
 from keras_hub.src.models.mit.mit_image_classifier import (
     MiTImageClassifier as MiTImageClassifier,
@@ -554,6 +599,24 @@ from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier import (
 from keras_hub.src.models.mobilenetv5.mobilenetv5_image_classifier_preprocessor import (
     MobileNetV5ImageClassifierPreprocessor as MobileNetV5ImageClassifierPreprocessor,
 )
+from keras_hub.src.models.modern_bert.modern_bert_backbone import (
+    ModernBertBackbone as ModernBertBackbone,
+)
+from keras_hub.src.models.modern_bert.modern_bert_masked_lm import (
+    ModernBertMaskedLM as ModernBertMaskedLM,
+)
+from keras_hub.src.models.modern_bert.modern_bert_masked_lm_preprocessor import (
+    ModernBertMaskedLMPreprocessor as ModernBertMaskedLMPreprocessor,
+)
+from keras_hub.src.models.modern_bert.modern_bert_text_classifier import (
+    ModernBertTextClassifier as ModernBertTextClassifier,
+)
+from keras_hub.src.models.modern_bert.modern_bert_text_classifier_preprocessor import (
+    ModernBertTextClassifierPreprocessor as ModernBertTextClassifierPreprocessor,
+)
+from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
+    ModernBertTokenizer as ModernBertTokenizer,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_to_text import (
     MoonshineAudioToText as MoonshineAudioToText,
 )
@@ -565,6 +628,24 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
+    MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_backbone import (
+    MuseGlimmerBackbone as MuseGlimmerBackbone,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm import (
+    MuseGlimmerCausalLM as MuseGlimmerCausalLM,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_causal_lm_preprocessor import (
+    MuseGlimmerCausalLMPreprocessor as MuseGlimmerCausalLMPreprocessor,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
+    MuseGlimmerTokenizer as MuseGlimmerTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_vision_encoder import (
+    MuseGlimmerVisionEncoder as MuseGlimmerVisionEncoder,
 )
 from keras_hub.src.models.object_detector import (
     ObjectDetector as ImageObjectDetector,
@@ -855,6 +936,21 @@ from keras_hub.src.models.smollm3.smollm3_tokenizer import (
 )
 from keras_hub.src.models.smollm3.smollm3_tokenizer import (
     SmolLM3Tokenizer as SmolLMTokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_backbone import (
+    SmolVLM2Backbone as SmolVLM2Backbone,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm import (
+    SmolVLM2CausalLM as SmolVLM2CausalLM,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
+    SmolVLM2CausalLMPreprocessor as SmolVLM2CausalLMPreprocessor,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import (
+    SmolVLM2Tokenizer as SmolVLM2Tokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_vision_encoder import (
+    SmolVLM2VisionEncoder as SmolVLM2VisionEncoder,
 )
 from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import (
     StableDiffusion3Backbone as StableDiffusion3Backbone,

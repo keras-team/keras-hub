@@ -498,9 +498,9 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
             ],
         )
         images = self.image_converter(images)
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(images):
             images = images.cpu()
         # Recover the rank.
         images = tf.reshape(
@@ -833,6 +833,7 @@ class Gemma3nCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         response_mask = segment_ids == 1

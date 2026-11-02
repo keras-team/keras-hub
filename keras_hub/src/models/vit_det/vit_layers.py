@@ -463,7 +463,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
 
 class ViTDetPatchingAndEmbedding(keras.layers.Layer):
     """
-    Implements a image patch and embedding layer.
+    Implements an image patch and embedding layer.
 
     Image to Patch Embedding using only a conv layer (without
     layer normalization).The code has been adapted from [Segment Anything

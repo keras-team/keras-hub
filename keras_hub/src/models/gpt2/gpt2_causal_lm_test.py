@@ -266,7 +266,7 @@ class GPT2CausalLMTest(TestCase):
             )
 
 
-@pytest.mark.skipif(keras.src.backend.backend() != "jax", reason="JAX only")
+@pytest.mark.skipif(keras.config.backend() != "jax", reason="JAX only")
 @pytest.mark.multi_device
 class GPT2CausalLMDistributionTest(TestCase):
     def setUp(self):

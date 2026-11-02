@@ -12,7 +12,7 @@ class TextToImagePreprocessor(Preprocessor):
 
     The exact specifics of this layer will vary depending on the subclass
     implementation per model architecture. Generally, it will take text input,
-    and tokenize, then pad/truncate so it is ready to be fed to a image
+    and tokenize, then pad/truncate so it is ready to be fed to an image
     generation model (e.g. a diffusion model).
 
     Examples.

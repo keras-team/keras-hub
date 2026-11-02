@@ -145,7 +145,7 @@ class Sampler:
         if keras.config.backend() == "jax":
             import itertools
 
-            if model:
+            if hasattr(model, "trainable_variables"):
                 model_trainable_variables = model.trainable_variables
                 model_non_trainable_variables = model.non_trainable_variables
             else:

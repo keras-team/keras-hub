@@ -1,5 +1,7 @@
+import grain
 import keras
 import numpy as np
+import tensorflow as tf
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
@@ -95,3 +97,52 @@ class MoonshineAudioConverterTest(TestCase):
     def test_serialization(self):
         instance = MoonshineAudioConverter(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
+
+    def test_python_matches_tf(self):
+        converter = MoonshineAudioConverter(
+            **{**self.init_kwargs, "do_normalize": True}
+        )
+        audio = (
+            np.random.default_rng(42)
+            .random((2, self.sampling_rate, 1))
+            .astype("float32")
+        )
+        self.assertAllClose(
+            converter._call_python(audio), converter._call_tf(audio)
+        )
+        self.assertAllClose(
+            converter._call_python(audio, padding="max_length", max_length=100),
+            converter._call_tf(audio, padding="max_length", max_length=100),
+        )
+
+    def test_grain_outputs_numpy(self):
+        converter = MoonshineAudioConverter(**self.init_kwargs)
+        rng = np.random.default_rng(42)
+        samples = [
+            rng.random((1, self.sampling_rate, 1)).astype("float32")
+            for _ in range(2)
+        ]
+        ds = grain.MapDataset.source(samples).map(converter)
+        for sample, output in zip(samples, ds):
+            self.assertIsInstance(output, np.ndarray)
+            self.assertEqual(output.shape, (1, self.sampling_rate, 1))
+            self.assertAllClose(output, converter(sample))
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch, np.ndarray)
+        self.assertEqual(batch.shape, (2, 1, self.sampling_rate, 1))
+
+    def test_tf_data_pipeline(self):
+        # Inside `tf.data` the converter runs in graph mode, where its input
+        # is a *symbolic* `tf.Tensor` that cannot be converted to a jax or
+        # torch tensor. This mirrors what `MoonshineAudioToTextPreprocessor`
+        # does during `fit()`: rank 3 input with `padding="longest"`.
+        converter = MoonshineAudioConverter(**self.init_kwargs)
+        audio = np.random.rand(2, self.sampling_rate, 1).astype("float32")
+        ds = (
+            tf.data.Dataset.from_tensor_slices(audio)
+            .batch(2)
+            .map(lambda x: converter(x, padding="longest"))
+        )
+        (output,) = list(ds)
+        self.assertEqual(tuple(output.shape), (2, self.sampling_rate, 1))
+        self.assertAllClose(output, converter(audio, padding="longest"))

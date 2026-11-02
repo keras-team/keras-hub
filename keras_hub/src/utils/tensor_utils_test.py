@@ -1,3 +1,4 @@
+import grain
 import numpy as np
 import tensorflow as tf
 from keras import ops
@@ -5,12 +6,22 @@ from keras import tree
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import canonicalize_python_string_inputs
+from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
+from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_inputs
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs
+from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import get_decode_errors_name
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import is_tensor_type
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import restore_outer_shape
 from keras_hub.src.utils.tensor_utils import target_gather
 from keras_hub.src.utils.tensor_utils import tensor_to_list
 
@@ -113,6 +124,146 @@ class ConvertHelpers(TestCase):
             return inputs
 
         test(self, ([1, 2, 3], ["foo", "bar"], "foo"))
+
+
+class GrainOutputsTest(TestCase):
+    """Preprocessing outputs inside a Grain pipeline must be NumPy/lists.
+
+    Grain pickles elements across worker processes, so backend tensors are
+    never returned from a Grain `map`.
+    """
+
+    def assertNumpyOutputs(self, x):
+        for leaf in tree.flatten(x):
+            self.assertNotIsInstance(leaf, tf.Tensor)
+            self.assertNotIsInstance(leaf, tf.RaggedTensor)
+            if not isinstance(leaf, (str, bytes, int, float, bool)):
+                self.assertIsInstance(leaf, np.ndarray)
+
+    def run_grain(self, fn, elements):
+        return list(grain.MapDataset.source(elements).map(fn))
+
+    def test_in_grain_data_pipeline_detection(self):
+        seen = []
+        self.assertFalse(in_grain_data_pipeline())
+        self.run_grain(lambda x: seen.append(in_grain_data_pipeline()), [0])
+        self.assertEqual(seen, [True])
+        self.assertFalse(in_grain_data_pipeline())
+
+    def test_convert_preprocessing_outputs_grain(self):
+        inputs = {
+            "dense": tf.constant([[1, 2], [3, 4]]),
+            "ragged": tf.ragged.constant([[1, 2, 3], [4]]),
+            "strings": tf.constant(["one", "two"]),
+            "backend": ops.ones((2, 2)),
+            "numpy": np.zeros((2,)),
+            "scalar_string": "hi",
+            "python_list": [1, 2],
+            "none": None,
+        }
+        outputs = convert_preprocessing_outputs_grain(inputs)
+        self.assertIsInstance(outputs["dense"], np.ndarray)
+        self.assertAllEqual(outputs["dense"], [[1, 2], [3, 4]])
+        self.assertEqual(outputs["ragged"], [[1, 2, 3], [4]])
+        self.assertEqual(outputs["strings"], ["one", "two"])
+        self.assertIsInstance(outputs["backend"], np.ndarray)
+        self.assertIsInstance(outputs["numpy"], np.ndarray)
+        self.assertEqual(outputs["scalar_string"], "hi")
+        self.assertEqual(outputs["python_list"], [1, 2])
+        self.assertIsNone(outputs["none"])
+
+    def test_convert_preprocessing_outputs_in_grain(self):
+        # Outside grain: backend tensors.
+        outputs = convert_preprocessing_outputs(tf.constant([1, 2, 3]))
+        self.assertTrue(is_tensor_type(outputs))
+        self.assertNotIsInstance(outputs, np.ndarray)
+        # Inside grain: numpy.
+        (outputs,) = self.run_grain(
+            lambda x: convert_preprocessing_outputs(tf.constant(x)),
+            [[1, 2, 3]],
+        )
+        self.assertIsInstance(outputs, np.ndarray)
+        self.assertAllEqual(outputs, [1, 2, 3])
+        # Ragged and string outputs stay python lists.
+        (outputs,) = self.run_grain(
+            lambda x: convert_preprocessing_outputs(
+                (tf.ragged.constant(x), tf.constant(["a", "b"]))
+            ),
+            [[[1, 2], [3]]],
+        )
+        self.assertEqual(outputs, ([[1, 2], [3]], ["a", "b"]))
+
+    def test_convert_preprocessing_outputs_python_in_grain(self):
+        # Outside grain: backend tensors.
+        outputs = convert_preprocessing_outputs_python(np.array([1, 2, 3]))
+        self.assertTrue(is_tensor_type(outputs))
+        self.assertNotIsInstance(outputs, np.ndarray)
+        # Inside grain: numpy, lists stay lists.
+        (outputs,) = self.run_grain(
+            lambda x: convert_preprocessing_outputs_python(
+                (np.array(x), ops.array(x), [[1], [2, 3]], "hi")
+            ),
+            [[1, 2, 3]],
+        )
+        self.assertIsInstance(outputs[0], np.ndarray)
+        self.assertIsInstance(outputs[1], np.ndarray)
+        self.assertEqual(outputs[2], [[1], [2, 3]])
+        self.assertEqual(outputs[3], "hi")
+
+    def test_preprocessing_function_in_grain(self):
+        @preprocessing_function
+        def fn(self, x):
+            return x
+
+        @preprocessing_function
+        def fn_with_labels(self, x, y=None, sample_weight=None):
+            return x, y, sample_weight
+
+        elements = [
+            {"ints": [1, 2, 3], "text": "hello", "image": np.ones((2, 2, 3))}
+        ]
+        # Direct call: backend tensors.
+        outputs = fn(self, elements[0])
+        self.assertTrue(is_tensor_type(outputs["ints"]))
+        self.assertNotIsInstance(outputs["ints"], np.ndarray)
+        # Grain map: numpy and python types.
+        (outputs,) = self.run_grain(lambda x: fn(self, x), elements)
+        self.assertNumpyOutputs(outputs)
+        self.assertAllEqual(outputs["ints"], [1, 2, 3])
+        self.assertEqual(outputs["text"], "hello")
+        self.assertAllEqual(outputs["image"], np.ones((2, 2, 3)))
+        # Grain map with labels.
+        (outputs,) = self.run_grain(
+            lambda x: fn_with_labels(self, x, [1], [0.5]), elements
+        )
+        self.assertNumpyOutputs(outputs)
+        self.assertAllEqual(outputs[1], [1])
+        self.assertAllClose(outputs[2], [0.5])
+
+    def test_grain_batching(self):
+        # Grain batches by stacking numpy leaves; outputs must be stackable.
+        @preprocessing_function
+        def fn(self, x):
+            return {"ints": x, "text": tf.strings.upper("hello")}
+
+        ds = grain.MapDataset.source([[1, 2], [3, 4]]).map(
+            lambda x: fn(self, x)
+        )
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch["ints"], np.ndarray)
+        self.assertAllEqual(batch["ints"], [[1, 2], [3, 4]])
+        self.assertEqual(batch["text"].tolist(), ["HELLO", "HELLO"])
+
+    def test_grain_iter_dataset(self):
+        @preprocessing_function
+        def fn(self, x):
+            return x
+
+        ds = grain.MapDataset.source([[1, 2], [3, 4]]).to_iter_dataset()
+        outputs = list(ds.map(lambda x: fn(self, x)))
+        self.assertLen(outputs, 2)
+        for output in outputs:
+            self.assertIsInstance(output, np.ndarray)
 
 
 class TensorToListTest(TestCase):
@@ -338,3 +489,156 @@ class IsFloatDtypeTest(TestCase):
         ]
         for dtype in non_float_dtypes:
             self.assertFalse(is_float_dtype(dtype))
+
+
+class CanonicalizePythonInputsTest(TestCase):
+    def test_string_inputs(self):
+        self.assertEqual(
+            canonicalize_python_string_inputs("a"), (["a"], False, None)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(b"a"), (["a"], False, None)
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.str_("a")),
+            (["a"], False, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(["a", b"b"]),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(("a", "b")),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array(["a", "b"])),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array("a")),
+            (["a"], False, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant("a")),
+            (["a"], False, None),
+        )
+        # Decoding options for bytes.
+        self.assertEqual(
+            canonicalize_python_string_inputs(b"a\xffb", errors="ignore"),
+            (["ab"], False, None),
+        )
+        with self.assertRaises(ValueError):
+            canonicalize_python_string_inputs(b"a\xffb")
+        with self.assertRaises(ValueError):
+            canonicalize_python_string_inputs([1, 2])
+
+    def test_rank_2_string_inputs(self):
+        # Rank >= 2 inputs are flattened, with the leading dimensions
+        # returned so callers can regroup their results.
+        self.assertEqual(
+            canonicalize_python_string_inputs(np.array([["a"], ["b"]])),
+            (["a", "b"], True, (2, 1)),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                tf.constant([["a", "b"], ["c", "d"]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2)),
+        )
+        # Nested Python lists are routed through the same path.
+        self.assertEqual(
+            canonicalize_python_string_inputs([["a"], ["b"]]),
+            (["a", "b"], True, (2, 1)),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                np.array([[["a"], ["b"]], [["c"], ["d"]]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2, 1)),
+        )
+
+    def test_restore_outer_shape(self):
+        # Ragged outputs stay nested lists.
+        self.assertEqual(
+            restore_outer_shape([[1], [2, 3], [4], [5]], (2, 2)),
+            [[[1], [2, 3]], [[4], [5]]],
+        )
+        self.assertEqual(
+            restore_outer_shape([[1], [2], [3], [4]], (2, 2, 1)),
+            [[[[1]], [[2]]], [[[3]], [[4]]]],
+        )
+        # Dense outputs are reshaped, preserving the trailing token axis.
+        restored = restore_outer_shape(np.arange(8).reshape(4, 2), (2, 2))
+        self.assertEqual(restored.shape, (2, 2, 2))
+        self.assertAllEqual(restored, np.arange(8).reshape(2, 2, 2))
+
+    def test_token_inputs(self):
+        self.assertEqual(canonicalize_python_token_inputs(1), ([[1]], False))
+        self.assertEqual(
+            canonicalize_python_token_inputs([1, 2]), ([[1, 2]], False)
+        )
+        self.assertEqual(canonicalize_python_token_inputs([]), ([[]], False))
+        self.assertEqual(
+            canonicalize_python_token_inputs([[1, 2], [3]]),
+            ([[1, 2], [3]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array(1)), ([[1]], False)
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array([1, 2])),
+            ([[1, 2]], False),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(np.array([[1, 2], [3, 4]])),
+            ([[1, 2], [3, 4]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(ops.array([[1, 2], [3, 4]])),
+            ([[1, 2], [3, 4]], True),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(tf.constant([1, 2])),
+            ([[1, 2]], False),
+        )
+        self.assertEqual(
+            canonicalize_python_token_inputs(tf.ragged.constant([[1, 2], [3]])),
+            ([[1, 2], [3]], True),
+        )
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs("a")
+
+
+class CasefoldUtf8Test(TestCase):
+    def test_matches_nfkc_casefold(self):
+        # NFKC normalization plus full case folding.
+        self.assertEqual(casefold_utf8("HeLlO"), "hello")
+        self.assertEqual(casefold_utf8("ß ẞ"), "ss ss")
+        self.assertEqual(casefold_utf8("ﬁsh ǅ"), "fish dž")
+        self.assertEqual(casefold_utf8("ΣΑΣ"), "σασ")
+        self.assertEqual(casefold_utf8("Ａ①"), "a1")
+        # Default ignorable code points are removed.
+        self.assertEqual(casefold_utf8("a\u200bb\u00adc\u200d d"), "abc d")
+        self.assertEqual(casefold_utf8("é"), "é")
+
+
+class GetDecodeErrorsNameTest(TestCase):
+    def test_builtin_handlers(self):
+        self.assertEqual(get_decode_errors_name("strict"), "strict")
+        self.assertEqual(get_decode_errors_name("ignore"), "ignore")
+        self.assertEqual(get_decode_errors_name("replace"), "replace")
+        self.assertEqual(get_decode_errors_name("replace", 65533), "replace")
+
+    def test_custom_replacement_char(self):
+        errors = get_decode_errors_name("replace", 88)
+        self.assertEqual(b"he\xe2\x96llo".decode("utf-8", errors), "heXllo")
+        self.assertEqual(b"\xff\xff".decode("utf-8", errors), "XX")
+        # The handler is registered once and reused.
+        self.assertEqual(get_decode_errors_name("replace", 88), errors)

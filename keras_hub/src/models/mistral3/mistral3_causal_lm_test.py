@@ -1,0 +1,455 @@
+from unittest.mock import patch
+
+import numpy as np
+import pytest
+from absl.testing import parameterized
+from keras import ops
+from keras import tree
+
+from keras_hub.src.models.mistral3.mistral3_backbone import Mistral3Backbone
+from keras_hub.src.models.mistral3.mistral3_causal_lm import Mistral3CausalLM
+from keras_hub.src.models.mistral3.mistral3_causal_lm_preprocessor import (
+    Mistral3CausalLMPreprocessor,
+)
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
+    Mistral3ImageConverter,
+)
+from keras_hub.src.models.mistral3.mistral3_tokenizer import Mistral3Tokenizer
+from keras_hub.src.models.mistral3.mistral3_tokenizer_test import (
+    _tekken_vision_init_kwargs,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3MultiModalProjector,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    Mistral3VisionEncoder,
+)
+from keras_hub.src.models.mistral3.mistral3_vision_encoder import (
+    compute_image_placeholder_indices,
+)
+from keras_hub.src.tests.test_case import TestCase
+
+
+class Mistral3CausalLMTest(TestCase, parameterized.TestCase):
+    def setUp(self):
+        self.tokenizer = Mistral3Tokenizer(**_tekken_vision_init_kwargs())
+
+        self.text_preprocessor = Mistral3CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=None,
+            sequence_length=16,
+            spatial_merge_size=1,
+        )
+        self.text_backbone = Mistral3Backbone(
+            vocabulary_size=self.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=8,
+            num_key_value_heads=4,
+            hidden_dim=16,
+            intermediate_dim=8,
+            sliding_window=2,
+        )
+        self.text_init_kwargs = {
+            "backbone": self.text_backbone,
+            "preprocessor": self.text_preprocessor,
+        }
+        self.text_train_data = (
+            {
+                "prompts": ["the tin", "in the"],
+                "responses": ["the tin", "in the"],
+            },
+        )
+        self.text_input_data = tree.map_structure(
+            ops.convert_to_tensor,
+            self.text_preprocessor(*self.text_train_data)[0],
+        )
+
+        self.image_converter = Mistral3ImageConverter(
+            longest_edge=8, patch_size=4, spatial_merge_size=1
+        )
+        self.preprocessor = Mistral3CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=16,
+            spatial_merge_size=1,
+        )
+        vision_encoder = Mistral3VisionEncoder(
+            image_size=8,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=1,
+            num_heads=2,
+            head_dim=4,
+            intermediate_dim=8,
+        )
+        multimodal_projector = Mistral3MultiModalProjector(
+            vision_hidden_dim=8,
+            text_hidden_dim=16,
+            spatial_merge_size=1,
+            patch_size=4,
+            image_size=8,
+        )
+        self.backbone = Mistral3Backbone(
+            vocabulary_size=self.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=8,
+            num_key_value_heads=4,
+            hidden_dim=16,
+            intermediate_dim=8,
+            sliding_window=2,
+            vision_encoder=vision_encoder,
+            multimodal_projector=multimodal_projector,
+            image_token_index=self.tokenizer.image_placeholder_token_id,
+        )
+        self.init_kwargs = {
+            "backbone": self.backbone,
+            "preprocessor": self.preprocessor,
+        }
+        self.train_data = (
+            {
+                "prompts": ["the [IMG] tin", "in [IMG] the"],
+                "images": [
+                    [np.zeros((8, 8, 3), dtype="float32")],
+                    [np.ones((8, 8, 3), dtype="float32")],
+                ],
+            },
+        )
+        self.input_data = tree.map_structure(
+            ops.convert_to_tensor, self.preprocessor(*self.train_data)[0]
+        )
+
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    def test_causal_lm_basics(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            train_data = self.train_data
+        else:
+            init_kwargs = self.text_init_kwargs
+            train_data = self.text_train_data
+
+        self.run_task_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=init_kwargs,
+            train_data=train_data,
+            expected_output_shape=(2, 16, self.tokenizer.vocabulary_size()),
+        )
+
+    def test_vision_backbone_predict_text_only(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        outputs = causal_lm.predict(["the tin", "in the"], batch_size=2)
+        self.assertEqual(
+            outputs.shape, (2, 16, self.tokenizer.vocabulary_size())
+        )
+
+    def test_vision_backbone_call_text_only_preprocessor_output(self):
+        x, _, _ = self.preprocessor(["the tin", "in the"])
+        outputs = self.backbone(x)
+        self.assertEqual(outputs.shape, (2, 16, 16))
+
+    def test_multimodal_generate(self):
+        vision_encoder = Mistral3VisionEncoder(
+            image_size=8,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=1,
+            num_heads=2,
+            head_dim=4,
+            intermediate_dim=8,
+        )
+        multimodal_projector = Mistral3MultiModalProjector(
+            vision_hidden_dim=8,
+            text_hidden_dim=8,
+            spatial_merge_size=1,
+            patch_size=4,
+            image_size=8,
+        )
+        # `image_token_index` must stay inside `vocabulary_size`, since the
+        # token embedding lookup happens before the image-text merger
+        # overwrites those positions.
+        image_token_index = 9
+        backbone = Mistral3Backbone(
+            vocabulary_size=10,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            vision_encoder=vision_encoder,
+            multimodal_projector=multimodal_projector,
+            image_token_index=image_token_index,
+        )
+        causal_lm = Mistral3CausalLM(backbone=backbone, preprocessor=None)
+
+        # Two 8x8 images, each a 2x2 patch grid; `spatial_merge_size=1`
+        # makes every patch its own merge window (4 rows per image).
+        # Followed by one real token, then padding for incremental decoding.
+        token_ids = ops.array(
+            [
+                [image_token_index] * 4 + [3, 0, 0],
+                [image_token_index] * 4 + [4, 0, 0],
+            ],
+            dtype="int32",
+        )
+        padding_mask = ops.array(
+            [
+                [1, 1, 1, 1, 1, 0, 0],
+                [1, 1, 1, 1, 1, 0, 0],
+            ],
+        )
+        placeholder_indices = compute_image_placeholder_indices(
+            ops.convert_to_numpy(token_ids),
+            image_token_index=image_token_index,
+        )
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+            "pixel_values": ops.convert_to_tensor(
+                np.random.rand(2, 3, 8, 8).astype("float32")
+            ),
+            "image_sizes": ops.array([[8, 8], [8, 8]], dtype="int32"),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
+        }
+        output = causal_lm.generate(input_data, stop_token_ids=None)
+        self.assertEqual(ops.shape(output["token_ids"]), (2, 7))
+        self.assertEqual(ops.shape(output["padding_mask"]), (2, 7))
+
+    @parameterized.named_parameters(
+        ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
+    )
+    @pytest.mark.large
+    def test_saved_model(self, modality_type):
+        if modality_type == "text_and_vision":
+            init_kwargs = self.init_kwargs
+            input_data = self.input_data
+        else:
+            init_kwargs = self.text_init_kwargs
+            input_data = self.text_input_data
+
+        self.run_model_saving_test(
+            cls=Mistral3CausalLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+        )
+
+    def test_generate(self):
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
+        prompt = "the tin"
+        output = causal_lm.generate(prompt)
+        self.assertTrue(prompt in output)
+        prompts = ["the tin", "in the"]
+        outputs = causal_lm.generate(prompts)
+        for prompt, output in zip(prompts, outputs):
+            self.assertTrue(prompt in output)
+        prompt_ids = self.text_preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.assertAllEqual(
+            outputs["token_ids"][:, :2], prompt_ids["token_ids"][:, :2]
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :2], prompt_ids["padding_mask"][:, :2]
+        )
+
+    def test_early_stopping(self):
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = self.text_preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            prompt = ["the tin", "in the"]
+            output = causal_lm.generate(prompt)
+            self.assertEqual(prompt, output)
+
+    def test_generate_compilation(self):
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
+        causal_lm.generate("the tin")
+        first_fn = causal_lm.generate_function
+        causal_lm.generate("the tin")
+        second_fn = causal_lm.generate_function
+        self.assertEqual(first_fn, second_fn)
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)
+
+    @pytest.mark.kaggle_key_required
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        token_ids = ops.array([[1, 1824, 349, 524, 11234, 28804]])
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": ops.ones_like(token_ids),
+            "pixel_values": ops.zeros((0, 3, 14, 14), dtype="float32"),
+            "image_sizes": ops.zeros((0, 2), dtype="int32"),
+            "placeholder_indices": ops.zeros((1, 0), dtype="int32"),
+        }
+        for preset in Mistral3CausalLM.presets:
+            self.run_preset_test(
+                cls=Mistral3CausalLM,
+                preset=preset,
+                input_data=input_data,
+            )
+
+    def test_multimodal_generate_mixed_batch(self):
+        vision_encoder = Mistral3VisionEncoder(
+            image_size=8,
+            patch_size=4,
+            hidden_dim=8,
+            num_layers=1,
+            num_heads=2,
+            head_dim=4,
+            intermediate_dim=8,
+        )
+        multimodal_projector = Mistral3MultiModalProjector(
+            vision_hidden_dim=8,
+            text_hidden_dim=8,
+            spatial_merge_size=1,
+            patch_size=4,
+            image_size=8,
+        )
+        image_token_index = 9
+        backbone = Mistral3Backbone(
+            vocabulary_size=10,
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            vision_encoder=vision_encoder,
+            multimodal_projector=multimodal_projector,
+            image_token_index=image_token_index,
+        )
+        causal_lm = Mistral3CausalLM(backbone=backbone, preprocessor=None)
+
+        # Row 0 holds one image (4 placeholders). Row 1 is text only.
+        token_ids = ops.array(
+            [
+                [image_token_index] * 4 + [3, 0, 0],
+                [3, 4, 5, 6, 7, 0, 0],
+            ],
+            dtype="int32",
+        )
+        padding_mask = ops.array([[1, 1, 1, 1, 1, 0, 0], [1, 1, 1, 1, 1, 0, 0]])
+        placeholder_indices = compute_image_placeholder_indices(
+            ops.convert_to_numpy(token_ids),
+            image_token_index=image_token_index,
+        )
+        self.assertAllEqual(placeholder_indices[1], [-1, -1, -1, -1])
+        input_data = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+            "pixel_values": ops.convert_to_tensor(
+                np.random.rand(1, 3, 8, 8).astype("float32")
+            ),
+            "image_sizes": ops.array([[8, 8]], dtype="int32"),
+            "placeholder_indices": ops.convert_to_tensor(placeholder_indices),
+        }
+        output = causal_lm.generate(input_data, stop_token_ids=None)
+        self.assertEqual(ops.shape(output["token_ids"]), (2, 7))
+        self.assertEqual(ops.shape(output["padding_mask"]), (2, 7))
+        # Generation keeps each prompt in its own row.
+        self.assertAllEqual(output["token_ids"][:, :5], token_ids[:, :5])
+
+    def test_score_logits(self):
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
+        preprocessed = self.text_preprocessor.generate_preprocess(
+            ["the tin", "in the"]
+        )
+        scores = causal_lm.score(
+            token_ids=preprocessed["token_ids"],
+            padding_mask=preprocessed["padding_mask"],
+            scoring_mode="logits",
+        )
+        self.assertEqual(
+            ops.shape(scores), (2, 16, self.tokenizer.vocabulary_size())
+        )
+
+    def test_score_logits_with_images(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        inputs = self.input_data
+        image_inputs = {
+            key: inputs[key]
+            for key in ("pixel_values", "image_sizes", "placeholder_indices")
+        }
+        scores = causal_lm.score(
+            token_ids=inputs["token_ids"],
+            padding_mask=inputs["padding_mask"],
+            **image_inputs,
+        )
+        expected = self.backbone.token_embedding(
+            self.backbone(inputs), reverse=True
+        )
+        self.assertAllClose(scores, expected)
+        text_scores = causal_lm.score(
+            token_ids=inputs["token_ids"], padding_mask=inputs["padding_mask"]
+        )
+        difference = ops.max(ops.abs(ops.subtract(scores, text_scores)))
+        self.assertGreater(float(ops.convert_to_numpy(difference)), 0.0)
+
+    def test_score_loss_with_images(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        inputs = self.input_data
+        losses = causal_lm.score(
+            token_ids=inputs["token_ids"],
+            padding_mask=inputs["padding_mask"],
+            scoring_mode="loss",
+            target_ids=ops.roll(inputs["token_ids"], shift=-1, axis=1),
+            pixel_values=inputs["pixel_values"],
+            image_sizes=inputs["image_sizes"],
+            placeholder_indices=inputs["placeholder_indices"],
+        )
+        self.assertEqual(ops.shape(losses), (2, 16))
+
+    def test_score_intercept_receives_merged_embeddings(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        inputs = self.input_data
+        seen = {}
+
+        def layer_intercept_fn(x, index):
+            if index == -1:
+                seen["embeddings"] = x
+            return x
+
+        causal_lm.score(
+            token_ids=inputs["token_ids"],
+            padding_mask=inputs["padding_mask"],
+            layer_intercept_fn=layer_intercept_fn,
+            pixel_values=inputs["pixel_values"],
+            image_sizes=inputs["image_sizes"],
+            placeholder_indices=inputs["placeholder_indices"],
+        )
+        token_embeddings = self.backbone.token_embedding(inputs["token_ids"])
+        difference = ops.max(
+            ops.abs(ops.subtract(seen["embeddings"], token_embeddings))
+        )
+        self.assertGreater(float(ops.convert_to_numpy(difference)), 0.0)
+
+    def test_score_requires_image_sizes_and_placeholder_indices(self):
+        causal_lm = Mistral3CausalLM(**self.init_kwargs)
+        inputs = self.input_data
+        with self.assertRaisesRegex(ValueError, "image_sizes"):
+            causal_lm.score(
+                token_ids=inputs["token_ids"],
+                padding_mask=inputs["padding_mask"],
+                pixel_values=inputs["pixel_values"],
+            )
+
+    def test_score_rejects_images_for_text_only_backbone(self):
+        causal_lm = Mistral3CausalLM(**self.text_init_kwargs)
+        inputs = self.input_data
+        with self.assertRaisesRegex(ValueError, "text only"):
+            causal_lm.score(
+                token_ids=inputs["token_ids"],
+                padding_mask=inputs["padding_mask"],
+                pixel_values=inputs["pixel_values"],
+                image_sizes=inputs["image_sizes"],
+                placeholder_indices=inputs["placeholder_indices"],
+            )
