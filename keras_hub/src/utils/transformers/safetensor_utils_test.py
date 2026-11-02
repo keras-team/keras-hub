@@ -58,3 +58,33 @@ class SafetensorLoaderTest(TestCase):
         with SafetensorLoader(self.preset_dir) as loader:
             with self.assertRaises(SafetensorError):
                 loader.get_tensor("encoder.missing.weight")
+
+    def test_alias_map_skips_format_and_stored_keys(self):
+        save_file(
+            {
+                "model.decoder.embed_tokens.weight": self.embedding,
+                "model.encoder.layernorm_embedding.weight": self.layer_norm,
+            },
+            os.path.join(self.preset_dir, "model.safetensors"),
+            metadata={
+                "format": "pt",
+                "model.shared.weight": "model.decoder.embed_tokens.weight",
+                # A metadata key that is itself a stored tensor is not an
+                # alias and must not shadow the stored weight.
+                "model.encoder.layernorm_embedding.weight": (
+                    "model.decoder.embed_tokens.weight"
+                ),
+            },
+        )
+        with SafetensorLoader(self.preset_dir) as loader:
+            self.assertAllEqual(
+                loader.get_tensor("shared.weight"), self.embedding
+            )
+            self.assertEqual(
+                loader.safetensor_aliases["model.safetensors"],
+                {"model.shared.weight": "model.decoder.embed_tokens.weight"},
+            )
+            self.assertAllEqual(
+                loader.get_tensor("encoder.layernorm_embedding.weight"),
+                self.layer_norm,
+            )
