@@ -17,6 +17,7 @@ from keras_hub.src.utils.tensor_utils import convert_preprocessing_inputs
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import try_import_tensorflow
 
@@ -37,10 +38,19 @@ def _single_segment(x):
 
 
 def _row_lengths(tensor):
-    """Per-row length of a ragged or dense tensor on the TensorFlow path."""
+    """Per-row length of a ragged or dense tensor on the TensorFlow path.
+
+    Inside `tf.data` this receives tf tensors. With the TensorFlow workflow
+    forced eagerly, the tokenizer and the labels arrive as Python lists or
+    backend tensors instead, so convert before any `tf.*` op.
+    """
+    if isinstance(tensor, (list, tuple)):
+        tensor = tf.ragged.constant(tensor)
+    elif not isinstance(tensor, (tf.Tensor, tf.RaggedTensor)):
+        tensor = convert_to_numpy(tensor)
     if isinstance(tensor, tf.RaggedTensor):
         return tf.cast(tensor.row_lengths(), tf.int32)
-    if tensor.shape.rank == 1:
+    if len(tensor.shape) == 1:
         return tf.shape(tensor)[0]
     return tf.shape(tensor)[-1]
 
@@ -76,8 +86,9 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
 
     When per-token labels `y` are passed, they are padded or truncated to
     the same `sequence_length` (pad label `0`). A row of `y` with fewer
-    labels than its text has tokens raises a `ValueError`, since the missing
-    positions would otherwise be trained toward label `0`. When
+    labels than its text has tokens is rejected, with a `ValueError` on the
+    Python workflow and an `InvalidArgumentError` inside `tf.data`, since
+    the missing positions would otherwise be trained toward label `0`. When
     `sample_weight` is not provided, it defaults to `padding_mask` so that
     padded positions do not contribute to the loss. When an explicit
     `sample_weight` is provided, per-token weights are padded or truncated
@@ -191,7 +202,7 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
             # See `_check_label_lengths`; the assert must be a control
             # dependency or graph mode prunes it as dead code.
             check = tf.debugging.assert_greater_equal(
-                _row_lengths(convert_preprocessing_inputs(y)),
+                _row_lengths(y),
                 _row_lengths(x[0]),
                 message=_SHORT_Y_MESSAGE,
             )

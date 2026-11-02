@@ -167,6 +167,16 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         with self.assertRaisesRegex(tf.errors.InvalidArgumentError, short):
             list(ds.map(preprocessor))
 
+        # The TensorFlow workflow run eagerly, as on the TF backend, sees
+        # backend tensors from the tokenizer rather than tf ones. The eager
+        # assert surfaces with a backend-dependent type; the message is the
+        # contract.
+        preprocessor._allow_python_workflow = False
+        _, y, _ = preprocessor(["airplane at airport"], [[1, 2, 0, 0, 0]])
+        self.assertAllEqual(y, [[1, 2, 0, 0, 0, 0, 0, 0]])
+        with self.assertRaisesRegex(Exception, short):
+            preprocessor(["airplane at airport"], [[1]])
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in OpenAIPrivacyFilterPreprocessor.presets:
