@@ -330,6 +330,7 @@ class VideoPrismBackbone(Backbone):
         self.attention_logit_soft_cap = attention_logit_soft_cap
         self.layer_norm_epsilon = layer_norm_epsilon
         self.image_shape = image_shape
+        self.data_format = data_format
 
     def get_vision_embeddings(self, pixel_values):
         """Get the embeddings from the vision encoder."""
@@ -378,6 +379,7 @@ class VideoPrismBackbone(Backbone):
                 "attention_logit_soft_cap": self.attention_logit_soft_cap,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "image_shape": self.image_shape,
+                "data_format": self.data_format,
             }
         )
         return config
