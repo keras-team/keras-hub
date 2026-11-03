@@ -249,9 +249,7 @@ class GPT2CausalLMTest(TestCase):
     def test_fit_with_negative_one_labels(self):
         # Regression test for #1784: fit() must not crash when y contains -1
         # labels representing positions to ignore in the loss.
-        causal_lm = GPT2CausalLM(
-            backbone=self.backbone, preprocessor=None
-        )
+        causal_lm = GPT2CausalLM(backbone=self.backbone, preprocessor=None)
         causal_lm.compile(optimizer=keras.optimizers.Adam(2e-5))
         seq_len = self.preprocessor.sequence_length  # 8
         x = {
