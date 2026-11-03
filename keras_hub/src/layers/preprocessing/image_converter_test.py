@@ -38,7 +38,11 @@ class ImageConverterTest(TestCase):
         # that is missing from `get_config` is missing on both sides and
         # matches. The value only matters once the global image data format
         # differs from the one the converter was built with.
-        converter = ImageConverter(image_size=(4, 4), scale=1 / 255.0)
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         built = converter.data_format
         config = converter.get_config()
         self.assertEqual(config["data_format"], built)
@@ -49,6 +53,8 @@ class ImageConverterTest(TestCase):
         )
         try:
             keras.config.set_image_data_format(other)
+            # `get_config` does not save `_allow_python_workflow`.
+            config["_allow_python_workflow"] = self._allow_python_workflow
             revived = ImageConverter.from_config(config)
             self.assertEqual(revived.data_format, built)
             self.assertEqual(revived.resizing.data_format, built)
@@ -60,7 +66,10 @@ class ImageConverterTest(TestCase):
 
     def test_channels_first_scalar_scale_and_offset(self):
         converter = ImageConverter(
-            scale=1 / 255.0, offset=-1.0, data_format="channels_first"
+            scale=1 / 255.0,
+            offset=-1.0,
+            data_format="channels_first",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         inputs = np.ones((2, 3, 4, 4)) * 255.0
         self.assertAllClose(converter(inputs), np.zeros((2, 3, 4, 4)))
