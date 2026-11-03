@@ -54,9 +54,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             block.
         stackwise_force_input_filters: list of ints, overrides
             stackwise_input_filters if > 0. Primarily used to parameterize stem
-            filters (usually stackwise_input_filters[0]) differrently than stack
+            filters (usually stackwise_input_filters[0]) differently than stack
             input filters.
-        stackwise_nores_option: list of bools, toggles if residiual connection
+        stackwise_nores_option: list of bools, toggles if residual connection
             is not used. If False (default), the stack will use residual
             connections, otherwise not.
         dropout: float, dropout rate at skip connections. The default
@@ -68,9 +68,9 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         activation: activation function to use between each convolutional layer.
         input_shape: optional shape tuple, it should have exactly 3 input
             channels.
-
-
-        include_initial_padding: bool, whether to include initial zero padding
+        data_format: str, the data format of the input images. Only
+            "channels_last" is supported.
+        include_stem_padding: bool, whether to include initial zero padding
             (as per v1).
         use_depth_divisor_as_min_depth: bool, whether to use depth_divisor as
             the minimum depth instead of min_depth (as per v1).
@@ -78,10 +78,16 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
             number of filters the rounding process potentially produces
             (as per v1).
         stem_conv_padding: str, can be 'same' or 'valid'. Padding for the stem.
-        batch_norm_momentum: float, momentum for the moving average calcualtion
+        batch_norm_momentum: float, momentum for the moving average calculation
             in the batch normalization layers.
-        batch_norm_epsilon: float, epsilon for batch norm calcualtions. Used
+        batch_norm_epsilon: float, epsilon for batch norm calculations. Used
             in denominator for calculations to prevent divide by 0 errors.
+        projection_activation: optional activation function to use after the
+            output projection convolution of the 'v1' and 'fused' blocks. If
+            None (default), no activation is applied.
+        num_features: int, number of filters of the top convolution before
+            they are scaled by the last width coefficient and rounded. This
+            sets the number of output channels. Defaults to 1280.
 
     Example:
     ```python
@@ -360,6 +366,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
         self.batch_norm_momentum = batch_norm_momentum
         self.batch_norm_epsilon = batch_norm_epsilon
         self.projection_activation = projection_activation
+        self.num_features = num_features
 
     def get_config(self):
         config = super().get_config()
@@ -398,6 +405,7 @@ class EfficientNetBackbone(FeaturePyramidBackbone):
                 "batch_norm_momentum": self.batch_norm_momentum,
                 "batch_norm_epsilon": self.batch_norm_epsilon,
                 "projection_activation": self.projection_activation,
+                "num_features": self.num_features,
                 "data_format": self.data_format,
             }
         )

@@ -232,6 +232,7 @@ class DINOV3Backbone(FeaturePyramidBackbone):
         self.rope_theta = rope_theta
         self.apply_layernorm = apply_layernorm
         self.pyramid_outputs = pyramid_outputs
+        self.data_format = data_format
 
     def get_config(self):
         config = super().get_config()
@@ -258,6 +259,7 @@ class DINOV3Backbone(FeaturePyramidBackbone):
                 "image_shape": self.image_shape,
                 "rope_theta": self.rope_theta,
                 "apply_layernorm": self.apply_layernorm,
+                "data_format": self.data_format,
             }
         )
         return config
