@@ -312,9 +312,9 @@ class CausalLM(Task):
                 structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`. If `preprocessor` is `None`, `inputs` should
-                already be added to the desired maximum length.
-                Passing `max_length` in this case raises a `ValueError`.
+                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
+                padded to the desired maximum length and passing `max_length`
+                will raise a `ValueError`.
             stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
                 Defaults to "auto" which uses the
                 `preprocessor.tokenizer.end_token_id`. Not specifying a
@@ -342,25 +342,21 @@ class CausalLM(Task):
         # 3. Optionally postprocess dense integer tensors back to string.
         generate_function = self.make_generate_function()
 
-        if self.preprocessor is None and max_length is not None:
+        if self.preprocessor is None and stop_token_ids == "auto":
             raise ValueError(
-                "`max_length` has no effect when `preprocessor=None`. "
-                "Inputs should already be tokenized and padded to the "
-                "desired maximum length. Either attach a preprocessor "
-                "or remove the `max_length` argument."
+                "A `preprocessor` must be attached to the model if "
+                '`stop_token_ids="auto"`. Currently `preprocessor=None`. To '
+                "call `generate()` with preprocessing detached, either pass "
+                "`stop_token_ids=None` to always generate until `max_length` "
+                "or pass a tuple of token ids that should terminate generation "
+                "as `stop_token_ids`."
             )
-
-        # Setup our three main passes.
-        # 1. Optionally preprocessing strings to dense integer tensors.
-        # 2. Generate new tokens via a compiled function on dense tensors.
-        # 3. Optionally postprocess dense integer tensors back to string.
-        generate_function = self.make_generate_function()
-
-        if stop_token_ids == "auto":
-            if self.preprocessor is not None:
-                stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-            else:
-                stop_token_ids = None
+        elif stop_token_ids == "auto":
+            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
+            # Some models like Llama3 use two end tokens: <|eot_id|> in
+            # "instruct" versions and <|end_of_text|> in others.
+            if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
+                stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
 
         def preprocess(x):
             return self.preprocessor.generate_preprocess(
@@ -412,8 +408,7 @@ class CausalLM(Task):
             # the sequence and the generated text is at the beginning. We mask
             # it to retain the generated text only.
             y["padding_mask"] = ops.logical_xor(
-                roll_sequence(prompt_mask),
-                roll_sequence(x["padding_mask"]),
+                roll_sequence(prompt_mask), roll_sequence(x["padding_mask"])
             )
             # we assume the mask is enough and there is no need to zero-out the
             # values
