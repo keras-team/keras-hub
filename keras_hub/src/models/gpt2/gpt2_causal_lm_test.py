@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import keras
+import numpy as np
 import pytest
 from keras import ops
 
@@ -244,6 +245,34 @@ class GPT2CausalLMTest(TestCase):
         )
 
         self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
+
+    def test_fit_with_negative_one_labels(self):
+        # Regression test for #1784: fit() must not crash when y contains -1
+        # labels representing positions to ignore in the loss.
+        causal_lm = GPT2CausalLM(
+            backbone=self.backbone, preprocessor=None
+        )
+        causal_lm.compile(optimizer=keras.optimizers.Adam(2e-5))
+        seq_len = self.preprocessor.sequence_length  # 8
+        x = {
+            "token_ids": np.ones((2, seq_len), dtype="int32"),
+            "padding_mask": np.array(
+                [
+                    [True, True, True, True, False, False, False, False],
+                    [True, True, True, True, True, True, False, False],
+                ]
+            ),
+        }
+        # Padded tail uses -1 as the ignored label; before the fix this raised
+        # an error in SparseCategoricalCrossentropy.
+        y = np.array(
+            [
+                [1, 1, 1, -1, -1, -1, -1, -1],
+                [1, 1, 1, 1, 1, -1, -1, -1],
+            ],
+            dtype="int32",
+        )
+        causal_lm.fit(x=x, y=y, batch_size=2)
 
 
 @pytest.mark.skipif(keras.config.backend() != "jax", reason="JAX only")
