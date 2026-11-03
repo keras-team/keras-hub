@@ -31,7 +31,7 @@ backbone_presets = {
             "kaggle://keras/modernbert/keras/modern_bert_large_en/1"
         ),
     },
-    "modern_bert_embed_base_en": {
+    "modern_bert_embed_base": {
         "metadata": {
             "description": (
                 "22-layer ModernBERT Base sentence embedding model from Nomic "
@@ -44,10 +44,10 @@ backbone_presets = {
             "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/modernbert-embed/keras/modern_bert_embed_base_en/1"
+            "kaggle://keras/modernbert-embedding/keras/modern_bert_embed_base/1"
         ),
     },
-    "gte_modern_bert_base_en": {
+    "gte_modern_bert_base": {
         "metadata": {
             "description": (
                 "22-layer ModernBERT Base sentence embedding model from "
@@ -60,7 +60,7 @@ backbone_presets = {
             "path": "modern_bert",
         },
         "kaggle_handle": (
-            "kaggle://keras/gte-modernbert/keras/gte_modern_bert_base_en/1"
+            "kaggle://keras/modernbert-embedding/keras/gte_modern_bert_base/1"
         ),
     },
 }

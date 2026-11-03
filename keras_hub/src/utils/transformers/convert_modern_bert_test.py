@@ -50,6 +50,10 @@ HF_PRESET = f"hf://{HF_MODEL_ID}"
 NOMIC_EMBED_MODEL_ID = "nomic-ai/modernbert-embed-base"  # Mean, normalized.
 GTE_MODEL_ID = "Alibaba-NLP/gte-modernbert-base"  # CLS, not normalized.
 
+# `modules.json` entries for the offline sentence-transformers config tests.
+ST_TRANSFORMER_MODULE = {"type": "sentence_transformers.models.Transformer"}
+ST_NORMALIZE_MODULE = {"type": "sentence_transformers.models.Normalize"}
+
 # `local_attention=128` gives a sliding-window radius of 64. A sequence
 # shorter than that makes the window mask all-ones, so the local layers
 # become indistinguishable from the global ones and the comparison silently
@@ -125,56 +129,71 @@ class TestConvertModernBert(TestCase):
             global_attn_every_n_layers=2,
         )
 
-    def test_load_task_config(self):
-        transformer = {"type": "sentence_transformers.models.Transformer"}
-        normalize = {"type": "sentence_transformers.models.Normalize"}
-
+    @parameterized.named_parameters(
         # No sentence-transformers files: nothing is overridden.
-        self.assertEqual(load_task_config(self._write_preset({}), {}), {})
-
+        ("no_sentence_transformers_files", {}, {}),
         # Legacy boolean flags, with a `Normalize` module.
-        preset = self._write_preset(
+        (
+            "legacy_flags_with_normalize",
             {
-                "modules.json": [transformer, normalize],
+                "modules.json": [ST_TRANSFORMER_MODULE, ST_NORMALIZE_MODULE],
                 "1_Pooling/config.json": {
                     "pooling_mode_cls_token": False,
                     "pooling_mode_mean_tokens": True,
                     "pooling_mode_max_tokens": False,
                 },
-            }
-        )
-        self.assertEqual(
-            load_task_config(preset, {}),
+            },
             {"normalize": True, "pooling_mode": "mean"},
-        )
-
+        ),
         # Newer string form, without a `Normalize` module.
-        preset = self._write_preset(
+        (
+            "string_without_normalize",
             {
-                "modules.json": [transformer],
+                "modules.json": [ST_TRANSFORMER_MODULE],
                 "1_Pooling/config.json": {"pooling_mode": "cls"},
-            }
-        )
-        self.assertEqual(
-            load_task_config(preset, {}),
+            },
             {"normalize": False, "pooling_mode": "cls"},
-        )
-
+        ),
         # As in sentence-transformers, the string form takes precedence over
-        # the flags, and a config with no mode enabled means mean pooling.
-        preset = self._write_preset(
+        # the flags...
+        (
+            "string_overrides_flags",
             {
                 "1_Pooling/config.json": {
                     "pooling_mode": "max",
                     "pooling_mode_mean_tokens": True,
                 }
-            }
-        )
-        self.assertEqual(load_task_config(preset, {}), {"pooling_mode": "max"})
+            },
+            {"pooling_mode": "max"},
+        ),
+        # ...and a config with no mode enabled means mean pooling.
+        (
+            "no_mode_enabled",
+            {"1_Pooling/config.json": {"pooling_mode_mean_tokens": False}},
+            {"pooling_mode": "mean"},
+        ),
+    )
+    def test_load_task_config(self, files, expected):
+        preset = self._write_preset(files)
+        self.assertEqual(load_task_config(preset, {}), expected)
+
+    @parameterized.named_parameters(
+        ("null", None),
+        ("int", 1),
+        ("dict", {"mean": True}),
+        ("list_with_non_string", ["mean", 1]),
+    )
+    def test_load_task_config_rejects_invalid_pooling_mode_type(
+        self, pooling_mode
+    ):
+        """A `pooling_mode` that is not a string or a list of strings."""
         preset = self._write_preset(
-            {"1_Pooling/config.json": {"pooling_mode_mean_tokens": False}}
+            {"1_Pooling/config.json": {"pooling_mode": pooling_mode}}
         )
-        self.assertEqual(load_task_config(preset, {}), {"pooling_mode": "mean"})
+        with self.assertRaisesRegex(
+            ValueError, re.escape(f"list of strings, got {pooling_mode!r}.")
+        ):
+            load_task_config(preset, {})
 
     @parameterized.named_parameters(
         (
@@ -233,58 +252,50 @@ class TestConvertModernBert(TestCase):
             pair_ids, ops.convert_to_numpy(string_tokenizer(text))
         )
 
-    def test_load_preprocessor_config(self):
-        transformers_config = {"max_position_embeddings": 8192}
-        modules = [{"type": "sentence_transformers.models.Transformer"}]
-
+    @parameterized.named_parameters(
         # `max_seq_length` from `sentence_bert_config.json` is used as-is.
-        preset = self._write_preset(
+        (
+            "max_seq_length",
             {
-                "modules.json": modules,
+                "modules.json": [ST_TRANSFORMER_MODULE],
                 "sentence_bert_config.json": {"max_seq_length": 512},
-            }
-        )
-        self.assertEqual(
-            load_preprocessor_config(preset, transformers_config),
+            },
             {"sequence_length": 512},
-        )
-
+        ),
         # Without it, sentence-transformers uses `max_position_embeddings`
         # (`Alibaba-NLP/gte-modernbert-base` ships no `sentence_bert_config`
         # and an effectively unset tokenizer `model_max_length`)...
-        for files in (
-            {"modules.json": modules},
+        (
+            "max_position_embeddings",
+            {"modules.json": [ST_TRANSFORMER_MODULE]},
+            {"sequence_length": 8192},
+        ),
+        (
+            "max_position_embeddings_unset_model_max_length",
             {
-                "modules.json": modules,
+                "modules.json": [ST_TRANSFORMER_MODULE],
                 "tokenizer_config.json": {"model_max_length": int(1e30)},
             },
-        ):
-            self.assertEqual(
-                load_preprocessor_config(
-                    self._write_preset(files), transformers_config
-                ),
-                {"sequence_length": 8192},
-            )
-
+            {"sequence_length": 8192},
+        ),
         # ...capped at the tokenizer's `model_max_length`.
-        preset = self._write_preset(
+        (
+            "capped_at_model_max_length",
             {
-                "modules.json": modules,
+                "modules.json": [ST_TRANSFORMER_MODULE],
                 "tokenizer_config.json": {"model_max_length": 1024},
-            }
-        )
-        self.assertEqual(
-            load_preprocessor_config(preset, transformers_config),
+            },
             {"sequence_length": 1024},
-        )
-
+        ),
         # Not a sentence-transformers checkpoint (no `modules.json`, e.g.
         # `answerdotai/ModernBERT-base`): the preprocessor default is kept.
+        ("not_sentence_transformers", {}, {}),
+    )
+    def test_load_preprocessor_config(self, files, expected):
+        preset = self._write_preset(files)
+        transformers_config = {"max_position_embeddings": 8192}
         self.assertEqual(
-            load_preprocessor_config(
-                self._write_preset({}), transformers_config
-            ),
-            {},
+            load_preprocessor_config(preset, transformers_config), expected
         )
 
     @pytest.mark.extra_large

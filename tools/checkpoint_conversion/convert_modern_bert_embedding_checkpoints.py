@@ -24,7 +24,7 @@ Usage (from the repository root):
 ```shell
 python \
     tools/checkpoint_conversion/convert_modern_bert_embedding_checkpoints.py \
-    --preset modern_bert_embed_base_en
+    --preset modern_bert_embed_base
 ```
 
 """
@@ -44,14 +44,14 @@ from sentence_transformers import SentenceTransformer
 import keras_hub
 
 PRESET_MAP = {
-    "modern_bert_embed_base_en": "nomic-ai/modernbert-embed-base",
-    "gte_modern_bert_base_en": "Alibaba-NLP/gte-modernbert-base",
+    "modern_bert_embed_base": "nomic-ai/modernbert-embed-base",
+    "gte_modern_bert_base": "Alibaba-NLP/gte-modernbert-base",
 }
 
 # Task prefixes each checkpoint expects on queries and documents.
 PROMPTS = {
-    "modern_bert_embed_base_en": ("search_query: ", "search_document: "),
-    "gte_modern_bert_base_en": ("", ""),
+    "modern_bert_embed_base": ("search_query: ", "search_document: "),
+    "gte_modern_bert_base": ("", ""),
 }
 
 FLAGS = flags.FLAGS

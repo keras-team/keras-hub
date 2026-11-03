@@ -300,12 +300,21 @@ def _read_pooling_mode(pooling_config):
 
     Several modes are joined with `"+"` (e.g. `"cls+mean"`). Modes that
     `ModernBertTextEmbedder` does not support are returned by name, so
-    building the embedder raises an error naming them.
+    building the embedder raises an error naming them. A `pooling_mode`
+    that is neither a string nor a list of strings raises a `ValueError`.
     """
     if "pooling_mode" in pooling_config:
         modes = pooling_config["pooling_mode"]
         if isinstance(modes, str):
             modes = [modes]
+        if not isinstance(modes, list) or not all(
+            isinstance(mode, str) for mode in modes
+        ):
+            raise ValueError(
+                "Expected `pooling_mode` in the sentence-transformers pooling "
+                "config to be a string or a list of strings, got "
+                f"{pooling_config['pooling_mode']!r}."
+            )
     else:
         modes = [
             mode
