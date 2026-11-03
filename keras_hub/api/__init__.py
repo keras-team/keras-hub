@@ -7,6 +7,7 @@ since your modifications would be overwritten.
 from keras_hub import layers as layers
 from keras_hub import metrics as metrics
 from keras_hub import models as models
+from keras_hub import press as press
 from keras_hub import samplers as samplers
 from keras_hub import tokenizers as tokenizers
 from keras_hub import utils as utils
