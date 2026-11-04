@@ -84,6 +84,32 @@ class Gemma4UnifiedVideoConverterTest(tf.test.TestCase):
             (1, 2, 1, 2),
         )
 
+    def test_video_converter_single_video_and_frame_list(self):
+        converter = Gemma4UnifiedVideoConverter(
+            patch_size=4,
+            max_soft_tokens=1,
+            num_frames=2,
+        )
+
+        # Single 4D video
+        video_4d = ops.convert_to_tensor(
+            np.random.randint(0, 256, size=(3, 12, 12, 3)).astype("float32")
+        )
+        outputs_4d = converter(video_4d)
+        self.assertEqual(ops.shape(outputs_4d["pixel_values"]), (1, 2, 1, 432))
+
+        # List of 3D frames
+        frame_list = [
+            ops.convert_to_tensor(
+                np.random.randint(0, 256, size=(12, 12, 3)).astype("float32")
+            )
+            for _ in range(3)
+        ]
+        outputs_frames = converter(frame_list)
+        self.assertEqual(
+            ops.shape(outputs_frames["pixel_values"]), (1, 2, 1, 432)
+        )
+
 
 if __name__ == "__main__":
     tf.test.main()

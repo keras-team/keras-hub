@@ -25,11 +25,7 @@ from keras_hub.src.models.gemma4_unified.gemma4_unified_video_converter import (
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 def _get_num_vision_tokens(

@@ -168,3 +168,30 @@ class Gemma4UnifiedDecoderBlockTest(TestCase):
         model.quantize("int8")
         int8_out = ops.convert_to_numpy(model(x)[0])
         self.assertAllClose(int8_out, float_out, atol=0.25, rtol=0.0)
+
+    def test_moe_validation(self):
+        with self.assertRaisesRegex(ValueError, "`num_experts` must be set"):
+            Gemma4UnifiedTextDecoderBlock(
+                hidden_dim=32,
+                intermediate_dim=32,
+                head_dim=16,
+                num_query_heads=2,
+                num_key_value_heads=2,
+                enable_moe_block=True,
+                expert_intermediate_dim=32,
+                # num_experts is None
+            )
+
+        with self.assertRaisesRegex(
+            ValueError, "`expert_intermediate_dim` must be set"
+        ):
+            Gemma4UnifiedTextDecoderBlock(
+                hidden_dim=32,
+                intermediate_dim=32,
+                head_dim=16,
+                num_query_heads=2,
+                num_key_value_heads=2,
+                enable_moe_block=True,
+                num_experts=2,
+                # expert_intermediate_dim is None
+            )

@@ -11,11 +11,7 @@ from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm_preprocessor i
 )
 from keras_hub.src.samplers.greedy_sampler import GreedySampler
 from keras_hub.src.utils.tensor_utils import any_equal
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.Gemma4UnifiedCausalLM")

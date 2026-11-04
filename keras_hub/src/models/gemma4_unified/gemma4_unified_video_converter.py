@@ -55,57 +55,63 @@ class Gemma4UnifiedVideoConverter(VideoConverter):
         self.pooling_kernel_size = pooling_kernel_size
 
     def call(self, inputs):
-        # inputs: 5D tensor (B, F, H, W, C) or list of 4D videos.
+        # inputs: 5D tensor, 4D tensor, list of 4D videos, or list of 3D frames.
 
         if isinstance(inputs, list):
-            # Handle list of videos.
-            outputs = []
-            for video in inputs:
-                out = self._process_single_video(video)
-                outputs.append(out)
-            return outputs
-        else:
-            # Assume 5D tensor (batch, frames, height, width, channels)
-            shape = ops.shape(inputs)
-            batch_size = shape[0]
-            total_frames = shape[1]
-            h, w, c = shape[2], shape[3], shape[4]
+            if len(ops.convert_to_tensor(inputs[0]).shape) == 3:
+                inputs = ops.stack(inputs, axis=0)
+            else:
+                # Handle list of videos.
+                outputs = []
+                for video in inputs:
+                    out = self._process_single_video(video)
+                    outputs.append(out)
+                return outputs
 
-            # Sample frames
-            indices = ops.cast(
-                ops.linspace(0, total_frames - 1, self.num_frames), "int32"
-            )
-            sampled_inputs = ops.take(inputs, indices, axis=1)
+        if len(inputs.shape) == 4:
+            inputs = ops.expand_dims(inputs, axis=0)
 
-            # Flatten batch and temporal dims
-            flat_inputs = ops.reshape(
-                sampled_inputs, (batch_size * self.num_frames, h, w, c)
-            )
+        # Assume 5D tensor (batch, frames, height, width, channels)
+        shape = ops.shape(inputs)
+        batch_size = shape[0]
+        total_frames = shape[1]
+        h, w, c = shape[2], shape[3], shape[4]
 
-            # Process frames as images
-            image_outputs = self.image_converter(flat_inputs)
+        # Sample frames
+        indices = ops.cast(
+            ops.linspace(0, total_frames - 1, self.num_frames), "int32"
+        )
+        sampled_inputs = ops.take(inputs, indices, axis=1)
 
-            # Extract pixel_values and pixel_position_ids
-            pixel_values = image_outputs["pixel_values"]
-            pixel_position_ids = image_outputs["pixel_position_ids"]
+        # Flatten batch and temporal dims
+        flat_inputs = ops.reshape(
+            sampled_inputs, (batch_size * self.num_frames, h, w, c)
+        )
 
-            # Reshape back to 5D
-            pv_shape = ops.shape(pixel_values)
-            pos_shape = ops.shape(pixel_position_ids)
+        # Process frames as images
+        image_outputs = self.image_converter(flat_inputs)
 
-            pixel_values = ops.reshape(
-                pixel_values,
-                (batch_size, self.num_frames, pv_shape[1], pv_shape[2]),
-            )
-            pixel_position_ids = ops.reshape(
-                pixel_position_ids,
-                (batch_size, self.num_frames, pos_shape[1], pos_shape[2]),
-            )
+        # Extract pixel_values and pixel_position_ids
+        pixel_values = image_outputs["pixel_values"]
+        pixel_position_ids = image_outputs["pixel_position_ids"]
 
-            return {
-                "pixel_values": pixel_values,
-                "pixel_position_ids": pixel_position_ids,
-            }
+        # Reshape back to 5D
+        pv_shape = ops.shape(pixel_values)
+        pos_shape = ops.shape(pixel_position_ids)
+
+        pixel_values = ops.reshape(
+            pixel_values,
+            (batch_size, self.num_frames, pv_shape[1], pv_shape[2]),
+        )
+        pixel_position_ids = ops.reshape(
+            pixel_position_ids,
+            (batch_size, self.num_frames, pos_shape[1], pos_shape[2]),
+        )
+
+        return {
+            "pixel_values": pixel_values,
+            "pixel_position_ids": pixel_position_ids,
+        }
 
     def _process_single_video(self, video):
         # video: 4D tensor (frames, H, W, C).

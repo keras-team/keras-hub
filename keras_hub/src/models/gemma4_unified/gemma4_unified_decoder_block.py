@@ -245,13 +245,15 @@ class Gemma4UnifiedTextDecoderBlock(keras.layers.Layer):
         # MoE blocks (26b-a4b): dense MLP runs in parallel with sparse MoE,
         # summed BEFORE post-FFW norm.
         if enable_moe_block:
-            assert num_experts is not None, (
-                "`num_experts` must be set when `enable_moe_block=True`."
-            )
-            assert expert_intermediate_dim is not None, (
-                "`expert_intermediate_dim` must be set when "
-                "`enable_moe_block=True`."
-            )
+            if num_experts is None:
+                raise ValueError(
+                    "`num_experts` must be set when `enable_moe_block=True`."
+                )
+            if expert_intermediate_dim is None:
+                raise ValueError(
+                    "`expert_intermediate_dim` must be set when "
+                    "`enable_moe_block=True`."
+                )
             # Separate pre-norm for the MoE path (pre_feedforward_layernorm_2).
             self.pre_ffw_norm_moe = RMSNormalization(
                 epsilon=self.layer_norm_epsilon,
