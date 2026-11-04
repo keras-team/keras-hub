@@ -1,4 +1,8 @@
+import json
+import os
+
 import pytest
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_hub.src.tests.test_case import TestCase
@@ -67,6 +71,22 @@ class WhisperTokenizerTest(TestCase):
             WhisperTokenizer(
                 vocabulary=["a", "b", "c"], merges=[], special_tokens={}
             )
+
+    def test_safe_mode_vocabulary_file_disallowed(self):
+        temp_dir = self.get_temp_dir()
+        special_tokens_path = os.path.join(temp_dir, "special_tokens.json")
+        with open(special_tokens_path, "w") as file:
+            json.dump(self.special_tokens, file)
+
+        init_kwargs = dict(self.init_kwargs)
+        init_kwargs["special_tokens"] = special_tokens_path
+        with serialization_lib.SafeModeScope(True):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Requested the loading of a vocabulary file outside of the "
+                r"model archive.*Vocabulary file: .*special_tokens\.json",
+            ):
+                WhisperTokenizer(**init_kwargs)
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):
