@@ -10,7 +10,9 @@ class AlbertTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             # Generated using create_albert_test_proto.py
-            "proto": os.path.join(self.get_test_data_dir(), "albert_test_vocab.spm")
+            "proto": os.path.join(
+                self.get_test_data_dir(), "albert_test_vocab.spm"
+            )
         }
         self.input_data = ["the quick brown fox", "the earth is round"]
 

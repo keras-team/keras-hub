@@ -16,7 +16,9 @@ class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self._allow_python_workflow = True
-        self.proto = os.path.join(self.get_test_data_dir(), "tokenizer_test_vocab.spm")
+        self.proto = os.path.join(
+            self.get_test_data_dir(), "tokenizer_test_vocab.spm"
+        )
         self.tokenizer = SentencePieceTokenizer(
             proto=self.proto,
             _allow_python_workflow=self._allow_python_workflow,
@@ -115,7 +117,9 @@ class SentencePieceTokenizerTest(TestCase):
     def test_grain_outputs_numpy(self):
         input_data = ["the quick brown fox.", "the quick"]
         # Ragged outputs are python lists.
-        (outputs,) = list(grain.MapDataset.source([input_data]).map(self.tokenizer))
+        (outputs,) = list(
+            grain.MapDataset.source([input_data]).map(self.tokenizer)
+        )
         self.assertIsInstance(outputs, list)
         self.assertEqual(outputs, [[6, 5, 3, 4], [6, 5]])
         # Dense outputs are numpy arrays.
@@ -127,7 +131,9 @@ class SentencePieceTokenizerTest(TestCase):
         outputs = list(grain.MapDataset.source(input_data).map(tokenizer))
         for output in outputs:
             self.assertIsInstance(output, np.ndarray)
-        (batch,) = list(grain.MapDataset.source(input_data).map(tokenizer).batch(2))
+        (batch,) = list(
+            grain.MapDataset.source(input_data).map(tokenizer).batch(2)
+        )
         self.assertAllEqual(batch, [[6, 5, 3, 4, 0], [6, 5, 0, 0, 0]])
 
     def test_detokenize(self):
@@ -208,7 +214,9 @@ class SentencePieceTokenizerTest(TestCase):
                 tokenizer.set_proto(proto_path)
 
     def test_init_with_swig_wrapper(self):
-        with patch("keras_hub.src.tokenizers.sentence_piece_tokenizer.spm") as mock_spm:
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
             # SWIG wrapper (sentencepiece < 0.2.2)
             processor = MagicMock()
             processor.vocab_size.return_value = 7
@@ -223,7 +231,9 @@ class SentencePieceTokenizerTest(TestCase):
             mock_spm.SentencePieceProcessor.assert_called_with()
 
     def test_init_with_pybind11_wrapper(self):
-        with patch("keras_hub.src.tokenizers.sentence_piece_tokenizer.spm") as mock_spm:
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
             # pybind11 wrapper (sentencepiece >= 0.2.2)
             processor = MagicMock()
             processor.vocab_size.return_value = 7
