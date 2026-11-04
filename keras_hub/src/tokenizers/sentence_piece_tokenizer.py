@@ -215,10 +215,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         piece_types = sentencepiece_model_pb2.ModelProto.SentencePiece
         changed = False
         for piece in model_proto.pieces:
-            if (
-                piece.type == piece_types.CONTROL
-                and piece.piece in special_tokens
-            ):
+            if piece.type == piece_types.CONTROL and piece.piece in special_tokens:
                 piece.type = piece_types.USER_DEFINED
                 changed = True
         if not changed:
@@ -299,13 +296,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         # Cache metadata for fast access.
         self._vocabulary_size = int(self._sentence_piece_spm.vocab_size())
         self._vocabulary = list(
-            self._sentence_piece_spm.IdToPiece(
-                list(range(self._vocabulary_size))
-            )
+            self._sentence_piece_spm.IdToPiece(list(range(self._vocabulary_size)))
         )
-        self._token_to_id_map = {
-            token: id for id, token in enumerate(self._vocabulary)
-        }
+        self._token_to_id_map = {token: id for id, token in enumerate(self._vocabulary)}
         self._unk_token_id = self._sentence_piece_spm.unk_id()
 
         # Keras cannot serialize a bytestring, so we base64 encode the model
@@ -385,9 +378,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
             pad_token_id = getattr(self, "pad_token_id", 0)
-            tokens = tokens.to_tensor(
-                shape=output_shape, default_value=pad_token_id
-            )
+            tokens = tokens.to_tensor(shape=output_shape, default_value=pad_token_id)
 
         # Convert to a dense output if input was a scalar.
         if unbatched:
@@ -466,9 +457,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             if is_int_dtype(self.compute_dtype):
                 # Dense int outputs are arrays, so that direct calls return
                 # backend tensors and Grain pipelines return NumPy.
-                batched_tokens = np.array(
-                    batched_tokens, dtype=self.compute_dtype
-                )
+                batched_tokens = np.array(batched_tokens, dtype=self.compute_dtype)
 
         if not batched:
             batched_tokens = batched_tokens[0]
@@ -477,9 +466,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 # `sequence_length`, so return an array here too. Without
                 # this, the output would fall back to NumPy's default int64
                 # rather than the `compute_dtype` the TF path returns.
-                batched_tokens = np.array(
-                    batched_tokens, dtype=self.compute_dtype
-                )
+                batched_tokens = np.array(batched_tokens, dtype=self.compute_dtype)
         return batched_tokens
 
     def tokenize(self, inputs):

@@ -177,15 +177,11 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = super()._tokenize_spm(inputs)
 
         def process(ids):
-            return [
-                (id if id != 0 else self.unk_token_id - 1) + 1 for id in ids
-            ]
+            return [(id if id != 0 else self.unk_token_id - 1) + 1 for id in ids]
 
         if isinstance(tokens, np.ndarray):
             return np.array(process(tokens.tolist()), dtype=tokens.dtype)
-        elif (
-            isinstance(tokens, list) and tokens and isinstance(tokens[0], list)
-        ):
+        elif isinstance(tokens, list) and tokens and isinstance(tokens[0], list):
             return [process(ids) for ids in tokens]
         else:
             return process(tokens)

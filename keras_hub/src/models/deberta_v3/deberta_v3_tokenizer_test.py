@@ -11,9 +11,7 @@ from keras_hub.src.tests.test_case import TestCase
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
         # Generated using create_deberta_v3_test_proto.py
-        proto = os.path.join(
-            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "deberta_v3_test_vocab.spm")
         self.tokenizer = DebertaV3Tokenizer(proto=proto)
         self.init_kwargs = {"proto": proto}
         self.input_data = ["the quick brown fox", "the earth is round"]
@@ -97,8 +95,6 @@ class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
 
     def setUp(self):
         super().setUp()
-        proto = os.path.join(
-            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
-        )
+        proto = os.path.join(self.get_test_data_dir(), "deberta_v3_test_vocab.spm")
         self.init_kwargs = {"proto": proto, "_allow_python_workflow": False}
         self.tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
