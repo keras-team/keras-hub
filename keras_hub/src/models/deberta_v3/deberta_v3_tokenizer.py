@@ -5,12 +5,6 @@ from keras_hub.src.models.deberta_v3.deberta_v3_backbone import (
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
     SentencePieceTokenizer,
 )
-from keras_hub.src.utils.tensor_utils import preprocessing_function
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 @keras_hub_export(
@@ -141,20 +135,18 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             return self.mask_token_id
         return super().token_to_id(token)
 
-    @preprocessing_function
-    def _detokenize_tf(self, inputs):
-        inputs = tf.ragged.boolean_mask(
-            inputs, tf.not_equal(inputs, self.mask_token_id)
-        )
-        return super()._detokenize_tf(inputs)
+    def _build_detokenize_proto(self, proto):
+        proto = super()._build_detokenize_proto(proto)
+        from sentencepiece import sentencepiece_model_pb2
 
-    def _detokenize_spm(self, inputs):
-        self._maybe_initialized_spm()
-        inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
-        inputs = [
-            [id for id in seqs if id != self.mask_token_id] for seqs in inputs
-        ]
-        outputs = self._sentence_piece_spm.Decode(inputs)
-        if not batched:
-            outputs = outputs[0]
-        return outputs
+        model_proto = sentencepiece_model_pb2.ModelProto()
+        model_proto.ParseFromString(proto)
+        if any(piece.piece == self.mask_token for piece in model_proto.pieces):
+            return proto
+        # When the mask token is not in the proto, it is appended to the
+        # vocabulary (see `set_proto()`). Append a matching piece so that
+        # `mask_token_id` is detokenized to `"[MASK]"`.
+        piece = model_proto.pieces.add()
+        piece.piece = self.mask_token
+        piece.type = piece.USER_DEFINED
+        return model_proto.SerializeToString()
