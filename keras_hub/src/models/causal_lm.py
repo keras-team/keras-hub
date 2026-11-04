@@ -281,6 +281,20 @@ class CausalLM(Task):
             return normalized
         return normalize([x for x in outputs])
 
+    def _check_max_length_without_preprocessor(self, max_length):
+        """Raise an error if `max_length` is set without a `preprocessor`.
+
+        `generate()` overrides that run their own `stop_token_ids` checks call
+        this first, so every model raises this error before those checks.
+        """
+        if self.preprocessor is None and max_length is not None:
+            raise ValueError(
+                "`max_length` has no effect when `preprocessor=None`. "
+                "Inputs should already be tokenized and padded to the "
+                "desired maximum length. Either attach a preprocessor "
+                "or remove the `max_length` argument."
+            )
+
     def generate(
         self,
         inputs,
@@ -328,13 +342,7 @@ class CausalLM(Task):
                 this option is set to True, only the newly generated text is
                 returned.
         """
-        if self.preprocessor is None and max_length is not None:
-            raise ValueError(
-                "`max_length` has no effect when `preprocessor=None`. "
-                "Inputs should already be tokenized and padded to the "
-                "desired maximum length. Either attach a preprocessor "
-                "or remove the `max_length` argument."
-            )
+        self._check_max_length_without_preprocessor(max_length)
 
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
@@ -347,9 +355,9 @@ class CausalLM(Task):
                 "A `preprocessor` must be attached to the model if "
                 '`stop_token_ids="auto"`. Currently `preprocessor=None`. To '
                 "call `generate()` with preprocessing detached, either pass "
-                "`stop_token_ids=None` to always generate until `max_length` "
-                "or pass a tuple of token ids that should terminate generation "
-                "as `stop_token_ids`."
+                "`stop_token_ids=None` to always generate until the end of "
+                "the padded inputs or pass a tuple of token ids that should "
+                "terminate generation as `stop_token_ids`."
             )
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
