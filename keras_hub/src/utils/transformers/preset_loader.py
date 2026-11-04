@@ -89,12 +89,11 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "embedding_gemma2":
+            self.converter = convert_embedding_gemma2
         elif model_type == "gemma4_unified":
             self.converter = convert_gemma4_unified
         elif model_type in ("gemma4_assistant", "gemma4_unified_assistant"):
-        elif model_type == "embedding_gemma2":
-            self.converter = convert_embedding_gemma2
-        elif model_type == "gemma4_assistant":
             self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
             self.converter = convert_gpt2
