@@ -208,9 +208,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
         tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
 
-        # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
-        # the `detokenize` method will return empty strings for these tokens.
-        # This is a vagary of the `sentencepiece` library.
+        # Note: `"<s>"` and `"</s>"` are mapped to their SentencePiece IDs
+        # above so they are detokenized as special tokens, see
+        # `SentencePieceTokenizer._build_detokenize_proto()`.
         return super()._detokenize_tf(tokens)
 
     def _detokenize_spm(self, inputs):
@@ -233,7 +233,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
             return new_ids
 
         processed_inputs = [process(ids) for ids in inputs]
-        outputs = self._sentence_piece_spm.Decode(processed_inputs)
+        outputs = self._get_spm_detokenizer().Decode(processed_inputs)
         if not batched:
             outputs = outputs[0]
         return outputs

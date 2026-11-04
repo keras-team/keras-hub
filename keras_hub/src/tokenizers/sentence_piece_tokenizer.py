@@ -140,6 +140,13 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             add_bos=self.add_bos,
             add_eos=self.add_eos,
         )
+        detokenize_proto = getattr(self, "_detokenize_proto", None)
+        if detokenize_proto is None or detokenize_proto is proto:
+            self._sentence_piece_detokenizer = self._sentence_piece
+        else:
+            self._sentence_piece_detokenizer = tf_text.SentencepieceTokenizer(
+                model=detokenize_proto,
+            )
 
     def _set_proto_spm(self, proto):
         out_type = str if is_string_dtype(self.compute_dtype) else int
@@ -164,13 +171,70 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 alpha=1.0,
             )
 
+        # Built on first use, see `_get_spm_detokenizer()`.
+        self._sentence_piece_spm_detokenizer = None
+
+    def _get_spm_detokenizer(self):
+        """Returns the `SentencePieceProcessor` used to detokenize.
+
+        Unlike the TF detokenizer, which must be created outside of any
+        `tf.data` pipeline, this is only built when first needed.
+        """
+        self._maybe_initialized_spm()
+        if getattr(self, "_sentence_piece_spm_detokenizer", None) is None:
+            detokenize_proto = getattr(self, "_detokenize_proto", None)
+            if detokenize_proto is None or detokenize_proto is self.proto:
+                detokenizer = self._sentence_piece_spm
+            else:
+                detokenizer = spm.SentencePieceProcessor()
+                detokenizer.LoadFromSerializedProto(detokenize_proto)
+            self._sentence_piece_spm_detokenizer = detokenizer
+        return self._sentence_piece_spm_detokenizer
+
+    def _build_detokenize_proto(self, proto):
+        """Build the proto used to detokenize, given the tokenizer's proto.
+
+        SentencePiece marks special tokens like `"<s>"` or `"[CLS]"` as
+        `CONTROL` pieces, which it always decodes to an empty string. To keep
+        detokenization consistent with other KerasHub tokenizers, we decode
+        with a copy of the proto where the tokenizer's special tokens are
+        `USER_DEFINED` pieces instead, which SentencePiece decodes verbatim.
+        The original proto is still used for tokenization, so special tokens
+        appearing in input text are not parsed as special tokens.
+
+        Returns `proto` itself if no piece needs to change.
+        """
+        special_tokens = {token for token in self.special_tokens if token}
+        if spm is None or not special_tokens:
+            return proto
+
+        from sentencepiece import sentencepiece_model_pb2
+
+        model_proto = sentencepiece_model_pb2.ModelProto()
+        model_proto.ParseFromString(proto)
+        piece_types = sentencepiece_model_pb2.ModelProto.SentencePiece
+        changed = False
+        for piece in model_proto.pieces:
+            if (
+                piece.type == piece_types.CONTROL
+                and piece.piece in special_tokens
+            ):
+                piece.type = piece_types.USER_DEFINED
+                changed = True
+        if not changed:
+            return proto
+        return model_proto.SerializeToString()
+
     def set_proto(self, proto):
         if proto is None:
             self.proto = None
             # _sentence_piece
             self._sentence_piece = None
+            self._sentence_piece_detokenizer = None
             # _sentence_piece_spm
             self._sentence_piece_spm = None
+            self._sentence_piece_spm_detokenizer = None
+            self._detokenize_proto = None
             self._vocabulary = None
             self._vocabulary_size = None
             self._token_to_id_map = None
@@ -210,6 +274,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"filepath or a `bytes` sequence. "
                 f"Received unknown type: {type(proto)}"
             )
+
+        # Special tokens are detokenized with a separate proto. See
+        # `_build_detokenize_proto()`.
+        self._detokenize_proto = self._build_detokenize_proto(proto_bytes)
 
         # When using `SentencePieceTokenizer` with `tf.data`, it must be built
         # outside the `tf.data` pipeline. So we always call `_set_proto_tf`.
@@ -427,7 +495,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # tf-text sentencepiece does not handle int64.
         inputs = tf.cast(inputs, "int32")
-        outputs = self._sentence_piece.detokenize(inputs)
+        outputs = self._sentence_piece_detokenizer.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
@@ -474,7 +542,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def _detokenize_spm(self, inputs):
         self._maybe_initialized_spm()
         inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
-        outputs = self._sentence_piece_spm.Decode(inputs)
+        outputs = self._get_spm_detokenizer().Decode(inputs)
         if not batched:
             outputs = outputs[0]
         return outputs
