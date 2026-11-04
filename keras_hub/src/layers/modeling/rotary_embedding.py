@@ -38,6 +38,10 @@ class RotaryEmbedding(keras.layers.Layer):
         truncate: bool. Whether to round the YaRN correction range to whole
             dimensions. Only used when rope_type="yarn". Defaults to True,
             matching the reference YaRN implementation.
+        attention_factor: float. The YaRN temperature scale applied to the
+            cos/sin embeddings. Only used when rope_type="yarn". Defaults to
+            `None`, which derives the scale as `0.1 * log(scaling_factor) +
+            1.0`. Pass an explicit value to override this default.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
@@ -90,6 +94,7 @@ class RotaryEmbedding(keras.layers.Layer):
         sequence_axis=1,
         feature_axis=-1,
         denominator_dim=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -105,6 +110,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.original_max_position_embeddings = original_max_position_embeddings
         self.truncate = truncate
         self.denominator_dim = denominator_dim
+        self.attention_factor = attention_factor
         self.built = True
 
     def _normalize_axes(self, input_shape):
@@ -214,14 +220,22 @@ class RotaryEmbedding(keras.layers.Layer):
         sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
 
         if self.rope_type == "yarn":
-            # YaRN temperature scaling
-            factor = ops.add(
-                ops.multiply(
-                    ops.cast(0.1, self.compute_dtype),
-                    ops.log(ops.cast(self.scaling_factor, self.compute_dtype)),
-                ),
-                ops.cast(1.0, self.compute_dtype),
-            )
+            # YaRN temperature scaling. Defaults to the standard
+            # `mscale=1.0` formula; `attention_factor` overrides it for
+            # checkpoints that derive a different scale from
+            # `mscale`/`mscale_all_dim`.
+            if self.attention_factor is not None:
+                factor = ops.cast(self.attention_factor, self.compute_dtype)
+            else:
+                factor = ops.add(
+                    ops.multiply(
+                        ops.cast(0.1, self.compute_dtype),
+                        ops.log(
+                            ops.cast(self.scaling_factor, self.compute_dtype)
+                        ),
+                    ),
+                    ops.cast(1.0, self.compute_dtype),
+                )
             cos_emb = cos_emb * factor
             sin_emb = sin_emb * factor
         return cos_emb, sin_emb
@@ -236,7 +250,10 @@ class RotaryEmbedding(keras.layers.Layer):
             "float32",
         )
         freq_range = idx / denom
-        inv = ops.power(ops.cast(self.max_wavelength, "float32"), -freq_range)
+        # Divide by the power, as HF does. `power(base, -x)` rounds
+        # differently in `float32`.
+        base = ops.cast(self.max_wavelength, "float32")
+        inv = 1.0 / ops.power(base, freq_range)
 
         if self.rope_type == "linear":
             return inv / ops.cast(self.scaling_factor, "float32")
@@ -331,6 +348,7 @@ class RotaryEmbedding(keras.layers.Layer):
                 "sequence_axis": self.sequence_axis,
                 "feature_axis": self.feature_axis,
                 "denominator_dim": self.denominator_dim,
+                "attention_factor": self.attention_factor,
             }
         )
         return config

@@ -1,0 +1,254 @@
+import numpy as np
+import pytest
+from keras import ops
+
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_backbone import (
+    EmbeddingGemma2Backbone,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder import (  # noqa: E501
+    EmbeddingGemma2TextEmbedder,
+)
+from keras_hub.src.tests.test_case import TestCase
+
+
+class EmbeddingGemma2TextEmbedderTest(TestCase):
+    def setUp(self):
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (  # noqa: E501
+            EmbeddingGemma2AudioConverter,
+        )
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter import (  # noqa: E501
+            EmbeddingGemma2ImageConverter,
+        )
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
+            EmbeddingGemma2TextEmbedderPreprocessor,
+        )
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (  # noqa: E501
+            EmbeddingGemma2VideoConverter,
+        )
+        from keras_hub.src.models.gemma4.gemma4_audio_encoder import (
+            Gemma4AudioEncoder,
+        )
+        from keras_hub.src.models.gemma4.gemma4_vision_encoder import (
+            Gemma4VisionEncoder,
+        )
+        from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import (
+            MockGemma4Tokenizer,
+        )
+
+        vision_encoder = Gemma4VisionEncoder(
+            image_size=16,
+            patch_size=16,
+            num_layers=1,
+            num_heads=2,
+            hidden_dim=16,
+            intermediate_dim=32,
+            head_dim=8,
+            pool_size=1,
+            output_dim=16,
+        )
+        audio_encoder = Gemma4AudioEncoder(
+            input_feat_size=8,
+            hidden_size=16,
+            num_heads=2,
+            num_layers=1,
+            chunk_size=4,
+            context_left=5,
+            context_right=0,
+            sscp_conv_channels=(4, 2),
+            sscp_kernel_sizes=((3, 3), (3, 3)),
+            sscp_stride_sizes=((2, 2), (2, 2)),
+            output_proj_dims=48,
+            output_dim=16,
+        )
+
+        # We need a small backbone WITH encoders attached to cover text-only
+        # predictions passing through placeholders.
+        self.backbone = EmbeddingGemma2Backbone(
+            vocabulary_size=100,
+            image_size=16,
+            num_layers=2,
+            num_query_heads=2,
+            num_key_value_heads=1,
+            hidden_dim=16,
+            intermediate_dim=32,
+            head_dim=8,
+            embedding_dim=12,
+            layer_types=["sliding_attention", "full_attention"],
+            vision_encoder=vision_encoder,
+            audio_encoder=audio_encoder,
+        )
+
+        self.tokenizer = MockGemma4Tokenizer(add_bos=False, add_eos=False)
+        self.image_converter = EmbeddingGemma2ImageConverter(
+            image_size=(16, 16),
+            patch_size=16,
+            pooling_kernel_size=1,
+            max_soft_tokens=10,
+        )
+        self.audio_converter = EmbeddingGemma2AudioConverter(
+            num_mels=8,
+            num_fft_bins=16,
+            stride=8,
+            max_audio_length=1,
+            sampling_rate=160,
+        )
+        self.video_converter = EmbeddingGemma2VideoConverter(
+            image_size=(16, 16),
+            patch_size=16,
+            pooling_kernel_size=1,
+            max_frames=32,
+        )
+
+        self.preprocessor = EmbeddingGemma2TextEmbedderPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            video_converter=self.video_converter,
+            sequence_length=4,
+        )
+
+        self.init_kwargs = {
+            "backbone": self.backbone,
+            "preprocessor": self.preprocessor,
+        }
+        self.train_data = (
+            ["hello", "world"],
+            np.ones((2, 12), dtype="float32"),
+        )
+        # `run_model_saving_test` calls the model directly, which does not
+        # apply preprocessing, so hand it preprocessed tensors.
+        self.input_data = self.preprocessor(*self.train_data)[0]
+
+    def test_embedder_basics(self):
+        self.run_task_test(
+            cls=EmbeddingGemma2TextEmbedder,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 12),
+            batch_size=2,
+            compile_kwargs={"optimizer": "adam", "loss": "mse"},
+            atol=1e-06,
+            rtol=1e-06,
+        )
+
+    def test_encode_text(self):
+        embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
+        output = embedder.encode_text("hello")
+        self.assertEqual(output.shape, (1, 12))
+        self.assertAllClose(output, embedder.predict(["hello"]))
+
+    def test_output_is_normalized(self):
+        embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
+        output = embedder.predict(["hello"])
+        norms = np.linalg.norm(output, axis=-1)
+        self.assertAllClose(norms, np.ones_like(norms), atol=1e-5)
+
+    def test_output_not_normalized(self):
+        embedder = EmbeddingGemma2TextEmbedder(
+            backbone=self.backbone,
+            preprocessor=self.preprocessor,
+            normalize=False,
+        )
+        output = embedder.predict(["hello", "world"])
+        self.assertEqual(output.shape, (2, 12))
+        norms = np.linalg.norm(output, axis=-1)
+        self.assertFalse(np.allclose(norms, np.ones_like(norms), atol=1e-3))
+
+    def test_invalid_pooling_mode(self):
+        with self.assertRaises(ValueError):
+            EmbeddingGemma2TextEmbedder(
+                backbone=self.backbone,
+                preprocessor=self.preprocessor,
+                pooling_mode="cls",
+            )
+
+    def test_mean_pooling_respects_mask(self):
+        """Mean pooling must ignore every padded position."""
+        embedder = EmbeddingGemma2TextEmbedder(**self.init_kwargs)
+        inputs = {
+            k: ops.convert_to_numpy(v)
+            for k, v in embedder.preprocessor(["hello", "hello"]).items()
+        }
+        token_ids = inputs["token_ids"].copy()
+        padding_mask = inputs["padding_mask"]
+        pad_positions = np.where(~padding_mask[1])[0]
+        self.assertGreater(len(pad_positions), 0)
+        # Row 1 differs from row 0 only at masked positions.
+        token_ids[1, pad_positions] = 99
+        inputs["token_ids"] = token_ids
+
+        out = ops.convert_to_numpy(embedder(inputs))
+        self.assertAllClose(out[0], out[1])
+
+    def test_predict_text_then_images_then_text(self):
+        # A text-only batch followed by an image batch and back, through the
+        # public `predict()` path. On the TensorFlow backend the second call
+        # retraces with relaxed media dims, so every layer must trace with a
+        # symbolic image count (keras-hub#3152).
+        from keras_hub.src.models.embedding_gemma2.embedding_gemma2_text_embedder_preprocessor import (  # noqa: E501
+            EmbeddingGemma2TextEmbedderPreprocessor,
+        )
+
+        # The setUp preprocessor uses `sequence_length=4`, too short for the
+        # image placeholder plus its soft tokens.
+        preprocessor = EmbeddingGemma2TextEmbedderPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            audio_converter=self.audio_converter,
+            video_converter=self.video_converter,
+            sequence_length=32,
+        )
+        embedder = EmbeddingGemma2TextEmbedder(
+            backbone=self.backbone, preprocessor=preprocessor
+        )
+        img = np.ones((16, 16, 3), dtype="float32")
+        text_only = ["hello", "world"]
+        with_images = {
+            "texts": ["<|image|> hello", "<|image|> world"],
+            "images": np.stack([img, img]),
+        }
+        outputs = []
+        for inputs in (text_only, with_images, text_only):
+            outputs.append(embedder.predict(inputs, verbose=0))
+            self.assertEqual(outputs[-1].shape, (2, 12))
+        # The retrace must not change the text-only result.
+        self.assertAllClose(outputs[0], outputs[2], atol=1e-6)
+        # The tower must have a slot for every placeholder the preprocessor
+        # placed; with the default `pool_size=3` it emits one token for nine
+        # `<|image|>` placeholders and the image tests pass without testing
+        # the alignment.
+        prep = preprocessor(with_images)
+        placed = int(
+            (
+                ops.convert_to_numpy(prep["token_ids"])
+                == self.tokenizer.token_to_id("<|image|>")
+            ).sum(axis=1)[0]
+        )
+        slots = self.backbone.vision_encoder(
+            {
+                "pixel_values": prep["pixel_values"],
+                "pixel_position_ids": prep["pixel_position_ids"],
+            }
+        ).shape[2]
+        self.assertGreater(placed, 1)
+        self.assertGreaterEqual(slots, placed)
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=EmbeddingGemma2TextEmbedder,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        # `run_preset_test` calls the model directly, which skips
+        # preprocessing; the real checkpoint needs its own preprocessor
+        # (vocab, mel bins), so go through `predict` on raw text instead.
+        for preset in EmbeddingGemma2TextEmbedder.presets:
+            embedder = EmbeddingGemma2TextEmbedder.from_preset(preset)
+            output = embedder.predict(["hello", "world"])
+            self.assertEqual(output.shape, (2, embedder.backbone.embedding_dim))
+            norms = np.linalg.norm(output, axis=-1)
+            self.assertAllClose(norms, np.ones_like(norms), atol=1e-4)

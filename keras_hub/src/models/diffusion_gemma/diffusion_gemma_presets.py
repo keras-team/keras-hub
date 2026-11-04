@@ -10,6 +10,6 @@ backbone_presets = {
             "params": 25823778864,
             "path": "diffusion_gemma",
         },
-        "kaggle_handle": "kaggle://keras/diffusion_gemma/keras/diffusion_gemma_26b_a4b_it/1",
+        "kaggle_handle": "kaggle://keras/diffusion-gemma/keras/diffusion_gemma_26b_a4b_it/1",
     },
 }

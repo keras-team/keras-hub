@@ -37,6 +37,9 @@ from keras_hub.src.models.distil_bert.distil_bert_tokenizer import (
 from keras_hub.src.models.electra.electra_tokenizer import (
     ElectraTokenizer as ElectraTokenizer,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_tokenizer import (
+    EmbeddingGemma2Tokenizer as EmbeddingGemma2Tokenizer,
+)
 from keras_hub.src.models.esm.esm_tokenizer import ESMTokenizer as ESMTokenizer
 from keras_hub.src.models.f_net.f_net_tokenizer import (
     FNetTokenizer as FNetTokenizer,
@@ -83,6 +86,9 @@ from keras_hub.src.models.mistral.mistral_tokenizer import (
 from keras_hub.src.models.mistral.mistral_tokenizer import (
     MistralTokenizer as MistralTokenizer,
 )
+from keras_hub.src.models.mistral3.mistral3_tokenizer import (
+    Mistral3Tokenizer as Mistral3Tokenizer,
+)
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
@@ -91,6 +97,12 @@ from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
+)
+from keras_hub.src.models.mpnet.mpnet_tokenizer import (
+    MPNetTokenizer as MPNetTokenizer,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
+    MuseGlimmerTokenizer as MuseGlimmerTokenizer,
 )
 from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
@@ -143,6 +155,9 @@ from keras_hub.src.models.smollm3.smollm3_tokenizer import (
 )
 from keras_hub.src.models.smollm3.smollm3_tokenizer import (
     SmolLM3Tokenizer as SmolLMTokenizer,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_tokenizer import (
+    SmolVLM2Tokenizer as SmolVLM2Tokenizer,
 )
 from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer as T5Tokenizer
 from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
