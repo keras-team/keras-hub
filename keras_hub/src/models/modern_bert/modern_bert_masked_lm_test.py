@@ -1,3 +1,6 @@
+import os
+
+import numpy as np
 import pytest
 
 from keras_hub.src.models.modern_bert import modern_bert_masked_lm_preprocessor
@@ -133,3 +136,28 @@ class ModernBertMaskedLMTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=input_data,
         )
+
+    def test_decoder_bias_is_trained_and_saved(self):
+        """The decoder bias must be a tracked weight on every backend.
+
+        Regression test for keras-team/keras-hub#3210. On torch the bias was
+        untracked, so it was never trained or saved, and task weights saved
+        on other backends failed to load.
+        """
+        bias = self.model.mlm_head_decoder_bias
+        self.assertTrue(
+            any(weight is bias for weight in self.model.trainable_weights)
+        )
+
+        # Use a non-zero bias so that a dropped variable cannot pass the
+        # round trip by keeping its zero initial value.
+        bias.assign(np.linspace(-1.0, 1.0, bias.shape[0]).astype("float32"))
+        path = os.path.join(self.get_temp_dir(), "task.weights.h5")
+        self.model.save_task_weights(path)
+
+        restored = ModernBertMaskedLM(
+            backbone=ModernBertBackbone.from_config(self.backbone.get_config()),
+            preprocessor=None,
+        )
+        restored.load_task_weights(path)
+        self.assertAllClose(restored.mlm_head_decoder_bias, bias)
