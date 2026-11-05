@@ -58,6 +58,7 @@ class Qwen2VLAttention(QwenAttention):
             ops.cast(self.rope_max_wavelength, "float32"),
             -idx / ops.cast(self.head_dim, "float32"),
         )  # (half,)
+        inv_freq = inv_freq / ops.cast(self.rope_scaling_factor, "float32")
 
         freqs = []
         for channel in range(3):

@@ -20,7 +20,9 @@ def _make_converter(**overrides):
         "merge_size": 2,
     }
     kwargs.update(overrides)
-    return Qwen2VLVideoConverter(**kwargs)
+    return Qwen2VLVideoConverter(
+        image_converter=Qwen2VLImageConverter(**kwargs)
+    )
 
 
 def _make_video(num_frames=4, height=56, width=56):
@@ -81,6 +83,7 @@ class Qwen2VLVideoConverterTest(TestCase):
         converter = _make_converter(max_pixels=56 * 56 * 8)
         self.run_serialization_test(converter)
         cfg = converter.get_config()
-        self.assertEqual(cfg["max_pixels"], 56 * 56 * 8)
-        self.assertEqual(cfg["patch_size"], 14)
-        self.assertEqual(cfg["temporal_patch_size"], 2)
+        image_cfg = cfg["image_converter"]["config"]
+        self.assertEqual(image_cfg["max_pixels"], 56 * 56 * 8)
+        self.assertEqual(image_cfg["patch_size"], 14)
+        self.assertEqual(image_cfg["temporal_patch_size"], 2)

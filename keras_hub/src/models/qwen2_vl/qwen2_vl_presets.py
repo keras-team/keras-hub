@@ -14,7 +14,7 @@ backbone_presets = {}
 #                 "and video understanding with multimodal "
 #                 "rotary position embeddings."
 #             ),
-#             "params": 2014341120,
+#             "params": 2208985600,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_2b_base/1",
@@ -26,7 +26,7 @@ backbone_presets = {}
 #                 "Instruction-tuned for image and video understanding with "
 #                 "multimodal rotary position embeddings."
 #             ),
-#             "params": 2014341120,
+#             "params": 2208985600,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_2b_instruct/1",
@@ -39,7 +39,7 @@ backbone_presets = {}
 #                 "and video understanding with multimodal "
 #                 "rotary position embeddings."
 #             ),
-#             "params": 7616192512,
+#             "params": 8291375616,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_7b_base/1",
@@ -51,7 +51,7 @@ backbone_presets = {}
 #                 "Instruction-tuned for image and video understanding with "
 #                 "multimodal rotary position embeddings."
 #             ),
-#             "params": 7616192512,
+#             "params": 8291375616,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_7b_instruct/1",
@@ -64,7 +64,7 @@ backbone_presets = {}
 #                 "and video understanding with multimodal "
 #                 "rotary position embeddings."
 #             ),
-#             "params": 72706203648,
+#             "params": 73405560320,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_72b_base/1",
@@ -76,7 +76,7 @@ backbone_presets = {}
 #                 "Instruction-tuned for image and video understanding with "
 #                 "multimodal rotary position embeddings."
 #             ),
-#             "params": 72706203648,
+#             "params": 73405560320,
 #             "path": "qwen2_vl",
 #         },
 #         "kaggle_handle": "kaggle://keras/qwen2_vl/keras/qwen2_vl_72b_instruct/1",

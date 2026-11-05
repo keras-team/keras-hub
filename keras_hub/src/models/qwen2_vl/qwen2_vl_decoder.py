@@ -1,8 +1,6 @@
-import keras
 from keras import ops
 
 from keras_hub.src.models.qwen.qwen_decoder import QwenTransformerDecoder
-from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm
 from keras_hub.src.models.qwen2_vl.qwen2_vl_attention import Qwen2VLAttention
 from keras_hub.src.utils.keras_utils import clone_initializer
 
@@ -23,11 +21,7 @@ class Qwen2VLTransformerDecoder(QwenTransformerDecoder):
         super().__init__(*args, **kwargs)
         self.mrope_section = mrope_section
 
-    def build(self, decoder_sequence_shape):
-        self._decoder_sequence_shape = decoder_sequence_shape
-        self.hidden_dim = decoder_sequence_shape[-1]
-
-        # Self attention layer.
+    def _build_self_attention_layer(self, decoder_sequence_shape):
         self._self_attention_layer = Qwen2VLAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
@@ -42,60 +36,6 @@ class Qwen2VLTransformerDecoder(QwenTransformerDecoder):
             name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
-
-        self._self_attention_layernorm = QwenLayerNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="self_attention_layernorm",
-        )
-        self._self_attention_layernorm.build(decoder_sequence_shape)
-
-        self._self_attention_dropout = keras.layers.Dropout(
-            rate=self.dropout,
-            dtype=self.dtype_policy,
-            name="self_attention_dropout",
-        )
-
-        # Feedforward layers.
-        self._feedforward_intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_intermediate_dense",
-        )
-        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
-
-        self._feedforward_gate_dense = keras.layers.Dense(
-            self.intermediate_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_gate_dense",
-        )
-        self._feedforward_gate_dense.build(decoder_sequence_shape)
-
-        self._feedforward_output_dense = keras.layers.Dense(
-            self.hidden_dim,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="feedforward_output_dense",
-        )
-        self._feedforward_output_dense.build(
-            self._feedforward_gate_dense.compute_output_shape(
-                decoder_sequence_shape
-            )
-        )
-
-        self._feedforward_layernorm = QwenLayerNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="feedforward_layernorm",
-        )
-        self._feedforward_layernorm.build(decoder_sequence_shape)
-
-        self.built = True
 
     def call(
         self,

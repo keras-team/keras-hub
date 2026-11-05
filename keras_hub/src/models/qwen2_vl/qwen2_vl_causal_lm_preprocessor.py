@@ -5,6 +5,9 @@ import numpy as np
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
@@ -13,6 +16,9 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
 from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import Qwen2VLTokenizer
 from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
     Qwen2VLVideoConverter,
+)
+from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
+    QwenVLSpecialTokenMixin,
 )
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -25,7 +31,9 @@ except ImportError:
 
 
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
-class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
+class Qwen2VLCausalLMPreprocessor(
+    QwenVLSpecialTokenMixin, CausalLMPreprocessor
+):
     """Qwen2-VL Causal LM preprocessor with multimodal support.
 
     For text-only usage this behaves identically to the base
@@ -61,15 +69,6 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
     image_converter_cls = Qwen2VLImageConverter
     video_converter_cls = Qwen2VLVideoConverter
 
-    _SPECIAL_TOKEN_ATTRS = [
-        "im_start_token",
-        "end_token",
-        "vision_start_token",
-        "vision_end_token",
-        "image_token",
-        "video_token",
-    ]
-
     def __init__(
         self,
         tokenizer,
@@ -102,90 +101,127 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         self._cached_special_token_map = None
         self._cached_special_token_pattern = None
 
-    @property
-    def image_token_id(self):
-        """Image pad token ID, resolved from the tokenizer."""
-        return getattr(self.tokenizer, "image_token_id", None)
+    def build(self, input_shape):
+        super().build(input_shape)
+        self.multi_packer = MultiSegmentPacker(
+            start_value=[],
+            end_value=self.tokenizer.end_token_id or [],
+            pad_value=self.tokenizer.pad_token_id,
+            sep_value=[],
+            sequence_length=self.sequence_length,
+        )
 
-    @property
-    def video_token_id(self):
-        """Video pad token ID, resolved from the tokenizer."""
-        return getattr(self.tokenizer, "video_token_id", None)
-
-    @property
-    def _special_token_map(self):
-        """Lazily build token-string → token-ID map."""
-        if self._cached_special_token_map is None:
-            self._cached_special_token_map = {}
-            for attr in self._SPECIAL_TOKEN_ATTRS:
-                tok_str = getattr(self.tokenizer, attr, None)
-                tok_id = getattr(self.tokenizer, f"{attr}_id", None)
-                if tok_str is not None and tok_id is not None:
-                    self._cached_special_token_map[tok_str] = tok_id
-        return self._cached_special_token_map
-
-    @property
-    def _special_token_pattern(self):
-        """Lazily build regex for splitting at special tokens."""
-        if self._cached_special_token_pattern is None:
-            self._cached_special_token_pattern = re.compile(
-                "("
-                + "|".join(re.escape(t) for t in self._special_token_map)
-                + ")"
+    def _check_converters(self, images, videos):
+        """Raise when media inputs arrive without a converter to process."""
+        if images is not None and self.image_converter is None:
+            raise ValueError(
+                "This preprocessor was created without an "
+                "`image_converter`, so it cannot process images. "
+                "To process image inputs, pass an `image_converter` when "
+                "creating the preprocessor, or load a preset that includes "
+                "one."
             )
-        return self._cached_special_token_pattern
+        if (
+            videos is not None
+            and self.image_converter is None
+            and (self.video_converter is None)
+        ):
+            raise ValueError(
+                "This preprocessor was created without an "
+                "`image_converter` or `video_converter`, so it cannot "
+                "process videos. To process video inputs, pass a converter "
+                "when creating the preprocessor, or load a preset that "
+                "includes one."
+            )
 
-    def _tokenize_with_special_tokens(
-        self, text, num_image_tokens, num_video_tokens
-    ):
-        """Tokenize text while correctly handling special tokens.
+    def _flatten_prompts(self, prompts):
+        """Normalize a string / Tensor / list of prompts to a list of str."""
+        if isinstance(prompts, str):
+            return [prompts], False
+        if isinstance(prompts, tf.Tensor):
+            if len(prompts.shape) == 0:
+                return [prompts.numpy().decode("utf-8")], False
+            return [p.numpy().decode("utf-8") for p in prompts], True
+        return [
+            p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
+            for p in prompts
+        ], True
 
-        The KerasHub BPE tokenizer may not encode Qwen2-VL's added special
-        tokens (``<|image_pad|>``, ``<|vision_start|>``, etc.) as single
-        tokens — it can break them into sub-word pieces. This method
-        splits the input by known special tokens, tokenizes only the
-        text segments, and manually inserts the correct token IDs.
+    def _process_media(self, images, videos):
+        """Run converters and count merged tokens per media item."""
+        vision_out_images = (
+            self._preprocess_images(images) if images is not None else None
+        )
+        vision_out_videos = (
+            self._preprocess_videos(videos) if videos is not None else None
+        )
+        vision_converter = self.image_converter or self.video_converter
+        merge_size = getattr(vision_converter, "merge_size", 2)
 
-        Each ``<|image_pad|>``/``<|video_pad|>`` marker is expanded to the
-        number of merged vision tokens for the corresponding image/video.
+        def _counts(vision_out):
+            if vision_out is None:
+                return []
+            grid_np = ops.convert_to_numpy(vision_out["grid_thw"])
+            return [
+                int(row[0])
+                * (int(row[1]) // merge_size)
+                * (int(row[2]) // merge_size)
+                for row in grid_np
+            ]
 
-        Args:
-            text: str. The prompt string.
-            num_image_tokens: list[int]. Merged token count per image.
-            num_video_tokens: list[int]. Merged token count per video.
-        Returns:
-            list[int]. The complete token ID sequence.
+        return (
+            vision_out_images,
+            vision_out_videos,
+            _counts(vision_out_images),
+            _counts(vision_out_videos),
+        )
+
+    def _check_sequence_length(self, expanded_sequences, sequence_length):
+        """Raise if an expanded sequence cannot fit `sequence_length`.
+
+        Truncating mid vision span would desynchronize `vision_indices`
+        from `pixel_values`, so fail loudly instead of truncating.
         """
-        parts = self._special_token_pattern.split(text)
+        longest = max(len(s) for s in expanded_sequences)
+        if longest > sequence_length:
+            raise ValueError(
+                f"Expanded input requires at least {longest} tokens, but "
+                f"`sequence_length` is {sequence_length}. Increase "
+                "`sequence_length` to fit the vision token spans."
+            )
 
-        all_ids = []
-        img_idx = 0
-        vid_idx = 0
-        for part in parts:
-            if part in self._special_token_map:
-                if part == self.image_token:
-                    if img_idx < len(num_image_tokens):
-                        n = num_image_tokens[img_idx]
-                        img_idx += 1
-                    else:
-                        n = 1
-                    all_ids.extend([self.image_token_id] * n)
-                elif part == self.video_token:
-                    if vid_idx < len(num_video_tokens):
-                        n = num_video_tokens[vid_idx]
-                        vid_idx += 1
-                    else:
-                        n = 1
-                    all_ids.extend([self.video_token_id] * n)
-                else:
-                    all_ids.append(self._special_token_map[part])
-            elif part:
-                tokenized = self.tokenizer(part)
-                if hasattr(tokenized, "numpy"):
-                    all_ids.extend(tokenized.numpy().tolist())
-                else:
-                    all_ids.extend(list(tokenized))
-        return all_ids
+    def _expand_prompts(self, prompts_list, num_image_tokens, num_video_tokens):
+        """Tokenize prompts, expanding media markers in prompt order."""
+        n_img = sum(p.count(self.image_token) for p in prompts_list)
+        n_vid = sum(p.count(self.video_token) for p in prompts_list)
+        if n_img != len(num_image_tokens):
+            raise ValueError(
+                f"Found {n_img} `{self.image_token}` placeholder(s) in the "
+                f"prompts but {len(num_image_tokens)} image(s) were "
+                "provided."
+            )
+        if n_vid != len(num_video_tokens):
+            raise ValueError(
+                f"Found {n_vid} `{self.video_token}` placeholder(s) in the "
+                f"prompts but {len(num_video_tokens)} video(s) were "
+                "provided."
+            )
+        expanded_sequences = []
+        img_offset = 0
+        vid_offset = 0
+        for prompt_str in prompts_list:
+            n_img = prompt_str.count(self.image_token)
+            n_vid = prompt_str.count(self.video_token)
+            expanded_sequences.append(
+                self._tokenize_with_special_tokens(
+                    prompt_str,
+                    num_image_tokens[img_offset : img_offset + n_img],
+                    num_video_tokens[vid_offset : vid_offset + n_vid],
+                )
+            )
+            img_offset += n_img
+            vid_offset += n_vid
+        return expanded_sequences
 
     def _compute_vision_indices(self, token_ids):
         """Return indices where token_ids matches image or video token IDs.
@@ -412,6 +448,135 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         }
 
     @preprocessing_function
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
+        sequence_length = sequence_length or self.sequence_length
+
+        # Text-only fast path for non-dict inputs.
+        if not isinstance(x, dict):
+            return super().call(
+                x,
+                y=y,
+                sample_weight=sample_weight,
+                sequence_length=sequence_length,
+            )
+
+        assert_tf_installed("Qwen2VLCausalLMPreprocessor")
+        if not self.built:
+            self.build(None)
+
+        images = x.get("images", None)
+        videos = x.get("videos", None)
+
+        def _empty(media):
+            # Empty collections behave like absent media, so placeholder
+            # counts get the descriptive mismatch error downstream.
+            if isinstance(media, (list, tuple)):
+                return len(media) == 0
+            shape = getattr(media, "shape", None)
+            return shape is not None and len(shape) > 0 and shape[0] == 0
+
+        if _empty(images):
+            images = None
+        if _empty(videos):
+            videos = None
+        self._check_converters(images, videos)
+        prompts_list, batched = self._flatten_prompts(x["prompts"])
+        responses_text = x.get("responses", None)
+
+        # Process media, expand markers, then pack prompts (+ responses).
+        (
+            vision_out_images,
+            vision_out_videos,
+            num_image_tokens,
+            num_video_tokens,
+        ) = self._process_media(images, videos)
+        expanded_sequences = self._expand_prompts(
+            prompts_list, num_image_tokens, num_video_tokens
+        )
+        self._check_sequence_length(expanded_sequences, sequence_length)
+
+        if responses_text is not None:
+            responses, _ = self._flatten_prompts(responses_text)
+            response_ids = [
+                self._tokenize_with_special_tokens(r, [], []) for r in responses
+            ]
+            prompt_ragged = tf.ragged.constant(
+                expanded_sequences, dtype="int32"
+            )
+            response_ragged = tf.ragged.constant(response_ids, dtype="int32")
+            token_ids, segment_ids = self.multi_packer(
+                (prompt_ragged, response_ragged),
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+            )
+            padding_mask = token_ids != self.tokenizer.pad_token_id
+            response_mask = segment_ids == 1
+            x_out = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+            }
+            y = token_ids[..., 1:]
+            sample_weight = response_mask[..., 1:]
+        else:
+            token_ids_ragged = tf.ragged.constant(
+                expanded_sequences, dtype="int32"
+            )
+            token_ids, padding_mask = self.packer(
+                token_ids_ragged,
+                sequence_length=sequence_length + 1,
+                add_start_value=self.add_start_token,
+                add_end_value=self.add_end_token,
+            )
+            x_out = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+            }
+            y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
+
+        # 5. Vision indices, M-RoPE positions, and merged encoder inputs.
+        if vision_out_images is not None or vision_out_videos is not None:
+            vision_indices = self._compute_vision_indices(x_out["token_ids"])
+            img_grid = (
+                vision_out_images["grid_thw"] if vision_out_images else None
+            )
+            vid_grid = (
+                vision_out_videos["grid_thw"] if vision_out_videos else None
+            )
+            pos_ids = self._compute_position_ids(
+                x_out["token_ids"], img_grid, vid_grid
+            )
+            x_out["vision_indices"] = vision_indices
+            x_out["position_ids"] = pos_ids
+
+            pixel_values_list = []
+            grid_list = []
+            if vision_out_images is not None:
+                pixel_values_list.append(vision_out_images["pixel_values"])
+                grid_list.append(vision_out_images["grid_thw"])
+            if vision_out_videos is not None:
+                pixel_values_list.append(vision_out_videos["pixel_values"])
+                grid_list.append(vision_out_videos["grid_thw"])
+            x_out["pixel_values"] = tf.concat(pixel_values_list, axis=0)
+            x_out["image_grid_thw"] = tf.concat(grid_list, axis=0)
+
+        # 6. Squeeze batch dim for unbatched inputs.
+        if not batched:
+            for key in ("token_ids", "padding_mask", "position_ids"):
+                if key in x_out:
+                    x_out[key] = tf.squeeze(x_out[key], axis=0)
+            y = tf.squeeze(y, axis=0)
+            sample_weight = tf.squeeze(sample_weight, axis=0)
+
+        return keras.utils.pack_x_y_sample_weight(x_out, y, sample_weight)
+
+    @preprocessing_function
     def generate_preprocess(self, x, sequence_length=None):
         """Preprocess inputs for generation (prompt-only, no labels).
 
@@ -444,109 +609,25 @@ class Qwen2VLCausalLMPreprocessor(CausalLMPreprocessor):
         assert_tf_installed("Qwen2VLCausalLMPreprocessor with images/videos")
         if not self.built:
             self.build(None)
-        if images is not None and self.image_converter is None:
-            raise ValueError(
-                "This preprocessor was created without an "
-                "`image_converter`, so it cannot process images. "
-                "To process image inputs, pass an `image_converter` when "
-                "creating the preprocessor, or load a preset that includes "
-                "one."
-            )
-        if (
-            videos is not None
-            and self.image_converter is None
-            and (self.video_converter is None)
-        ):
-            raise ValueError(
-                "This preprocessor was created without an "
-                "`image_converter` or `video_converter`, so it cannot "
-                "process videos. To process video inputs, pass a converter "
-                "when creating the preprocessor, or load a preset that "
-                "includes one."
-            )
+        self._check_converters(images, videos)
 
         sequence_length = sequence_length or self.sequence_length
-        prompts = x["prompts"]
+        prompts_list, batched = self._flatten_prompts(x["prompts"])
+        (
+            vision_out_images,
+            vision_out_videos,
+            num_image_tokens,
+            num_video_tokens,
+        ) = self._process_media(images, videos)
 
-        batched = True
-        if isinstance(prompts, str):
-            batched = False
-            prompts = [prompts]
-        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
-            batched = False
-            prompts = tf.expand_dims(prompts, 0)
-
-        # 1. Process images and videos.
-        vision_out_images = None
-        vision_out_videos = None
-        if images is not None:
-            vision_out_images = self._preprocess_images(images)
-        if videos is not None:
-            vision_out_videos = self._preprocess_videos(videos)
-
-        # 2. Compute merged token counts per image/video.
-        vision_converter = self.image_converter or self.video_converter
-        merge_size = getattr(vision_converter, "merge_size", 2)
-
-        num_image_tokens = []
-        if vision_out_images is not None:
-            grid_np = ops.convert_to_numpy(vision_out_images["grid_thw"])
-            for i in range(grid_np.shape[0]):
-                t = int(grid_np[i, 0])
-                h = int(grid_np[i, 1])
-                w = int(grid_np[i, 2])
-                num_image_tokens.append(
-                    t * (h // merge_size) * (w // merge_size)
-                )
-
-        num_video_tokens = []
-        if vision_out_videos is not None:
-            grid_np = ops.convert_to_numpy(vision_out_videos["grid_thw"])
-            for i in range(grid_np.shape[0]):
-                t = int(grid_np[i, 0])
-                h = int(grid_np[i, 1])
-                w = int(grid_np[i, 2])
-                num_video_tokens.append(
-                    t * (h // merge_size) * (w // merge_size)
-                )
-
-        # 3. Normalize prompts to a list of python strings.
-        if isinstance(prompts, tf.Tensor):
-            prompts_list = [p.numpy().decode("utf-8") for p in prompts]
-        elif isinstance(prompts, (list, tuple)):
-            prompts_list = [
-                p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
-                for p in prompts
-            ]
-        else:
-            prompts_list = [str(prompts)]
-
-        # 4. Tokenize with special-token-aware splitting. Media are consumed
-        # in prompt order across the batch, so each prompt gets the slice of
-        # token counts corresponding to the markers it contains.
-        expanded_sequences = []
-        img_offset = 0
-        vid_offset = 0
-        for prompt_str in prompts_list:
-            n_img = prompt_str.count(self.image_token)
-            n_vid = prompt_str.count(self.video_token)
-            expanded_sequences.append(
-                self._tokenize_with_special_tokens(
-                    prompt_str,
-                    num_image_tokens[img_offset : img_offset + n_img],
-                    num_video_tokens[vid_offset : vid_offset + n_vid],
-                )
-            )
-            img_offset += n_img
-            vid_offset += n_vid
-
-        # 5. Pack to fixed length. `sequence_length` acts as a minimum
-        # pad target — truncating inside an expanded vision span would
-        # desynchronize `vision_indices` from `pixel_values`, so the
-        # packed length grows to fit the longest expanded sequence.
-        sequence_length = max(
-            sequence_length, max(len(s) for s in expanded_sequences)
+        # Media are consumed in prompt order across the batch, so each
+        # prompt gets the slice of token counts for the markers it contains.
+        expanded_sequences = self._expand_prompts(
+            prompts_list, num_image_tokens, num_video_tokens
         )
+
+        # 5. Pack to fixed length.
+        self._check_sequence_length(expanded_sequences, sequence_length)
         token_ids_ragged = tf.ragged.constant(expanded_sequences, dtype="int32")
         token_ids, padding_mask = self.packer(
             token_ids_ragged,

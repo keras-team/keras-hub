@@ -1,33 +1,34 @@
+"""Convert Qwen2-VL checkpoints from Hugging Face to KerasHub presets.
+
+Uses the maintained `hf://` loading path (utils/transformers/convert_qwen2_vl)
+for the actual conversion, then validates the result against the HF model:
+parameter count, tokenization, text and multimodal logits, and generation.
+
+    python tools/checkpoint_conversion/convert_qwen2_vl_checkpoints.py \
+        --preset qwen2_vl_2b_instruct
+"""
+
 import os
-import traceback
 
 os.environ["KERAS_BACKEND"] = "torch"
 
-import json  # noqa: E402
+import gc  # noqa: E402
+from io import BytesIO  # noqa: E402
 
 import numpy as np  # noqa: E402
+import requests  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.set_default_device(device)
-
 from keras import ops  # noqa: E402
+from PIL import Image  # noqa: E402
+from transformers import AutoModelForImageTextToText  # noqa: E402
 from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
-from transformers import Qwen2VLForConditionalGeneration  # noqa: E402
 
 import keras_hub  # noqa: E402
-from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import (  # noqa: E402
-    Qwen2VLBackbone,
-)
-from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (  # noqa: E402, E501
-    Qwen2VLImageConverter,
-)
-from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (  # noqa: E402, E501
-    Qwen2VLVisionEncoder,
-)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 PRESET_MAP = {
     "qwen2_vl_2b_instruct": "Qwen/Qwen2-VL-2B-Instruct",
@@ -35,471 +36,305 @@ PRESET_MAP = {
     "qwen2_vl_72b_instruct": "Qwen/Qwen2-VL-72B-Instruct",
 }
 
+TEXT_PROMPT = "What is the capital of France?"
+MULTIMODAL_PROMPT = (
+    "<"
+    "|im_start|>user\n"
+    "<"
+    "|vision_start|>"
+    "<"
+    "|image_pad|>"
+    "<"
+    "|vision_end|>Describe this image."
+    "<"
+    "|im_end|>\n"
+    "<"
+    "|im_start|>assistant\n"
+)
+IMAGE_URL = (
+    "https://huggingface.co/datasets/huggingface/"
+    "documentation-images/resolve/main/transformers/tasks/car.jpg"
+)
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
     f"Must be one of {','.join(PRESET_MAP.keys())}",
 )
+flags.DEFINE_bool(
+    "skip_generation",
+    False,
+    "Skip end-to-end generation checks (logits still compared).",
+)
 
 
-# Helpers
+def _extract_response(text):
+    """Strip the prompt/chat-template prefix from generated text."""
+    if "assistant\n" in text:
+        return text.split("assistant\n", 1)[1].strip()
+    return text.strip()
 
 
-def transpose_and_reshape(x, shape):
-    """Transpose a 2-D HF weight and reshape to Keras EinsumDense shape."""
-    return np.reshape(np.transpose(x), shape)
+def _load_test_image():
+    response = requests.get(IMAGE_URL, timeout=30)
+    response.raise_for_status()
+    return Image.open(BytesIO(response.content)).convert("RGB")
 
 
-def transpose_2d(x):
-    """Simple 2-D transpose for Dense kernels."""
-    return np.transpose(x, axes=(1, 0))
+def _count_keras_params(backbone):
+    """Count unique parameters (handles tied weights)."""
+    unique = {id(w): w for w in backbone.weights}.values()
+    return sum(ops.convert_to_numpy(w).size for w in unique)
 
 
-# Build config from HF
+# ---------------------------------------------------------------
+# 1. Precompute HF outputs (before freeing HF model)
+# ---------------------------------------------------------------
+def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
+    """Run all HF forward passes and generation, returning numpy results."""
+    results = {}
 
-
-def build_backbone_config(hf_config):
-    """Map HF ``config.json`` fields to ``Qwen2VLBackbone`` kwargs."""
-    # Newer transformers nest text params under "text_config".
-    tc = hf_config.get("text_config", hf_config)
-    vc = hf_config.get("vision_config", None)
-
-    rope_params = tc.get("rope_parameters", tc.get("rope_scaling", {}))
-    mrope_section = rope_params.get("mrope_section", [16, 24, 24])
-
-    vision_encoder = None
-    if vc is not None:
-        vision_theta = vc.get("rope_parameters", {}).get("rope_theta", 10000.0)
-        vision_encoder = Qwen2VLVisionEncoder(
-            patch_size=vc.get("patch_size", 14),
-            temporal_patch_size=vc.get("temporal_patch_size", 2),
-            in_channels=vc.get("in_channels", 3),
-            embed_dim=vc.get("embed_dim", 1280),
-            out_dim=tc["hidden_size"],
-            depth=vc.get("depth", 32),
-            num_heads=vc.get("num_heads", 16),
-            mlp_ratio=vc.get("mlp_ratio", 4),
-            spatial_merge_size=vc.get("spatial_merge_size", 2),
-            theta=vision_theta,
-        )
-
-    config = {
-        "vocabulary_size": tc["vocab_size"],
-        "num_layers": tc["num_hidden_layers"],
-        "num_query_heads": tc["num_attention_heads"],
-        "num_key_value_heads": tc["num_key_value_heads"],
-        "hidden_dim": tc["hidden_size"],
-        "intermediate_dim": tc["intermediate_size"],
-        "mrope_section": mrope_section,
-        "rope_max_wavelength": tc.get("rope_theta", 1000000),
-        "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
-        "tie_word_embeddings": hf_config.get("tie_word_embeddings", False),
-        "use_sliding_window_attention": tc.get("use_sliding_window", False),
-        "sliding_window_size": tc.get("sliding_window", 32768),
-    }
-    if vision_encoder is not None:
-        config["vision_encoder"] = vision_encoder
-    return config
-
-
-# Port weights
-
-
-def port_weights(backbone, hf_state_dict):
-    """Assign every HF weight to the corresponding KerasHub variable."""
-
-    def get(key):
-        return hf_state_dict[key].cpu().float().numpy()
-
-    # ── Token embeddings ────────────────────────────────────────
-    backbone.get_layer("token_embedding").embeddings.assign(
-        get("model.embed_tokens.weight")
-    )
-    if not backbone.tie_word_embeddings:
-        backbone.get_layer("token_embedding").reverse_embeddings.assign(
-            transpose_2d(get("lm_head.weight"))
-        )
-
-    # ── Text decoder layers ─────────────────────────────────────
-    for i in range(backbone.num_layers):
-        d = backbone.get_layer(f"transformer_layer_{i}")
-        pfx = f"model.layers.{i}"
-
-        # Pre-attention RMSNorm
-        d._self_attention_layernorm.scale.assign(
-            get(f"{pfx}.input_layernorm.weight")
-        )
-
-        # Q projection
-        q_w = get(f"{pfx}.self_attn.q_proj.weight")
-        q_b = get(f"{pfx}.self_attn.q_proj.bias")
-        q_k_shape = list(d._self_attention_layer._query_dense.kernel.shape)
-        q_b_shape = list(d._self_attention_layer._query_dense.bias.shape)
-        d._self_attention_layer._query_dense.kernel.assign(
-            transpose_and_reshape(q_w, q_k_shape)
-        )
-        d._self_attention_layer._query_dense.bias.assign(
-            transpose_and_reshape(q_b, q_b_shape)
-        )
-
-        # K projection
-        k_w = get(f"{pfx}.self_attn.k_proj.weight")
-        k_b = get(f"{pfx}.self_attn.k_proj.bias")
-        k_k_shape = list(d._self_attention_layer._key_dense.kernel.shape)
-        k_b_shape = list(d._self_attention_layer._key_dense.bias.shape)
-        d._self_attention_layer._key_dense.kernel.assign(
-            transpose_and_reshape(k_w, k_k_shape)
-        )
-        d._self_attention_layer._key_dense.bias.assign(
-            transpose_and_reshape(k_b, k_b_shape)
-        )
-
-        # V projection
-        v_w = get(f"{pfx}.self_attn.v_proj.weight")
-        v_b = get(f"{pfx}.self_attn.v_proj.bias")
-        v_k_shape = list(d._self_attention_layer._value_dense.kernel.shape)
-        v_b_shape = list(d._self_attention_layer._value_dense.bias.shape)
-        d._self_attention_layer._value_dense.kernel.assign(
-            transpose_and_reshape(v_w, v_k_shape)
-        )
-        d._self_attention_layer._value_dense.bias.assign(
-            transpose_and_reshape(v_b, v_b_shape)
-        )
-
-        # O projection
-        o_w = get(f"{pfx}.self_attn.o_proj.weight")
-        o_k_shape = list(d._self_attention_layer._output_dense.kernel.shape)
-        d._self_attention_layer._output_dense.kernel.assign(
-            transpose_and_reshape(o_w, o_k_shape)
-        )
-
-        # MLP (gate / up / down)
-        d._feedforward_gate_dense.kernel.assign(
-            transpose_2d(get(f"{pfx}.mlp.gate_proj.weight"))
-        )
-        d._feedforward_intermediate_dense.kernel.assign(
-            transpose_2d(get(f"{pfx}.mlp.up_proj.weight"))
-        )
-        d._feedforward_output_dense.kernel.assign(
-            transpose_2d(get(f"{pfx}.mlp.down_proj.weight"))
-        )
-
-        # Post-attention RMSNorm
-        d._feedforward_layernorm.scale.assign(
-            get(f"{pfx}.post_attention_layernorm.weight")
-        )
-
-    # Final layernorm
-    backbone.get_layer("sequence_output_layernorm").scale.assign(
-        get("model.norm.weight")
-    )
-
-    # Vision encoder
-    vision = backbone.get_layer("vision_encoder")
-
-    # Conv3D patch embedding
-    # HF: (embed_dim, C, T, H, W) → Keras: (T, H, W, C, embed_dim)
-    vision.patch_embed.kernel.assign(
-        np.transpose(get("visual.patch_embed.proj.weight"), (2, 3, 4, 1, 0))
-    )
-
-    # Vision blocks
-    for i in range(vision.depth):
-        blk = vision.blocks[i]
-        bp = f"visual.blocks.{i}"
-
-        # LayerNorm 1
-        blk.norm1.gamma.assign(get(f"{bp}.norm1.weight"))
-        blk.norm1.beta.assign(get(f"{bp}.norm1.bias"))
-
-        # Fused QKV
-        blk.attn.qkv.kernel.assign(transpose_2d(get(f"{bp}.attn.qkv.weight")))
-        blk.attn.qkv.bias.assign(get(f"{bp}.attn.qkv.bias"))
-
-        # Output projection
-        blk.attn.proj.kernel.assign(transpose_2d(get(f"{bp}.attn.proj.weight")))
-        blk.attn.proj.bias.assign(get(f"{bp}.attn.proj.bias"))
-
-        # LayerNorm 2
-        blk.norm2.gamma.assign(get(f"{bp}.norm2.weight"))
-        blk.norm2.beta.assign(get(f"{bp}.norm2.bias"))
-
-        # MLP
-        blk.mlp.fc1.kernel.assign(transpose_2d(get(f"{bp}.mlp.fc1.weight")))
-        blk.mlp.fc1.bias.assign(get(f"{bp}.mlp.fc1.bias"))
-        blk.mlp.fc2.kernel.assign(transpose_2d(get(f"{bp}.mlp.fc2.weight")))
-        blk.mlp.fc2.bias.assign(get(f"{bp}.mlp.fc2.bias"))
-
-    # Patch merger
-    merger = vision.merger
-    merger.ln_q.gamma.assign(get("visual.merger.ln_q.weight"))
-    merger.ln_q.beta.assign(get("visual.merger.ln_q.bias"))
-    # HF Sequential: .0 = fc1, .1 = GELU (no params), .2 = fc2
-    merger.mlp_fc1.kernel.assign(
-        transpose_2d(get("visual.merger.mlp.0.weight"))
-    )
-    merger.mlp_fc1.bias.assign(get("visual.merger.mlp.0.bias"))
-    merger.mlp_fc2.kernel.assign(
-        transpose_2d(get("visual.merger.mlp.2.weight"))
-    )
-    merger.mlp_fc2.bias.assign(get("visual.merger.mlp.2.bias"))
-
-    print(f"  Ported {len(hf_state_dict)} HF weights → KerasHub backbone")
-    return backbone
-
-
-# Verify tokenizer
-
-
-def verify_tokenizer(keras_tokenizer, hf_tokenizer):
-    print("\n── Tokenizer verification ──")
-    test_strings = [
-        "What is Keras?",
-        "Describe the weather today.",
-        "Hello, world! 🌍",
-    ]
-    for s in test_strings:
-        hf_ids = hf_tokenizer(s, add_special_tokens=False)["input_ids"]
-        keras_ids = keras_tokenizer(s)
-        if hasattr(keras_ids, "numpy"):
-            keras_ids = keras_ids.numpy()
-        keras_ids = np.asarray(keras_ids).flatten().tolist()
-        np.testing.assert_equal(keras_ids, hf_ids, err_msg=f"Mismatch: {s!r}")
-        print(f"  ✅ '{s}' → {len(hf_ids)} tokens match")
-    print("  All tokenizer checks passed")
-
-
-# Verify preprocessor
-
-
-def verify_preprocessor(keras_tokenizer, hf_processor):
-    # Text-only
-    text = "Describe the weather"
-    hf_ids = hf_processor.tokenizer(text, add_special_tokens=False)["input_ids"]
-    keras_pp = keras_hub.models.Qwen2VLCausalLMPreprocessor(
-        tokenizer=keras_tokenizer, sequence_length=32
-    )
-    result = keras_pp.generate_preprocess(text)
-    padding_mask = np.asarray(result["padding_mask"])
-    num_real = int(np.sum(padding_mask))
-    keras_ids = np.asarray(result["token_ids"])[:num_real].tolist()
-    np.testing.assert_equal(keras_ids, hf_ids)
-    print("Text-only preprocessing matches")
-
-    # With image
-    image_converter = Qwen2VLImageConverter()
-    keras_pp_img = keras_hub.models.Qwen2VLCausalLMPreprocessor(
-        tokenizer=keras_tokenizer,
-        image_converter=image_converter,
-        sequence_length=512,
-    )
-    dummy = np.random.randint(0, 255, (56, 56, 3), dtype=np.uint8)
-    result = keras_pp_img.generate_preprocess(
-        {"prompts": "Describe this image", "images": dummy}
-    )
-    assert result["pixel_values"] is not None
-    assert result["image_grid_thw"] is not None
-    grid_thw = np.asarray(result["image_grid_thw"])
-    expected = int(np.prod(grid_thw[0]) // 4)
-    actual = int(
-        np.sum(
-            np.asarray(result["token_ids"]) == keras_tokenizer.image_token_id
-        )
-    )
-    assert actual == expected, f"vision tokens: {actual} != {expected}"
-    print(
-        f"Image preprocessing: {expected} vision tokens "
-        f"from grid {grid_thw[0].tolist()}"
-    )
-    print("All preprocessor checks passed")
-
-
-# Verify backbone outputs
-
-
-def verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer):
-    # Parameter counts
-    keras_params = keras_backbone.count_params()
-    hf_params = hf_model.num_parameters()
-    print(f"KerasHub params: {keras_params:,}")
-    print(f"HF total params: {hf_params:,}")
-
-    # Hidden state comparison (text-only path)
-    test_text = "What is Keras?"
-    hf_inputs = hf_tokenizer(
-        test_text, return_tensors="pt", add_special_tokens=False
-    ).to(device)
-    seq_len = hf_inputs["input_ids"].shape[1]
-
+    # --- Text-only outputs ---
+    hf_ids = hf_tokenizer(TEXT_PROMPT, return_tensors="np")["input_ids"]
+    results["text_token_ids"] = hf_ids
     with torch.no_grad():
-        hf_outputs = hf_model.model(**hf_inputs)
-    hf_hidden = hf_outputs.last_hidden_state.detach().cpu().float().numpy()
-
-    keras_pp = keras_hub.models.Qwen2VLCausalLMPreprocessor(
-        tokenizer=keras_tokenizer, sequence_length=seq_len
-    )
-    k_in = keras_pp([test_text], sequence_length=seq_len)[0]
-    k_in = {k: v.to(device) for k, v in k_in.items()}
-    keras_hidden = ops.convert_to_numpy(keras_backbone(k_in))
-
-    print(f"HF hidden shape:    {hf_hidden.shape}")
-    print(f"Keras hidden shape: {keras_hidden.shape}")
-
-    try:
-        np.testing.assert_allclose(
-            keras_hidden, hf_hidden, atol=1e-4, rtol=1e-4
+        hf_out = hf_model(
+            input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device)
         )
-        print("Hidden states match (atol=1e-4)")
-    except AssertionError:
-        max_diff = float(np.max(np.abs(keras_hidden - hf_hidden)))
-        mean_diff = float(np.mean(np.abs(keras_hidden - hf_hidden)))
-        print(f"Max abs diff:  {max_diff:.6e}")
-        print(f"Mean abs diff: {mean_diff:.6e}")
-        print(traceback.format_exc())
+    results["text_logits"] = hf_out.logits.detach().cpu().float().numpy()
 
-    # Logits via LM head
-    keras_logits = ops.convert_to_numpy(
-        keras_backbone.token_embedding(
-            ops.convert_to_tensor(keras_hidden), reverse=True
-        )
-    )
-    with torch.no_grad():
-        hf_logits = (
-            hf_model.lm_head(hf_outputs.last_hidden_state)
-            .detach()
-            .cpu()
-            .float()
-            .numpy()
+    if not FLAGS.skip_generation:
+        with torch.no_grad():
+            hf_gen = hf_model.generate(
+                input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
+                max_new_tokens=32,
+                do_sample=False,
+            )
+        results["text_generated"] = hf_tokenizer.decode(
+            hf_gen[0], skip_special_tokens=True
         )
 
-    try:
-        np.testing.assert_allclose(
-            keras_logits, hf_logits, atol=1e-4, rtol=1e-4
-        )
-        print("Logits match (atol=1e-4)")
-    except AssertionError:
-        max_diff = float(np.max(np.abs(keras_logits - hf_logits)))
-        print(f"Logits max diff: {max_diff:.6e}")
-        print(traceback.format_exc())
-
-    # Mean diff as a single number (like the DistilBERT example)
-    mean_hidden = float(np.mean(keras_hidden - hf_hidden))
-    print(f"  Mean diff (keras - hf): {mean_hidden:.6e}")
-
-    print("  Backbone verification complete")
-
-
-def verify_multimodal(keras_backbone, keras_tokenizer, hf_model, hf_processor):
-    """Verify logits on a real image + text prompt (M-RoPE path)."""
-    print("\n── Multimodal verification ──")
-    from PIL import Image as PILImage
-
-    rng = np.random.default_rng(42)
-    image = PILImage.fromarray(
-        rng.integers(0, 255, (224, 224, 3), dtype=np.uint8)
-    )
-    prompt = (
-        "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
-        "Describe this image.<|im_end|>\n<|im_start|>assistant\n"
-    )
-
-    # HF forward.
-    hf_inputs = hf_processor(
-        text=[prompt], images=[image], return_tensors="pt"
+    # --- Multimodal outputs ---
+    raw_image = _load_test_image()
+    processor = AutoProcessor.from_pretrained(hf_preset)
+    hf_inputs = processor(
+        text=[MULTIMODAL_PROMPT], images=[raw_image], return_tensors="pt"
     ).to(device)
     with torch.no_grad():
-        hf_logits = hf_model(**hf_inputs).logits.detach().cpu().float().numpy()
+        hf_out = hf_model(**hf_inputs)
+    results["mm_logits"] = hf_out.logits.detach().cpu().float().numpy()
+    results["mm_input_ids"] = hf_inputs["input_ids"].cpu().numpy()
+    results["mm_attention_mask"] = (
+        hf_inputs["attention_mask"].cpu().numpy().astype(np.int32)
+    )
+    results["mm_pixel_values"] = hf_inputs["pixel_values"].cpu().float().numpy()
+    results["mm_image_grid_thw"] = (
+        hf_inputs["image_grid_thw"].cpu().numpy().astype(np.int32)
+    )
+    results["raw_image"] = raw_image
 
-    # KerasHub forward through the functional backbone.
-    image_converter = Qwen2VLImageConverter()
-    keras_pp = keras_hub.models.Qwen2VLCausalLMPreprocessor(
-        tokenizer=keras_tokenizer,
-        image_converter=image_converter,
-        sequence_length=int(hf_inputs["input_ids"].shape[1]),
+    if not FLAGS.skip_generation:
+        with torch.no_grad():
+            hf_gen = hf_model.generate(
+                **hf_inputs, max_new_tokens=32, do_sample=False
+            )
+        results["mm_generated"] = processor.decode(
+            hf_gen[0], skip_special_tokens=True
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------
+# 2. Parameter count
+# ---------------------------------------------------------------
+def test_parameter_count(keras_backbone, hf_param_count):
+    print("\n" + "=" * 50)
+    print("PARAMETER COUNT COMPARISON")
+    print("=" * 50)
+    keras_params = _count_keras_params(keras_backbone)
+    print(f"\n  KerasHub params: {keras_params:,}")
+    print(f"  HF params:       {hf_param_count:,}")
+    if keras_params == hf_param_count:
+        print("  Parameter counts match.")
+    else:
+        print(
+            f"  Parameter count difference: {hf_param_count - keras_params:,}"
+        )
+
+
+# ---------------------------------------------------------------
+# 3. Text-only validation
+# ---------------------------------------------------------------
+def validate_text_output(keras_model, hf_results):
+    print("\n" + "=" * 50)
+    print("TEXT-ONLY VALIDATION")
+    print("=" * 50)
+
+    hf_ids = hf_results["text_token_ids"]
+    keras_preprocessed = keras_model.preprocessor.generate_preprocess(
+        TEXT_PROMPT, sequence_length=hf_ids.shape[1]
     )
-    k_in = keras_pp.generate_preprocess(
-        {"prompts": [prompt], "images": [np.asarray(image)]}
+    keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
+    keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
+    keras_valid = keras_ids[keras_mask.astype(bool)]
+    np.testing.assert_array_equal(keras_valid, hf_ids[0])
+    print("  Token IDs match.")
+
+    token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
+    padding_mask = ops.ones_like(token_ids)
+    keras_hidden = keras_model.backbone(
+        {"token_ids": token_ids, "padding_mask": padding_mask}
     )
-    k_in = {
-        k: ops.convert_to_tensor(v, dtype="int32")
-        if v.dtype != "float32"
-        else ops.convert_to_tensor(v)
-        for k, v in k_in.items()
-    }
-    keras_hidden = ops.convert_to_numpy(keras_backbone(k_in))
-    keras_logits = ops.convert_to_numpy(
-        keras_backbone.token_embedding(
-            ops.convert_to_tensor(keras_hidden), reverse=True
+    keras_logits = keras_model.backbone.token_embedding(
+        keras_hidden, reverse=True
+    )
+    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
+
+    hf_logits = hf_results["text_logits"]
+    abs_diff = np.abs(keras_logits - hf_logits)
+    print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
+    print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+    print("  Logits match within atol=1e-3.")
+
+    if not FLAGS.skip_generation:
+        keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
+        print(f"  KerasHub: {_extract_response(keras_output)}")
+        print(f"  HF:       {hf_results.get('text_generated', 'N/A')}")
+
+
+# ---------------------------------------------------------------
+# 4. Multimodal validation
+# ---------------------------------------------------------------
+def validate_multimodal_output(keras_model, hf_results):
+    if keras_model.backbone.vision_encoder is None:
+        print("\n-> Skipping multimodal validation (no vision encoder).")
+        return
+
+    print("\n" + "=" * 50)
+    print("MULTIMODAL VALIDATION")
+    print("=" * 50)
+
+    backbone = keras_model.backbone
+    token_ids_np = hf_results["mm_input_ids"].astype(np.int32)
+    token_ids = ops.convert_to_tensor(token_ids_np)
+    padding_mask = ops.convert_to_tensor(hf_results["mm_attention_mask"])
+
+    # HF pixel_values is (N, C*T*pH*pW) flattened; KerasHub uses
+    # (N, T, pH, pW, C).
+    ve = backbone.vision_encoder
+    C, T = ve.in_channels, ve.temporal_patch_size
+    pH = pW = ve.patch_size
+    pixel_values_np = hf_results["mm_pixel_values"].reshape(-1, C, T, pH, pW)
+    pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 4, 1))
+    pixel_values = ops.convert_to_tensor(pixel_values_np)
+    image_grid_thw = ops.convert_to_tensor(hf_results["mm_image_grid_thw"])
+
+    image_pad_id = keras_model.preprocessor.image_token_id
+    vision_pos = np.where(token_ids_np[0] == image_pad_id)[0]
+    vision_indices = ops.convert_to_tensor(vision_pos.astype(np.int32))
+
+    img_embeds = backbone.vision_encoder(pixel_values, image_grid_thw)
+    x = backbone.token_embedding(token_ids)
+    x = backbone.interleave_embeddings(
+        image_embeddings=img_embeds,
+        text_embeddings=x,
+        vision_indices=vision_indices,
+    )
+    position_ids = ops.convert_to_tensor(
+        keras_model.preprocessor._compute_position_ids(
+            token_ids, image_grid_thw, None
         )
     )
+    for layer in backbone.transformer_layers:
+        x = layer(
+            x,
+            decoder_padding_mask=padding_mask,
+            position_ids=position_ids,
+        )
+    x = backbone.layer_norm(x)
+    keras_logits = backbone.token_embedding(x, reverse=True)
+    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
 
-    # Compare on non-padded positions only.
-    num_real = int(np.asarray(k_in["padding_mask"]).sum())
-    hf_l = hf_logits[0, :num_real]
-    kh_l = keras_logits[0, :num_real]
-    try:
-        np.testing.assert_allclose(kh_l, hf_l, atol=1e-4, rtol=1e-4)
-        print("  Multimodal logits match (atol=1e-4)")
-    except AssertionError:
-        max_diff = float(np.max(np.abs(kh_l - hf_l)))
-        mean_diff = float(np.mean(np.abs(kh_l - hf_l)))
-        print(f"  Multimodal logits max diff:  {max_diff:.6e}")
-        print(f"  Multimodal logits mean diff: {mean_diff:.6e}")
-        print(traceback.format_exc())
+    hf_logits = hf_results["mm_logits"]
+    abs_diff = np.abs(keras_logits - hf_logits)
+    print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
+    print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
+    print("  Logits match within atol=1e-3.")
+
+    if not FLAGS.skip_generation:
+        print(f"  HF output: {hf_results.get('mm_generated', 'N/A')}")
+        keras_output = keras_model.generate(
+            {
+                "prompts": [MULTIMODAL_PROMPT],
+                "images": [np.array(hf_results["raw_image"])],
+            },
+            max_length=8192,
+        )
+        keras_text = (
+            keras_output[0] if isinstance(keras_output, list) else keras_output
+        )
+        print(f"  KerasHub output: {_extract_response(keras_text)}")
 
 
+# ---------------------------------------------------------------
+# 5. Save
+# ---------------------------------------------------------------
+def save_preset(keras_model, preset_name):
+    print(f"\n-> Saving KerasHub preset to ./{preset_name}...")
+    keras_model.save_to_preset(f"./{preset_name}")
+    print(f"  Preset saved to ./{preset_name}")
+
+
+# ---------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------
 def main(_):
     preset = FLAGS.preset
     if preset not in PRESET_MAP:
         raise ValueError(
-            f"Invalid preset {preset}. "
-            f"Must be one of {','.join(PRESET_MAP.keys())}"
+            f"Invalid preset '{preset}'. Must be one of "
+            f"{', '.join(PRESET_MAP.keys())}"
         )
-    hf_id = PRESET_MAP[preset]
+    hf_preset = PRESET_MAP[preset]
 
-    # Load HF model
-    print(f"Loading HF model: {hf_id}")
-    hf_model = Qwen2VLForConditionalGeneration.from_pretrained(
-        hf_id, device_map=device, torch_dtype=torch.float32
+    # --- Phase 1: Load HF model and precompute all outputs ---
+    print("-> Loading HF model...")
+    hf_model = AutoModelForImageTextToText.from_pretrained(
+        hf_preset, device_map="cpu", torch_dtype=torch.float32
     )
     hf_model.eval()
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_id)
-    hf_processor = AutoProcessor.from_pretrained(hf_id)
-    hf_state_dict = hf_model.state_dict()
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    hf_params = sum(p.numel() for p in hf_model.parameters())
+    print(f"   HF model loaded: {hf_params:,} params")
 
-    # Use in-memory config
-    hf_config = hf_model.config.to_dict()
-    print(f"  HF state_dict: {len(hf_state_dict)} tensors")
+    print("\n-> Precomputing all HF outputs...")
+    hf_results = precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset)
 
-    # Build KerasHub backbone from config
-    backbone_kwargs = build_backbone_config(hf_config)
-    print(f"  Config: {json.dumps(backbone_kwargs, indent=2)}")
-    keras_backbone = Qwen2VLBackbone(**backbone_kwargs)
-    keras_backbone.summary()
+    # --- Phase 2: Free HF model, load KerasHub model ---
+    print("\n-> Releasing HF model to free memory...")
+    del hf_model
+    del hf_tokenizer
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    # Port weights
-    port_weights(keras_backbone, hf_state_dict)
-
-    # Load KerasHub tokenizer
-    keras_tokenizer = keras_hub.models.Qwen2VLTokenizer.from_preset(
-        f"hf://{hf_id}"
+    print("\n-> Loading KerasHub model from HF preset...")
+    keras_model = keras_hub.models.Qwen2VLCausalLM.from_preset(
+        f"hf://{hf_preset}", dtype="float32"
     )
-    print("  KerasHub tokenizer loaded")
 
-    # Verify
-    verify_tokenizer(keras_tokenizer, hf_tokenizer)
-    verify_preprocessor(keras_tokenizer, hf_processor)
-    verify_backbone(keras_backbone, keras_tokenizer, hf_model, hf_tokenizer)
-    verify_multimodal(keras_backbone, keras_tokenizer, hf_model, hf_processor)
+    # --- Phase 3: Validate ---
+    test_parameter_count(keras_model.backbone, hf_params)
+    validate_text_output(keras_model, hf_results)
+    validate_multimodal_output(keras_model, hf_results)
 
-    # Save preset
-    save_dir = f"./{preset}"
-    keras_backbone.save_to_preset(save_dir)
-    keras_tokenizer.save_to_preset(save_dir)
-    print(f"Preset saved to {save_dir}/")
-    print(f"Contents: {os.listdir(save_dir)}")
-    print(f"All checks passed for {preset}!")
+    # --- Phase 4: Save ---
+    save_preset(keras_model, preset)
+    print("\n=== Done! ===")
 
 
 if __name__ == "__main__":

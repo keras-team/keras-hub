@@ -82,21 +82,44 @@ class Qwen2VLMultimodalBackboneTest(TestCase):
 
     def _vision_inputs(self, seq_len=5):
         """2 merged vision tokens from grid [2, 2, 2] at positions 1, 2."""
-        grid_thw = np.array([[2, 2, 2]], dtype="int32")
-        pixel_values = np.random.rand(8, 2, 14, 14, 3).astype("float32")
-        vision_indices = np.array([1, 2], dtype="int32")
+        grid_thw = np.array([[[2, 2, 2]]], dtype="int32")
+        pixel_values = np.random.rand(1, 8, 2, 14, 14, 3).astype("float32")
+        vision_indices = np.array([[1, 2]], dtype="int32")
         # Sequential positions (equivalent to 1-D RoPE).
         position_ids = np.broadcast_to(
             np.arange(seq_len)[None, None, :], (1, 3, seq_len)
         ).astype("int32")
+        token_ids = np.full((1, seq_len), 5, dtype="int32")
+        token_ids[0, :3] = [1, 999, 999]
         return {
-            "token_ids": np.array([[1, 999, 999, 4, 5]]),
-            "padding_mask": np.array([[1, 1, 1, 1, 1]]),
+            "token_ids": token_ids,
+            "padding_mask": np.ones((1, seq_len), dtype="int32"),
             "pixel_values": pixel_values,
             "image_grid_thw": grid_thw,
             "vision_indices": vision_indices,
             "position_ids": position_ids,
         }
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=Qwen2VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self._vision_inputs(),
+            expected_output_shape=(1, 5, 128),
+            variable_length_data=[
+                self._vision_inputs(seq_len) for seq_len in (3, 4)
+            ],
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
+        )
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=Qwen2VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self._vision_inputs(),
+        )
 
     def test_multimodal_backbone_builds(self):
         model = Qwen2VLBackbone(**self.init_kwargs)
@@ -135,3 +158,17 @@ class Qwen2VLMultimodalBackboneTest(TestCase):
         )
         out_mrope = backbone({**inputs, "position_ids": pos_mrope})
         self.assertNotAllClose(out_flat, out_mrope)
+
+    def test_backbone_mrope_sequential_equals_1d(self):
+        """Fixed expected output: sequential M-RoPE ids == 1-D RoPE path.
+
+        With all three position channels set to the sequence index, the
+        recomposition produces identical frequencies to plain 1-D RoPE, so
+        the outputs must match exactly.
+        """
+        backbone = Qwen2VLBackbone(**self.init_kwargs)
+        inputs = self._vision_inputs()  # sequential (1,3,seq) position_ids
+        out_mrope = backbone(inputs)
+        inputs_1d = {k: v for k, v in inputs.items() if k != "position_ids"}
+        out_1d = backbone(inputs_1d)
+        self.assertAllClose(out_mrope, out_1d, atol=1e-5)

@@ -397,7 +397,7 @@ class Qwen2VLCausalLM(CausalLM):
             from_logits=True, reduction="none"
         )
         per_token_loss = per_token_loss_fn(target_ids, logits)
-        return per_token_loss
+        return per_token_loss * ops.cast(padding_mask, per_token_loss.dtype)
 
     def generate(
         self,
