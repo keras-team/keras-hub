@@ -9,6 +9,7 @@ from openvino import Core
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.openvino_utils import compile_model
 from keras_hub.src.utils.openvino_utils import get_device
+from keras_hub.src.utils.openvino_utils import get_input_signature
 from keras_hub.src.utils.openvino_utils import get_outputs
 from keras_hub.src.utils.openvino_utils import ov_infer
 
@@ -108,46 +109,11 @@ class OpenVINOUtilsTest(TestCase):
         expected = np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
         np.testing.assert_array_almost_equal(outputs, expected)
 
-    def test_ov_infer_model_caching(self):
-        current_device = get_device()
-
-        class MockModel:
-            def __init__(self):
-                self.dtype = "float32"
-                self.ov_compiled_model = unittest.mock.MagicMock()
-                self.ov_device = current_device
-                self.struct_outputs = ["mock_output"]
-
-            def _parameterize_data(self, inputs):
-                return ["mock_param"]
-
-            def _unpack_singleton(self, x):
-                return x[0] if len(x) == 1 else x
-
-        def mock_fn(struct_params, stop_token_ids):
-            return ["mock_output"]
-
-        model = MockModel()
-        test_input = [np.array([[1.0, 2.0, 3.0]], dtype=np.float32)]
-        cached_model = model.ov_compiled_model
-
-        with unittest.mock.patch(
-            "keras_hub.src.utils.openvino_utils.get_outputs"
-        ) as mock_get_outputs:
-            mock_get_outputs.return_value = np.array(
-                [[2.0, 4.0, 6.0]], dtype=np.float32
-            )
-            result = ov_infer(model, test_input, None, mock_fn)
-
-        self.assertIs(model.ov_compiled_model, cached_model)
-        self.assertIsNotNone(result)
-
     def test_ov_infer_dtype_selection(self):
         class MockModel:
             def __init__(self, dtype):
                 self.dtype = dtype
                 self.ov_compiled_model = None
-                self.ov_device = None
                 self.struct_outputs = None
 
             def _parameterize_data(self, inputs):
@@ -180,6 +146,82 @@ class OpenVINOUtilsTest(TestCase):
                     mock_get_outputs.return_value = np.array(
                         [[1.0, 2.0]], dtype=np.float32
                     )
-                    ov_infer(model, test_input, None, mock_fn)
+                    ov_infer(model, test_input, mock_fn, static_args=(None,))
                     args, kwargs = mock_compile.call_args
                     self.assertEqual(args[3], expected_ov_dtype)
+
+
+class OpenVINOCacheTest(TestCase):
+    def test_get_input_signature(self):
+        x = np.zeros((2, 5), dtype="int32")
+        signature = get_input_signature(
+            {"token_ids": x, "padding_mask": x.astype("bool")}
+        )
+        self.assertEqual(
+            signature, (((None, 5), "bool"), ((None, 5), "int32"))
+        )
+
+    def test_get_input_signature_ignores_batch_size(self):
+        self.assertEqual(
+            get_input_signature([np.zeros((1, 5))]),
+            get_input_signature([np.zeros((3, 5))]),
+        )
+
+    def test_get_input_signature_keeps_rank(self):
+        self.assertNotEqual(
+            get_input_signature([np.zeros(())]),
+            get_input_signature([np.zeros((3,))]),
+        )
+
+    def count_compiles(self, calls):
+        class MockModel:
+            dtype = "float32"
+
+            def _parameterize_data(self, inputs):
+                return ["mock_param"]
+
+            def _unpack_singleton(self, x):
+                return x[0] if len(x) == 1 else x
+
+        def mock_fn(struct_params, *static_args):
+            return ["mock_output"]
+
+        model = MockModel()
+        with (
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.get_device",
+                return_value="CPU",
+            ),
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.compile_model"
+            ) as mock_compile,
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.get_outputs"
+            ),
+        ):
+            for inputs, static_args in calls:
+                ov_infer(model, inputs, mock_fn, static_args=static_args)
+        return mock_compile.call_count
+
+    def test_ov_infer_reuses_model(self):
+        x = [np.zeros((2, 5), dtype="int32")]
+        self.assertEqual(self.count_compiles([(x, (None,)), (x, (None,))]), 1)
+
+    def test_ov_infer_reuses_model_across_batch_sizes(self):
+        calls = [
+            ([np.zeros((1, 5), dtype="int32")], (None,)),
+            ([np.zeros((4, 5), dtype="int32")], (None,)),
+        ]
+        self.assertEqual(self.count_compiles(calls), 1)
+
+    def test_ov_infer_recompiles_on_sequence_length_change(self):
+        calls = [
+            ([np.zeros((2, 5), dtype="int32")], (None,)),
+            ([np.zeros((2, 8), dtype="int32")], (None,)),
+        ]
+        self.assertEqual(self.count_compiles(calls), 2)
+
+    def test_ov_infer_recompiles_on_static_args_change(self):
+        x = [np.zeros((2, 5), dtype="int32")]
+        calls = [(x, (None,)), (x, ((2,),))]
+        self.assertEqual(self.count_compiles(calls), 2)

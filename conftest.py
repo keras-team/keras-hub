@@ -8,6 +8,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "integration_tests",
     "keras_hub/src/metrics",
     "keras_hub/src/tokenizers",
+    "keras_hub/src/utils/openvino_utils_test.py",
     "keras_hub/src/vllm",
     "keras_hub/src/models/albert",
     "keras_hub/src/models/bart",
