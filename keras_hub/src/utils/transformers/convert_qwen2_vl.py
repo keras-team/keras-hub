@@ -3,6 +3,9 @@
 import numpy as np
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
+from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
+    Qwen2VLImageConverter,
+)
 from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLVisionEncoder,
 )
@@ -26,7 +29,9 @@ def convert_backbone_config(transformers_config):
         vision_encoder = Qwen2VLVisionEncoder(
             patch_size=vision_config.get("patch_size", 14),
             temporal_patch_size=vision_config.get("temporal_patch_size", 2),
-            in_channels=vision_config.get("in_channels", 3),
+            in_channels=vision_config.get(
+                "in_chans", vision_config.get("in_channels", 3)
+            ),
             embed_dim=vision_config.get(
                 "embed_dim", vision_config.get("hidden_size", 1280)
             ),
@@ -39,6 +44,9 @@ def convert_backbone_config(transformers_config):
             ),
             mlp_ratio=vision_config.get("mlp_ratio", 4),
             spatial_merge_size=vision_config.get("spatial_merge_size", 2),
+            theta=vision_config.get("rope_parameters", {}).get(
+                "rope_theta", vision_config.get("rope_theta", 10000.0)
+            ),
         )
 
     result = {
@@ -51,9 +59,7 @@ def convert_backbone_config(transformers_config):
         "rope_max_wavelength": rope_theta,
         "mrope_section": mrope_section,
         "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
-        "tie_word_embeddings": transformers_config.get(
-            "tie_word_embeddings", False
-        ),
+        "tie_word_embeddings": tc.get("tie_word_embeddings", False),
         "use_sliding_window_attention": tc.get("use_sliding_window", False),
         "sliding_window_size": tc.get("sliding_window", 32768),
     }
@@ -70,8 +76,9 @@ def load_image_converter_config(preset, transformers_config):
     vision_config = transformers_config["vision_config"]
     preprocessor_config = load_json(preset, "preprocessor_config.json")
 
-    # HF nests pixel budgets under "size" with flat min_pixels/max_pixels
-    # also present.
+    # HF nests pixel budgets under "size" as shortest_edge/longest_edge,
+    # which are pixel counts (not edge lengths) and map to our
+    # min_pixels/max_pixels
     size_config = preprocessor_config.get("size", {})
     min_pixels = size_config.get(
         "shortest_edge", preprocessor_config.get("min_pixels", 56 * 56)
@@ -109,9 +116,10 @@ def load_video_converter_config(preset, transformers_config):
     checkpoints do not ship a ``video_preprocessor_config.json``, so this
     delegates to ``load_image_converter_config``.
     """
-    if "vision_config" not in transformers_config:
+    image_kwargs = load_image_converter_config(preset, transformers_config)
+    if image_kwargs is None:
         return None
-    return load_image_converter_config(preset, transformers_config)
+    return {"image_converter": Qwen2VLImageConverter(**image_kwargs)}
 
 
 def convert_weights(backbone, loader, transformers_config):
@@ -341,17 +349,14 @@ def convert_tokenizer(cls, preset, **kwargs):
     # HF's tokenizer.json added_tokens goes up to <|vision_pad|> (151654)
     # but tokenizer_config.json also defines <|image_pad|> (151655) and
     # <|video_pad|> (151656) in added_tokens_decoder. Load those too.
-    try:
-        tok_cfg = load_json(preset, "tokenizer_config.json")
-        for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
-            content = meta["content"]
-            if content not in vocab and not content.startswith(
-                "<|reserved_special_token_"
-            ):
-                vocab[content] = int(_id_str)
-                special_tokens.add(content)
-    except Exception:
-        pass
+    tok_cfg = load_json(preset, "tokenizer_config.json")
+    for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
+        content = meta["content"]
+        if content not in vocab and not content.startswith(
+            "<|reserved_special_token_"
+        ):
+            vocab[content] = int(_id_str)
+            special_tokens.add(content)
 
     kwargs.update(
         {

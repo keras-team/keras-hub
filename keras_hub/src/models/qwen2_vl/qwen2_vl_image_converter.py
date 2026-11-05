@@ -2,6 +2,7 @@ import math
 import warnings
 
 import numpy as np
+from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
@@ -158,15 +159,11 @@ class Qwen2VLImageConverter(ImageConverter):
                 "grid_thw": np.concatenate(all_grids, axis=0),
             }
 
-        image = np.asarray(image, dtype="float32")
+        image = np.asarray(ops.convert_to_numpy(image), dtype="float32")
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
         if image.ndim == 3:
             image = image[np.newaxis]
-
-        # Normalize inputs in [0, 1] to [0, 255] (HF expects 0-255).
-        if image.size > 0 and float(image.max()) <= 1.0:
-            image = image * 255.0
 
         height, width = image.shape[1], image.shape[2]
         resized_h, resized_w = smart_resize(
@@ -177,13 +174,16 @@ class Qwen2VLImageConverter(ImageConverter):
             max_pixels=self.max_pixels,
         )
 
-        frames = []
-        for frame in image:
-            if resized_h != height or resized_w != width:
-                frame = self._resize_frame(frame, resized_h, resized_w)
-            frames.append(frame)
-
-        patches = np.stack(frames, axis=0)
+        if resized_h != height or resized_w != width:
+            image = ops.convert_to_numpy(
+                ops.image.resize(
+                    image,
+                    (resized_h, resized_w),
+                    interpolation="bicubic",
+                    antialias=True,
+                )
+            )
+        patches = image
 
         patches = patches / np.float32(255.0)
         patches = (patches - self.image_mean) / self.image_std
@@ -230,21 +230,6 @@ class Qwen2VLImageConverter(ImageConverter):
         grid_thw = np.array([[grid_t, grid_h, grid_w]], dtype="int32")
         return {"patches": patches, "grid_thw": grid_thw}
 
-    def _resize_frame(self, frame, target_h, target_w):
-        """Resize a single frame using PIL (preferred) or NumPy fallback."""
-        try:
-            from PIL import Image as PILImage
-
-            if hasattr(PILImage, "Resampling"):
-                resample = PILImage.Resampling.BICUBIC
-            else:
-                resample = PILImage.BICUBIC
-            pil = PILImage.fromarray(frame.astype("uint8"))
-            pil = pil.resize((target_w, target_h), resample)
-            return np.array(pil, dtype="float32")
-        except ImportError:
-            return _numpy_resize(frame, target_h, target_w)
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -259,19 +244,3 @@ class Qwen2VLImageConverter(ImageConverter):
             }
         )
         return config
-
-
-def _numpy_resize(frame, new_h, new_w):
-    """Fallback bilinear resize using NumPy (no PIL dependency)."""
-    old_h, old_w = frame.shape[:2]
-    row_idx = np.linspace(0, old_h - 1, new_h)
-    col_idx = np.linspace(0, old_w - 1, new_w)
-    r0 = np.floor(row_idx).astype(int).clip(0, old_h - 1)
-    r1 = np.ceil(row_idx).astype(int).clip(0, old_h - 1)
-    c0 = np.floor(col_idx).astype(int).clip(0, old_w - 1)
-    c1 = np.ceil(col_idx).astype(int).clip(0, old_w - 1)
-    dr = (row_idx - r0)[:, np.newaxis, np.newaxis]
-    dc = (col_idx - c0)[np.newaxis, :, np.newaxis]
-    top = frame[r0][:, c0] * (1 - dc) + frame[r0][:, c1] * dc
-    bot = frame[r1][:, c0] * (1 - dc) + frame[r1][:, c1] * dc
-    return (top * (1 - dr) + bot * dr).astype("float32")

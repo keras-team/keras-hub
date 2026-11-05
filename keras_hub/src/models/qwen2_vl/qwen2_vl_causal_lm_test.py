@@ -126,6 +126,57 @@ class Qwen2VLCausalLMTest(TestCase):
         )
         self.assertTrue(isinstance(output, str))
 
+    def test_fit_with_image(self):
+        """fit() trains through the multimodal preprocessor path."""
+        image_converter = Qwen2VLImageConverter(
+            patch_size=2,
+            temporal_patch_size=2,
+            merge_size=1,
+            min_pixels=16,
+            max_pixels=100,
+        )
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            Qwen2VLTokenizer(vocabulary=self.vocab, merges=self.merges),
+            image_converter=image_converter,
+            sequence_length=32,
+        )
+        backbone = Qwen2VLBackbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            mrope_section=[1, 0, 0],
+            vision_encoder=Qwen2VLVisionEncoder(
+                patch_size=2,
+                temporal_patch_size=2,
+                in_channels=3,
+                embed_dim=16,
+                out_dim=8,
+                depth=2,
+                num_heads=2,
+                mlp_ratio=4,
+                spatial_merge_size=1,
+            ),
+        )
+        causal_lm = Qwen2VLCausalLM(
+            backbone=backbone, preprocessor=preprocessor
+        )
+        images = np.ones((2, 4, 4, 3), dtype="float32")
+        x = {
+            "prompts": [
+                "<|vision_start|><|image_pad|><|vision_end|> air",
+            ]
+            * 2,
+            "responses": [" at airport"] * 2,
+            "images": images,
+        }
+        embedding = causal_lm.backbone.token_embedding.embeddings
+        old_weight = ops.convert_to_numpy(embedding)
+        causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)
+        self.assertNotAllClose(old_weight, ops.convert_to_numpy(embedding))
+
     def test_generate_strip_prompt(self):
         causal_lm = Qwen2VLCausalLM(**self.init_kwargs)
         prompt = " airplane at airport"

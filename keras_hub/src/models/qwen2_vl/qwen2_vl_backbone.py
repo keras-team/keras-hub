@@ -125,6 +125,7 @@ class Qwen2VLBackbone(Backbone):
         if not text_only_model:
             pixel_values_input = keras.Input(
                 shape=(
+                    None,
                     vision_encoder.temporal_patch_size,
                     vision_encoder.patch_size,
                     vision_encoder.patch_size,
@@ -133,10 +134,10 @@ class Qwen2VLBackbone(Backbone):
                 name="pixel_values",
             )
             image_grid_thw_input = keras.Input(
-                shape=(3,), dtype="int32", name="image_grid_thw"
+                shape=(None, 3), dtype="int32", name="image_grid_thw"
             )
             vision_indices_input = keras.Input(
-                shape=(), dtype="int32", name="vision_indices"
+                shape=(None,), dtype="int32", name="vision_indices"
             )
             position_ids_input = keras.Input(
                 shape=(3, None), dtype="int32", name="position_ids"
@@ -228,20 +229,14 @@ class Qwen2VLBackbone(Backbone):
             return inputs
         inputs = dict(inputs)  # shallow copy to avoid mutation
         ve = self.vision_encoder
-        missing = (
-            "pixel_values" not in inputs
-            or "image_grid_thw" not in inputs
-            or "vision_indices" not in inputs
-            or "position_ids" not in inputs
-        )
-        if missing:
-            # Convert all values to tensors first — Keras rejects a
-            # nested call argument mixing tensors and non-tensors.
-            for key in inputs:
-                inputs[key] = ops.convert_to_tensor(inputs[key])
+        # Convert all values to tensors first — Keras rejects a
+        # nested call argument mixing tensors and non-tensors.
+        for key in inputs:
+            inputs[key] = ops.convert_to_tensor(inputs[key])
         if "pixel_values" not in inputs:
             inputs["pixel_values"] = ops.zeros(
                 (
+                    1,
                     0,
                     ve.temporal_patch_size,
                     ve.patch_size,
@@ -250,15 +245,29 @@ class Qwen2VLBackbone(Backbone):
                 )
             )
         if "image_grid_thw" not in inputs:
-            inputs["image_grid_thw"] = ops.zeros((0, 3), dtype="int32")
+            inputs["image_grid_thw"] = ops.zeros((1, 0, 3), dtype="int32")
         if "vision_indices" not in inputs:
-            inputs["vision_indices"] = ops.zeros((0,), dtype="int32")
+            inputs["vision_indices"] = ops.zeros((1, 0), dtype="int32")
         if "position_ids" not in inputs:
             batch_size = ops.shape(inputs["token_ids"])[0]
             seq_len = ops.shape(inputs["token_ids"])[1]
             inputs["position_ids"] = ops.broadcast_to(
                 ops.cast(ops.reshape(ops.arange(seq_len), (1, 1, -1)), "int32"),
                 (batch_size, 3, seq_len),
+            )
+
+        # Uprank flat vision tensors to the batch-leading spec
+        # (`(N, ...)` -> `(1, N, ...)`); the graph collapses the
+        # leading group axis internally.
+        if len(ops.shape(inputs["pixel_values"])) == 5:
+            inputs["pixel_values"] = ops.expand_dims(inputs["pixel_values"], 0)
+        if len(ops.shape(inputs["image_grid_thw"])) == 2:
+            inputs["image_grid_thw"] = ops.expand_dims(
+                inputs["image_grid_thw"], 0
+            )
+        if len(ops.shape(inputs["vision_indices"])) == 1:
+            inputs["vision_indices"] = ops.expand_dims(
+                inputs["vision_indices"], 0
             )
         return inputs
 

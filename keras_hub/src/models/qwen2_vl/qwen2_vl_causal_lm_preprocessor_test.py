@@ -138,6 +138,52 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         # vision_end at index 5 → pos 1+2=3.
         self.assertEqual(list(pos_ids[:, 5]), [3, 3, 3])
 
+    def test_generate_preprocess_pixel_values_match_hf(self):
+        """Pin `pixel_values` against HF-equivalent preprocessing output.
+
+        Expected values were computed offline with
+        `torch.nn.functional.interpolate(mode="bicubic", antialias=True)` —
+        the op HF's Qwen2VLImageProcessor resizes through — followed by
+        1/255 rescale and CLIP normalization.
+        """
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=32,
+        )
+
+        # Structured non-uniform image (smooth gradient + dark edge), so
+        # the bicubic+antialias kernel exercises non-trivial weights.
+        xx, yy = np.meshgrid(np.linspace(0, 255, 9), np.linspace(0, 255, 12))
+        image = np.stack([xx + yy * 0.3, yy, 255 - xx], -1).astype("float32")
+        image[:, :3] *= 0.4
+        image = np.clip(image, 0, 255)
+
+        out = preprocessor.generate_preprocess(
+            {
+                "prompts": "<|vision_start|><|image_pad|><|vision_end|> air",
+                "images": [image],
+            }
+        )
+
+        # First patch of the resized grid (top-left 2x2), first temporal
+        # frame — HF-equivalent values, atol 1e-3.
+        patch0 = ops.convert_to_numpy(out["pixel_values"])[0, 0]
+        expected = np.array(
+            [
+                [
+                    [-1.779326, -1.752097, -0.042374],
+                    [-1.608532, -1.752097, -0.297906],
+                ],
+                [
+                    [-1.738716, -1.612934, -0.042374],
+                    [-1.570418, -1.621489, -0.297906],
+                ],
+            ],
+            dtype="float32",
+        )
+        self.assertAllClose(patch0, expected, atol=1e-3)
+
     def test_generate_preprocess_with_multiple_images(self):
         """Two image markers each expand independently."""
         image_converter = self._image_converter()
@@ -174,8 +220,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
             sequence_length=32,
         )
 
-        # 4 frames of 4x4 → grid [2, 2, 2] → 8 merged tokens.
-        video = np.ones((4, 4, 4, 3), dtype="float32")
+        video = np.ones((8, 2, 2, 3), dtype="float32")
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
 
         out = preprocessor.generate_preprocess(
@@ -184,14 +229,62 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
 
         token_ids = ops.convert_to_numpy(out["token_ids"])
         video_id = self.tokenizer.video_token_id
-        self.assertEqual(int(np.sum(token_ids == video_id)), 8)
+        self.assertEqual(int(np.sum(token_ids == video_id)), 16)
         self.assertEqual(
-            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [2, 2, 2]
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
         )
 
-        # Temporal channel increments per frame (2 frames of 4 tokens).
+        # Temporal channel increments per merged frame (4 tokens each).
         pos_ids = ops.convert_to_numpy(out["position_ids"])
-        self.assertEqual(list(pos_ids[0, 1:9]), [1, 1, 1, 1, 2, 2, 2, 2])
+        self.assertEqual(
+            list(pos_ids[0, 1:17]),
+            [1] * 4 + [2] * 4 + [3] * 4 + [4] * 4,
+        )
+        self.assertEqual(list(pos_ids[:, 17]), [3, 3, 3])
+        self.assertEqual(list(pos_ids[:, 18]), [4, 4, 4])
+
+    def test_batched_call_with_images(self):
+        """Two prompts with two images: each row expands its own span."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=32,
+        )
+        images = [
+            np.ones((4, 4, 3), dtype="float32"),
+            np.ones((8, 8, 3), dtype="float32"),
+        ]
+        pad = "<|image_pad|>"
+        prompts = [pad + " air", pad + " airport"]
+        x, y, sw = preprocessor({"prompts": prompts, "images": images})
+
+        token_ids = ops.convert_to_numpy(x["token_ids"])
+        image_id = self.tokenizer.image_token_id
+        # img1 4x4 → grid [1,2,2] → 4 tokens; img2 8x8 → [1,4,4] → 16.
+        self.assertEqual(int(np.sum(token_ids[0] == image_id)), 4)
+        self.assertEqual(int(np.sum(token_ids[1] == image_id)), 16)
+        self.assertEqual(tuple(x["image_grid_thw"].shape), (2, 3))
+        # vision_indices covers both rows' image token positions (4+16).
+        self.assertEqual(tuple(x["vision_indices"].shape), (4 + 16,))
+
+    def test_prompt_image_count_mismatch(self):
+        """Placeholder/media count mismatch raises a descriptive error."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=64,
+        )
+        image = np.ones((4, 4, 3), dtype="float32")
+        pad = "<|image_pad|>"
+        # More images than placeholders.
+        with self.assertRaisesRegex(ValueError, "Found 1.*but 2 image"):
+            preprocessor({"prompts": [pad + " air"], "images": [image, image]})
+        # More placeholders than images.
+        with self.assertRaisesRegex(ValueError, "Found 2.*but 1 image"):
+            preprocessor({"prompts": [pad + " air " + pad], "images": [image]})
+        # Placeholder with no images at all.
+        with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
+            preprocessor({"prompts": [pad + " air"], "images": []})
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2VLCausalLMPreprocessor(
