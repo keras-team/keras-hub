@@ -274,9 +274,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             "vision_indices": ops.convert_to_tensor(vision_indices[None, :]),
         }
 
-        output = self.multimodal_causal_lm.generate(
-            inputs, max_length=sequence_length, stop_token_ids=None
-        )
+        output = self.multimodal_causal_lm.generate(inputs, stop_token_ids=None)
         self.assertEqual(ops.shape(output["token_ids"]), (1, sequence_length))
 
     def _multimodal_generate_inputs(
@@ -338,14 +336,14 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
             int(row_lengths.min()) - 1,
         )
         batch_output = self.multimodal_causal_lm.generate(
-            batch_inputs, max_length=sequence_length, stop_token_ids=None
+            batch_inputs, stop_token_ids=None
         )
         for row, prompt in enumerate(prompts):
             row_inputs = self._multimodal_generate_inputs(
                 [prompt], sequence_length, image_seeds=[row]
             )
             row_output = self.multimodal_causal_lm.generate(
-                row_inputs, max_length=sequence_length, stop_token_ids=None
+                row_inputs, stop_token_ids=None
             )
             self.assertAllEqual(
                 batch_output["token_ids"][row], row_output["token_ids"][0]
@@ -368,9 +366,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         padding_mask = np.zeros_like(convert_to_numpy(inputs["padding_mask"]))
         padding_mask[:, :prompt_length] = 1
         inputs = {**inputs, "padding_mask": padding_mask}
-        output = self.multimodal_causal_lm.generate(
-            inputs, max_length=sequence_length, stop_token_ids=None
-        )
+        output = self.multimodal_causal_lm.generate(inputs, stop_token_ids=None)
         # The full forward pass sees the image features at every prompt
         # position. Each generated token must follow its last logit.
         generated = ops.convert_to_numpy(output["token_ids"])
@@ -439,12 +435,9 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         )
         self.assertLessEqual(max_length - block_size, last_image_position)
         assistant = self._make_multimodal_assistant(block_size)
-        plain = self.multimodal_causal_lm.generate(
-            inputs, max_length=max_length, stop_token_ids=None
-        )
+        plain = self.multimodal_causal_lm.generate(inputs, stop_token_ids=None)
         assisted = self.multimodal_causal_lm.generate(
             inputs,
-            max_length=max_length,
             stop_token_ids=None,
             assistant_model=assistant,
         )
@@ -697,7 +690,7 @@ class MuseGlimmerCausalLMTest(TestCase, parameterized.TestCase):
         for sampler in ("beam", "contrastive"):
             self.multimodal_causal_lm.compile(sampler=sampler)
             output = self.multimodal_causal_lm.generate(
-                inputs, max_length=12, stop_token_ids=None
+                inputs, stop_token_ids=None
             )
             self.assertEqual(ops.shape(output["token_ids"]), (1, 12))
 
