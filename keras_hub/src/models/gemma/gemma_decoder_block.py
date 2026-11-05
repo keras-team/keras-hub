@@ -1,6 +1,7 @@
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
@@ -88,21 +89,21 @@ class GemmaDecoderBlock(keras.layers.Layer):
                 name="post_ffw_norm",
             )
 
-        self.gating_ffw = keras.layers.EinsumDense(
+        self.gating_ffw = EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.intermediate_dim // 2),
             dtype=self.dtype_policy,
             name="ffw_gating",
         )
 
-        self.gating_ffw_2 = keras.layers.EinsumDense(
+        self.gating_ffw_2 = EinsumDense(
             equation="btd,df->btf",
             output_shape=(None, self.intermediate_dim // 2),
             dtype=self.dtype_policy,
             name="ffw_gating_2",
         )
 
-        self.ffw_linear = keras.layers.EinsumDense(
+        self.ffw_linear = EinsumDense(
             equation="btf,fd->btd",
             output_shape=(None, self.hidden_dim),
             dtype=self.dtype_policy,

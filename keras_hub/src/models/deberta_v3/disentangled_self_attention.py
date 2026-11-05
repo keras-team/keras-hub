@@ -3,6 +3,7 @@ import math
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
@@ -68,7 +69,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
     def build(self, inputs_shape, rel_embeddings_shape=None):
         # Q, K, V linear layers.
-        self._query_dense = keras.layers.EinsumDense(
+        self._query_dense = EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
@@ -77,7 +78,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             name="query",
         )
         self._query_dense.build(inputs_shape)
-        self._key_dense = keras.layers.EinsumDense(
+        self._key_dense = EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
@@ -86,7 +87,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             name="key",
         )
         self._key_dense.build(inputs_shape)
-        self._value_dense = keras.layers.EinsumDense(
+        self._value_dense = EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
@@ -114,7 +115,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         )
 
         # Output.
-        self._output_dense = keras.layers.EinsumDense(
+        self._output_dense = EinsumDense(
             equation="abc,cd->abd",
             output_shape=(None, self.hidden_dim),
             bias_axes="d",

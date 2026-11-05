@@ -1,6 +1,8 @@
 import keras
 from keras import ops
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
+
 
 def clamp_dim_to_at_least_one(dim):
     """Clamp a static or symbolic dimension to a minimum of 1.
@@ -326,7 +328,7 @@ class Gemma4ClippableEinsumDense(keras.layers.Layer):
         self.output_shape = output_shape
         self.use_clipped_linears = use_clipped_linears
         self.kernel_initializer = kernel_initializer
-        self.dense = keras.layers.EinsumDense(
+        self.dense = EinsumDense(
             equation,
             output_shape=output_shape,
             kernel_initializer=kernel_initializer,

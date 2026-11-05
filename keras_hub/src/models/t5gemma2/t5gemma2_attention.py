@@ -2,6 +2,7 @@ import inspect
 
 import keras
 
+from keras_hub.src.layers.modeling.einsum_dense import EinsumDense
 from keras_hub.src.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_hub.src.models.gemma3.gemma3_attention import CachedGemma3Attention
 from keras_hub.src.models.gemma3.gemma3_layers import RMSNormalization
@@ -118,7 +119,7 @@ class T5Gemma2Attention(CachedGemma3Attention):
         hidden_states_shape = input_shape
         self.hidden_dim = hidden_states_shape[-1]
 
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -128,7 +129,7 @@ class T5Gemma2Attention(CachedGemma3Attention):
         )
         self.query_dense.build(hidden_states_shape)
 
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -138,7 +139,7 @@ class T5Gemma2Attention(CachedGemma3Attention):
         )
         self.key_dense.build(hidden_states_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -148,7 +149,7 @@ class T5Gemma2Attention(CachedGemma3Attention):
         )
         self.value_dense.build(hidden_states_shape)
 
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -440,7 +441,7 @@ class T5Gemma2MergedAttention(CachedGemma3Attention):
         self.hidden_dim = decoder_shape[-1]
 
         # Q projection from decoder hidden states.
-        self.query_dense = keras.layers.EinsumDense(
+        self.query_dense = EinsumDense(
             equation="btd,dnh->btnh",
             output_shape=(None, self.num_query_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -451,7 +452,7 @@ class T5Gemma2MergedAttention(CachedGemma3Attention):
         self.query_dense.build(decoder_shape)
 
         # K/V projections shared for self-attn and cross-attn.
-        self.key_dense = keras.layers.EinsumDense(
+        self.key_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -461,7 +462,7 @@ class T5Gemma2MergedAttention(CachedGemma3Attention):
         )
         self.key_dense.build(decoder_shape)
 
-        self.value_dense = keras.layers.EinsumDense(
+        self.value_dense = EinsumDense(
             equation="bsd,dkh->bskh",
             output_shape=(None, self.num_key_value_heads, self.head_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
@@ -472,7 +473,7 @@ class T5Gemma2MergedAttention(CachedGemma3Attention):
         self.value_dense.build(decoder_shape)
 
         # Output projection.
-        self.output_dense = keras.layers.EinsumDense(
+        self.output_dense = EinsumDense(
             equation="btnh,nhd->btd",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=clone_initializer(self._kernel_initializer),
