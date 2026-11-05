@@ -24,4 +24,4 @@ tensorflow-datasets
 safetensors
 pillow
 openvino
-transformers
+transformers==5.17.0
