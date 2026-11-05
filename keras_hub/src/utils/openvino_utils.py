@@ -84,7 +84,7 @@ def compile_model(struct_params, struct_outputs, device, model_dtype):
     flat_params = tree.flatten(struct_params)
     flat_outputs = tree.flatten(struct_outputs)
     parameters = [p.output.get_node() for p in flat_params]
-    results = [ov_opset.result(r.output) for r in flat_outputs]
+    results = [ov_opset.result(r.output) for r in flat_outputs if r is not None]
     ov_model = ov.Model(results=results, parameters=parameters)
     ov_model.validate_nodes_and_infer_types()
     config = {"INFERENCE_PRECISION_HINT": model_dtype}
@@ -107,8 +107,11 @@ def get_outputs(inputs, struct_outputs, compiled_ov_model, unpack_singleton):
         Structured model outputs matching expected format.
     """
     flatten_inputs = tree.flatten(inputs)
-    raw = compiled_ov_model(flatten_inputs).to_tuple()
-    packed = tree.pack_sequence_as(struct_outputs, raw)
+    raw = iter(compiled_ov_model(flatten_inputs).to_tuple())
+    flat_outputs = [
+        None if x is None else next(raw) for x in tree.flatten(struct_outputs)
+    ]
+    packed = tree.pack_sequence_as(struct_outputs, flat_outputs)
     return unpack_singleton(packed)
 
 

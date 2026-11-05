@@ -157,9 +157,7 @@ class OpenVINOCacheTest(TestCase):
         signature = get_input_signature(
             {"token_ids": x, "padding_mask": x.astype("bool")}
         )
-        self.assertEqual(
-            signature, (((None, 5), "bool"), ((None, 5), "int32"))
-        )
+        self.assertEqual(signature, (((None, 5), "bool"), ((None, 5), "int32")))
 
     def test_get_input_signature_ignores_batch_size(self):
         self.assertEqual(
@@ -171,6 +169,19 @@ class OpenVINOCacheTest(TestCase):
         self.assertNotEqual(
             get_input_signature([np.zeros(())]),
             get_input_signature([np.zeros((3,))]),
+        )
+
+    def test_get_outputs_keeps_none_outputs(self):
+        compiled = unittest.mock.Mock()
+        compiled.return_value.to_tuple.return_value = ("a", "b")
+        outputs = get_outputs(
+            [np.zeros((1,))],
+            {"token_ids": 0, "images": None, "padding_mask": 0},
+            compiled,
+            lambda x: x,
+        )
+        self.assertEqual(
+            outputs, {"token_ids": "b", "images": None, "padding_mask": "a"}
         )
 
     def count_compiles(self, calls):
