@@ -1,6 +1,6 @@
 from absl import logging
 from keras import ops
-from keras.src.backend import get_keras_mask
+from keras.src.backend.common.masking import get_keras_mask
 
 
 def _check_masks_shapes(inputs, padding_mask, attention_mask):

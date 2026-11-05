@@ -1,5 +1,5 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
@@ -16,7 +16,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class ResNetImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 16, 16, 3))
+        self.images = np.ones((2, 16, 16, 3), dtype="float32")
         self.labels = [0, 1]
         self.backbone = ResNetBackbone(
             input_conv_filters=[64],

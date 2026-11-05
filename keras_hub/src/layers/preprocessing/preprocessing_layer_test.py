@@ -1,8 +1,10 @@
 from unittest import mock
 
+import keras
 import numpy as np
 import pytest
 import tensorflow as tf
+from keras import ops
 
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
@@ -28,6 +30,25 @@ class FeaturesLayer(PreprocessingLayer):
 
     def call(self, inputs):
         return {"inputs": inputs}
+
+
+class DeviceLayer(PreprocessingLayer):
+    """A layer whose output is a backend tensor created inside `call`."""
+
+    def call(self, inputs):
+        return ops.ones((2,)) * inputs
+
+
+def _device_type(x):
+    """The device type a backend tensor lives on: `"cpu"`, `"gpu"`, ..."""
+    if keras.backend.backend() == "tensorflow":
+        # "/job:localhost/replica:0/task:0/device:CPU:0"
+        return x.device.rsplit("device:", 1)[-1].split(":")[0].lower()
+    if keras.backend.backend() == "jax":
+        return next(iter(x.devices())).platform
+    if keras.backend.backend() == "torch":
+        return x.device.type
+    raise NotImplementedError(keras.backend.backend())
 
 
 class PreprocessingLayerTest(TestCase):
@@ -142,3 +163,13 @@ class PreprocessingLayerTest(TestCase):
         (output,) = list(grain.MapDataset.source(elements).map(self.layer))
         self.assertEqual(output["x"], elements[0])
         self.assertIsNone(output["y"])
+
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
+    def test_grain_runs_on_cpu(self):
+        # Grain maps on a pool of threads and pickles NumPy outputs, so the
+        # ops must run on the CPU even when an accelerator is the default
+        # device. On the TensorFlow backend concurrent eager GPU ops from
+        # several threads can also mix up their inputs.
+        layer = DeviceLayer()
+        (output,) = list(grain.MapDataset.source([1.0]).map(layer))
+        self.assertEqual(_device_type(output), "cpu")

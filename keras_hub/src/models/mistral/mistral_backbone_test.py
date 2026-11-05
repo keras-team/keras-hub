@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from keras import ops
 
@@ -61,6 +62,41 @@ class MistralBackboneTest(TestCase):
         model = MistralBackbone(**init_kwargs)
         attention = model.transformer_layers[0]._self_attention_layer
         self.assertEqual(attention._head_dim, 4)
+
+    def test_llama_4_scaling_beta(self):
+        init_kwargs = {
+            **self.init_kwargs,
+            "llama_4_scaling_beta": 0.5,
+            "original_max_position_embeddings": 2,
+        }
+        self.run_backbone_test(
+            cls=MistralBackbone,
+            init_kwargs=init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 16),
+        )
+        attention = (
+            MistralBackbone(**init_kwargs)
+            .transformer_layers[0]
+            ._self_attention_layer
+        )
+        query = ops.ones((1, 4, 1, 2))
+        # Scale is `1 + beta * log(1 + floor(pos / 2))`.
+        expected = 1.0 + 0.5 * np.log(1.0 + np.array([0, 0, 1, 1]))
+        scaled = attention._apply_llama_4_scaling(query)
+        self.assertAllClose(scaled[0, :, 0, 0], expected)
+        # `start_index` shifts the absolute positions.
+        expected = 1.0 + 0.5 * np.log(1.0 + np.array([1, 1, 2, 2]))
+        scaled = attention._apply_llama_4_scaling(query, start_index=2)
+        self.assertAllClose(scaled[0, :, 0, 0], expected)
+        # The vLLM route passes one position for each flattened token.
+        flat_query = ops.ones((4, 1, 1, 2))
+        positions = ops.array([[0], [1], [2], [5]])
+        expected = 1.0 + 0.5 * np.log(1.0 + np.array([0, 0, 1, 2]))
+        scaled = attention._apply_llama_4_scaling(
+            flat_query, positions=positions
+        )
+        self.assertAllClose(scaled[:, 0, 0, 0], expected)
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):
