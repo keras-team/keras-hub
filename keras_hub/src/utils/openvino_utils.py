@@ -44,7 +44,8 @@ def get_input_signature(inputs):
     """Summarize inputs as shapes and dtypes for cache invalidation.
 
     A compiled model is only valid for the shapes it was traced with, so this
-    signature is what decides whether a cached model can be reused.
+    signature is what decides whether a cached model can be reused. The batch
+    dimension is left out, since `_parameterize_data` traces it as dynamic.
 
     Args:
         inputs: Input tensors, in any nested structure.
@@ -55,12 +56,11 @@ def get_input_signature(inputs):
     signature = []
     for x in tree.flatten(inputs):
         shape = getattr(x, "shape", None)
-        signature.append(
-            (
-                tuple(shape) if shape is not None else None,
-                str(getattr(x, "dtype", None)),
-            )
-        )
+        if shape is not None:
+            shape = tuple(shape)
+            if shape:
+                shape = (None,) + shape[1:]
+        signature.append((shape, str(getattr(x, "dtype", None))))
     return tuple(signature)
 
 
