@@ -1,14 +1,38 @@
-import math
+"""Convert T5 checkpoints.
+
+Weight porting lives in `keras_hub/src/utils/transformers/convert_t5.py` and is
+shared with `from_preset("hf://...")`. This script only loads the Hugging Face
+model, converts it through that converter, validates the numerics against
+Hugging Face and saves (optionally uploads) the KerasHub preset.
+
+export KAGGLE_USERNAME=XXX
+export KAGGLE_KEY=XXX
+
+python tools/checkpoint_conversion/convert_t5_checkpoints.py \
+    --preset t5_small_multi --upload_uri kaggle://keras/t5/keras/t5_small_multi
+python tools/checkpoint_conversion/convert_t5_checkpoints.py \
+    --preset t5_1.1_small --upload_uri kaggle://keras/t5/keras/t5_1.1_small
+python tools/checkpoint_conversion/convert_t5_checkpoints.py \
+    --preset flan_small_multi --upload_uri kaggle://keras/t5/keras/flan_small_multi
+"""
+
 import os
-import shutil
 
-import numpy as np
-import transformers
-from absl import app
-from absl import flags
-from checkpoint_conversion_utils import get_md5_checksum
+os.environ["KERAS_BACKEND"] = "torch"
 
-import keras_hub
+import shutil  # noqa: E402
+import tempfile  # noqa: E402
+
+import keras  # noqa: E402
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+import transformers  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+
+import keras_hub  # noqa: E402
+from keras_hub.src.models.t5.t5_backbone import T5Backbone  # noqa: E402
+from keras_hub.src.models.t5.t5_tokenizer import T5Tokenizer  # noqa: E402
 
 PRESET_MAP = {
     "t5_small_multi": "google-t5/t5-small",
@@ -24,333 +48,59 @@ PRESET_MAP = {
     "flan_large_multi": "google/flan-t5-large",
 }
 
-
-PARAM_MAP = {
-    "t5_1.1_small": {
-        "trainable": True,
-        "vocabulary_size": 32128,
-        "hidden_dim": 512,
-        "intermediate_dim": 1024,
-        "num_layers": 8,
-        "num_heads": 6,
-        "activation": "gelu",
-        "key_value_dim": 64,
-        "dropout": 0.1,
-        "use_gated_activation": True,
-        "layer_norm_epsilon": 1e-6,
-        "tie_embedding_weights": False,
-    },
-    "t5_1.1_base": {
-        "trainable": True,
-        "vocabulary_size": 32128,
-        "hidden_dim": 768,
-        "intermediate_dim": 2048,
-        "num_layers": 12,
-        "num_heads": 12,
-        "activation": "gelu",
-        "key_value_dim": 64,
-        "dropout": 0.1,
-        "use_gated_activation": True,
-        "layer_norm_epsilon": 1e-6,
-        "tie_embedding_weights": False,
-    },
-    "t5_1.1_large": {
-        "trainable": True,
-        "vocabulary_size": 32128,
-        "hidden_dim": 1024,
-        "intermediate_dim": 2816,
-        "num_layers": 24,
-        "num_heads": 16,
-        "activation": "gelu",
-        "key_value_dim": 64,
-        "dropout": 0.1,
-        "use_gated_activation": True,
-        "layer_norm_epsilon": 1e-6,
-        "tie_embedding_weights": False,
-    },
-    "t5_1.1_xl": {
-        "trainable": True,
-        "vocabulary_size": 32128,
-        "hidden_dim": 2048,
-        "intermediate_dim": 5120,
-        "num_layers": 24,
-        "num_heads": 32,
-        "activation": "gelu",
-        "key_value_dim": 64,
-        "dropout": 0.1,
-        "use_gated_activation": True,
-        "layer_norm_epsilon": 1e-6,
-        "tie_embedding_weights": False,
-    },
-    "t5_1.1_xxl": {
-        "trainable": True,
-        "vocabulary_size": 32128,
-        "hidden_dim": 4096,
-        "intermediate_dim": 10240,
-        "num_layers": 24,
-        "num_heads": 64,
-        "activation": "gelu",
-        "key_value_dim": 64,
-        "dropout": 0.1,
-        "use_gated_activation": True,
-        "layer_norm_epsilon": 1e-6,
-        "tie_embedding_weights": False,
-    },
-}
-
-
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "preset", "t5_base_multi", f"Must be one of {','.join(PRESET_MAP.keys())}"
+    "preset",
+    None,
+    f"Must be one of {','.join(PRESET_MAP.keys())}",
+    required=True,
 )
-os.environ["KERAS_BACKEND"] = "torch"
+flags.DEFINE_string(
+    "upload_uri",
+    None,
+    'Could be "kaggle://keras/{variant}/keras/{preset}"',
+    required=False,
+)
 
 
-def extract_vocab(hf_tokenizer):
-    proto_path = f"./{FLAGS.preset}/vocab.spm"
-    print(f"\n-> Save KerasHub vocab to `{proto_path}`.")
+def load_keras_hub_components(hf_model, hf_preset, hf_dir):
+    """Load the KerasHub T5 backbone and tokenizer via the HF converter.
 
-    # Huggingface has a save_vocabulary function but it's not byte-for-byte
-    # with the source. Instead copy the original downloaded file directly.
-    shutil.copyfile(
-        transformers.utils.hub.get_file_from_repo(
-            hf_tokenizer.name_or_path, "spiece.model"
-        ),
-        proto_path,
-    )
-
-    keras_tokenizer = keras_hub.models.T5Tokenizer(
-        proto=proto_path,
-    )
-
-    print("-> Print MD5 checksum of the vocab files.")
-    print(f"`{proto_path}` md5sum: ", get_md5_checksum(proto_path))
-
-    return keras_tokenizer
+    Some upstream checkpoints (e.g. `google/t5-v1_1-*`) only ship
+    `pytorch_model.bin`, which the safetensors-based converter cannot read.
+    To support all presets, the HF model is re-saved as a local HF-format
+    directory with safetensors and the backbone is loaded from there. The
+    tokenizer only needs `spiece.model`, which every upstream repo provides,
+    so it is loaded from the Hub directly.
+    """
+    hf_model.save_pretrained(hf_dir, safe_serialization=True)
+    keras_model = T5Backbone.from_preset(hf_dir)
+    keras_tokenizer = T5Tokenizer.from_preset(f"hf://{hf_preset}")
+    return keras_model, keras_tokenizer
 
 
-def convert_checkpoints(hf_model):
-    keras_hub_model = keras_hub.models.T5Backbone(**PARAM_MAP[FLAGS.preset])
-
-    hf_wts = hf_model.state_dict()
-    print("Original weights:")
-    print(list(hf_wts.keys()))
-
-    for i in range(keras_hub_model.num_layers):
-        for section in ["encoder", "decoder"]:
-            n = 0
-
-            # Token embedding layer
-            keras_hub_model.get_layer("token_embedding").embeddings.assign(
-                hf_wts[f"{section}.embed_tokens.weight"]
-            )
-            if not keras_hub_model.tie_embedding_weights:
-                keras_hub_model.get_layer(
-                    "token_embedding"
-                ).reverse_embeddings.assign(
-                    hf_wts["lm_head.weight"].transpose(1, 0).numpy()
-                )
-
-            # Query, key, value, and output projectors in self-attention
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention.query_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"]
-                .transpose(1, 0)
-                .numpy()
-            )
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention.key_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"]
-                .transpose(1, 0)
-                .numpy()
-            )
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention.value_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"]
-                .transpose(1, 0)
-                .numpy()
-            )
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention.output_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"]
-                .transpose(1, 0)
-                .numpy()
-            )
-
-            # Add relative attention bias
-            if keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention.use_relative_attention_bias:
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).self_attention.relative_attention_bias.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.SelfAttention.relative_attention_bias.weight"
-                    ].numpy()
-                )
-
-            # Self-attention norm
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).self_attention_layer_norm.weight.assign(
-                hf_wts[
-                    f"{section}.block.{i}.layer.{n}.layer_norm.weight"
-                ].numpy()
-            )
-
-            # Increment for next layer
-            n += 1
-
-            if section == "decoder":
-                # Cross-attention QKV and output proj (one between encoder and
-                # decoder)
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).cross_attention.query_projector.kernel.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.EncDecAttention.q.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).cross_attention.key_projector.kernel.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.EncDecAttention.k.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).cross_attention.value_projector.kernel.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.EncDecAttention.v.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).cross_attention.output_projector.kernel.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.EncDecAttention.o.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-
-                # Cross-attention layer norm
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).cross_attention_layer_norm.weight.assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.layer_norm.weight"
-                    ].numpy()
-                )
-                # Increment for next layer
-                n += 1
-
-            if keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).use_gated_activation:
-                # Input projection layer
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).input_projector.weights[0].assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_0.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-
-                # Gated activation layer
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).gate_projector.weights[0].assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_1.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-            else:
-                # Input projection layer
-                keras_hub_model.get_layer(
-                    f"transformer_{section}_layer_{i}"
-                ).input_projector.weights[0].assign(
-                    hf_wts[
-                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi.weight"
-                    ]
-                    .transpose(1, 0)
-                    .numpy()
-                )
-
-            # Output projection layer
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).output_projector.weights[0].assign(
-                hf_wts[
-                    f"{section}.block.{i}.layer.{n}.DenseReluDense.wo.weight"
-                ]
-                .transpose(1, 0)
-                .numpy()
-            )
-
-            # Layer norm
-            keras_hub_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).layer_norm.weight.assign(
-                hf_wts[
-                    f"{section}.block.{i}.layer.{n}.layer_norm.weight"
-                ].numpy()
-            )
-
-            # Final normalization
-            keras_hub_model.get_layer(f"{section}_output_layer_norm").weights[
-                -1
-            ].assign(hf_wts[f"{section}.final_layer_norm.weight"].numpy())
-
-    return keras_hub_model
-
-
-def check_output(
-    keras_model,
-    keras_tokenizer,
-    hf_model,
-    hf_tokenizer,
-):
-    print("\n-> Compare the outputs.")
+def validate_output(keras_model, keras_tokenizer, hf_model, hf_tokenizer):
     encoder_input = ["the quick brown fox jumped."]
     decoder_input = ["the quick brown fox fell."]
-
     sequence_length = 12
 
-    # KerasHub Tokenization
+    # KerasHub tokenization.
     packer = keras_hub.layers.StartEndPacker(
         sequence_length=sequence_length,
         pad_value=keras_tokenizer.pad_token_id,
         end_value=keras_tokenizer.end_token_id,
     )
-    encoder_token_ids = packer(keras_tokenizer(encoder_input))
+    encoder_token_ids = keras.ops.convert_to_numpy(
+        packer(keras_tokenizer(encoder_input))
+    )
+    decoder_token_ids = keras.ops.convert_to_numpy(
+        packer(keras_tokenizer(decoder_input))
+    )
     encoder_padding_mask = encoder_token_ids != keras_tokenizer.pad_token_id
-    decoder_token_ids = packer(keras_tokenizer(decoder_input))
     decoder_padding_mask = decoder_token_ids != keras_tokenizer.pad_token_id
-    keras_inputs = {
-        "encoder_token_ids": encoder_token_ids,
-        "encoder_padding_mask": encoder_padding_mask,
-        "decoder_token_ids": decoder_token_ids,
-        "decoder_padding_mask": decoder_padding_mask,
-    }
 
-    # HF Tokenization.
+    # HF tokenization.
     hf_encoder_inputs = hf_tokenizer(
         encoder_input,
         padding="max_length",
@@ -363,89 +113,111 @@ def check_output(
         max_length=sequence_length,
         return_tensors="pt",
     )
-    hf_inputs = {
-        "input_ids": hf_encoder_inputs["input_ids"],
-        "attention_mask": hf_encoder_inputs["attention_mask"],
-        "decoder_input_ids": hf_decoder_inputs["input_ids"],
-        "decoder_attention_mask": hf_decoder_inputs["attention_mask"],
-    }
-
-    # Compare tokenized inputs. This should be a compete match.
-    print("-> KerasHub inputs:")
-    for k, v in keras_inputs.items():
-        print(k, v)
-    print("-> HF inputs:")
-    for k, v in hf_inputs.items():
-        print(k, v)
-
-    # Forward pass
-    keras_out = keras_model(keras_inputs)
-    hf_out = hf_model(**hf_inputs, output_hidden_states=True)
-
-    # Only compare non-padded token ids.
-    keras_hidden_states = keras_out["decoder_sequence_output"]
-    hf_hidden_states = hf_out.decoder_hidden_states[-1]
-
-    print("-> KerasHub output:", keras_hidden_states[0:5])
-    print("-> HF output:", hf_hidden_states[0:5])
-    np.testing.assert_allclose(
-        keras_hidden_states.numpy(),
-        hf_hidden_states.detach().numpy(),
-        atol=1e-2,
+    np.testing.assert_array_equal(
+        encoder_token_ids, hf_encoder_inputs["input_ids"].numpy()
     )
+    np.testing.assert_array_equal(
+        decoder_token_ids, hf_decoder_inputs["input_ids"].numpy()
+    )
+    print("🔶 Tokenization matches.")
 
-    if keras_model.tie_embedding_weights:
-        keras_hidden_states = keras_hidden_states * (
-            keras_model.hidden_dim**-0.5
+    # Forward pass.
+    keras_outputs = keras_model.predict(
+        {
+            "encoder_token_ids": encoder_token_ids,
+            "encoder_padding_mask": encoder_padding_mask,
+            "decoder_token_ids": decoder_token_ids,
+            "decoder_padding_mask": decoder_padding_mask,
+        },
+        verbose=0,
+    )
+    with torch.no_grad():
+        hf_outputs = hf_model(
+            input_ids=hf_encoder_inputs["input_ids"],
+            attention_mask=hf_encoder_inputs["attention_mask"],
+            decoder_input_ids=hf_decoder_inputs["input_ids"],
+            decoder_attention_mask=hf_decoder_inputs["attention_mask"],
+            output_hidden_states=True,
         )
 
-    keras_logits = keras_model.token_embedding(
-        keras_hidden_states, reverse=True
-    )
-    hf_logits = hf_out.logits
-    print("-> KerasHub logits:", keras_logits[0:5])
-    print("-> HF logits:", hf_logits[0:5])
-    np.testing.assert_allclose(
-        keras_logits.numpy(), hf_logits.detach().numpy(), atol=1e-1
-    )
+    # Only compare non-padded positions.
+    encoder_mask = encoder_padding_mask[0]
+    decoder_mask = decoder_padding_mask[0]
+    keras_encoder = keras_outputs["encoder_sequence_output"][0][encoder_mask]
+    hf_encoder = hf_outputs.encoder_last_hidden_state[0].numpy()[encoder_mask]
+    keras_decoder = keras_outputs["decoder_sequence_output"][0][decoder_mask]
+    hf_decoder = hf_outputs.decoder_hidden_states[-1][0].numpy()[decoder_mask]
 
+    # Logits. Original T5 ties the LM head to the token embedding and scales
+    # the decoder output; T5 v1.1 / FLAN-T5 use a separate unscaled head.
+    decoder_output = keras_outputs["decoder_sequence_output"]
+    if keras_model.tie_embedding_weights:
+        decoder_output = decoder_output * keras_model.hidden_dim**-0.5
+    keras_logits = keras.ops.convert_to_numpy(
+        keras_model.token_embedding(decoder_output, reverse=True)
+    )[0][decoder_mask]
+    hf_logits = hf_outputs.logits[0].numpy()[decoder_mask]
 
-def count_params(weights):
-    shapes = [v.shape for v in weights]
-    return int(sum(math.prod(p) for p in shapes))
+    for name, keras_value, hf_value in (
+        ("Encoder output", keras_encoder, hf_encoder),
+        ("Decoder output", keras_decoder, hf_decoder),
+        ("Logits", keras_logits, hf_logits),
+    ):
+        print(f"🔶 {name} Keras:", keras_value[0, :5])
+        print(f"🔶 {name} HF:   ", hf_value[0, :5])
+        print(
+            f"🔶 {name} mean abs diff:",
+            np.mean(np.abs(keras_value - hf_value)),
+        )
+    # HF's gated-gelu uses the tanh approximation (`gelu_new`) while KerasHub
+    # uses the exact gelu, hence the loose tolerances.
+    np.testing.assert_allclose(keras_decoder, hf_decoder, atol=1e-2)
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-1)
 
 
 def main(_):
-    hf_id = PRESET_MAP[FLAGS.preset]
-    shutil.rmtree(f"./{FLAGS.preset}", ignore_errors=True)
-    os.mkdir(f"./{FLAGS.preset}")
+    preset = FLAGS.preset
+    if preset not in PRESET_MAP:
+        raise ValueError(
+            f"Invalid preset {preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    hf_preset = PRESET_MAP[preset]
+    if os.path.exists(preset):
+        shutil.rmtree(preset)
+    os.makedirs(preset)
 
-    print("\n-> Convert weights.")
-    hf_model = transformers.T5ForConditionalGeneration.from_pretrained(hf_id)
-    keras_model = convert_checkpoints(hf_model)
+    print(f"🏃 Converting {preset}")
 
-    # Save the model.
-    model_path = f"./{FLAGS.preset}"
-    weight_path = os.path.join(model_path, "model.weights.h5")
-    print(f"\n-> Save KerasHub model weights to `{model_path}`.")
-    keras_model.save_to_preset(model_path)
-    print("-> Print MD5 checksum of the model weights files.")
-    print(f"`{model_path}` md5sum: ", get_md5_checksum(weight_path))
-    print(f"-> Param count {count_params(keras_model.weights)}")
-
-    print("\n-> Convert vocab.")
-    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_id)
-    keras_tokenizer = extract_vocab(hf_tokenizer)
-    keras_tokenizer.save_to_preset(model_path)
-
-    check_output(
-        keras_model,
-        keras_tokenizer,
-        hf_model,
-        hf_tokenizer,
+    # Load the Hugging Face model. `T5ForConditionalGeneration` (rather than
+    # `T5Model`) also carries `lm_head.weight` for untied variants.
+    hf_model = transformers.T5ForConditionalGeneration.from_pretrained(
+        hf_preset
     )
+    hf_model.eval()
+    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_preset)
+
+    # Load KerasHub components through the transformers converter
+    # (`keras_hub/src/utils/transformers/convert_t5.py`).
+    with tempfile.TemporaryDirectory() as hf_dir:
+        keras_model, keras_tokenizer = load_keras_hub_components(
+            hf_model, hf_preset, hf_dir
+        )
+    print("✅ KerasHub model loaded and weights converted.")
+    print(f"🔶 Parameter count: {keras_model.count_params()}")
+
+    validate_output(keras_model, keras_tokenizer, hf_model, hf_tokenizer)
+    print("✅ Output validated.")
+
+    keras_model.save_to_preset(f"./{preset}")
+    keras_tokenizer.save_to_preset(f"./{preset}")
+    print(f"🏁 Preset saved to ./{preset}.")
+
+    upload_uri = FLAGS.upload_uri
+    if upload_uri:
+        keras_hub.upload_preset(uri=upload_uri, preset=f"./{preset}")
+        print(f"🏁 Preset uploaded to {upload_uri}")
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("preset")
     app.run(main)
