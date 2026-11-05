@@ -44,6 +44,11 @@ class EfficientNetBackboneTest(TestCase):
             backbone.get_config()["data_format"], backbone.data_format
         )
 
+    def test_num_features_is_serialized(self):
+        backbone = EfficientNetBackbone(**self.init_kwargs, num_features=640)
+        revived = EfficientNetBackbone.from_config(backbone.get_config())
+        self.assertEqual(revived.output.shape[-1], 640)
+
     def test_backbone_basics(self):
         self.run_backbone_test(
             cls=EfficientNetBackbone,
