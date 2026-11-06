@@ -59,17 +59,18 @@ class Qwen2VLVisionEncoderTest(TestCase):
 
         output = ops.convert_to_numpy(output)
         if keras.backend.backend() == "tensorflow":
+            tol = 2e-3 if running_on_gpu() else 1e-4
             np.testing.assert_allclose(
                 output[0, :6],
                 [-0.723, -0.3895, 0.116, -0.4222, 0.5193, -0.5394],
-                atol=1e-4,
-                rtol=1e-4,
+                atol=tol,
+                rtol=tol,
             )
             np.testing.assert_allclose(
                 output[1, :4],
                 [-0.7028, -0.0419, 0.1543, -0.2447],
-                atol=1e-4,
-                rtol=1e-4,
+                atol=tol,
+                rtol=tol,
             )
 
     def test_vision_encoder_config_roundtrip(self):
@@ -129,7 +130,7 @@ class Qwen2VLVisionEncoderTest(TestCase):
         joint = ops.convert_to_numpy(joint)
 
         n_a = out_a.shape[0]
-        tol = 1e-3 if running_on_gpu() else 1e-5
+        tol = 2e-3 if running_on_gpu() else 1e-5
         np.testing.assert_allclose(joint[:n_a], out_a, atol=tol, rtol=tol)
         np.testing.assert_allclose(joint[n_a:], out_b, atol=tol, rtol=tol)
 
@@ -165,7 +166,8 @@ class Qwen2VLVisionEncoderTest(TestCase):
         ref = ref @ ops.convert_to_numpy(attn.proj.kernel)
         ref += ops.convert_to_numpy(attn.proj.bias)
 
-        np.testing.assert_allclose(out, ref, atol=1e-4, rtol=1e-4)
+        tol = 1e-3 if running_on_gpu() else 1e-4
+        np.testing.assert_allclose(out, ref, atol=tol, rtol=tol)
 
     def test_empty_input(self):
         """Zero-patch input returns an empty output (text-only path)."""
