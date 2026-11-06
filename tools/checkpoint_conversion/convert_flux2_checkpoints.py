@@ -149,22 +149,20 @@ def check_prompt_embeddings(keras_model, reference, dtype):
     return error <= EMBEDDING_TOLERANCE[dtype]
 
 
-def check_generate(keras_model, reference, dtype):
+def check_generate(image, reference, dtype):
     """`generate()` against `Flux2KleinPipeline`, from the same noise."""
-    image = keras_model.generate(PROMPT, num_steps=NUM_STEPS, seed=SEED)
     diff = np.abs(image.astype("int32") - reference["image"].astype("int32"))
     print(f"Image shape: {image.shape}")
     print(f"Mean abs pixel diff: {diff.mean():.3f} (max {diff.max()})")
     return diff.mean() <= IMAGE_TOLERANCE[dtype]
 
 
-def check_saved_preset(keras_model, preset):
-    """Reload the saved preset and compare the generated images."""
+def check_saved_preset(image, preset):
+    """Reload the saved preset and compare its generated image."""
     # Use a path, a bare name would resolve to the registered Kaggle preset.
     reloaded = Flux2TextToImage.from_preset(os.path.abspath(preset))
-    original = keras_model.generate(PROMPT, num_steps=NUM_STEPS, seed=SEED)
     restored = reloaded.generate(PROMPT, num_steps=NUM_STEPS, seed=SEED)
-    diff = np.abs(original.astype("int32") - restored.astype("int32")).max()
+    diff = np.abs(image.astype("int32") - restored.astype("int32")).max()
     print(f"Max abs pixel diff after reload: {diff}")
     # GPU kernels are not bitwise reproducible across compiled models.
     return diff <= 1
@@ -188,6 +186,7 @@ def main(_):
     keras_model = Flux2TextToImage.from_preset(
         f"hf://{hf_id}", image_shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=dtype
     )
+    image = keras_model.generate(PROMPT, num_steps=NUM_STEPS, seed=SEED)
 
     checks = {
         "Parameter count": lambda: check_parameter_count(
@@ -197,7 +196,7 @@ def main(_):
         "Prompt embeddings": lambda: check_prompt_embeddings(
             keras_model, reference, dtype
         ),
-        "generate()": lambda: check_generate(keras_model, reference, dtype),
+        "generate()": lambda: check_generate(image, reference, dtype),
     }
     results = {}
     for name, check in checks.items():
@@ -212,7 +211,11 @@ def main(_):
 
     print("\n--- Saved preset ---")
     keras_model.save_to_preset(preset)
-    if not check_saved_preset(keras_model, preset):
+    # Free the converted model before reloading the preset, so that only one
+    # copy of the weights is in memory at a time.
+    keras_model = None
+    gc.collect()
+    if not check_saved_preset(image, preset):
         raise RuntimeError("The saved preset does not reproduce the outputs.")
     print(f"Saved and verified preset: ./{preset}")
 

@@ -162,12 +162,10 @@ def check_parameter_count(backbone, reference_params):
     return keras_params == reference_params
 
 
-def check_outputs(backbone, inputs, expected, dtype):
+def check_outputs(outputs, expected, dtype):
     """Compare the outputs on the pipeline's real inputs."""
     passed = True
-    for timestep, actual, want in zip(
-        TIMESTEPS, keras_outputs(backbone, inputs), expected
-    ):
+    for timestep, actual, want in zip(TIMESTEPS, outputs, expected):
         error = relative_error(actual, want)
         max_abs = np.abs(actual - want).max()
         print(
@@ -178,15 +176,13 @@ def check_outputs(backbone, inputs, expected, dtype):
     return passed
 
 
-def check_saved_preset(backbone, inputs, preset):
-    """Reload the saved preset and compare the outputs."""
+def check_saved_preset(outputs, inputs, preset):
+    """Reload the saved preset and compare its outputs."""
     # Use a path, a bare name would resolve to the registered Kaggle preset.
     reloaded = FluxBackbone.from_preset(os.path.abspath(preset))
     max_diff = max(
         np.abs(a - b).max()
-        for a, b in zip(
-            keras_outputs(backbone, inputs), keras_outputs(reloaded, inputs)
-        )
+        for a, b in zip(outputs, keras_outputs(reloaded, inputs))
     )
     print(f"Max abs diff after reload: {max_diff:.2e}")
     # GPU kernels are not bitwise reproducible across compiled models.
@@ -210,14 +206,13 @@ def main(_):
 
     print("\n--- Converting ---")
     backbone = FluxBackbone.from_preset(f"hf://{hf_id}", dtype=dtype)
+    outputs = keras_outputs(backbone, inputs)
 
     checks = {
         "Parameter count": lambda: check_parameter_count(
             backbone, reference_params
         ),
-        "Transformer output": lambda: check_outputs(
-            backbone, inputs, expected, dtype
-        ),
+        "Transformer output": lambda: check_outputs(outputs, expected, dtype),
     }
     results = {}
     for name, check in checks.items():
@@ -232,7 +227,11 @@ def main(_):
 
     print("\n--- Saved preset ---")
     backbone.save_to_preset(preset)
-    if not check_saved_preset(backbone, inputs, preset):
+    # Free the converted model before reloading the preset, so that only one
+    # copy of the weights is in memory at a time.
+    backbone = None
+    gc.collect()
+    if not check_saved_preset(outputs, inputs, preset):
         raise RuntimeError("The saved preset does not reproduce the outputs.")
     print(f"Saved and verified preset: ./{preset}")
 
