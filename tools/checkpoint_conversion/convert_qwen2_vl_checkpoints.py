@@ -22,8 +22,8 @@ from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
 from keras import ops  # noqa: E402
 from PIL import Image  # noqa: E402
+from transformers import AutoImageProcessor  # noqa: E402
 from transformers import AutoModelForImageTextToText  # noqa: E402
-from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
@@ -117,10 +117,23 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
 
     # --- Multimodal outputs ---
     raw_image = _load_test_image()
-    processor = AutoProcessor.from_pretrained(hf_preset)
-    hf_inputs = processor(
-        text=[MULTIMODAL_PROMPT], images=[raw_image], return_tensors="pt"
-    ).to(device)
+    # AutoImageProcessor, not AutoProcessor: transformers builds a video
+    # processor for the latter, which requires torchvision.
+    image_processor = AutoImageProcessor.from_pretrained(hf_preset)
+    vision = image_processor(images=[raw_image], return_tensors="pt")
+    grid_thw = vision["image_grid_thw"][0]
+    # Expand the marker to the image's token count, as HF's processor does.
+    pad = "<|image_pad|>"
+    merge_len = image_processor.merge_size**2
+    n_image_tokens = int(grid_thw.prod().item()) // merge_len
+    prompt = MULTIMODAL_PROMPT.replace(pad, pad * n_image_tokens)
+    enc = hf_tokenizer(prompt, return_tensors="pt")
+    hf_inputs = {
+        "input_ids": enc["input_ids"].to(device),
+        "attention_mask": enc["attention_mask"].to(device),
+        "pixel_values": vision["pixel_values"].to(device),
+        "image_grid_thw": vision["image_grid_thw"].to(device),
+    }
     with torch.no_grad():
         hf_out = hf_model(**hf_inputs)
     results["mm_logits"] = hf_out.logits.detach().cpu().float().numpy()
@@ -139,7 +152,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
             hf_gen = hf_model.generate(
                 **hf_inputs, max_new_tokens=32, do_sample=False
             )
-        results["mm_generated"] = processor.decode(
+        results["mm_generated"] = hf_tokenizer.decode(
             hf_gen[0], skip_special_tokens=True
         )
 
