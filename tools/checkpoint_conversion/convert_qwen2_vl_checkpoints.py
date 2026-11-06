@@ -304,7 +304,7 @@ def main(_):
     # --- Phase 1: Load HF model and precompute all outputs ---
     print("-> Loading HF model...")
     hf_model = AutoModelForImageTextToText.from_pretrained(
-        hf_preset, device_map="cpu", torch_dtype=torch.float32
+        hf_preset, device_map=device, torch_dtype=torch.float32
     )
     hf_model.eval()
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
