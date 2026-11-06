@@ -9,6 +9,7 @@ from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_backbone import (
     Qwen3_5MoeBackbone,
 )
 from keras_hub.src.utils.preset_utils import load_json
+from keras_hub.src.utils.transformers.convert_qwen3_5 import resolve_text_prefix
 
 backbone_cls = Qwen3_5MoeBackbone
 
@@ -184,11 +185,13 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(keras_var, hf_key, hook_fn=hook_fn)
         ported_hf_keys.add(hf_key)
 
-    # Text model weights.
+    # Text model weights. Multimodal checkpoints keep the decoder under
+    # "model.language_model.*"; text-only exports keep it under "model.*".
+    text_prefix = resolve_text_prefix(loader, transformers_config)
 
     _port(
         backbone.get_layer("token_embedding").embeddings,
-        "model.language_model.embed_tokens.weight",
+        f"{text_prefix}.embed_tokens.weight",
     )
     if not backbone.tie_word_embeddings:
         _port(
@@ -200,7 +203,7 @@ def convert_weights(backbone, loader, transformers_config):
     for i in range(backbone.num_layers):
         decoder_layer = backbone.get_layer(f"transformer_layer_{i}")
         layer_type = decoder_layer.layer_type
-        prefix = f"model.language_model.layers.{i}"
+        prefix = f"{text_prefix}.layers.{i}"
 
         _port(
             decoder_layer._input_layernorm.scale,
@@ -380,7 +383,7 @@ def convert_weights(backbone, loader, transformers_config):
 
     _port(
         backbone.get_layer("sequence_output_layernorm").scale,
-        "model.language_model.norm.weight",
+        f"{text_prefix}.norm.weight",
     )
 
     # Vision encoder weights (optional).

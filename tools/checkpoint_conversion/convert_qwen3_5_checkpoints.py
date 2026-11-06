@@ -3,6 +3,10 @@
 Usage:
     python tools/checkpoint_conversion/convert_qwen3_5_checkpoints.py \
         --preset qwen3_5_0.8b_base
+
+    # Text-only export (Qwen3_5ForCausalLM, model_type qwen3_5_text):
+    python tools/checkpoint_conversion/convert_qwen3_5_checkpoints.py \
+        --preset qwen3_5_9b --hf_preset <org>/<text-only-repo>
 """
 
 import gc
@@ -21,6 +25,8 @@ from absl import app
 from absl import flags
 from keras import ops
 from PIL import Image
+from transformers import AutoConfig
+from transformers import AutoModelForCausalLM
 from transformers import AutoModelForImageTextToText
 from transformers import AutoProcessor
 from transformers import AutoTokenizer
@@ -93,6 +99,31 @@ flags.DEFINE_bool(
     "If True, skip all text generation steps and only run "
     "numerical logit validation.",
 )
+flags.DEFINE_string(
+    "hf_preset",
+    None,
+    "Optional HuggingFace repo id to convert instead of the one mapped from "
+    "`--preset`. Use this for text-only exports (`Qwen3_5ForCausalLM`, "
+    "model_type `qwen3_5_text`) such as fine-tunes that drop the vision "
+    "tower.",
+)
+
+
+def _is_text_only_checkpoint(hf_preset):
+    """Return True if the HF checkpoint is a text-only Qwen3.5 export.
+
+    Text-only exports use `Qwen3_5ForCausalLM` with model_type
+    `qwen3_5_text` and have no `vision_config`, so they must be loaded
+    with `AutoModelForCausalLM` rather than `AutoModelForImageTextToText`.
+    """
+    config = AutoConfig.from_pretrained(hf_preset)
+    model_type = getattr(config, "model_type", "") or ""
+    architectures = getattr(config, "architectures", None) or []
+    if model_type.endswith("_text"):
+        return True
+    if any(arch.endswith("ForCausalLM") for arch in architectures):
+        return True
+    return getattr(config, "vision_config", None) is None
 
 
 def _load_test_image():
@@ -110,11 +141,12 @@ def _count_keras_params(backbone):
 # ---------------------------------------------------------------
 # 1. Precompute HF outputs (before freeing HF model)
 # ---------------------------------------------------------------
-def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
+def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset, text_only=False):
     """Precompute all HF outputs needed for validation.
 
     Runs all HF forward passes and generation, returning results as
     numpy arrays. The HF model can then be deleted to free memory.
+    For text-only checkpoints only the text outputs are computed.
     """
     results = {}
 
@@ -138,6 +170,9 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         results["text_generated"] = hf_tokenizer.decode(
             hf_gen[0], skip_special_tokens=True
         )
+
+    if text_only:
+        return results
 
     # --- Multimodal outputs ---
     raw_image = _load_test_image()
@@ -589,11 +624,17 @@ def main(_):
             f"{', '.join(PRESET_MAP.keys())}"
         )
 
-    hf_preset = PRESET_MAP[preset]
+    hf_preset = FLAGS.hf_preset or PRESET_MAP[preset]
+    text_only = _is_text_only_checkpoint(hf_preset)
 
     # --- Phase 1: Load HF model and precompute all outputs ---
     print("-> Loading HF model...")
-    hf_model = AutoModelForImageTextToText.from_pretrained(
+    if text_only:
+        print("   Text-only checkpoint detected (Qwen3_5ForCausalLM).")
+        hf_model_cls = AutoModelForCausalLM
+    else:
+        hf_model_cls = AutoModelForImageTextToText
+    hf_model = hf_model_cls.from_pretrained(
         hf_preset,
         device_map="cpu",
         torch_dtype=torch.float32,
@@ -604,7 +645,9 @@ def main(_):
     print(f"   HF model loaded: {hf_params:,} params")
 
     print("\n-> Precomputing all HF outputs...")
-    hf_results = precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset)
+    hf_results = precompute_hf_outputs(
+        hf_model, hf_tokenizer, hf_preset, text_only=text_only
+    )
     hf_results["hf_param_count"] = hf_params
     print("   HF outputs precomputed!")
 
@@ -627,8 +670,11 @@ def main(_):
     # --- Phase 4: Validate against precomputed HF outputs ---
     test_parameter_count(keras_model.backbone, hf_results["hf_param_count"])
     validate_text_output(keras_model, hf_results)
-    validate_multimodal_output(keras_model, hf_results)
-    validate_video_output(keras_model, hf_results)
+    if text_only:
+        print("\n-> Text-only checkpoint: skipping image/video validation.")
+    else:
+        validate_multimodal_output(keras_model, hf_results)
+        validate_video_output(keras_model, hf_results)
 
     # --- Phase 5: Save preset ---
     save_preset(keras_model, preset)
