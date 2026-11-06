@@ -137,16 +137,11 @@ class T5GemmaSeq2SeqLMTest(TestCase):
             self.assertEqual(inputs["decoder_text"], output)
 
     def test_generate_compilation(self):
-        causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
-        # Assert we do not recompile with successive calls.
-        causal_lm.generate("the quick brown fox")
-        first_fn = causal_lm.generate_function
-        causal_lm.generate("the quick brown fox")
-        second_fn = causal_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
-        causal_lm.compile(sampler="greedy")
-        self.assertIsNone(causal_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=T5GemmaSeq2SeqLM,
+            init_kwargs=self.init_kwargs,
+            prompt="the quick brown fox",
+        )
 
     @pytest.mark.large
     def test_saved_model(self):
