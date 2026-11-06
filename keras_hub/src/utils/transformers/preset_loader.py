@@ -4,6 +4,7 @@ import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
@@ -183,6 +184,15 @@ class TransformersPresetLoader(PresetLoader):
         has_matching_convert_head = hasattr(
             self.converter, "convert_head"
         ) and issubclass(cls, MaskedLM)
+        # Text classifiers restore a `*ForSequenceClassification` head through
+        # a dedicated hook instead of `convert_head`, so a head converter
+        # written for another task (e.g. ModernBERT's MaskedLM head) is never
+        # applied to a classifier.
+        is_text_classifier = (
+            issubclass(cls, TextClassifier)
+            and architecture.endswith("ForSequenceClassification")
+            and hasattr(self.converter, "convert_text_classifier_head")
+        )
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -192,6 +202,20 @@ class TransformersPresetLoader(PresetLoader):
             extra = self.converter.load_task_config(self.preset, self.config)
             if extra:
                 kwargs = {**extra, **kwargs}
+
+        if load_task_weights and is_text_classifier:
+            # `config.json` omits `id2label` for the default two-label setup.
+            id2label = self.config.get("id2label")
+            kwargs["num_classes"] = len(id2label) if id2label else 2
+            task = super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
+            if load_weights:
+                with SafetensorLoader(self.preset, prefix="") as loader:
+                    self.converter.convert_text_classifier_head(
+                        task, loader, self.config
+                    )
+            return task
 
         if not load_task_weights or (
             not is_classifier
