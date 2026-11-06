@@ -62,9 +62,14 @@ class Qwen2VLCausalLM(CausalLM):
             **kwargs,
         )
 
-    def __call__(self, inputs, *args, **kwargs):
+    def call(self, inputs, *args, **kwargs):
         # The functional model requires all vision inputs; inject empty
-        # defaults for text-only calls (mirrors the backbone's __call__).
+        # defaults for text-only calls. Lives in `call` (not `__call__`)
+        # because `stateless_call`/jit dispatches to `call` directly.
+        inputs = self.backbone._inject_empty_vision_inputs(inputs)
+        return super().call(inputs, *args, **kwargs)
+
+    def __call__(self, inputs, *args, **kwargs):
         inputs = self.backbone._inject_empty_vision_inputs(inputs)
         return super().__call__(inputs, *args, **kwargs)
 

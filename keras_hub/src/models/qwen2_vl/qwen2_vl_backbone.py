@@ -269,7 +269,15 @@ class Qwen2VLBackbone(Backbone):
             inputs["vision_indices"] = ops.expand_dims(
                 inputs["vision_indices"], 0
             )
+        if len(ops.shape(inputs["position_ids"])) == 2:
+            inputs["position_ids"] = ops.expand_dims(inputs["position_ids"], 0)
         return inputs
+
+    def call(self, inputs, *args, **kwargs):
+        # `stateless_call` (jax jit, savedmodel) dispatches to `call`
+        # directly, bypassing `__call__` — normalization must live here.
+        inputs = self._inject_empty_vision_inputs(inputs)
+        return super().call(inputs, *args, **kwargs)
 
     def __call__(self, inputs, *args, **kwargs):
         inputs = self._inject_empty_vision_inputs(inputs)

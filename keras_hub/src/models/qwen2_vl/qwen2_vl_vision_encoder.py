@@ -566,38 +566,50 @@ class Qwen2VLVisionEncoder(keras.Model):
             )
             grid_thw = ops.reshape(grid_thw, (-1, 3))
 
-        # Zero-sized input (text-only on a multimodal model). `ops.cond`
-        # keeps the branch traceable under `tf.function`.
-        def _empty_output():
-            empty = ops.zeros((0, self.out_dim), dtype=self.compute_dtype)
-            if batched:
-                empty = ops.expand_dims(empty, axis=0)
-            return empty
+        # `ops.cond` can't express a 0-vs-N patch branch under `jax.jit`
+        # (branches must return equal shapes). Instead, always encode by
+        # appending one dummy merge group and gathering the real tokens
+        # back out.
+        num_patches = ops.shape(pixel_values)[0]
+        num_merged = num_patches // (
+            self.spatial_merge_size * self.spatial_merge_size
+        )
+        pad_shape = (self.spatial_merge_size * self.spatial_merge_size,) + (
+            tuple(ops.shape(pixel_values)[1:])
+        )
+        pixel_values = ops.concatenate(
+            [
+                pixel_values,
+                ops.zeros(pad_shape, dtype=pixel_values.dtype),
+            ],
+            axis=0,
+        )
+        pad_grid = ops.cast(
+            ops.array([[1, self.spatial_merge_size, self.spatial_merge_size]]),
+            grid_thw.dtype,
+        )
+        grid_thw = ops.concatenate([grid_thw, pad_grid], axis=0)
 
-        def _encode():
-            # Patch embedding: each patch is one Conv3D "sample".
-            hidden_states = self.patch_embed(pixel_values)  # (N,1,1,1,E)
-            hidden_states = ops.reshape(
-                hidden_states, (ops.shape(hidden_states)[0], self.embed_dim)
-            )
-            hidden_states = ops.cast(hidden_states, "float32")
+        # Patch embedding: each patch is one Conv3D "sample".
+        hidden_states = self.patch_embed(pixel_values)  # (N,1,1,1,E)
+        hidden_states = ops.reshape(
+            hidden_states, (ops.shape(hidden_states)[0], self.embed_dim)
+        )
+        hidden_states = ops.cast(hidden_states, "float32")
 
-            seq_len = ops.shape(hidden_states)[0]
-            position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
-            segment_ids = self._segment_ids(grid_thw, seq_len)
+        seq_len = ops.shape(hidden_states)[0]
+        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
+        segment_ids = self._segment_ids(grid_thw, seq_len)
 
-            for blk in self.blocks:
-                hidden_states = blk(
-                    hidden_states, position_embeddings, segment_ids
-                )
+        for blk in self.blocks:
+            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
 
-            merged = self.merger(hidden_states)
+        merged = self.merger(hidden_states)
+        merged = ops.take(merged, ops.arange(num_merged), axis=0)
 
-            if batched:
-                merged = ops.expand_dims(merged, axis=0)
-            return merged
-
-        return ops.cond(ops.shape(pixel_values)[0] == 0, _empty_output, _encode)
+        if batched:
+            merged = ops.expand_dims(merged, axis=0)
+        return merged
 
     def compute_output_spec(self, pixel_values, grid_thw=None):
         """Infer output spec for backbone functional-graph construction."""
