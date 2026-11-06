@@ -614,6 +614,12 @@ from keras_hub.src.models.modern_bert.modern_bert_text_classifier import (
 from keras_hub.src.models.modern_bert.modern_bert_text_classifier_preprocessor import (
     ModernBertTextClassifierPreprocessor as ModernBertTextClassifierPreprocessor,
 )
+from keras_hub.src.models.modern_bert.modern_bert_text_embedder import (
+    ModernBertTextEmbedder as ModernBertTextEmbedder,
+)
+from keras_hub.src.models.modern_bert.modern_bert_text_embedder_preprocessor import (
+    ModernBertTextEmbedderPreprocessor as ModernBertTextEmbedderPreprocessor,
+)
 from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer as ModernBertTokenizer,
 )
@@ -628,6 +634,18 @@ from keras_hub.src.models.moonshine.moonshine_backbone import (
 )
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer as MoonshineTokenizer,
+)
+from keras_hub.src.models.mpnet.mpnet_backbone import (
+    MPNetBackbone as MPNetBackbone,
+)
+from keras_hub.src.models.mpnet.mpnet_text_embedder import (
+    MPNetTextEmbedder as MPNetTextEmbedder,
+)
+from keras_hub.src.models.mpnet.mpnet_text_embedder_preprocessor import (
+    MPNetTextEmbedderPreprocessor as MPNetTextEmbedderPreprocessor,
+)
+from keras_hub.src.models.mpnet.mpnet_tokenizer import (
+    MPNetTokenizer as MPNetTokenizer,
 )
 from keras_hub.src.models.muse_glimmer.muse_glimmer_assistant_causal_lm import (
     MuseGlimmerAssistantCausalLM as MuseGlimmerAssistantCausalLM,
