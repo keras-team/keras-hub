@@ -163,3 +163,11 @@ class ModernBertMaskedLM(MaskedLM):
             dtype=dtype,
             **kwargs,
         )
+
+        # Re-assign after `super().__init__()` so the bias is tracked on every
+        # backend. On torch, `Task.__setattr__` stores attributes set before
+        # `super().__init__()` untracked. Layers are re-tracked through the
+        # functional graph but bare variables are not, so the bias would never
+        # be trained or saved on torch. This is a no-op on other backends and
+        # keeps the saved weight layout unchanged.
+        self.mlm_head_decoder_bias = self.mlm_head_decoder_bias
