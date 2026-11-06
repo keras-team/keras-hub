@@ -69,6 +69,8 @@ HF_CONFIG_FILE = "config.json"
 HF_TOKENIZER_CONFIG_FILE = "tokenizer_config.json"
 SAFETENSOR_CONFIG_FILE = "model.safetensors.index.json"
 SAFETENSOR_FILE = "model.safetensors"
+# Diffusers pipeline repos have this instead of a root `config.json`.
+DIFFUSERS_MODEL_INDEX_FILE = "model_index.json"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
@@ -552,6 +554,14 @@ def set_dtype_in_config(config, dtype=None):
 
 def get_preset_loader(preset):
     if not check_file_exists(preset, CONFIG_FILE):
+        if check_file_exists(preset, DIFFUSERS_MODEL_INDEX_FILE):
+            # Avoid circular import.
+            from keras_hub.src.utils.transformers.preset_loader import (
+                DiffusersPresetLoader,
+            )
+
+            config = load_json(preset, DIFFUSERS_MODEL_INDEX_FILE)
+            return DiffusersPresetLoader(preset, config)
         raise ValueError(
             f"Preset {preset} has no {CONFIG_FILE}. Make sure the URI or "
             "directory you are trying to load is a valid KerasHub preset and "

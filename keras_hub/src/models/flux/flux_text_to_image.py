@@ -1,7 +1,7 @@
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.flux.flux_model import FluxBackbone
+from keras_hub.src.models.flux.flux_backbone import FluxBackbone
 from keras_hub.src.models.flux.flux_text_to_image_preprocessor import (
     FluxTextToImagePreprocessor,
 )
@@ -12,8 +12,12 @@ from keras_hub.src.models.text_to_image import TextToImage
 class FluxTextToImage(TextToImage):
     """An end-to-end Flux model for text-to-image generation.
 
-    This model has a `generate()` method, which generates image based on a
-    prompt.
+    Note: FLUX.1 generation is not supported yet. Only the FLUX.1
+    transformer (`keras_hub.models.FluxBackbone`) is ported, and the
+    `flux1_schnell` preset holds just the transformer weights, without the
+    CLIP-L and T5-XXL text encoders or the VAE that generation needs.
+    `generate()` raises a `NotImplementedError` until they are added. For
+    end-to-end generation, use `keras_hub.models.Flux2TextToImage`.
 
     Args:
         backbone: A `keras_hub.models.FluxBackbone` instance.
@@ -22,38 +26,9 @@ class FluxTextToImage(TextToImage):
 
     Examples:
 
-    Use `generate()` to do image generation.
+    Load the pretrained FLUX.1 [schnell] transformer.
     ```python
-    prompt = (
-        "Astronaut in a jungle, cold color palette, muted colors, "
-        "detailed, 8k"
-    )
-    text_to_image = keras_hub.models.FluxTextToImage.from_preset(
-        "TBA", height=512, width=512
-    )
-    text_to_image.generate(
-        prompt
-    )
-
-    # Generate with batched prompts.
-    text_to_image.generate(
-        ["cute wallpaper art of a cat", "cute wallpaper art of a dog"]
-    )
-
-    # Generate with different `num_steps` and `guidance_scale`.
-    text_to_image.generate(
-        prompt,
-        num_steps=50,
-        guidance_scale=5.0,
-    )
-
-    # Generate with `negative_prompts`.
-    text_to_image.generate(
-        {
-            "prompts": prompt,
-            "negative_prompts": "green color",
-        }
-    )
+    backbone = keras_hub.models.FluxBackbone.from_preset("flux1_schnell")
     ```
     """
 
@@ -138,9 +113,9 @@ class FluxTextToImage(TextToImage):
         guidance_scale=7.0,
         seed=None,
     ):
-        return super().generate(
-            inputs,
-            num_steps=num_steps,
-            guidance_scale=guidance_scale,
-            seed=seed,
+        raise NotImplementedError(
+            "FLUX.1 generation is not supported yet: only the FLUX.1 "
+            "transformer (`FluxBackbone`) is ported, without the CLIP-L and "
+            "T5-XXL text encoders and the VAE. Use "
+            "`keras_hub.models.Flux2TextToImage` for text-to-image generation."
         )

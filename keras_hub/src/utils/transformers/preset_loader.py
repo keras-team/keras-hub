@@ -1,11 +1,16 @@
 """Convert huggingface models to KerasHub."""
 
 import inspect
+import os
 
+from keras_hub.src.models.flux2.flux2_vae import Flux2VAE
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.utils.preset_utils import PresetLoader
+from keras_hub.src.utils.preset_utils import check_file_exists
+from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import jax_memory_cleanup
+from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
@@ -17,6 +22,8 @@ from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
 from keras_hub.src.utils.transformers import convert_embedding_gemma2
 from keras_hub.src.utils.transformers import convert_esm
+from keras_hub.src.utils.transformers import convert_flux
+from keras_hub.src.utils.transformers import convert_flux2
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
 from keras_hub.src.utils.transformers import convert_gemma3n
@@ -252,3 +259,142 @@ class TransformersPresetLoader(PresetLoader):
         if config_file is not None:
             return super().load_preprocessor(cls, config_file, **kwargs)
         return super().load_preprocessor(cls, **kwargs)
+
+
+class DiffusersSafetensorLoader(SafetensorLoader):
+    """A `SafetensorLoader` over one component folder of a diffusers repo.
+
+    Diffusers models (`transformer/`, `vae/`) are saved as
+    `diffusion_pytorch_model.safetensors`, or sharded with a
+    `diffusion_pytorch_model.safetensors.index.json`; transformers models
+    (`text_encoder/`) as `model.safetensors` or with a
+    `model.safetensors.index.json`.
+
+    Args:
+        preset: The diffusers repo, e.g. `"hf://org/model"` or a local path.
+        subfolder: The component folder, e.g. `"transformer"`.
+    """
+
+    def __init__(self, preset, subfolder):
+        super().__init__(preset)
+        for name in ("diffusion_pytorch_model", "model"):
+            index_file = f"{subfolder}/{name}.safetensors.index.json"
+            if check_file_exists(preset, index_file):
+                index = load_json(preset, index_file)
+                weight_map = {
+                    key: f"{subfolder}/{fname}"
+                    for key, fname in index["weight_map"].items()
+                }
+                self.safetensor_config = {**index, "weight_map": weight_map}
+                return
+            if check_file_exists(preset, f"{subfolder}/{name}.safetensors"):
+                self.fname = f"{subfolder}/{name}.safetensors"
+                return
+        raise FileNotFoundError(
+            f"`{subfolder}/` in preset `{preset}` has no safetensors weights."
+        )
+
+
+class DiffusersPresetLoader(PresetLoader):
+    """Loads FLUX models from diffusers pipeline repos.
+
+    A diffusers repo has a `model_index.json` and one folder per component
+    (`transformer/`, `vae/`, `text_encoder/`, `tokenizer/`, ...), each with
+    its own config and weights, but no root `config.json`. The backbone is
+    the `transformer/`, dispatched on the `_class_name` of its config. For
+    FLUX.2, the text encoder, tokenizer and VAE of `Flux2TextToImage` are
+    read from their folders too.
+    """
+
+    def __init__(self, preset, config):
+        super().__init__(preset, config)
+        self.transformer_config = load_json(preset, "transformer/config.json")
+        class_name = self.transformer_config["_class_name"]
+        if class_name == "FluxTransformer2DModel":
+            self.converter = convert_flux
+        elif class_name == "Flux2Transformer2DModel":
+            self.converter = convert_flux2
+        else:
+            raise ValueError(
+                "KerasHub has no converter for diffusers transformers of "
+                f"class `'{class_name}'`."
+            )
+
+    def check_backbone_class(self):
+        return self.converter.backbone_cls
+
+    def load_backbone(self, cls, load_weights, **kwargs):
+        keras_config = self.converter.convert_backbone_config(
+            self.transformer_config
+        )
+        backbone = cls(**{**keras_config, **kwargs})
+        if load_weights:
+            jax_memory_cleanup(backbone)
+            with DiffusersSafetensorLoader(
+                self.preset, "transformer"
+            ) as loader:
+                self.converter.convert_weights(backbone, loader)
+        return backbone
+
+    def _check_component(self, name, expected_class):
+        _, class_name = self.config[name]
+        if class_name != expected_class:
+            raise ValueError(
+                f"KerasHub can only load a `{expected_class}` as the `{name}` "
+                f"of a diffusers repo. Received: `{class_name}`"
+            )
+
+    def _check_flux2(self):
+        if self.converter is not convert_flux2:
+            raise ValueError(
+                "Only the transformer (`FluxBackbone`) of a FLUX.1 diffusers "
+                "repo can be loaded: FLUX.1 generation is not supported yet."
+            )
+
+    def _load_text_encoder(self, load_weights, dtype):
+        self._check_component("text_encoder", "Qwen3ForCausalLM")
+        config = load_json(self.preset, "text_encoder/config.json")
+        text_encoder = convert_qwen3.backbone_cls(
+            **convert_qwen3.convert_backbone_config(config), dtype=dtype
+        )
+        if load_weights:
+            jax_memory_cleanup(text_encoder)
+            with DiffusersSafetensorLoader(
+                self.preset, "text_encoder"
+            ) as loader:
+                convert_qwen3.convert_weights(text_encoder, loader, config)
+        return text_encoder
+
+    def _load_vae(self, load_weights, dtype):
+        self._check_component("vae", "AutoencoderKLFlux2")
+        config = load_json(self.preset, "vae/config.json")
+        vae = Flux2VAE(**convert_flux2.convert_vae_config(config), dtype=dtype)
+        if load_weights:
+            jax_memory_cleanup(vae)
+            with DiffusersSafetensorLoader(self.preset, "vae") as loader:
+                convert_flux2.convert_vae_weights(vae, loader)
+        return vae
+
+    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
+        self._check_flux2()
+        dtype = kwargs.get("dtype")
+        if "text_encoder" not in kwargs:
+            kwargs["text_encoder"] = self._load_text_encoder(
+                load_weights, dtype
+            )
+        if "vae" not in kwargs:
+            kwargs["vae"] = self._load_vae(load_weights, dtype)
+        # `Flux2KleinPipeline` defaults to `is_distilled=False` too.
+        kwargs.setdefault(
+            "is_distilled", self.config.get("is_distilled", False)
+        )
+        return super().load_task(cls, load_weights, load_task_weights, **kwargs)
+
+    def load_tokenizer(self, cls, config_file=None, **kwargs):
+        self._check_flux2()
+        # `get_file` fetches `tokenizer/tokenizer.json` (downloading it for
+        # `hf://` presets); its local folder is a preset `convert_qwen3` reads.
+        path = get_file(self.preset, "tokenizer/tokenizer.json")
+        return convert_qwen3.convert_tokenizer(
+            cls, os.path.dirname(path), **kwargs
+        )
