@@ -16,6 +16,93 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class Gemma4UnifiedCausalLMPreprocessorTest(TestCase):
+    def test_image_truncation_raises(self):
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=8,
+            num_vision_tokens_per_image=5,
+            max_images_per_prompt=1,
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Image placeholders were truncated. "
+            "Please raise `sequence_length`.",
+        ):
+            preprocessor.generate_preprocess(
+                {
+                    "prompts": ["a b c d e f g h i j k l <|image|> text"],
+                    "images": [tf.zeros([1, 16, 16, 3])],
+                }
+            )
+
+    def test_tf_data_map(self):
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=300,
+            num_vision_tokens_per_image=10,
+        )
+        # Test 1: preprocessor (training mode) with prompts, responses, images
+        ds = tf.data.Dataset.from_tensor_slices(
+            {
+                "prompts": ["<|image|> text", "text <|image|>"],
+                "responses": ["response 1", "response 2"],
+                "images": [tf.zeros([1, 16, 16, 3]), tf.zeros([1, 16, 16, 3])],
+            }
+        ).batch(2)
+        ds = ds.map(preprocessor)
+        for batch in ds:
+            self.assertIn("token_ids", batch[0])
+            self.assertIsNotNone(batch[1])  # labels
+
+        # Test 2: generate_preprocess with prompts and images only
+        ds_gen = tf.data.Dataset.from_tensor_slices(
+            {
+                "prompts": ["<|image|> text", "text <|image|>"],
+                "images": [tf.zeros([1, 16, 16, 3]), tf.zeros([1, 16, 16, 3])],
+            }
+        ).batch(2)
+        ds_gen = ds_gen.map(preprocessor.generate_preprocess)
+        for batch in ds_gen:
+            self.assertIn("token_ids", batch)
+
+    def test_per_sample_image_counts(self):
+        # We need a converter that returns different valid masks.
+        # But our dummy converter returns fixed sizes.
+        # Let's mock the converter to return different pixel_position_ids.
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self.image_converter,
+            sequence_length=300,
+            num_vision_tokens_per_image=50,
+        )
+        # Mock pixel_position_ids for 2 samples: 1 with 20 tokens, 1 with 30
+        # tokens. We'll just test that the placeholder replacement in
+        # generate_preprocess works!
+        pixel_position_ids = tf.constant(
+            [
+                [[[1, 1]] * 20 + [[-1, -1]] * 30],
+                [[[1, 1]] * 30 + [[-1, -1]] * 20],
+            ]
+        )
+
+        prompts = tf.constant(["<|image|> A", "<|image|> B"])
+        expanded, expected_vision = preprocessor._expand_image_prompt(
+            prompts, pixel_position_ids
+        )
+        expanded_str = [p.numpy().decode("utf-8") for p in expanded]
+
+        self.assertEqual(
+            expanded_str[0].count(preprocessor.image_placeholder), 20
+        )
+        self.assertEqual(
+            expanded_str[1].count(preprocessor.image_placeholder), 30
+        )
+        # text after image survives
+        self.assertTrue(expanded_str[0].endswith(" A"))
+        self.assertTrue(expanded_str[1].endswith(" B"))
+
     def setUp(self):
         self.tokenizer = MockGemma4Tokenizer()
 
@@ -88,17 +175,17 @@ class Gemma4UnifiedCausalLMPreprocessorTest(TestCase):
 
         expected_output = [
             {
-                "vision_indices": [list(range(6, 11)) + [0] * 5],
-                "vision_mask": [[0] * 6 + [1] * 5 + [0] * 9],
+                "vision_indices": [[6] + [0] * 9],
+                "vision_mask": [[0] * 6 + [1] * 1 + [0] * 13],
                 "token_ids": [
-                    [1, 9, 14, 10, 12, 4] + [8] * 5 + [5, 15, 2] + [0] * 6
+                    [1, 9, 14, 10, 12, 4] + [8] * 1 + [5, 15, 2] + [0] * 10
                 ],
-                "padding_mask": [[1] * 14 + [0] * 6],
+                "padding_mask": [[1] * 10 + [0] * 10],
             },
             [
-                [9, 14, 10, 12, 4] + [8] * 5 + [5, 15, 2] + [0] * 7
+                [9, 14, 10, 12, 4] + [8] * 1 + [5, 15, 2] + [0] * 11
             ],  # Labels shifted.
-            [[0] * 11 + [1] * 2 + [0] * 7],  # Zero out unlabeled examples.
+            [[0] * 7 + [1] * 2 + [0] * 11],  # Zero out unlabeled examples.
         ]
 
         # Check pixel_values shape.
@@ -147,11 +234,11 @@ class Gemma4UnifiedCausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_preprocess(input_data)
         self.assertAllEqual(
             x["token_ids"],
-            [1, 9, 14, 10, 12, 4] + [8] * 5 + [5] + [0] * 8,
+            [1, 9, 14, 10, 12, 4] + [8] * 1 + [5] + [0] * 12,
         )
-        self.assertAllEqual(x["padding_mask"], [1] * 12 + [0] * 8)
-        self.assertAllEqual(x["vision_indices"], list(range(6, 11)) + [0] * 5)
-        self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
+        self.assertAllEqual(x["padding_mask"], [1] * 8 + [0] * 12)
+        self.assertAllEqual(x["vision_indices"], [6] + [0] * 9)
+        self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 1 + [0] * 13)
         self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
 
     def test_text_generate_postprocess(self):

@@ -8,6 +8,8 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class Gemma4UnifiedVisionEmbedderTest(TestCase):
+    EXPECTED = None
+
     """Tests for Gemma4UnifiedVisionEmbedder."""
 
     def _make_embedder(self, hidden_dim=32, mm_posemb_size=256, **kwargs):
@@ -35,6 +37,41 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
 
         output = embedder({"pixel_values": pv, "pixel_position_ids": pos})
         self.assertEqual(output.shape, (1, 1, 16, 32))
+
+    def test_exact_output(self):
+        embedder = self._make_embedder(
+            hidden_dim=32,
+            model_patch_size=48,
+            mm_posemb_size=256,
+            num_soft_tokens=16,
+            pooling_kernel_size=3,
+            patch_size=16,
+        )
+        input_dim = 48 * 48 * 3
+        pv = np.ones((1, 1, 16, input_dim), dtype="float32")
+        pos = np.zeros((1, 1, 16, 2), dtype="int32")
+        for i in range(16):
+            pos[0, 0, i, 0] = i % 4
+            pos[0, 0, i, 1] = i // 4
+
+        # Build first
+        embedder({"pixel_values": pv, "pixel_position_ids": pos})
+
+        # Set deterministic weights
+        rng = np.random.default_rng(0)
+        embedder.set_weights(
+            [
+                rng.standard_normal(w.shape).astype("float32") * 0.1
+                for w in embedder.weights
+            ]
+        )
+
+        output = embedder({"pixel_values": pv, "pixel_position_ids": pos})
+        out_np = ops.convert_to_numpy(output)
+        expected = [0.93682486, 0.4554378, -0.17883497, 0.6127433, -0.9761301]
+        # Measured on CPU; 1e-3 covers TF32 drift in the GPU matrix (a x2
+        # mutation moves these values by ~1).
+        self.assertAllClose(out_np[0, 0, 0, :5], expected, atol=1e-3)
 
     def test_all_padding_input(self):
         """All-padding input (pos=-1) should not crash."""

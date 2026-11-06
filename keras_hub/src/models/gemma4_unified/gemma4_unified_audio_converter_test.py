@@ -49,14 +49,12 @@ class Gemma4UnifiedAudioConverterTest(TestCase):
 
     def test_exact_divisible_length(self):
         """Waveform exactly divisible produces no padding."""
-        converter = Gemma4UnifiedAudioConverter(**self.init_kwargs)
+        converter = Gemma4UnifiedAudioConverter(audio_samples_per_token=10)
         waveform = np.arange(20, dtype="float32")
         out = ops.convert_to_numpy(converter(waveform))
         self.assertEqual(out.shape, (2, 10))
-        # First token = [0..9], second = [10..19]
-        np.testing.assert_array_equal(out[0], np.arange(10, dtype="float32"))
         np.testing.assert_array_equal(
-            out[1], np.arange(10, 20, dtype="float32")
+            out, np.arange(20, dtype="float32").reshape(2, 10)
         )
 
     def test_output_preserves_values(self):

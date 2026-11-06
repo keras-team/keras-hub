@@ -215,6 +215,7 @@ class Gemma4UnifiedBackboneTest(TestCase, parameterized.TestCase):
 
     @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
+    @pytest.mark.skip(reason="No presets yet")
     def test_all_presets(self):
         for preset in Gemma4UnifiedBackbone.presets:
             self.run_preset_test(

@@ -77,10 +77,39 @@ class Gemma4UnifiedAudioEmbedderTest(TestCase):
         self.assertAlmostEqual(embedder.layer_norm_epsilon, 1e-5)
 
     def test_with_partial_mask(self):
-        """Partial audio mask should not cause errors."""
+        """Partial audio mask should not cause errors.
+
+        Masked positions should be exactly zero.
+        """
         embedder = self._make_embedder()
-        audio_features = np.random.rand(2, 10, 16).astype("float32")
-        audio_mask = np.zeros((2, 10), dtype="bool")
-        audio_mask[:, :5] = True  # First 5 frames are valid
+        audio_features = np.ones((2, 10, 16), dtype="float32")
+        audio_mask = np.ones((2, 10), dtype="bool")
+
+        # Build first
+        embedder(audio_features, audio_mask)
+
+        # Set deterministic weights
+        rng = np.random.default_rng(0)
+        embedder.set_weights(
+            [
+                rng.standard_normal(w.shape).astype("float32") * 0.1
+                for w in embedder.weights
+            ]
+        )
+
         output = embedder(audio_features, audio_mask)
         self.assertEqual(output.shape, (2, 10, 32))
+
+        import keras
+
+        out_np = keras.ops.convert_to_numpy(output)
+        expected = [
+            -0.049372494,
+            0.10350018,
+            -0.15298781,
+            0.28178325,
+            -0.14632004,
+        ]
+        # Measured on CPU; 1e-3 covers TF32 drift in the GPU matrix (a x2
+        # mutation moves these values by ~1).
+        self.assertAllClose(out_np[0, 0, :5], expected, atol=1e-3)

@@ -91,7 +91,7 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma4
         elif model_type == "embedding_gemma2":
             self.converter = convert_embedding_gemma2
-        elif model_type == "gemma4_unified":
+        elif model_type.startswith("gemma4_unified"):
             self.converter = convert_gemma4_unified
         elif model_type in ("gemma4_assistant", "gemma4_unified_assistant"):
             self.converter = convert_gemma4_assistant
@@ -153,6 +153,8 @@ class TransformersPresetLoader(PresetLoader):
             )
 
     def check_backbone_class(self):
+        if hasattr(self.converter, "check_backbone_class"):
+            return self.converter.check_backbone_class(self.config)
         return self.converter.backbone_cls
 
     def load_backbone(self, cls, load_weights, **kwargs):
@@ -263,6 +265,14 @@ class TransformersPresetLoader(PresetLoader):
                 self.preset, self.config
             )
             if config is not None:
+                model_type = self.config.get("model_type", "")
+                if model_type.startswith("gemma4_unified"):
+                    from keras_hub.src.models.gemma4_unified import (
+                        gemma4_unified_video_converter as v_conv,
+                    )
+
+                    cls = v_conv.Gemma4UnifiedVideoConverter
+
                 return cls(**{**config, **kwargs})
         return None
 

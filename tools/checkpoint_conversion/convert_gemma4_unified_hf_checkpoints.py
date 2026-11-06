@@ -119,17 +119,11 @@ def _download_test_video():
     except ImportError:
         print("Warning: PyAV not installed; skipping video download.")
         return None
-    try:
-        response = requests.get(VIDEO_URL, timeout=60)
-        response.raise_for_status()
-        container = av.open(BytesIO(response.content))
-        frames = [
-            f.to_ndarray(format="rgb24") for f in container.decode(video=0)
-        ]
-        return np.stack(frames)
-    except Exception as e:
-        print(f"Warning: could not download test video ({e}).")
-        return None
+    response = requests.get(VIDEO_URL, timeout=60)
+    response.raise_for_status()
+    container = av.open(BytesIO(response.content))
+    frames = [f.to_ndarray(format="rgb24") for f in container.decode(video=0)]
+    return np.stack(frames)
 
 
 def _count_hf_params(hf_model):
@@ -156,17 +150,11 @@ def _load_test_assets():
 
     import soundfile as sf
 
-    try:
-        raw_audio, sr = sf.read(AUDIO_FILE_PATH)
-        if sr != 16000:
-            from scipy import signal
+    raw_audio, sr = sf.read(AUDIO_FILE_PATH)
+    if sr != 16000:
+        from scipy import signal
 
-            raw_audio = signal.resample(
-                raw_audio, int(len(raw_audio) * 16000 / sr)
-            )
-    except Exception as e:
-        print(f"Warning: could not read audio ({e}), using silence.")
-        raw_audio = np.zeros((16000 * 3,), dtype=np.float32)
+        raw_audio = signal.resample(raw_audio, int(len(raw_audio) * 16000 / sr))
 
     if FLAGS.video_path:
         import av
@@ -299,9 +287,13 @@ def _precompute_hf_outputs(
         audio=raw_audio,
         videos=raw_video,
         return_mm_token_type_ids=True,
+        return_metadata=True,
         return_tensors="pt",
     )
-    hf_inputs = {key: value.to(device) for key, value in hf_inputs.items()}
+    hf_inputs = {
+        key: value.to(device) if hasattr(value, "to") else value
+        for key, value in hf_inputs.items()
+    }
 
     # Ensure HF inputs start with BOS.
     bos_id = hf_tokenizer.bos_token_id
@@ -478,7 +470,9 @@ def _test_token_ids(label, preprocessor, prompt, hf_token_ids, **media_kwargs):
     print(f"✓ [{label}] Token IDs match.")
 
 
-def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
+def _test_numerics(
+    label, backbone, keras_hub_inputs, hf_logits, hf_token_ids=None
+):
     """Assert backbone logits match HF logits within tolerance."""
     if isinstance(keras_hub_inputs, tuple):
         keras_hub_inputs = keras_hub_inputs[0]
@@ -496,6 +490,11 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
         "audio_indices",
         "audio_mask",
     ]
+    if hf_token_ids is not None:
+        kh_token_ids = ops.convert_to_numpy(keras_hub_inputs["token_ids"])
+        np.testing.assert_array_equal(kh_token_ids, hf_token_ids)
+        print(f"✓ [{label}] Token IDs match before numerics check.")
+
     keras_hub_inputs = {
         k: v for k, v in keras_hub_inputs.items() if k in expected_names
     }
@@ -513,24 +512,11 @@ def _test_numerics(label, backbone, keras_hub_inputs, hf_logits):
     max_diff = float(np.max(abs_diff))
     mean_diff = float(np.mean(abs_diff))
 
-    try:
-        np.testing.assert_allclose(kh_logits, hf_logits, atol=1e-3, rtol=1e-3)
-        print(
-            f"✅ [{label}] Logits within 1e-3 tolerance "
-            f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
-        )
-    except AssertionError:
-        diff = np.abs(kh_logits - hf_logits)
-        tol = 1e-3 + 1e-3 * np.abs(hf_logits)
-        mismatched = int(np.sum(diff > tol))
-        total = hf_logits.size
-        pct = 100.0 * (1.0 - mismatched / total)
-        print(
-            f"⚠️  [{label}] Logits exceed 1e-3 tolerance — "
-            f"max={max_diff:.6f}, mean={mean_diff:.6f}, "
-            f"matching={pct:.2f}% ({total - mismatched}/{total}).\n"
-            "    NOTE: Generated text comparison is the authoritative check."
-        )
+    np.testing.assert_allclose(kh_logits, hf_logits, atol=1e-3, rtol=1e-3)
+    print(
+        f"✅ [{label}] Logits within 1e-3 tolerance "
+        f"(max={max_diff:.6f}, mean={mean_diff:.6f})."
+    )
 
 
 def _test_generate(
@@ -847,11 +833,6 @@ def _verify_model(
         "text", preprocessor, PROMPT_TEXT, hf_data_text["input_ids"]
     )
 
-    actual_num_tokens = int(
-        np.sum(hf_data_image["input_ids"][0] == tokenizer.image_placeholder_id)
-    )
-    saved_num_tokens = preprocessor.num_vision_tokens_per_image
-    preprocessor.num_vision_tokens_per_image = actual_num_tokens
     _test_token_ids(
         "image",
         preprocessor,
@@ -859,7 +840,6 @@ def _verify_model(
         hf_data_image["input_ids"],
         images=raw_image,
     )
-    preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     if is_audio_model and hf_data_audio is not None:
         _test_token_ids(
@@ -896,11 +876,14 @@ def _verify_model(
         sequence_length=hf_data_text["logits"].shape[1],
     )
     _test_numerics(
-        "text (KH preproc)", backbone, kh_inputs_text, hf_data_text["logits"]
+        "text (KH preproc)",
+        backbone,
+        kh_inputs_text,
+        hf_data_text["logits"],
+        hf_data_text["input_ids"],
     )
 
     # Image: use KH preprocessor.
-    preprocessor.num_vision_tokens_per_image = actual_num_tokens
     kh_inputs_image = preprocessor.generate_preprocess(
         {
             "prompts": [PROMPT_IMAGE],
@@ -913,8 +896,8 @@ def _verify_model(
         backbone,
         kh_inputs_image,
         hf_data_image["logits"],
+        hf_data_image["input_ids"],
     )
-    preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     # Audio: feed through KH preprocessor.
     if is_audio_model and hf_data_audio is not None:
@@ -930,6 +913,7 @@ def _verify_model(
             backbone,
             kh_inputs_audio,
             hf_data_audio["logits"],
+            hf_data_audio["input_ids"],
         )
 
     if is_video_model and hf_data_video is not None:
@@ -950,6 +934,7 @@ def _verify_model(
             backbone,
             kh_inputs_video,
             hf_data_video["logits"],
+            hf_data_video["input_ids"],
         )
         preprocessor.num_frames_per_video = saved_num_frames
 
@@ -970,7 +955,6 @@ def _verify_model(
         "text", gemma4_lm, PROMPT_TEXT, hf_data_text["generated_text"]
     )
 
-    preprocessor.num_vision_tokens_per_image = actual_num_tokens
     _test_generate(
         "image",
         gemma4_lm,
@@ -978,7 +962,6 @@ def _verify_model(
         hf_data_image["generated_text"],
         images=raw_image,
     )
-    preprocessor.num_vision_tokens_per_image = saved_num_tokens
 
     if is_audio_model and hf_data_audio is not None:
         _test_generate(

@@ -256,7 +256,9 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         )
         self.built = True
 
-    def _get_vision_indices(self, vision_mask, max_tokens=None):
+    def _get_vision_indices(
+        self, vision_mask, max_tokens=None, expected_vision_tokens=None
+    ):
         """Computes indices given vision mask, and pads with 0.
 
         Args:
@@ -266,6 +268,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
                 length, ensuring a static second dimension across all batches
                 (required for XLA compilation and consistent batching).
                 When ``None``, pads to the maximum actual count in the batch.
+            expected_vision_tokens: Expected token count to check truncation.
         """
         batch_size, sequence_length = vision_mask.shape
 
@@ -276,6 +279,31 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         row_lengths = tf.math.reduce_sum(
             tf.cast(vision_mask, dtype=vision_indices.dtype), axis=1
         )
+
+        if expected_vision_tokens is not None:
+            if hasattr(row_lengths, "numpy") and hasattr(
+                expected_vision_tokens, "numpy"
+            ):
+                import numpy as np
+
+                if np.any(row_lengths.numpy() < expected_vision_tokens.numpy()):
+                    raise ValueError(
+                        "Image placeholders were truncated. "
+                        "Please raise `sequence_length`."
+                    )
+
+            assert_op = tf.debugging.Assert(
+                tf.reduce_all(
+                    row_lengths
+                    >= tf.cast(expected_vision_tokens, row_lengths.dtype)
+                ),
+                [
+                    "Image placeholders were truncated. "
+                    "Please raise `sequence_length`."
+                ],
+            )
+            with tf.control_dependencies([assert_op]):
+                row_lengths = tf.identity(row_lengths)
 
         batched_vision_indices = tf.RaggedTensor.from_row_lengths(
             values=vision_indices,
@@ -356,6 +384,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         return_labels=False,
         text_only_input=False,
         batched=False,
+        expected_vision_tokens=None,
     ):
         if return_labels:
             # Target `y` will be the next token.
@@ -400,7 +429,9 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             else:
                 max_vision_tokens = None
             vision_indices = self._get_vision_indices(
-                vision_mask=vision_mask, max_tokens=max_vision_tokens
+                vision_mask=vision_mask,
+                max_tokens=max_vision_tokens,
+                expected_vision_tokens=expected_vision_tokens,
             )
 
         if pixel_values is None:
@@ -713,6 +744,64 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             )
         return " ".join(frame_strs)
 
+    def _expand_image_prompt(self, prompts, pixel_position_ids, batched=True):
+        if pixel_position_ids is not None:
+            pos_ids = pixel_position_ids
+            if not batched:
+                pos_ids = tf.expand_dims(pos_ids, 0)
+            if len(pos_ids.shape) == 3:
+                pos_ids = tf.expand_dims(pos_ids, 1)
+            valid_mask = pos_ids[..., 0] >= 0
+            tokens_per_image = tf.reduce_sum(
+                tf.cast(valid_mask, tf.int32), axis=-1
+            )
+        else:
+            tokens_per_image = tf.fill(
+                [tf.shape(prompts)[0], self.max_images_per_prompt],
+                self.num_vision_tokens_per_image,
+            )
+
+        def _replace_images(args):
+            prompt, counts = args
+            parts = tf.strings.split(prompt, self.image_placeholder)
+            num_occurrences = tf.shape(parts)[0] - 1
+            valid_counts = counts[:num_occurrences]
+            expected_total = tf.reduce_sum(valid_counts)
+
+            def _build_repl(count):
+                count = tf.maximum(count, 1)
+                repeated = tf.repeat(self.image_placeholder, count)
+                joined = tf.strings.reduce_join(repeated)
+                return tf.strings.join(
+                    [
+                        self.start_of_image_token,
+                        joined,
+                        self.end_of_image_token,
+                    ]
+                )
+
+            replacements = tf.map_fn(
+                _build_repl, valid_counts, fn_output_signature=tf.string
+            )
+
+            def _join_step(i):
+                return tf.strings.join([replacements[i], parts[i + 1]])
+
+            joined_tail = tf.map_fn(
+                _join_step,
+                tf.range(num_occurrences),
+                fn_output_signature=tf.string,
+            )
+            return tf.strings.join(
+                [parts[0], tf.strings.reduce_join(joined_tail)]
+            ), expected_total
+
+        return tf.map_fn(
+            _replace_images,
+            (prompts, tokens_per_image),
+            fn_output_signature=(tf.string, tf.int32),
+        )
+
     def _expand_video_prompt(self, prompts, videos):
         """Expand ``<|video|>`` placeholders with per-frame token sequences.
 
@@ -819,15 +908,32 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
                 "`audio` is not `None`."
             )
 
+        if images is not None and videos is not None:
+            raise ValueError(
+                "Cannot process both `images` and `videos` in the same call."
+            )
+
+        if (
+            images is not None
+            and self.image_converter is not None
+            and pixel_position_ids is None
+        ):
+            vision_dict = self._preprocess_images(images, batched)
+            pixel_values = vision_dict["pixel_values"]
+            pixel_position_ids = vision_dict["pixel_position_ids"]
+        elif (
+            videos is not None
+            and self.video_converter is not None
+            and pixel_position_ids is None
+        ):
+            videos_dict = self._preprocess_videos(videos, batched)
+            pixel_values = videos_dict["pixel_values"]
+            pixel_position_ids = videos_dict["pixel_position_ids"]
+
+        expected_vision_tokens = None
         if self.image_converter is not None:
-            num_tokens = self.num_vision_tokens_per_image
-            img_pattern = re.escape(self.image_placeholder)
-            prompts = tf.strings.regex_replace(
-                prompts,
-                img_pattern,
-                f"{self.start_of_image_token}"
-                + self.image_placeholder * num_tokens
-                + f"{self.end_of_image_token}",
+            prompts, expected_vision_tokens = self._expand_image_prompt(
+                prompts, pixel_position_ids, batched=batched
             )
 
         if self.video_converter is not None:
@@ -971,14 +1077,8 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:
-            vision_dict = self._preprocess_images(images, batched)
-            pixel_values = vision_dict["pixel_values"]
-            pixel_position_ids = vision_dict["pixel_position_ids"]
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         elif videos is not None and self.video_converter is not None:
-            videos_dict = self._preprocess_videos(videos, batched)
-            pixel_values = videos_dict["pixel_values"]
-            pixel_position_ids = videos_dict["pixel_position_ids"]
             vision_mask = token_ids == self.tokenizer.video_placeholder_id
         elif pixel_values is not None:
             pixel_values = (
@@ -1025,6 +1125,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             return_labels=True,
             text_only_input=False,
             batched=batched,
+            expected_vision_tokens=expected_vision_tokens,
         )
 
     @preprocessing_function
@@ -1074,15 +1175,32 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
                 "`images`/`pixel_values` or `audio` is not `None`."
             )
 
+        if images is not None and videos is not None:
+            raise ValueError(
+                "Cannot process both `images` and `videos` in the same call."
+            )
+
+        if (
+            images is not None
+            and self.image_converter is not None
+            and pixel_position_ids is None
+        ):
+            vision_dict = self._preprocess_images(images, batched)
+            pixel_values = vision_dict["pixel_values"]
+            pixel_position_ids = vision_dict["pixel_position_ids"]
+        elif (
+            videos is not None
+            and self.video_converter is not None
+            and pixel_position_ids is None
+        ):
+            videos_dict = self._preprocess_videos(videos, batched)
+            pixel_values = videos_dict["pixel_values"]
+            pixel_position_ids = videos_dict["pixel_position_ids"]
+
+        expected_vision_tokens = None
         if self.image_converter is not None:
-            num_tokens = self.num_vision_tokens_per_image
-            img_pattern = re.escape(self.image_placeholder)
-            prompts = tf.strings.regex_replace(
-                prompts,
-                img_pattern,
-                f"{self.start_of_image_token}"
-                + self.image_placeholder * num_tokens
-                + f"{self.end_of_image_token}",
+            prompts, expected_vision_tokens = self._expand_image_prompt(
+                prompts, pixel_position_ids, batched=batched
             )
 
         if self.video_converter is not None:
@@ -1158,14 +1276,8 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision & Audio processing ===
         if images is not None and self.image_converter is not None:
-            vision_dict = self._preprocess_images(images, batched)
-            pixel_values = vision_dict["pixel_values"]
-            pixel_position_ids = vision_dict["pixel_position_ids"]
             vision_mask = token_ids == self.tokenizer.image_placeholder_id
         elif videos is not None and self.video_converter is not None:
-            videos_dict = self._preprocess_videos(videos, batched)
-            pixel_values = videos_dict["pixel_values"]
-            pixel_position_ids = videos_dict["pixel_position_ids"]
             vision_mask = token_ids == self.tokenizer.video_placeholder_id
         elif pixel_values is not None:
             pixel_values = (
@@ -1267,6 +1379,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             return_labels=False,
             text_only_input=False,
             batched=batched,
+            expected_vision_tokens=expected_vision_tokens,
         )
 
     def get_config(self):
