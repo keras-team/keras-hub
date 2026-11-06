@@ -20,6 +20,23 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import 
 from keras_hub.src.models.text_to_image import TextToImage
 
 
+def _match_qk_norm_epsilon(text_encoder):
+    """Give the Qwen3 query/key RMSNorms the checkpoint's `rms_norm_eps`.
+
+    `Qwen3TransformerDecoder` does not forward its `layer_norm_epsilon` to
+    `Qwen3Attention`, so the query/key RMSNorms keep the attention layer's
+    default of `1e-5` instead of the `rms_norm_eps` (`1e-6`) used by
+    `Qwen3ForCausalLM`. Real tokens barely notice, but the padded positions
+    drift away from the reference, and FLUX.2 feeds every text position,
+    padding included, to the transformer. Aligning the two epsilons makes
+    `encode_text_step` match the reference at every position.
+    """
+    for layer in text_encoder.transformer_layers:
+        attention = layer._self_attention_layer
+        attention._query_dense_layer_norm.epsilon = layer.layer_norm_epsilon
+        attention._key_dense_layer_norm.epsilon = layer.layer_norm_epsilon
+
+
 class Flux2PositionIds(layers.Layer):
     """Builds FLUX.2's 4-axis `(t, h, w, l)` RoPE positions for text-to-image.
 
@@ -110,11 +127,12 @@ class Flux2TextToImage(TextToImage):
         text_encoder_layers: tuple of ints. The text encoder layers whose
             outputs are concatenated, as Hugging Face `hidden_states` indices
             (`0` is the embedding output). Defaults to `(9, 18, 27)`.
-        image_shape: tuple. `(height, width, 3)` of the generated images.
-            Both sides must be divisible by the VAE downsampling factor times
-            the patch size (`16`). Defaults to `(1024, 1024, 3)`.
         is_distilled: bool. Whether the model is step-distilled (no
             classifier-free guidance). Defaults to `True`.
+
+    The generated image size is the backbone's `image_shape`. Its height
+    and width must be divisible by the VAE downsampling factor times the
+    patch size (`16`).
 
     Examples:
     ```python
@@ -138,7 +156,6 @@ class Flux2TextToImage(TextToImage):
         text_encoder,
         vae,
         text_encoder_layers=(9, 18, 27),
-        image_shape=(1024, 1024, 3),
         is_distilled=True,
         **kwargs,
     ):
@@ -170,17 +187,19 @@ class Flux2TextToImage(TextToImage):
                 f"The backbone expects {backbone.input_channels} latent "
                 f"channels, but the VAE produces {latent_channels}."
             )
+        image_shape = backbone.image_shape
         factor = 2 ** (len(vae.decoder_num_filters) - 1) * vae.patch_size
         height, width = int(image_shape[0]), int(image_shape[1])
         if height % factor != 0 or width % factor != 0:
             raise ValueError(
-                f"`image_shape` height and width must be divisible by "
-                f"{factor}. Received: image_shape={image_shape}"
+                f"The backbone's `image_shape` height and width must be "
+                f"divisible by {factor}. Received: image_shape={image_shape}"
             )
         latent_height, latent_width = height // factor, width // factor
         self._latent_shape = (latent_height, latent_width, latent_channels)
         self.text_encoder_layers = text_encoder_layers
         self.is_distilled = bool(is_distilled)
+        _match_qk_norm_epsilon(text_encoder)
 
         # === Layers ===
         self.backbone = backbone
@@ -252,8 +271,10 @@ class Flux2TextToImage(TextToImage):
         images = self.decode_step(latents)
         super().__init__(inputs=inputs, outputs=images, **kwargs)
 
-        # === Config ===
-        self.image_shape = tuple(image_shape)
+    @property
+    def image_shape(self):
+        """The `(height, width, 3)` shape of the generated images."""
+        return tuple(self.backbone.image_shape)
 
     @property
     def latent_shape(self):
@@ -437,7 +458,6 @@ class Flux2TextToImage(TextToImage):
                 "text_encoder": layers.serialize(self.text_encoder),
                 "vae": layers.serialize(self.vae),
                 "text_encoder_layers": list(self.text_encoder_layers),
-                "image_shape": list(self.image_shape),
                 "is_distilled": self.is_distilled,
             }
         )
@@ -446,22 +466,6 @@ class Flux2TextToImage(TextToImage):
     @classmethod
     def from_config(cls, config):
         config = config.copy()
-        backbone = config.get("backbone")
-        if isinstance(backbone, dict):
-            backbone_config = backbone.get("config", {})
-            image_shape = backbone_config.get("image_shape")
-            # `from_preset(..., image_shape=(height, width, 3))` merges the
-            # image size into the backbone config, where Stable Diffusion 3
-            # keeps it. Here it is the task's output size; the backbone's
-            # `image_shape` is the `(tokens, channels)` shape of the packed
-            # latents and is never 3D.
-            if image_shape is not None and len(image_shape) == 3:
-                config["image_shape"] = image_shape
-                latent_shape = [None, backbone_config["input_channels"]]
-                config["backbone"] = {
-                    **backbone,
-                    "config": {**backbone_config, "image_shape": latent_shape},
-                }
         for key in ("text_encoder", "vae"):
             if key in config and isinstance(config[key], dict):
                 config[key] = layers.deserialize(config[key])

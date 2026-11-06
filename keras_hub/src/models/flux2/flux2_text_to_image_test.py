@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -64,7 +65,6 @@ class Flux2TextToImageTest(TestCase):
             "vae": self.vae,
             # Two hidden states of width 16 give the backbone's 32 features.
             "text_encoder_layers": (1, 2),
-            "image_shape": (32, 32, 3),
         }
         self.input_data = {
             "latents": ops.ones((2, 8, 8, 16)),
@@ -83,8 +83,9 @@ class Flux2TextToImageTest(TestCase):
             "depth_single_blocks": 1,
             "axes_dim": [4, 4, 4, 4],
             "theta": 2000,
-            "image_shape": (None, 16),
+            "latent_shape": (None, 16),
             "text_shape": (None, 32),
+            "image_shape": (32, 32, 3),
         }
         config.update(kwargs)
         return Flux2Backbone(**config)
@@ -143,22 +144,35 @@ class Flux2TextToImageTest(TestCase):
         self.assertAllClose(output, output2)
 
     def test_generate_compilation(self):
+        if keras.config.backend() == "torch":
+            self.skipTest("`generate()` is not compiled on the torch backend.")
         text_to_image = Flux2TextToImage(**self.init_kwargs)
-        # Assert we do not recompile with successive calls, even when the
-        # number of steps changes.
+        # The compiled `generate_step` only runs in Python while it is being
+        # traced, so counting its calls counts traces.
+        traces = []
+        generate_step = text_to_image.generate_step
+
+        def counting_generate_step(*args, **kwargs):
+            traces.append(None)
+            return generate_step(*args, **kwargs)
+
+        text_to_image.generate_step = counting_generate_step
+        # `num_steps` is a tensor and the schedule is computed per step, so
+        # changing it must not retrace.
         text_to_image.generate("airplane", num_steps=2)
-        first_fn = text_to_image.generate_function
         text_to_image.generate("airplane", num_steps=3)
-        second_fn = text_to_image.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
+        self.assertLen(traces, 1)
+        # `compile()` drops the compiled function, so the next call traces.
         text_to_image.compile()
         self.assertIsNone(text_to_image.generate_function)
+        text_to_image.generate("airplane", num_steps=2)
+        self.assertLen(traces, 2)
 
     def test_text_encoder_layers(self):
         # Indices follow Hugging Face `hidden_states`: `0` is the embedding
         # output, `i` the output of block `i - 1` and `num_layers` the
         # normalized final output. Features are concatenated in order.
+        text_to_image = Flux2TextToImage(**self.init_kwargs)
         inputs = self.preprocessor.generate_preprocess(["airplane", "a user"])
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         embeddings = self.text_encoder.token_embedding(token_ids)
@@ -169,7 +183,6 @@ class Flux2TextToImageTest(TestCase):
             {"token_ids": token_ids, "padding_mask": padding_mask}
         )
 
-        text_to_image = Flux2TextToImage(**self.init_kwargs)
         positive, negative = text_to_image.encode_text_step(inputs)
         self.assertIsNone(negative)
         self.assertAllClose(
@@ -183,6 +196,75 @@ class Flux2TextToImageTest(TestCase):
         self.assertAllClose(
             positive, ops.concatenate([final, embeddings], axis=-1)
         )
+
+    def test_text_encoder_qk_norm_epsilon(self):
+        # The Qwen3 query/key RMSNorms must use the checkpoint's
+        # `rms_norm_eps`, like `Qwen3ForCausalLM`.
+        Flux2TextToImage(**self.init_kwargs)
+        for layer in self.text_encoder.transformer_layers:
+            attention = layer._self_attention_layer
+            for norm in (
+                attention._query_dense_layer_norm,
+                attention._key_dense_layer_norm,
+            ):
+                self.assertEqual(norm.epsilon, layer.layer_norm_epsilon)
+
+    def test_encode_text_step_matches_transformers(self):
+        """Every position, padding included, matches `Qwen3ForCausalLM`.
+
+        FLUX.2 feeds all text positions to the transformer, so the padded
+        ones matter too. The query/key projections are scaled down so their
+        RMSNorm epsilon is not negligible, which is where the padded
+        positions used to drift.
+        """
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        torch.manual_seed(0)
+        hf_config = transformers.Qwen3Config(
+            vocab_size=64,
+            hidden_size=16,
+            intermediate_size=32,
+            num_hidden_layers=3,
+            num_attention_heads=2,
+            num_key_value_heads=1,
+            head_dim=8,
+            rms_norm_eps=1e-6,
+            max_position_embeddings=64,
+            tie_word_embeddings=False,
+        )
+        hf_model = transformers.Qwen3ForCausalLM(hf_config).eval()
+        with torch.no_grad():
+            for layer in hf_model.model.layers:
+                layer.self_attn.q_proj.weight.mul_(1e-2)
+                layer.self_attn.k_proj.weight.mul_(1e-2)
+        preset_dir = self.get_temp_dir()
+        hf_model.save_pretrained(preset_dir)
+        text_encoder = Qwen3Backbone.from_preset(preset_dir)
+
+        # Right-padded, as the preprocessor pads.
+        rng = np.random.default_rng(0)
+        token_ids = rng.integers(1, 64, size=(2, 12)).astype("int32")
+        padding_mask = np.zeros((2, 12), dtype="int32")
+        padding_mask[0, :7] = 1
+        padding_mask[1, :4] = 1
+        token_ids = np.where(padding_mask == 1, token_ids, 0).astype("int32")
+
+        text_to_image = Flux2TextToImage(
+            **{**self.init_kwargs, "text_encoder": text_encoder}
+        )
+        positive, _ = text_to_image.encode_text_step(
+            {"token_ids": token_ids, "padding_mask": padding_mask}
+        )
+        with torch.no_grad():
+            hidden_states = hf_model(
+                input_ids=torch.from_numpy(token_ids.astype("int64")),
+                attention_mask=torch.from_numpy(padding_mask.astype("int64")),
+                output_hidden_states=True,
+            ).hidden_states
+        expected = np.concatenate(
+            [hidden_states[i].numpy() for i in (1, 2)], axis=-1
+        )
+        self.assertAllClose(positive, expected, atol=1e-5, rtol=1e-5)
 
     def test_invalid_arguments(self):
         with self.assertRaisesRegex(ValueError, "guidance embedding"):
@@ -205,12 +287,17 @@ class Flux2TextToImageTest(TestCase):
                 **{
                     **self.init_kwargs,
                     "backbone": self.make_backbone(
-                        input_channels=32, image_shape=(None, 32)
+                        input_channels=32, latent_shape=(None, 32)
                     ),
                 }
             )
         with self.assertRaisesRegex(ValueError, "divisible"):
-            Flux2TextToImage(**{**self.init_kwargs, "image_shape": (30, 32, 3)})
+            Flux2TextToImage(
+                **{
+                    **self.init_kwargs,
+                    "backbone": self.make_backbone(image_shape=(30, 32, 3)),
+                }
+            )
 
     def test_serialization(self):
         self.run_serialization_test(Flux2TextToImage(**self.init_kwargs))
@@ -225,15 +312,16 @@ class Flux2TextToImageTest(TestCase):
         restored_output = restored.generate("airplane", num_steps=2, seed=42)
         self.assertAllClose(output, restored_output)
 
-        # `image_shape` sets the generated image size, not the backbone's
-        # latent token shape, also through the `TextToImage` base class.
+        # `from_preset(..., image_shape=...)` sets the generated image size,
+        # also through the `TextToImage` base class. It does not touch the
+        # backbone's latent token shape.
         for cls in (Flux2TextToImage, TextToImage):
             restored = cls.from_preset(save_dir, image_shape=(64, 32, 3))
             self.assertIsInstance(restored, Flux2TextToImage)
             self.assertEqual(restored.image_shape, (64, 32, 3))
             self.assertEqual(restored.latent_shape, (None, 16, 8, 16))
             self.assertEqual(
-                tuple(restored.backbone.get_config()["image_shape"]),
+                tuple(restored.backbone.get_config()["latent_shape"]),
                 (None, 16),
             )
             image = restored.generate("airplane", num_steps=1, seed=42)

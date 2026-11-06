@@ -102,7 +102,8 @@ def apply_rope(xq, xk, freqs_cis):
             `(..., L, D // 2, 2)`.
 
     Returns:
-        A `(query, key)` tuple of the rotated tensors.
+        A `(query, key)` tuple of the rotated tensors, in the dtypes of
+        `xq` and `xk`.
     """
     # xq, xk shape (..., num_heads, seq_len, D)
     # freqs_cis shape (..., seq_len, D//2, 2)
@@ -110,8 +111,11 @@ def apply_rope(xq, xk, freqs_cis):
     freqs_cis = ops.expand_dims(freqs_cis, axis=-4)
     # Now freqs_cis shape (..., 1, seq_len, D//2, 2)
 
-    xq_ = ops.reshape(xq, (*ops.shape(xq)[:-1], -1, 2))
-    xk_ = ops.reshape(xk, (*ops.shape(xk)[:-1], -1, 2))
+    # Rotate in float32 and cast back afterwards, as the reference does
+    # (`xq.float()` ... `.type_as(xq)`). Otherwise the float32 `freqs_cis`
+    # silently promotes low-precision `q`/`k` to float32.
+    xq_ = ops.reshape(ops.cast(xq, "float32"), (*ops.shape(xq)[:-1], -1, 2))
+    xk_ = ops.reshape(ops.cast(xk, "float32"), (*ops.shape(xk)[:-1], -1, 2))
 
     xq_real = xq_[..., 0]
     xq_imag = xq_[..., 1]
@@ -133,7 +137,7 @@ def apply_rope(xq, xk, freqs_cis):
         ops.stack([xk_out_real, xk_out_imag], axis=-1), ops.shape(xk)
     )
 
-    return xq_out, xk_out
+    return ops.cast(xq_out, xq.dtype), ops.cast(xk_out, xk.dtype)
 
 
 class FluxRoPEAttention(keras.layers.Layer):

@@ -3,7 +3,6 @@ import numpy as np
 from absl.testing import parameterized
 from keras import ops
 
-from keras_hub.src.models.flux.flux_layers import ApproximateGELU
 from keras_hub.src.models.flux.flux_layers import DoubleStreamBlock
 from keras_hub.src.models.flux.flux_layers import EmbedND
 from keras_hub.src.models.flux.flux_layers import LastLayer
@@ -13,8 +12,10 @@ from keras_hub.src.models.flux.flux_layers import QKNorm
 from keras_hub.src.models.flux.flux_layers import SingleStreamBlock
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import TimestepEmbedding
+from keras_hub.src.models.flux.flux_maths import apply_rope
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import gelu_approximate
 
 # Small but non-degenerate config. `sum(AXES_DIM)` must equal the head
 # dimension (HIDDEN_SIZE // NUM_HEADS) for RoPE to line up.
@@ -471,6 +472,36 @@ class DTypeTest(TestCase):
         out = TimestepEmbedding(dim=8)(t)
         self.assertEqual(keras.backend.standardize_dtype(out.dtype), "float32")
 
+    def test_apply_rope_keeps_input_dtype(self):
+        """The reference rotates in float32, then `.type_as(xq)`.
+
+        `rope()` is float32, so without the cast back the bfloat16 `q`/`k`
+        of a `mixed_bfloat16` model would come out float32 and attention
+        would run outside the policy's compute dtype.
+        """
+        rng = np.random.default_rng(0)
+        shape = (BATCH, NUM_HEADS, IMG_LEN, HEAD_DIM)
+        q = rng.normal(size=shape).astype("float32")
+        k = rng.normal(size=shape).astype("float32")
+        pos = EmbedND(theta=10_000, axes_dim=AXES_DIM)(
+            ops.cast(rng.integers(0, 16, size=(BATCH, IMG_LEN, 3)), "float32")
+        )
+        expected_q, expected_k = apply_rope(q, k, pos)
+
+        out_q, out_k = apply_rope(
+            ops.cast(q, "bfloat16"), ops.cast(k, "bfloat16"), pos
+        )
+        for out in (out_q, out_k):
+            self.assertEqual(
+                keras.backend.standardize_dtype(out.dtype), "bfloat16"
+            )
+        self.assertAllClose(
+            ops.cast(out_q, "float32"), expected_q, atol=5e-2, rtol=5e-2
+        )
+        self.assertAllClose(
+            ops.cast(out_k, "float32"), expected_k, atol=5e-2, rtol=5e-2
+        )
+
 
 class ActivationTest(TestCase):
     """FLUX's double-stream MLPs use the tanh approximation of GELU.
@@ -482,10 +513,15 @@ class ActivationTest(TestCase):
     shapes and looks plausible in isolation.
     """
 
-    def test_approximate_gelu_matches_tanh_formulation(self):
+    def test_double_block_mlps_use_approximate_gelu(self):
+        block = DoubleStreamBlock(
+            hidden_size=HIDDEN_SIZE, num_heads=NUM_HEADS, mlp_ratio=2.0
+        )
+        for mlp in (block.image_mlp, block.text_mlp):
+            self.assertIs(mlp.layers[1].activation, gelu_approximate)
         x = np.linspace(-4.0, 4.0, 128).astype("float32")
         self.assertAllClose(
-            ApproximateGELU()(x),
+            block.image_mlp.layers[1](x),
             keras.activations.gelu(x, approximate=True),
         )
 
@@ -498,10 +534,3 @@ class ActivationTest(TestCase):
             - ops.convert_to_numpy(keras.activations.gelu(x, approximate=False))
         ).max()
         self.assertGreater(gap, 1e-4)
-
-    def test_double_block_mlps_use_approximate_gelu(self):
-        block = DoubleStreamBlock(
-            hidden_size=HIDDEN_SIZE, num_heads=NUM_HEADS, mlp_ratio=2.0
-        )
-        self.assertIsInstance(block.image_mlp.layers[1], ApproximateGELU)
-        self.assertIsInstance(block.text_mlp.layers[1], ApproximateGELU)

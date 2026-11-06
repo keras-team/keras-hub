@@ -1,3 +1,5 @@
+import keras
+
 from keras_hub.src.models.flux2.flux2_text_to_image_preprocessor import (
     Flux2TextToImagePreprocessor,
 )
@@ -105,3 +107,17 @@ class Flux2TextToImagePreprocessorTest(TestCase):
         preprocessor = Flux2TextToImagePreprocessor(tokenizer)
         with self.assertRaisesRegex(ValueError, "unsplittable"):
             preprocessor(self.input_data)
+
+    def test_symbolic_input(self):
+        # What a functional wrapper or a `keras.Model` built around the
+        # preprocessor passes it, on every backend.
+        preprocessor = Flux2TextToImagePreprocessor(**self.init_kwargs)
+        outputs = preprocessor(keras.Input(shape=(), dtype="string"))
+        self.assertEqual(tuple(outputs["token_ids"].shape), (None, 20))
+        self.assertEqual(tuple(outputs["padding_mask"].shape), (None, 20))
+        self.assertEqual(outputs["token_ids"].dtype, "int32")
+        self.assertEqual(outputs["padding_mask"].dtype, "bool")
+        outputs = preprocessor(
+            keras.Input(shape=(), dtype="string"), sequence_length=8
+        )
+        self.assertEqual(tuple(outputs["token_ids"].shape), (None, 8))

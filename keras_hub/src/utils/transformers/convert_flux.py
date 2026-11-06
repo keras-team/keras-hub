@@ -1,258 +1,282 @@
+"""Convert diffusers `FluxTransformer2DModel` checkpoints to `FluxBackbone`.
+
+The weights are read from the `transformer/` folder of a diffusers pipeline
+repo, such as `hf://black-forest-labs/FLUX.1-schnell`, through
+`DiffusersPresetLoader`. The porting helpers here are shared with FLUX.2
+(`convert_flux2.py`).
+"""
+
+import collections
+
+import numpy as np
+
 from keras_hub.src.models.flux.flux_backbone import FluxBackbone
+from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
+from keras_hub.src.utils.preset_utils import get_file
 
 try:
-    from safetensors import SafetensorError
-except ImportError:  # safetensors is an optional dependency.
-    SafetensorError = None
+    import safetensors
+except ImportError:
+    safetensors = None
 
 backbone_cls = FluxBackbone
 
-# Raised when a key is absent: `KeyError` from the sharded `weight_map`
-# lookup, `SafetensorError` from a single-file `safe_open`.
-_MISSING_TENSOR_ERRORS = tuple(
-    error for error in (KeyError, SafetensorError) if error is not None
-)
+
+def checkpoint_keys(loader):
+    """Return the names of all tensors in the checkpoint read by `loader`."""
+    if loader.safetensor_config is not None:
+        return set(loader.safetensor_config["weight_map"])
+    path = get_file(loader.preset, loader.fname or SAFETENSOR_FILE)
+    with safetensors.safe_open(path, framework="np") as file:
+        return set(file.keys())
 
 
-def _has_tensor(loader, hf_weight_key):
-    """Return whether `hf_weight_key` exists in the checkpoint.
+class CheckedLoader:
+    """Reads tensors by exact name and checks that a conversion is complete.
 
-    `SafetensorLoader` intentionally has no existence check and is shared by
-    every other converter, so the probe lives here instead.
+    `SafetensorLoader` resolves a missing name to any name that ends with
+    it, so a missing `transformer_blocks.0.attn.to_q.weight` would silently
+    load `single_transformer_blocks.0.attn.to_q.weight`. This wrapper only
+    reads names that exist verbatim, and `check_complete` fails unless every
+    weight of the model was assigned exactly once and every checkpoint tensor
+    was read, so a missing, renamed or extra tensor fails the conversion
+    instead of leaving a randomly initialized weight behind.
 
-    Note that a `TypeError` is deliberately *not* treated as "missing".
-    `SafetensorLoader` opens files with `framework="np"`, and numpy has no
-    bfloat16 dtype, so a present bf16 tensor raises `TypeError`. Swallowing
-    that would report FLUX's real weights as absent and produce a badly
-    misleading "checkpoint is missing" error.
+    Args:
+        loader: A `SafetensorLoader`.
     """
-    # The offline conversion script passes a loader shim that answers this
-    # directly (and can read bf16 via torch).
-    probe = getattr(loader, "has_tensor", None)
-    if probe is not None:
-        return probe(hf_weight_key)
 
-    saved_prefix = loader.prefix
-    try:
-        loader.get_tensor(hf_weight_key)
-        return True
-    except _MISSING_TENSOR_ERRORS:
-        # `get_prefixed_key` caches a prefix and resets it to "" when a key
-        # is not found, so an unsuccessful probe would otherwise corrupt
-        # every lookup that follows it.
-        loader.prefix = saved_prefix
-        return False
+    def __init__(self, loader):
+        self.loader = loader
+        self.keys = checkpoint_keys(loader)
+        self.read = set()
+        self.assigned = collections.Counter()
 
+    def get_tensor(self, key):
+        if key not in self.keys:
+            raise ValueError(f"The checkpoint has no tensor `{key}`.")
+        self.read.add(key)
+        return self.loader.get_tensor(key)
 
-def _get_any(config, keys, default):
-    """Return the first present key in `config`, else `default`.
+    def assign(self, variable, value):
+        # Checkpoints are usually bfloat16; cast on the host.
+        variable.assign(np.asarray(value).astype(variable.dtype))
+        self.assigned[id(variable)] += 1
 
-    FLUX configs appear in two flavours depending on where the checkpoint
-    came from:
-
-    - diffusers (`black-forest-labs/FLUX.1-*`, `transformer/config.json`),
-      which uses names like `num_layers` and `axes_dims_rope`.
-    - the original Black Forest Labs single-file layout, which uses
-      `depth`, `axes_dim`, and so on.
-
-    Looking up only one flavour silently falls through to the default and
-    produces a structurally wrong model, so probe both.
-    """
-    for key in keys:
-        if key in config:
-            return config[key]
-    return default
-
-
-def convert_backbone_config(hf_config):
-    """Convert a Hugging Face FLUX config to `FluxBackbone` kwargs."""
-    num_heads = _get_any(hf_config, ["num_attention_heads"], 24)
-
-    # diffusers expresses width as heads * head_dim rather than hidden_size.
-    attention_head_dim = _get_any(hf_config, ["attention_head_dim"], None)
-    if attention_head_dim is not None:
-        hidden_size = num_heads * attention_head_dim
-    else:
-        hidden_size = _get_any(hf_config, ["hidden_size"], 3072)
-
-    # `guidance_embeds` is the diffusers spelling. Getting this wrong means
-    # FLUX.1-dev silently loads as a non-guidance-distilled model.
-    guidance_embed = _get_any(
-        hf_config, ["guidance_embeds", "guidance_embed"], False
-    )
-
-    input_channels = _get_any(hf_config, ["in_channels"], 64)
-
-    return {
-        "input_channels": input_channels,
-        "hidden_size": hidden_size,
-        "mlp_ratio": _get_any(hf_config, ["mlp_ratio"], 4.0),
-        "num_heads": num_heads,
-        "depth": _get_any(hf_config, ["num_layers", "depth"], 19),
-        "depth_single_blocks": _get_any(
-            hf_config, ["num_single_layers", "depth_single_blocks"], 38
-        ),
-        "axes_dim": _get_any(
-            hf_config, ["axes_dims_rope", "axes_dim"], [16, 56, 56]
-        ),
-        "theta": _get_any(hf_config, ["rope_theta", "theta"], 10_000),
-        "use_bias": _get_any(hf_config, ["qkv_bias", "use_bias"], True),
-        "guidance_embed": guidance_embed,
-        # Sequence axes stay dynamic so a preset built from this config can
-        # run at any resolution / prompt length.
-        "image_shape": (None, input_channels),
-        "text_shape": (
-            None,
-            _get_any(hf_config, ["joint_attention_dim"], 4096),
-        ),
-        "image_ids_shape": (None, 3),
-        "text_ids_shape": (None, 3),
-        "y_shape": (_get_any(hf_config, ["pooled_projection_dim"], 768),),
-    }
+    def check_complete(self, model, ignore=()):
+        """Fail unless the mapping was complete and one-to-one."""
+        never = [w.path for w in model.weights if id(w) not in self.assigned]
+        twice = [w.path for w in model.weights if self.assigned[id(w)] > 1]
+        unused = sorted(self.keys - self.read - set(ignore))
+        problems = []
+        if never:
+            problems.append(f"{len(never)} weights never assigned: {never[:8]}")
+        if twice:
+            problems.append(f"{len(twice)} weights assigned twice: {twice[:8]}")
+        if unused:
+            problems.append(
+                f"{len(unused)} checkpoint tensors never read: {unused[:8]}"
+            )
+        if problems:
+            raise ValueError(
+                f"The checkpoint does not match `{type(model).__name__}`:\n"
+                + "\n".join(f"  - {problem}" for problem in problems)
+            )
 
 
-def _port_dense(loader, dense, prefix):
+def port_dense(loader, dense, key):
     """Port a PyTorch `nn.Linear` into a Keras `Dense`.
 
     PyTorch stores `[out_features, in_features]`; Keras wants
     `[in_features, out_features]`.
     """
-    loader.port_weight(
-        dense.kernel, f"{prefix}.weight", hook_fn=lambda x, _: x.T
-    )
+    loader.assign(dense.kernel, loader.get_tensor(f"{key}.weight").T)
     if dense.bias is not None:
-        loader.port_weight(dense.bias, f"{prefix}.bias")
+        loader.assign(dense.bias, loader.get_tensor(f"{key}.bias"))
 
 
-def _port_qk_norm(loader, qk_norm, prefix):
-    """Port the RMS scales FLUX applies to q and k before attention."""
-    loader.port_weight(qk_norm.query_norm.scale, f"{prefix}.query_norm.scale")
-    loader.port_weight(qk_norm.key_norm.scale, f"{prefix}.key_norm.scale")
+def port_fused_dense(loader, dense, keys):
+    """Port several `nn.Linear`s, stacked along the output, into one `Dense`.
 
-
-def _port_modulation(loader, mod_layer, prefix):
-    """Port a FLUX modulation / adaLN_modulation projection.
-
-    Handles both `Modulation` (which exposes `linear_projection`) and the
-    `Sequential(SiLU, Dense)` used by `LastLayer.adaLN_modulation`, and both
-    the `<prefix>.lin.*` and `<prefix>.1.*` checkpoint spellings.
+    diffusers keeps `to_q`, `to_k` and `to_v` (and, for FLUX.1 single-stream
+    blocks, `proj_mlp`) separate, where FLUX fuses them into one projection.
     """
-    if _has_tensor(loader, f"{prefix}.lin.weight"):
-        weight_prefix = f"{prefix}.lin"
-    elif _has_tensor(loader, f"{prefix}.1.weight"):
-        weight_prefix = f"{prefix}.1"
-    else:
+    kernels = [loader.get_tensor(f"{key}.weight").T for key in keys]
+    loader.assign(dense.kernel, np.concatenate(kernels, axis=-1))
+    if dense.bias is not None:
+        biases = [loader.get_tensor(f"{key}.bias") for key in keys]
+        loader.assign(dense.bias, np.concatenate(biases, axis=-1))
+
+
+def port_norm_out(loader, dense, key):
+    """Port the projection of diffusers' `AdaLayerNormContinuous`.
+
+    diffusers splits its output as `(scale, shift)`; the FLUX final layers
+    split it as `(shift, scale)`, so the two halves are swapped.
+    """
+
+    def swap_halves(x):
+        scale, shift = np.split(x, 2, axis=-1)
+        return np.concatenate([shift, scale], axis=-1)
+
+    kernel = loader.get_tensor(f"{key}.weight").T
+    loader.assign(dense.kernel, swap_halves(kernel))
+    if dense.bias is not None:
+        loader.assign(dense.bias, swap_halves(loader.get_tensor(f"{key}.bias")))
+
+
+def port_qk_norm(loader, qk_norm, query_key, key_key):
+    """Port the RMSNorm scales applied to the queries and keys."""
+    query_scale = loader.get_tensor(f"{query_key}.weight")
+    loader.assign(qk_norm.query_norm.scale, query_scale)
+    loader.assign(
+        qk_norm.key_norm.scale, loader.get_tensor(f"{key_key}.weight")
+    )
+
+
+def port_mlp_embedder(loader, embedder, key):
+    """Port a diffusers `TimestepEmbedding` or `PixArtAlphaTextProjection`."""
+    port_dense(loader, embedder.input_layer, f"{key}.linear_1")
+    port_dense(loader, embedder.output_layer, f"{key}.linear_2")
+
+
+def convert_backbone_config(hf_config):
+    """Convert a diffusers `FluxTransformer2DModel` config to kwargs.
+
+    Structural keys are read directly, so a missing one fails here, with its
+    name, instead of building a model of the wrong shape.
+    """
+    if hf_config["patch_size"] != 1:
         raise ValueError(
-            f"Could not find modulation weights for `{prefix}`. Tried "
-            f"`{prefix}.lin.weight` and `{prefix}.1.weight`."
+            "`FluxBackbone` takes latents already packed into 2x2 patches, "
+            "so the transformer must have `patch_size=1`. Received: "
+            f"patch_size={hf_config['patch_size']}"
         )
-
-    dense = getattr(mod_layer, "linear_projection", None)
-    if dense is None:
-        dense = next(
-            (layer for layer in mod_layer.layers if hasattr(layer, "kernel")),
-            None,
-        )
-    if dense is None:
-        raise TypeError(
-            f"Could not find a Dense layer for modulation `{prefix}` on "
-            f"{type(mod_layer)}."
-        )
-
-    _port_dense(loader, dense, weight_prefix)
-
-
-def _port_mlp_embedder(loader, embedder, prefix):
-    _port_dense(loader, embedder.input_layer, f"{prefix}.in_layer")
-    _port_dense(loader, embedder.output_layer, f"{prefix}.out_layer")
+    input_channels = hf_config["in_channels"]
+    num_heads = hf_config["num_attention_heads"]
+    return {
+        "input_channels": input_channels,
+        "hidden_size": num_heads * hf_config["attention_head_dim"],
+        # diffusers hardcodes the MLP ratio, the RoPE base frequency and
+        # the attention biases of FLUX.1.
+        "mlp_ratio": 4.0,
+        "num_heads": num_heads,
+        "depth": hf_config["num_layers"],
+        "depth_single_blocks": hf_config["num_single_layers"],
+        # Configs written before diffusers added this key, including
+        # FLUX.1 [schnell]'s, use diffusers' default.
+        "axes_dim": list(hf_config.get("axes_dims_rope", (16, 56, 56))),
+        "theta": 10_000,
+        "use_bias": True,
+        "guidance_embed": hf_config["guidance_embeds"],
+        # Sequence axes stay dynamic so a preset built from this config can
+        # run at any resolution and prompt length.
+        "image_shape": (None, input_channels),
+        "text_shape": (None, hf_config["joint_attention_dim"]),
+        "image_ids_shape": (None, 3),
+        "text_ids_shape": (None, 3),
+        "y_shape": (hf_config["pooled_projection_dim"],),
+    }
 
 
 def _port_double_block(loader, block, prefix):
-    _port_modulation(loader, block.image_mod, f"{prefix}.img_mod")
-    _port_modulation(loader, block.text_mod, f"{prefix}.txt_mod")
-
-    _port_dense(loader, block.image_qkv, f"{prefix}.img_attn.qkv")
-    _port_qk_norm(loader, block.image_attn_norm, f"{prefix}.img_attn.norm")
-    _port_dense(loader, block.image_attn_proj, f"{prefix}.img_attn.proj")
-
-    _port_dense(loader, block.text_qkv, f"{prefix}.txt_attn.qkv")
-    _port_qk_norm(loader, block.text_attn_norm, f"{prefix}.txt_attn.norm")
-    _port_dense(loader, block.text_attn_proj, f"{prefix}.txt_attn.proj")
-
-    _port_dense(loader, block.image_mlp.layers[0], f"{prefix}.img_mlp.0")
-    _port_dense(loader, block.image_mlp.layers[2], f"{prefix}.img_mlp.2")
-    _port_dense(loader, block.text_mlp.layers[0], f"{prefix}.txt_mlp.0")
-    _port_dense(loader, block.text_mlp.layers[2], f"{prefix}.txt_mlp.2")
+    port_dense(
+        loader, block.image_mod.linear_projection, f"{prefix}.norm1.linear"
+    )
+    port_dense(
+        loader,
+        block.text_mod.linear_projection,
+        f"{prefix}.norm1_context.linear",
+    )
+    attn = f"{prefix}.attn"
+    port_fused_dense(
+        loader,
+        block.image_qkv,
+        [f"{attn}.to_q", f"{attn}.to_k", f"{attn}.to_v"],
+    )
+    port_fused_dense(
+        loader,
+        block.text_qkv,
+        [f"{attn}.add_q_proj", f"{attn}.add_k_proj", f"{attn}.add_v_proj"],
+    )
+    port_qk_norm(
+        loader, block.image_attn_norm, f"{attn}.norm_q", f"{attn}.norm_k"
+    )
+    port_qk_norm(
+        loader,
+        block.text_attn_norm,
+        f"{attn}.norm_added_q",
+        f"{attn}.norm_added_k",
+    )
+    port_dense(loader, block.image_attn_proj, f"{attn}.to_out.0")
+    port_dense(loader, block.text_attn_proj, f"{attn}.to_add_out")
+    # `image_mlp` and `text_mlp` are `Sequential(Dense, GELU, Dense)`.
+    port_dense(loader, block.image_mlp.layers[0], f"{prefix}.ff.net.0.proj")
+    port_dense(loader, block.image_mlp.layers[2], f"{prefix}.ff.net.2")
+    port_dense(
+        loader, block.text_mlp.layers[0], f"{prefix}.ff_context.net.0.proj"
+    )
+    port_dense(loader, block.text_mlp.layers[2], f"{prefix}.ff_context.net.2")
 
 
 def _port_single_block(loader, block, prefix):
-    _port_modulation(loader, block.modulation, f"{prefix}.modulation")
-    _port_dense(loader, block.linear1, f"{prefix}.linear1")
-    _port_dense(loader, block.linear2, f"{prefix}.linear2")
-    _port_qk_norm(loader, block.norm, f"{prefix}.norm")
+    port_dense(
+        loader, block.modulation.linear_projection, f"{prefix}.norm.linear"
+    )
+    # `linear1` is `[q, k, v, mlp]`.
+    attn = f"{prefix}.attn"
+    port_fused_dense(
+        loader,
+        block.linear1,
+        [f"{attn}.to_q", f"{attn}.to_k", f"{attn}.to_v", f"{prefix}.proj_mlp"],
+    )
+    port_qk_norm(loader, block.norm, f"{attn}.norm_q", f"{attn}.norm_k")
+    port_dense(loader, block.linear2, f"{prefix}.proj_out")
 
 
-def convert_weights(backbone, loader, hf_config):
-    """Map Hugging Face FLUX weights into a `FluxBackbone`.
+def convert_weights(backbone, loader):
+    """Port diffusers `FluxTransformer2DModel` weights into `backbone`.
 
-    Weight names follow the original Black Forest Labs layout
-    (`img_in`, `double_blocks.*`, `single_blocks.*`, `final_layer`).
+    Fails unless every backbone weight is assigned exactly once and every
+    checkpoint tensor is read.
+
+    Args:
+        backbone: A `FluxBackbone`.
+        loader: A `SafetensorLoader` over the diffusers `transformer/`
+            weights.
     """
     if not isinstance(backbone, FluxBackbone):
         raise ValueError(
             "The provided backbone must be an instance of FluxBackbone. "
             f"Received: {type(backbone)}"
         )
-
-    _port_dense(loader, backbone.image_input_embedder, "img_in")
-    _port_dense(loader, backbone.text_input_embedder, "txt_in")
-    _port_mlp_embedder(loader, backbone.time_input_embedder, "time_in")
-    _port_mlp_embedder(loader, backbone.vector_embedder, "vector_in")
-
-    if backbone.guidance_embed:
-        if not _has_tensor(loader, "guidance_in.in_layer.weight"):
-            raise ValueError(
-                "Backbone was built with `guidance_embed=True` but the "
-                "checkpoint has no `guidance_in.*` weights. This usually "
-                "means a FLUX.1-schnell checkpoint was paired with a "
-                "FLUX.1-dev config."
-            )
-        _port_mlp_embedder(
-            loader, backbone.guidance_input_embedder, "guidance_in"
-        )
-
-    # Missing blocks are a hard error. Skipping them silently produces a model
-    # with randomly initialized transformer layers that still runs.
-    #
-    # This is checked by attempting the port and annotating any missing-key
-    # failure, rather than by probing first: a probe would have to read a
-    # full QKV tensor for every one of the ~57 blocks purely to test
-    # presence, which is gigabytes of redundant I/O on a real checkpoint.
-    for i, block in enumerate(backbone.double_blocks):
-        prefix = f"double_blocks.{i}"
-        try:
-            _port_double_block(loader, block, prefix)
-        except _MISSING_TENSOR_ERRORS as error:
-            raise ValueError(
-                f"Checkpoint is missing weights for `{prefix}` "
-                f"({error}). Expected {len(backbone.double_blocks)} "
-                "double-stream blocks."
-            ) from error
-
-    for i, block in enumerate(backbone.single_blocks):
-        prefix = f"single_blocks.{i}"
-        try:
-            _port_single_block(loader, block, prefix)
-        except _MISSING_TENSOR_ERRORS as error:
-            raise ValueError(
-                f"Checkpoint is missing weights for `{prefix}` "
-                f"({error}). Expected {len(backbone.single_blocks)} "
-                "single-stream blocks."
-            ) from error
-
-    _port_dense(loader, backbone.final_layer.linear, "final_layer.linear")
-    _port_modulation(
+    loader = CheckedLoader(loader)
+    port_dense(loader, backbone.image_input_embedder, "x_embedder")
+    port_dense(loader, backbone.text_input_embedder, "context_embedder")
+    embedders = "time_text_embed"
+    port_mlp_embedder(
         loader,
-        backbone.final_layer.adaLN_modulation,
-        "final_layer.adaLN_modulation",
+        backbone.time_input_embedder,
+        f"{embedders}.timestep_embedder",
     )
+    port_mlp_embedder(
+        loader, backbone.vector_embedder, f"{embedders}.text_embedder"
+    )
+    if backbone.guidance_embed:
+        port_mlp_embedder(
+            loader,
+            backbone.guidance_input_embedder,
+            f"{embedders}.guidance_embedder",
+        )
+    for i, block in enumerate(backbone.double_blocks):
+        _port_double_block(loader, block, f"transformer_blocks.{i}")
+    for i, block in enumerate(backbone.single_blocks):
+        _port_single_block(loader, block, f"single_transformer_blocks.{i}")
+    # `adaLN_modulation` is `Sequential(SiLU, Dense)`.
+    port_norm_out(
+        loader,
+        backbone.final_layer.adaLN_modulation.layers[1],
+        "norm_out.linear",
+    )
+    port_dense(loader, backbone.final_layer.linear, "proj_out")
+    loader.check_complete(backbone)

@@ -1,117 +1,172 @@
+import json
 import os
 
 import numpy as np
 import pytest
-from safetensors.numpy import save_file
+from keras import ops
 
+from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
+from keras_hub.src.models.flux2.flux2_text_to_image import Flux2TextToImage
 from keras_hub.src.models.flux2.flux2_vae import Flux2VAE
+from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_flux2
-from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
+from keras_hub.src.utils.transformers.preset_loader import (
+    DiffusersSafetensorLoader,
+)
 
-# A deliberately tiny FLUX.2. `sum(AXES_DIM)` must equal HIDDEN // NUM_HEADS.
-INPUT_CHANNELS = 8
-HIDDEN = 16
-NUM_HEADS = 2
-HEAD_DIM = HIDDEN // NUM_HEADS
-MLP_RATIO = 3.0
-MLP_HIDDEN = int(HIDDEN * MLP_RATIO)
-AXES_DIM = [2, 2, 2, 2]
-DEPTH = 1
-DEPTH_SINGLE = 2
-TEXT_DIM = 12
-TIMESTEP_DIM = 256
+# `black-forest-labs/FLUX.2-klein-4B/transformer/config.json`.
+KLEIN_4B_CONFIG = {
+    "_class_name": "Flux2Transformer2DModel",
+    "_diffusers_version": "0.37.0.dev0",
+    "attention_head_dim": 128,
+    "axes_dims_rope": [32, 32, 32, 32],
+    "eps": 1e-06,
+    "guidance_embeds": False,
+    "in_channels": 128,
+    "joint_attention_dim": 7680,
+    "mlp_ratio": 3.0,
+    "num_attention_heads": 24,
+    "num_layers": 5,
+    "num_single_layers": 20,
+    "out_channels": None,
+    "patch_size": 1,
+    "rope_theta": 2000,
+    "timestep_guidance_channels": 256,
+}
+
+# `black-forest-labs/FLUX.2-klein-4B/vae/config.json`.
+KLEIN_VAE_CONFIG = {
+    "_class_name": "AutoencoderKLFlux2",
+    "act_fn": "silu",
+    "batch_norm_eps": 0.0001,
+    "batch_norm_momentum": 0.1,
+    "block_out_channels": [128, 256, 512, 512],
+    "in_channels": 3,
+    "latent_channels": 32,
+    "layers_per_block": 2,
+    "mid_block_add_attention": True,
+    "norm_num_groups": 32,
+    "out_channels": 3,
+    "patch_size": [2, 2],
+    "use_post_quant_conv": True,
+    "use_quant_conv": True,
+}
+
+# A tiny `Flux2Transformer2DModel`. `sum(axes_dims_rope)` is the head size.
+TINY_KWARGS = {
+    "patch_size": 1,
+    "in_channels": 16,
+    "num_layers": 1,
+    "num_single_layers": 2,
+    "attention_head_dim": 8,
+    "num_attention_heads": 2,
+    "joint_attention_dim": 12,
+    "timestep_guidance_channels": 256,
+    "mlp_ratio": 3.0,
+    "axes_dims_rope": [2, 2, 2, 2],
+    "rope_theta": 2000,
+}
+
+# A tiny `AutoencoderKLFlux2`. GroupNorm uses 32 groups, so widths are
+# multiples of 32; distinct stage widths catch a reversed decoder.
+TINY_VAE_KWARGS = {
+    "block_out_channels": (32, 64),
+    "down_block_types": ("DownEncoderBlock2D",) * 2,
+    "up_block_types": ("UpDecoderBlock2D",) * 2,
+    "layers_per_block": 1,
+    "latent_channels": 4,
+    "sample_size": 32,
+}
 
 
-def _tensor(*shape):
-    """Deterministic, distinguishable values (never all-ones)."""
-    size = int(np.prod(shape))
-    return (np.arange(size, dtype="float32") * 0.01 + 0.5).reshape(shape)
+def write_model_index(preset_dir, **components):
+    model_index = {"_class_name": "Flux2KleinPipeline", **components}
+    with open(os.path.join(preset_dir, "model_index.json"), "w") as f:
+        json.dump(model_index, f)
 
 
-def _linear(out_features, in_features, prefix, tensors):
-    """Emit a bias-free PyTorch `nn.Linear`: weight is [out, in]."""
-    tensors[f"{prefix}.weight"] = _tensor(out_features, in_features)
-
-
-def _build_fake_checkpoint(guidance=False):
-    """Synthesize a FLUX.2 checkpoint in the Black Forest Labs layout."""
-    tensors = {}
-    _linear(HIDDEN, INPUT_CHANNELS, "img_in", tensors)
-    _linear(HIDDEN, TEXT_DIM, "txt_in", tensors)
-    _linear(HIDDEN, TIMESTEP_DIM, "time_in.in_layer", tensors)
-    _linear(HIDDEN, HIDDEN, "time_in.out_layer", tensors)
-    if guidance:
-        _linear(HIDDEN, TIMESTEP_DIM, "guidance_in.in_layer", tensors)
-        _linear(HIDDEN, HIDDEN, "guidance_in.out_layer", tensors)
-    _linear(6 * HIDDEN, HIDDEN, "double_stream_modulation_img.lin", tensors)
-    _linear(6 * HIDDEN, HIDDEN, "double_stream_modulation_txt.lin", tensors)
-    _linear(3 * HIDDEN, HIDDEN, "single_stream_modulation.lin", tensors)
-
-    for i in range(DEPTH):
-        p = f"double_blocks.{i}"
-        for stream in ("img", "txt"):
-            _linear(3 * HIDDEN, HIDDEN, f"{p}.{stream}_attn.qkv", tensors)
-            _linear(HIDDEN, HIDDEN, f"{p}.{stream}_attn.proj", tensors)
-            tensors[f"{p}.{stream}_attn.norm.query_norm.scale"] = _tensor(
-                HEAD_DIM
-            )
-            tensors[f"{p}.{stream}_attn.norm.key_norm.scale"] = (
-                _tensor(HEAD_DIM) + 1.0
-            )
-            _linear(2 * MLP_HIDDEN, HIDDEN, f"{p}.{stream}_mlp.0", tensors)
-            _linear(HIDDEN, MLP_HIDDEN, f"{p}.{stream}_mlp.2", tensors)
-
-    for i in range(DEPTH_SINGLE):
-        p = f"single_blocks.{i}"
-        _linear(3 * HIDDEN + 2 * MLP_HIDDEN, HIDDEN, f"{p}.linear1", tensors)
-        _linear(HIDDEN, HIDDEN + MLP_HIDDEN, f"{p}.linear2", tensors)
-        tensors[f"{p}.norm.query_norm.scale"] = _tensor(HEAD_DIM)
-        tensors[f"{p}.norm.key_norm.scale"] = _tensor(HEAD_DIM) + 1.0
-
-    _linear(2 * HIDDEN, HIDDEN, "final_layer.adaLN_modulation.1", tensors)
-    _linear(INPUT_CHANNELS, HIDDEN, "final_layer.linear", tensors)
-    return tensors
-
-
-def _build_backbone(guidance=False):
-    return Flux2Backbone(
-        input_channels=INPUT_CHANNELS,
-        hidden_size=HIDDEN,
-        mlp_ratio=MLP_RATIO,
-        num_heads=NUM_HEADS,
-        depth=DEPTH,
-        depth_single_blocks=DEPTH_SINGLE,
-        axes_dim=AXES_DIM,
-        theta=2000,
-        guidance_embed=guidance,
-        image_shape=(None, INPUT_CHANNELS),
-        text_shape=(None, TEXT_DIM),
+def save_tiny_transformer(preset_dir, guidance_embeds=False, **kwargs):
+    """Save a random, tiny FLUX.2 transformer in a diffusers repo layout."""
+    torch = pytest.importorskip("torch")
+    diffusers = pytest.importorskip("diffusers")
+    torch.manual_seed(0)
+    transformer = diffusers.Flux2Transformer2DModel(
+        **{**TINY_KWARGS, **kwargs}, guidance_embeds=guidance_embeds
+    ).eval()
+    with torch.no_grad():
+        # Not the default init, so that all-ones norm scales cannot hide a
+        # wrong mapping.
+        for param in transformer.parameters():
+            param.normal_(0.0, 0.2)
+    transformer.save_pretrained(os.path.join(preset_dir, "transformer"))
+    write_model_index(
+        preset_dir, transformer=["diffusers", "Flux2Transformer2DModel"]
     )
+    return transformer
+
+
+def save_tiny_vae(preset_dir):
+    """Save a random, tiny `AutoencoderKLFlux2` to `preset_dir/vae`."""
+    torch = pytest.importorskip("torch")
+    diffusers = pytest.importorskip("diffusers")
+    torch.manual_seed(0)
+    vae = diffusers.AutoencoderKLFlux2(**TINY_VAE_KWARGS).eval()
+    with torch.no_grad():
+        for param in vae.parameters():
+            param.add_(0.05 * torch.randn_like(param))
+        vae.bn.running_mean.normal_(0.0, 0.5)
+        vae.bn.running_var.uniform_(0.5, 2.0)
+    vae.save_pretrained(os.path.join(preset_dir, "vae"))
+    return vae
+
+
+def run_both(backbone, transformer, guidance=False, dtype="float32"):
+    """Run the backbone and the diffusers reference on the same inputs."""
+    import torch
+
+    rng = np.random.default_rng(0)
+    batch, rows, cols, text_length = 2, 3, 4, 5
+    rows_ids, cols_ids = np.meshgrid(
+        np.arange(rows), np.arange(cols), indexing="ij"
+    )
+    zeros = np.zeros_like(rows_ids)
+    image_ids = np.stack([zeros, rows_ids, cols_ids, zeros], axis=-1)
+    image_ids = image_ids.reshape(-1, 4)
+    index = np.arange(text_length)
+    text_ids = np.stack([0 * index, 0 * index, 0 * index, index], axis=-1)
+    inputs = {
+        "image": rng.standard_normal((batch, rows * cols, 16)),
+        "image_ids": np.broadcast_to(image_ids, (batch, rows * cols, 4)),
+        "text": rng.standard_normal((batch, text_length, 12)),
+        "text_ids": np.broadcast_to(text_ids, (batch, text_length, 4)),
+        "timesteps": np.array([1.0, 0.25]),
+    }
+    if guidance:
+        inputs["guidance"] = np.array([4.0, 2.5])
+    inputs = {k: np.ascontiguousarray(v, "float32") for k, v in inputs.items()}
+    actual = ops.convert_to_numpy(backbone(inputs))
+
+    def tensor(name):
+        return torch.from_numpy(inputs[name])
+
+    with torch.no_grad():
+        expected = transformer.to(getattr(torch, dtype))(
+            hidden_states=tensor("image"),
+            encoder_hidden_states=tensor("text"),
+            timestep=tensor("timesteps"),
+            img_ids=tensor("image_ids"),
+            txt_ids=tensor("text_ids"),
+            guidance=tensor("guidance") if guidance else None,
+            return_dict=False,
+        )[0].numpy()
+    return actual, expected
 
 
 class ConvertFlux2ConfigTest(TestCase):
-    def test_diffusers_klein_4b_config(self):
-        """`black-forest-labs/FLUX.2-klein-4B/transformer/config.json`."""
-        hf_config = {
-            "_class_name": "Flux2Transformer2DModel",
-            "attention_head_dim": 128,
-            "axes_dims_rope": [32, 32, 32, 32],
-            "eps": 1e-06,
-            "guidance_embeds": False,
-            "in_channels": 128,
-            "joint_attention_dim": 7680,
-            "mlp_ratio": 3.0,
-            "num_attention_heads": 24,
-            "num_layers": 5,
-            "num_single_layers": 20,
-            "out_channels": None,
-            "patch_size": 1,
-            "rope_theta": 2000,
-            "timestep_guidance_channels": 256,
-        }
-        config = convert_flux2.convert_backbone_config(hf_config)
+    def test_klein_4b_config(self):
+        config = convert_flux2.convert_backbone_config(KLEIN_4B_CONFIG)
         self.assertEqual(config["hidden_size"], 3072)
         self.assertEqual(config["num_heads"], 24)
         self.assertEqual(config["depth"], 5)
@@ -123,354 +178,30 @@ class ConvertFlux2ConfigTest(TestCase):
         self.assertFalse(config["guidance_embed"])
         self.assertEqual(config["text_shape"], (None, 7680))
         self.assertEqual(config["image_ids_shape"], (None, 4))
-
-    def test_original_config_key_names(self):
-        """Black Forest Labs `Flux2Params` spelling (FLUX.2 [dev])."""
-        hf_config = {
-            "in_channels": 128,
-            "context_in_dim": 15360,
-            "hidden_size": 6144,
-            "num_heads": 48,
-            "depth": 8,
-            "depth_single_blocks": 48,
-            "axes_dim": [32, 32, 32, 32],
-            "theta": 2000,
-            "mlp_ratio": 3.0,
-            "use_guidance_embed": True,
-        }
-        config = convert_flux2.convert_backbone_config(hf_config)
-        self.assertEqual(config["hidden_size"], 6144)
-        self.assertEqual(config["num_heads"], 48)
-        self.assertEqual(config["depth"], 8)
-        self.assertEqual(config["depth_single_blocks"], 48)
-        self.assertEqual(config["text_shape"], (None, 15360))
-        self.assertTrue(config["guidance_embed"])
-
-    def test_defaults_are_klein_4b_with_dynamic_axes(self):
-        config = convert_flux2.convert_backbone_config({})
-        backbone_param_count_inputs = (
-            config["hidden_size"],
-            config["depth"],
-            config["depth_single_blocks"],
-        )
-        self.assertEqual(backbone_param_count_inputs, (3072, 5, 20))
-        self.assertIsNone(config["image_shape"][0])
-        self.assertIsNone(config["text_shape"][0])
-        self.assertIsNone(config["image_ids_shape"][0])
+        # Sequence axes stay dynamic.
+        self.assertEqual(config["latent_shape"], (None, 128))
         self.assertIsNone(config["text_ids_shape"][0])
 
-    def test_rejects_unsupported_patch_size(self):
-        with self.assertRaisesRegex(ValueError, "patch_size"):
-            convert_flux2.convert_backbone_config({"patch_size": 2})
+    def test_missing_key_raises(self):
+        config = dict(KLEIN_4B_CONFIG)
+        del config["num_single_layers"]
+        with self.assertRaisesRegex(KeyError, "num_single_layers"):
+            convert_flux2.convert_backbone_config(config)
 
-    def test_rejects_mismatched_out_channels(self):
-        with self.assertRaisesRegex(ValueError, "out_channels"):
-            convert_flux2.convert_backbone_config(
-                {"in_channels": 128, "out_channels": 64}
-            )
-
-
-class ConvertFlux2WeightsTest(TestCase):
-    def setUp(self):
-        super().setUp()
-        self.tensors = _build_fake_checkpoint()
-        self.preset_dir = self.get_temp_dir()
-        save_file(
-            self.tensors, os.path.join(self.preset_dir, "model.safetensors")
-        )
-
-    def _convert(self, guidance=False, preset_dir=None):
-        backbone = _build_backbone(guidance=guidance)
-        with SafetensorLoader(preset_dir or self.preset_dir) as loader:
-            convert_flux2.convert_weights(backbone, loader, {})
-        return backbone
-
-    def test_parameter_count_matches_checkpoint(self):
-        backbone = self._convert()
-        self.assertEqual(
-            backbone.count_params(),
-            sum(t.size for t in self.tensors.values()),
-        )
-
-    def test_shared_modulation(self):
-        backbone = self._convert()
-        self.assertAllClose(
-            backbone.double_stream_modulation_image.linear_projection.kernel,
-            self.tensors["double_stream_modulation_img.lin.weight"].T,
-        )
-        self.assertAllClose(
-            backbone.double_stream_modulation_text.linear_projection.kernel,
-            self.tensors["double_stream_modulation_txt.lin.weight"].T,
-        )
-        self.assertAllClose(
-            backbone.single_stream_modulation.linear_projection.kernel,
-            self.tensors["single_stream_modulation.lin.weight"].T,
-        )
-
-    def test_embedders(self):
-        backbone = self._convert()
-        self.assertAllClose(
-            backbone.image_input_embedder.kernel,
-            self.tensors["img_in.weight"].T,
-        )
-        self.assertAllClose(
-            backbone.text_input_embedder.kernel,
-            self.tensors["txt_in.weight"].T,
-        )
-        self.assertAllClose(
-            backbone.time_input_embedder.output_layer.kernel,
-            self.tensors["time_in.out_layer.weight"].T,
-        )
-
-    def test_double_block(self):
-        backbone = self._convert()
-        block = backbone.double_blocks[0]
-        self.assertAllClose(
-            block.image_qkv.kernel,
-            self.tensors["double_blocks.0.img_attn.qkv.weight"].T,
-        )
-        self.assertAllClose(
-            block.text_attn_proj.kernel,
-            self.tensors["double_blocks.0.txt_attn.proj.weight"].T,
-        )
-        self.assertAllClose(
-            block.image_mlp.input_layer.kernel,
-            self.tensors["double_blocks.0.img_mlp.0.weight"].T,
-        )
-        self.assertAllClose(
-            block.text_mlp.output_layer.kernel,
-            self.tensors["double_blocks.0.txt_mlp.2.weight"].T,
-        )
-        # Query and key scales differ in the fixture, so a swap would fail.
-        self.assertAllClose(
-            block.image_attn_norm.key_norm.scale,
-            self.tensors["double_blocks.0.img_attn.norm.key_norm.scale"],
-        )
-        self.assertAllClose(
-            block.text_attn_norm.query_norm.scale,
-            self.tensors["double_blocks.0.txt_attn.norm.query_norm.scale"],
-        )
-
-    def test_single_block(self):
-        backbone = self._convert()
-        block = backbone.single_blocks[1]
-        self.assertAllClose(
-            block.linear1.kernel,
-            self.tensors["single_blocks.1.linear1.weight"].T,
-        )
-        self.assertAllClose(
-            block.linear2.kernel,
-            self.tensors["single_blocks.1.linear2.weight"].T,
-        )
-        self.assertAllClose(
-            block.norm.key_norm.scale,
-            self.tensors["single_blocks.1.norm.key_norm.scale"],
-        )
-
-    def test_final_layer(self):
-        backbone = self._convert()
-        self.assertAllClose(
-            backbone.final_layer.adaLN_modulation.kernel,
-            self.tensors["final_layer.adaLN_modulation.1.weight"].T,
-        )
-        self.assertAllClose(
-            backbone.final_layer.linear.kernel,
-            self.tensors["final_layer.linear.weight"].T,
-        )
-
-    def test_guidance_embedder(self):
-        tensors = _build_fake_checkpoint(guidance=True)
-        preset_dir = self.get_temp_dir()
-        save_file(tensors, os.path.join(preset_dir, "model.safetensors"))
-        backbone = self._convert(guidance=True, preset_dir=preset_dir)
-        self.assertAllClose(
-            backbone.guidance_input_embedder.input_layer.kernel,
-            tensors["guidance_in.in_layer.weight"].T,
-        )
-
-    def test_guidance_mismatch_raises(self):
-        """A [dev]-style config against a [klein] checkpoint must not pass."""
-        with self.assertRaisesRegex(ValueError, "guidance_in"):
-            self._convert(guidance=True)
-
-    def test_missing_block_raises(self):
-        """Silently skipping a block would leave it randomly initialized."""
-        truncated = {
-            k: v
-            for k, v in self.tensors.items()
-            if not k.startswith("single_blocks.1.linear2")
-        }
-        preset_dir = self.get_temp_dir()
-        save_file(truncated, os.path.join(preset_dir, "model.safetensors"))
-        with self.assertRaisesRegex(ValueError, "single_blocks.1"):
-            self._convert(preset_dir=preset_dir)
-
-    def test_flux1_checkpoint_raises(self):
-        """FLUX.1 has per-block modulation and no shared projections."""
-        flux1_like = {
-            k: v
-            for k, v in self.tensors.items()
-            if "stream_modulation" not in k
-        }
-        flux1_like["double_blocks.0.img_mod.lin.weight"] = _tensor(
-            6 * HIDDEN, HIDDEN
-        )
-        preset_dir = self.get_temp_dir()
-        save_file(flux1_like, os.path.join(preset_dir, "model.safetensors"))
-        with self.assertRaisesRegex(ValueError, "FluxBackbone"):
-            self._convert(preset_dir=preset_dir)
-
-    def test_wrong_backbone_type_raises(self):
-        with self.assertRaisesRegex(ValueError, "Flux2Backbone"):
-            with SafetensorLoader(self.preset_dir) as loader:
-                convert_flux2.convert_weights(object(), loader, {})
-
-
-class ConvertFlux2PresetTest(TestCase):
-    @pytest.mark.extra_large
-    def test_klein_4b_matches_checkpoint_size(self):
-        """Built from the published config, the backbone must have exactly
-        as many parameters as `flux-2-klein-4b.safetensors`."""
-        backbone = Flux2Backbone(**convert_flux2.convert_backbone_config({}))
-        self.assertEqual(backbone.count_params(), 3_875_544_576)
-
-
-# A tiny `AutoencoderKLFlux2`. GroupNorm uses 32 groups, so widths are
-# multiples of 32; distinct stage widths catch a reversed decoder.
-VAE_CHANNELS = [32, 64]
-VAE_LAYERS_PER_BLOCK = 1
-VAE_LATENT_CHANNELS = 4
-VAE_CONFIG = {
-    "block_out_channels": VAE_CHANNELS,
-    "layers_per_block": VAE_LAYERS_PER_BLOCK,
-    "latent_channels": VAE_LATENT_CHANNELS,
-    "patch_size": [2, 2],
-}
-
-
-def _build_fake_vae_checkpoint():
-    """Synthesize `AutoencoderKLFlux2` weights in the diffusers layout."""
-    tensors = {}
-
-    def conv(prefix, out_channels, in_channels, kernel_size):
-        shape = (out_channels, in_channels, kernel_size, kernel_size)
-        tensors[f"{prefix}.weight"] = _tensor(*shape)
-        tensors[f"{prefix}.bias"] = _tensor(out_channels) + 0.25
-
-    def norm(prefix, channels):
-        tensors[f"{prefix}.weight"] = _tensor(channels) + 1.0
-        tensors[f"{prefix}.bias"] = _tensor(channels)
-
-    def resnet(prefix, in_channels, out_channels):
-        norm(f"{prefix}.norm1", in_channels)
-        conv(f"{prefix}.conv1", out_channels, in_channels, 3)
-        norm(f"{prefix}.norm2", out_channels)
-        conv(f"{prefix}.conv2", out_channels, out_channels, 3)
-        if in_channels != out_channels:
-            conv(f"{prefix}.conv_shortcut", out_channels, in_channels, 1)
-
-    def mid_block(prefix, channels):
-        resnet(f"{prefix}.mid_block.resnets.0", channels, channels)
-        attention = f"{prefix}.mid_block.attentions.0"
-        norm(f"{attention}.group_norm", channels)
-        for name in ("to_q", "to_k", "to_v", "to_out.0"):
-            tensors[f"{attention}.{name}.weight"] = _tensor(channels, channels)
-            tensors[f"{attention}.{name}.bias"] = _tensor(channels)
-        resnet(f"{prefix}.mid_block.resnets.1", channels, channels)
-
-    latent = VAE_LATENT_CHANNELS
-    conv("encoder.conv_in", VAE_CHANNELS[0], 3, 3)
-    in_channels = VAE_CHANNELS[0]
-    for i, channels in enumerate(VAE_CHANNELS):
-        for j in range(VAE_LAYERS_PER_BLOCK):
-            resnet(
-                f"encoder.down_blocks.{i}.resnets.{j}", in_channels, channels
-            )
-            in_channels = channels
-        if i < len(VAE_CHANNELS) - 1:
-            conv(
-                f"encoder.down_blocks.{i}.downsamplers.0.conv",
-                *[channels] * 2,
-                3,
-            )
-    mid_block("encoder", VAE_CHANNELS[-1])
-    norm("encoder.conv_norm_out", VAE_CHANNELS[-1])
-    conv("encoder.conv_out", 2 * latent, VAE_CHANNELS[-1], 3)
-    conv("quant_conv", 2 * latent, 2 * latent, 1)
-    conv("post_quant_conv", latent, latent, 1)
-
-    # diffusers' decoder stages run from the lowest resolution up.
-    decoder_channels = VAE_CHANNELS[::-1]
-    conv("decoder.conv_in", decoder_channels[0], latent, 3)
-    mid_block("decoder", decoder_channels[0])
-    in_channels = decoder_channels[0]
-    for i, channels in enumerate(decoder_channels):
-        for j in range(VAE_LAYERS_PER_BLOCK + 1):
-            resnet(f"decoder.up_blocks.{i}.resnets.{j}", in_channels, channels)
-            in_channels = channels
-        if i < len(decoder_channels) - 1:
-            conv(f"decoder.up_blocks.{i}.upsamplers.0.conv", *[channels] * 2, 3)
-    norm("decoder.conv_norm_out", decoder_channels[-1])
-    conv("decoder.conv_out", 3, decoder_channels[-1], 3)
-
-    tensors["bn.running_mean"] = _tensor(4 * latent) - 0.5
-    tensors["bn.running_var"] = _tensor(4 * latent) + 1.0
-    tensors["bn.num_batches_tracked"] = np.array(0, dtype="int64")
-    return tensors
-
-
-class _TrackingLoader(SafetensorLoader):
-    """Records which tensors were read and which variables were written."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.used = set()
-        self.assigned = {}
-
-    def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
-        super().port_weight(keras_variable, hf_weight_key, hook_fn)
-        self.used.add(hf_weight_key)
-        entry = self.assigned.setdefault(
-            id(keras_variable), [keras_variable.path, 0]
-        )
-        entry[1] += 1
-
-
-def _to_keras_conv(weight):
-    """PyTorch `[out, in, kh, kw]` -> Keras `[kh, kw, in, out]`."""
-    return weight.transpose(2, 3, 1, 0)
-
-
-class ConvertFlux2VAETest(TestCase):
-    def setUp(self):
-        super().setUp()
-        self.tensors = _build_fake_vae_checkpoint()
-        self.preset_dir = self.get_temp_dir()
-        save_file(
-            self.tensors, os.path.join(self.preset_dir, "model.safetensors")
-        )
-
-    def _convert(self):
-        vae = Flux2VAE(**convert_flux2.convert_vae_config(VAE_CONFIG))
-        with _TrackingLoader(self.preset_dir) as loader:
-            convert_flux2.convert_vae_weights(vae, loader)
-        return vae, loader
+    def test_rejects_unsupported_configs(self):
+        for key, value in (
+            ("patch_size", 2),
+            ("out_channels", 64),
+            ("eps", 1e-5),
+            ("timestep_guidance_channels", 128),
+        ):
+            with self.assertRaisesRegex(ValueError, key):
+                convert_flux2.convert_backbone_config(
+                    {**KLEIN_4B_CONFIG, key: value}
+                )
 
     def test_klein_vae_config(self):
-        config = convert_flux2.convert_vae_config(
-            {
-                "act_fn": "silu",
-                "batch_norm_eps": 1e-4,
-                "block_out_channels": [128, 256, 512, 512],
-                "latent_channels": 32,
-                "layers_per_block": 2,
-                "mid_block_add_attention": True,
-                "norm_num_groups": 32,
-                "patch_size": [2, 2],
-                "use_post_quant_conv": True,
-                "use_quant_conv": True,
-            }
-        )
+        config = convert_flux2.convert_vae_config(KLEIN_VAE_CONFIG)
         self.assertEqual(config["encoder_num_filters"], [128, 256, 512, 512])
         self.assertEqual(config["encoder_num_blocks"], [2, 2, 2, 2])
         self.assertEqual(config["decoder_num_filters"], [512, 512, 256, 128])
@@ -479,90 +210,259 @@ class ConvertFlux2VAETest(TestCase):
         self.assertEqual(config["patch_size"], 2)
         self.assertEqual(config["batch_norm_epsilon"], 1e-4)
 
-    def test_decoder_block_out_channels(self):
-        config = convert_flux2.convert_vae_config(
-            {**VAE_CONFIG, "decoder_block_out_channels": [64, 128]}
-        )
-        self.assertEqual(config["encoder_num_filters"], [32, 64])
-        self.assertEqual(config["decoder_num_filters"], [128, 64])
+    def test_vae_config_errors(self):
+        config = dict(KLEIN_VAE_CONFIG)
+        del config["latent_channels"]
+        with self.assertRaisesRegex(KeyError, "latent_channels"):
+            convert_flux2.convert_vae_config(config)
+        for key, value in (
+            ("norm_num_groups", 16),
+            ("use_quant_conv", False),
+            ("patch_size", [2, 1]),
+        ):
+            with self.assertRaisesRegex(ValueError, key.split("_")[0]):
+                convert_flux2.convert_vae_config(
+                    {**KLEIN_VAE_CONFIG, key: value}
+                )
 
-    def test_rejects_unsupported_vae_config(self):
-        with self.assertRaisesRegex(ValueError, "norm_num_groups"):
-            convert_flux2.convert_vae_config(
-                {**VAE_CONFIG, "norm_num_groups": 16}
+
+class ConvertFlux2WeightsTest(TestCase):
+    def test_matches_diffusers(self):
+        preset_dir = self.get_temp_dir()
+        transformer = save_tiny_transformer(preset_dir)
+        backbone = Flux2Backbone.from_preset(preset_dir)
+        actual, expected = run_both(backbone, transformer)
+        self.assertAllClose(actual, expected, atol=1e-3, rtol=1e-3)
+
+    def test_guidance_embed(self):
+        preset_dir = self.get_temp_dir()
+        transformer = save_tiny_transformer(preset_dir, guidance_embeds=True)
+        backbone = Flux2Backbone.from_preset(preset_dir)
+        self.assertIn("guidance", backbone.input)
+        actual, expected = run_both(backbone, transformer, guidance=True)
+        self.assertAllClose(actual, expected, atol=1e-3, rtol=1e-3)
+
+    def test_bfloat16_checkpoint(self):
+        # The released checkpoints are bfloat16.
+        import torch
+
+        preset_dir = self.get_temp_dir()
+        transformer = save_tiny_transformer(preset_dir).to(torch.bfloat16)
+        transformer.save_pretrained(os.path.join(preset_dir, "transformer"))
+        backbone = Flux2Backbone.from_preset(preset_dir)
+        # The reference runs in float32 on the same bfloat16 values.
+        actual, expected = run_both(backbone, transformer.float())
+        self.assertAllClose(actual, expected, atol=1e-3, rtol=1e-3)
+
+    def test_class_detection(self):
+        preset_dir = self.get_temp_dir()
+        save_tiny_transformer(preset_dir)
+        backbone = Backbone.from_preset(preset_dir, load_weights=False)
+        self.assertIsInstance(backbone, Flux2Backbone)
+
+    def test_missing_and_extra_tensors_raise(self):
+        from safetensors.numpy import load_file
+        from safetensors.numpy import save_file
+
+        preset_dir = self.get_temp_dir()
+        save_tiny_transformer(preset_dir)
+        path = os.path.join(
+            preset_dir, "transformer", "diffusion_pytorch_model.safetensors"
+        )
+        tensors = load_file(path)
+        missing = dict(tensors)
+        del missing["transformer_blocks.0.attn.norm_added_k.weight"]
+        save_file(missing, path)
+        with self.assertRaisesRegex(ValueError, "norm_added_k"):
+            Flux2Backbone.from_preset(preset_dir)
+        extra = dict(tensors)
+        extra["single_transformer_blocks.2.attn.to_out.weight"] = tensors[
+            "single_transformer_blocks.1.attn.to_out.weight"
+        ]
+        save_file(extra, path)
+        with self.assertRaisesRegex(ValueError, "never read"):
+            Flux2Backbone.from_preset(preset_dir)
+
+    def test_flux1_checkpoint_raises(self):
+        # FLUX.1 has per-block modulation and no shared projections.
+        preset_dir = self.get_temp_dir()
+        save_tiny_transformer(preset_dir)
+        backbone = Flux2Backbone(
+            **convert_flux2.convert_backbone_config(
+                {**KLEIN_4B_CONFIG, **TINY_KWARGS, "guidance_embeds": False}
             )
-        with self.assertRaisesRegex(ValueError, "use_quant_conv"):
-            convert_flux2.convert_vae_config(
-                {**VAE_CONFIG, "use_quant_conv": False}
+        )
+        path = os.path.join(
+            preset_dir, "transformer", "diffusion_pytorch_model.safetensors"
+        )
+        from safetensors.numpy import load_file
+        from safetensors.numpy import save_file
+
+        tensors = load_file(path)
+        tensors = {
+            k: v for k, v in tensors.items() if "stream_modulation" not in k
+        }
+        save_file(tensors, path)
+        with self.assertRaisesRegex(ValueError, "stream_modulation"):
+            with DiffusersSafetensorLoader(preset_dir, "transformer") as loader:
+                convert_flux2.convert_weights(backbone, loader)
+
+    def test_wrong_backbone_type_raises(self):
+        preset_dir = self.get_temp_dir()
+        save_tiny_transformer(preset_dir)
+        with self.assertRaisesRegex(ValueError, "Flux2Backbone"):
+            with DiffusersSafetensorLoader(preset_dir, "transformer") as loader:
+                convert_flux2.convert_weights(object(), loader)
+
+
+class ConvertFlux2VAETest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.preset_dir = self.get_temp_dir()
+        self.reference = save_tiny_vae(self.preset_dir)
+        config = self.reference.config
+        self.vae = Flux2VAE(**convert_flux2.convert_vae_config(config))
+        with DiffusersSafetensorLoader(self.preset_dir, "vae") as loader:
+            convert_flux2.convert_vae_weights(self.vae, loader)
+
+    def test_decode_matches_diffusers(self):
+        import torch
+        from diffusers import Flux2KleinPipeline
+
+        rng = np.random.default_rng(0)
+        latents = rng.standard_normal((2, 4, 4, 16)).astype("float32")
+        actual = ops.convert_to_numpy(self.vae.decode(latents))
+        # `Flux2KleinPipeline.__call__`, after the denoising loop.
+        with torch.no_grad():
+            x = torch.from_numpy(latents).permute(0, 3, 1, 2)
+            bn = self.reference.bn
+            std = torch.sqrt(
+                bn.running_var.view(1, -1, 1, 1)
+                + self.reference.config.batch_norm_eps
             )
-        with self.assertRaisesRegex(ValueError, "square"):
-            convert_flux2.convert_vae_config(
-                {**VAE_CONFIG, "patch_size": [2, 1]}
+            x = x * std + bn.running_mean.view(1, -1, 1, 1)
+            x = Flux2KleinPipeline._unpatchify_latents(x)
+            expected = self.reference.decode(x, return_dict=False)[0]
+        expected = expected.permute(0, 2, 3, 1).numpy()
+        self.assertAllClose(actual, expected, atol=1e-3, rtol=1e-3)
+
+    def test_encode_matches_diffusers(self):
+        import torch
+        from diffusers import Flux2KleinPipeline
+
+        rng = np.random.default_rng(1)
+        images = rng.uniform(-1, 1, (2, 16, 16, 3)).astype("float32")
+        actual = ops.convert_to_numpy(self.vae.encode(images))
+        # `Flux2KleinPipeline._encode_vae_image`.
+        with torch.no_grad():
+            x = torch.from_numpy(images).permute(0, 3, 1, 2)
+            x = self.reference.encode(x).latent_dist.mode()
+            x = Flux2KleinPipeline._patchify_latents(x)
+            bn = self.reference.bn
+            std = torch.sqrt(
+                bn.running_var.view(1, -1, 1, 1)
+                + self.reference.config.batch_norm_eps
             )
+            expected = (x - bn.running_mean.view(1, -1, 1, 1)) / std
+        expected = expected.permute(0, 2, 3, 1).numpy()
+        self.assertAllClose(actual, expected, atol=1e-3, rtol=1e-3)
 
-    def test_weights_are_complete_and_one_to_one(self):
-        vae, loader = self._convert()
-        never = [w.path for w in vae.weights if id(w) not in loader.assigned]
-        twice = [path for path, n in loader.assigned.values() if n > 1]
-        # `num_batches_tracked` is a training counter with no Keras use.
-        unused = set(self.tensors) - loader.used - {"bn.num_batches_tracked"}
-        self.assertEqual(never, [])
-        self.assertEqual(twice, [])
-        self.assertEqual(unused, set())
-        self.assertEqual(
-            vae.count_params(),
-            sum(
-                t.size
-                for k, t in self.tensors.items()
-                if k != "bn.num_batches_tracked"
-            ),
+
+# Byte-level BPE vocabulary for the tiny tokenizer, and the chat template's
+# special tokens.
+MERGES = [["Ġ", "a"], ["a", "i"], ["p", "l"], ["n", "e"], ["ai", "r"]]
+MERGES += [["pl", "a"], ["pla", "ne"], ["u", "s"], ["e", "r"], ["us", "er"]]
+SPECIAL_TOKENS = ["<|endoftext|>", "<|im_start|>", "<|im_end|>"]
+SPECIAL_TOKENS += ["<think>", "</think>"]
+
+
+def save_tiny_text_encoder(preset_dir):
+    """Save a tiny `Qwen3ForCausalLM` and its tokenizer, as klein does."""
+    transformers = pytest.importorskip("transformers")
+    tokens = sorted({t for pair in MERGES for t in pair + ["".join(pair)]})
+    tokens += [chr(c) for c in range(ord("a"), ord("z") + 1)]
+    tokens += ["Ċ", "ĊĊ", "Ġ"]
+    vocab = {token: i for i, token in enumerate(dict.fromkeys(tokens))}
+    added = [
+        {"id": len(vocab) + i, "content": token, "special": True}
+        for i, token in enumerate(SPECIAL_TOKENS)
+    ]
+    os.makedirs(os.path.join(preset_dir, "tokenizer"))
+    with open(
+        os.path.join(preset_dir, "tokenizer", "tokenizer.json"), "w"
+    ) as f:
+        json.dump(
+            {
+                "model": {"type": "BPE", "vocab": vocab, "merges": MERGES},
+                "added_tokens": added,
+            },
+            f,
+        )
+    config = transformers.Qwen3Config(
+        vocab_size=len(vocab) + len(added),
+        hidden_size=16,
+        intermediate_size=32,
+        # `Flux2TextToImage` reads hidden states 9, 18 and 27.
+        num_hidden_layers=27,
+        num_attention_heads=2,
+        num_key_value_heads=1,
+        head_dim=8,
+        max_position_embeddings=512,
+        tie_word_embeddings=True,
+    )
+    model = transformers.Qwen3ForCausalLM(config)
+    model.save_pretrained(os.path.join(preset_dir, "text_encoder"))
+
+
+class ConvertFlux2PipelineTest(TestCase):
+    def test_text_to_image_from_diffusers_repo(self):
+        preset_dir = self.get_temp_dir()
+        # Three Qwen3 hidden states of width 16 give 48 text features.
+        save_tiny_transformer(preset_dir, joint_attention_dim=48)
+        save_tiny_vae(preset_dir)
+        save_tiny_text_encoder(preset_dir)
+        write_model_index(
+            preset_dir,
+            is_distilled=True,
+            scheduler=["diffusers", "FlowMatchEulerDiscreteScheduler"],
+            text_encoder=["transformers", "Qwen3ForCausalLM"],
+            tokenizer=["transformers", "Qwen2TokenizerFast"],
+            transformer=["diffusers", "Flux2Transformer2DModel"],
+            vae=["diffusers", "AutoencoderKLFlux2"],
+        )
+        for cls in (Flux2TextToImage, TextToImage):
+            text_to_image = cls.from_preset(preset_dir, image_shape=(32, 32, 3))
+            self.assertIsInstance(text_to_image, Flux2TextToImage)
+            self.assertTrue(text_to_image.is_distilled)
+            self.assertEqual(text_to_image.latent_shape, (None, 8, 8, 16))
+        image = text_to_image.generate("airplane", num_steps=2, seed=0)
+        self.assertEqual(image.shape, (32, 32, 3))
+
+    def test_flux1_repo_has_no_task(self):
+        preset_dir = self.get_temp_dir()
+        from keras_hub.src.utils.transformers.convert_flux_test import (
+            save_tiny_flux,
         )
 
-    def test_conv_and_attention_layouts(self):
-        vae, _ = self._convert()
-        self.assertAllClose(
-            vae.encoder.input_projection.kernel,
-            _to_keras_conv(self.tensors["encoder.conv_in.weight"]),
-        )
-        self.assertAllClose(
-            vae.quant_conv.kernel,
-            _to_keras_conv(self.tensors["quant_conv.weight"]),
-        )
-        # diffusers' attention uses `nn.Linear`; KerasHub uses 1x1 convs.
-        self.assertAllClose(
-            vae.decoder.mid_attention.query_conv2d.kernel,
-            self.tensors["decoder.mid_block.attentions.0.to_q.weight"].T[
-                None, None
-            ],
-        )
+        save_tiny_flux(preset_dir)
+        with self.assertRaisesRegex(ValueError, "FLUX.1"):
+            TextToImage.from_preset(preset_dir)
 
-    def test_decoder_stage_order(self):
-        # diffusers' `up_blocks.0` is the lowest resolution, which is also
-        # the first `VAEDecoder` stack: no reversal (unlike the LDM layout).
-        vae, _ = self._convert()
-        blocks = vae.decoder.blocks
-        self.assertAllClose(
-            blocks[0].conv1.kernel,
-            _to_keras_conv(
-                self.tensors["decoder.up_blocks.0.resnets.0.conv1.weight"]
-            ),
-        )
-        self.assertAllClose(
-            blocks[2].residual_projection.kernel,
-            _to_keras_conv(
-                self.tensors[
-                    "decoder.up_blocks.1.resnets.0.conv_shortcut.weight"
-                ]
-            ),
-        )
 
-    def test_latent_statistics(self):
-        vae, _ = self._convert()
-        self.assertAllClose(
-            vae.latent_normalization.moving_mean,
-            self.tensors["bn.running_mean"],
+class ConvertFlux2PresetTest(TestCase):
+    @pytest.mark.extra_large
+    def test_klein_4b_matches_checkpoint_size(self):
+        """Built from the published config, the backbone must have exactly
+        as many parameters as `flux-2-klein-4b.safetensors`."""
+        backbone = Flux2Backbone(
+            **convert_flux2.convert_backbone_config(KLEIN_4B_CONFIG)
         )
-        self.assertAllClose(
-            vae.latent_normalization.moving_variance,
-            self.tensors["bn.running_var"],
+        self.assertEqual(backbone.count_params(), 3_875_544_576)
+
+    @pytest.mark.extra_large
+    def test_klein_4b_from_hub(self):
+        # Public, unlike FLUX.1 [schnell].
+        backbone = Flux2Backbone.from_preset(
+            "hf://black-forest-labs/FLUX.2-klein-4B"
         )
+        self.assertEqual(backbone.count_params(), 3_875_544_576)

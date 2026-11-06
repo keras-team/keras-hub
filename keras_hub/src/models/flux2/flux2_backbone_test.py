@@ -18,7 +18,7 @@ class Flux2BackboneTest(TestCase):
             "axes_dim": [8, 8, 8, 8],
             "theta": 2000,
             "guidance_embed": False,
-            "image_shape": (12, 16),
+            "latent_shape": (12, 16),
             "text_shape": (5, 24),
             "image_ids_shape": (12, 4),
             "text_ids_shape": (5, 4),
@@ -114,7 +114,7 @@ class Flux2DynamicShapeTest(TestCase):
             depth_single_blocks=2,
             axes_dim=[8, 8, 8, 8],
             theta=2000,
-            image_shape=(None, 16),
+            latent_shape=(None, 16),
             text_shape=(None, 24),
         )
         # Deliberately unequal, and different from any earlier call.

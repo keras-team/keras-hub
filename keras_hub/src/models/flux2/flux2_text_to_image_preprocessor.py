@@ -1,3 +1,5 @@
+import keras
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
@@ -125,6 +127,16 @@ class Flux2TextToImagePreprocessor(TextToImagePreprocessor):
 
     def call(self, x, sequence_length=None):
         return self.generate_preprocess(x, sequence_length=sequence_length)
+
+    def compute_output_spec(self, x, sequence_length=None):
+        # Declared rather than inferred: on JAX and PyTorch, Keras cannot
+        # trace string ops on a symbolic input such as
+        # `keras.Input(shape=(), dtype="string")`.
+        shape = tuple(x.shape) + (sequence_length or self.sequence_length,)
+        return {
+            "token_ids": keras.KerasTensor(shape, dtype="int32"),
+            "padding_mask": keras.KerasTensor(shape, dtype="bool"),
+        }
 
     def get_config(self):
         config = super().get_config()

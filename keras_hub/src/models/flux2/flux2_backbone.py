@@ -56,14 +56,21 @@ class Flux2Backbone(Backbone):
         theta: int. The RoPE base frequency.
         guidance_embed: bool. Whether the model is guidance-distilled and
             takes a `guidance` input. Defaults to `False`.
-        image_shape: tuple. The shape of the `image` input, excluding the
-            batch axis. Defaults to `(None, 128)`.
+        latent_shape: tuple. The shape of the `image` input (the packed
+            latent tokens), excluding the batch axis. Defaults to
+            `(None, 128)`.
         text_shape: tuple. The shape of the `text` input, excluding the batch
             axis. Defaults to `(None, 7680)`.
         image_ids_shape: tuple. The shape of the `image_ids` input,
             excluding the batch axis. Defaults to `(None, 4)`.
         text_ids_shape: tuple. The shape of the `text_ids` input, excluding
             the batch axis. Defaults to `(None, 4)`.
+        image_shape: tuple. The `(height, width, 3)` shape of the images
+            that `keras_hub.models.Flux2TextToImage` generates with this
+            backbone. The transformer itself accepts any number of latent
+            tokens; as for Stable Diffusion 3, this is the generated image
+            size, which `from_preset(..., image_shape=...)` overrides.
+            Defaults to `(1024, 1024, 3)`.
         **kwargs: other keyword arguments passed to `keras.Model`, including
             `name`, `dtype` etc.
 
@@ -100,7 +107,7 @@ class Flux2Backbone(Backbone):
         depth_single_blocks=2,
         axes_dim=[8, 8, 8, 8],
         theta=2000,
-        image_shape=(None, 16),
+        latent_shape=(None, 16),
         text_shape=(None, 24),
     )
     outputs = backbone(
@@ -126,10 +133,11 @@ class Flux2Backbone(Backbone):
         axes_dim,
         theta,
         guidance_embed=False,
-        image_shape=(None, 128),
+        latent_shape=(None, 128),
         text_shape=(None, 7680),
         image_ids_shape=(None, 4),
         text_ids_shape=(None, 4),
+        image_shape=(1024, 1024, 3),
         **kwargs,
     ):
         if hidden_size % num_heads != 0:
@@ -209,7 +217,7 @@ class Flux2Backbone(Backbone):
         )
 
         # === Functional Model ===
-        image_input = keras.Input(shape=image_shape, name="image")
+        image_input = keras.Input(shape=latent_shape, name="image")
         image_ids = keras.Input(shape=image_ids_shape, name="image_ids")
         text_input = keras.Input(shape=text_shape, name="text")
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
@@ -287,10 +295,11 @@ class Flux2Backbone(Backbone):
         self.axes_dim = axes_dim
         self.theta = theta
         self.guidance_embed = guidance_embed
-        self.image_shape = image_shape
+        self.latent_shape = latent_shape
         self.text_shape = text_shape
         self.image_ids_shape = image_ids_shape
         self.text_ids_shape = text_ids_shape
+        self.image_shape = tuple(image_shape)
 
     def get_config(self):
         config = super().get_config()
@@ -305,10 +314,11 @@ class Flux2Backbone(Backbone):
                 "axes_dim": self.axes_dim,
                 "theta": self.theta,
                 "guidance_embed": self.guidance_embed,
-                "image_shape": self.image_shape,
+                "latent_shape": self.latent_shape,
                 "text_shape": self.text_shape,
                 "image_ids_shape": self.image_ids_shape,
                 "text_ids_shape": self.text_ids_shape,
+                "image_shape": self.image_shape,
             }
         )
         return config

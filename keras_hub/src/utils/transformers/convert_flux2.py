@@ -1,277 +1,207 @@
-"""Convert FLUX.2 transformer checkpoints to `Flux2Backbone`.
+"""Convert diffusers FLUX.2 checkpoints to `Flux2Backbone` and `Flux2VAE`.
 
-Weights are read in the original Black Forest Labs single-file layout, as
-shipped next to the diffusers folders on the Hub (e.g.
-`black-forest-labs/FLUX.2-klein-4B/flux-2-klein-4b.safetensors`):
-`img_in`, `txt_in`, `time_in`, the shared `double_stream_modulation_img`,
-`double_stream_modulation_txt` and `single_stream_modulation` projections,
-`double_blocks.*`, `single_blocks.*` and `final_layer`.
+The weights are read from the `transformer/` and `vae/` folders of a
+diffusers pipeline repo, such as `hf://black-forest-labs/FLUX.2-klein-4B`,
+through `DiffusersPresetLoader`. Only the key maps that differ from FLUX.1
+live here: the shared modulation projections, the fused single-block
+projection, the SwiGLU feed-forward layers, the missing biases and the VAE.
 """
 
 import numpy as np
 
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
-
-try:
-    from safetensors import SafetensorError
-except ImportError:  # safetensors is an optional dependency.
-    SafetensorError = None
+from keras_hub.src.utils.transformers.convert_flux import CheckedLoader
+from keras_hub.src.utils.transformers.convert_flux import port_dense
+from keras_hub.src.utils.transformers.convert_flux import port_fused_dense
+from keras_hub.src.utils.transformers.convert_flux import port_mlp_embedder
+from keras_hub.src.utils.transformers.convert_flux import port_norm_out
+from keras_hub.src.utils.transformers.convert_flux import port_qk_norm
 
 backbone_cls = Flux2Backbone
 
-# Raised when a key is absent: `KeyError` from the sharded `weight_map`
-# lookup, `SafetensorError` from a single-file `safe_open`.
-_MISSING_TENSOR_ERRORS = tuple(
-    error for error in (KeyError, SafetensorError) if error is not None
-)
-
-
-def _get_any(config, keys, default):
-    """Return the value of the first key of `keys` present in `config`.
-
-    FLUX.2 configs come in two spellings: diffusers'
-    `transformer/config.json` (`num_layers`, `axes_dims_rope`,
-    `joint_attention_dim`, `guidance_embeds`, ...) and the Black Forest Labs
-    `Flux2Params` (`depth`, `axes_dim`, `context_in_dim`,
-    `use_guidance_embed`, ...). Reading only one of them silently falls back
-    to a default and builds a structurally wrong model.
-    """
-    for key in keys:
-        if key in config:
-            return config[key]
-    return default
-
 
 def convert_backbone_config(hf_config):
-    """Convert a FLUX.2 transformer config to `Flux2Backbone` kwargs.
+    """Convert a diffusers `Flux2Transformer2DModel` config to kwargs.
 
-    Missing keys default to FLUX.2 [klein] 4B.
+    Structural keys are read directly, so a missing one fails here, with its
+    name, instead of building a model of the wrong shape.
     """
-    patch_size = _get_any(hf_config, ["patch_size"], 1)
-    if patch_size != 1:
+    if hf_config["patch_size"] != 1:
         raise ValueError(
             "FLUX.2 packs latents into 2x2 patches before the transformer, "
             "so the transformer itself must have `patch_size=1`. Received: "
-            f"patch_size={patch_size}"
+            f"patch_size={hf_config['patch_size']}"
         )
-    input_channels = _get_any(hf_config, ["in_channels"], 128)
-    out_channels = hf_config.get("out_channels")
-    if out_channels is not None and out_channels != input_channels:
+    input_channels = hf_config["in_channels"]
+    # As in diffusers, `out_channels=None` means `in_channels`.
+    out_channels = hf_config.get("out_channels") or input_channels
+    if out_channels != input_channels:
         raise ValueError(
             "`Flux2Backbone` predicts a velocity with the same number of "
             "channels as its input. Received: "
             f"in_channels={input_channels}, out_channels={out_channels}"
         )
-
-    num_heads = _get_any(hf_config, ["num_attention_heads", "num_heads"], 24)
-    # diffusers expresses width as heads * head_dim rather than hidden_size.
-    attention_head_dim = _get_any(hf_config, ["attention_head_dim"], None)
-    if attention_head_dim is not None:
-        hidden_size = num_heads * attention_head_dim
-    else:
-        hidden_size = _get_any(hf_config, ["hidden_size"], 3072)
-
-    axes_dim = list(
-        _get_any(hf_config, ["axes_dims_rope", "axes_dim"], [32, 32, 32, 32])
-    )
-    text_dim = _get_any(
-        hf_config, ["joint_attention_dim", "context_in_dim"], 7680
-    )
+    for key, supported in (("eps", 1e-6), ("timestep_guidance_channels", 256)):
+        if hf_config[key] != supported:
+            raise ValueError(
+                f"`Flux2Backbone` only supports `{key}={supported}`. "
+                f"Received: {key}={hf_config[key]}"
+            )
+    num_heads = hf_config["num_attention_heads"]
+    axes_dim = list(hf_config["axes_dims_rope"])
     return {
         "input_channels": input_channels,
-        "hidden_size": hidden_size,
-        "mlp_ratio": _get_any(hf_config, ["mlp_ratio"], 3.0),
+        "hidden_size": num_heads * hf_config["attention_head_dim"],
+        "mlp_ratio": hf_config["mlp_ratio"],
         "num_heads": num_heads,
-        "depth": _get_any(hf_config, ["num_layers", "depth"], 5),
-        "depth_single_blocks": _get_any(
-            hf_config, ["num_single_layers", "depth_single_blocks"], 20
-        ),
+        "depth": hf_config["num_layers"],
+        "depth_single_blocks": hf_config["num_single_layers"],
         "axes_dim": axes_dim,
-        "theta": _get_any(hf_config, ["rope_theta", "theta"], 2000),
-        "guidance_embed": _get_any(
-            hf_config,
-            ["guidance_embeds", "use_guidance_embed", "guidance_embed"],
-            False,
-        ),
+        "theta": hf_config["rope_theta"],
+        "guidance_embed": hf_config["guidance_embeds"],
         # Sequence axes stay dynamic so a preset built from this config can
         # run at any resolution and prompt length.
-        "image_shape": (None, input_channels),
-        "text_shape": (None, text_dim),
+        "latent_shape": (None, input_channels),
+        "text_shape": (None, hf_config["joint_attention_dim"]),
         "image_ids_shape": (None, len(axes_dim)),
         "text_ids_shape": (None, len(axes_dim)),
     }
 
 
-def _port_dense(loader, dense, prefix):
-    """Port a bias-free PyTorch `nn.Linear` into a Keras `Dense`.
-
-    PyTorch stores `[out_features, in_features]`; Keras wants
-    `[in_features, out_features]`.
-    """
-    loader.port_weight(
-        dense.kernel, f"{prefix}.weight", hook_fn=lambda x, _: x.T
+def _port_double_block(loader, block, prefix):
+    attn = f"{prefix}.attn"
+    port_fused_dense(
+        loader,
+        block.image_qkv,
+        [f"{attn}.to_q", f"{attn}.to_k", f"{attn}.to_v"],
+    )
+    port_fused_dense(
+        loader,
+        block.text_qkv,
+        [f"{attn}.add_q_proj", f"{attn}.add_k_proj", f"{attn}.add_v_proj"],
+    )
+    port_qk_norm(
+        loader, block.image_attn_norm, f"{attn}.norm_q", f"{attn}.norm_k"
+    )
+    port_qk_norm(
+        loader,
+        block.text_attn_norm,
+        f"{attn}.norm_added_q",
+        f"{attn}.norm_added_k",
+    )
+    port_dense(loader, block.image_attn_proj, f"{attn}.to_out.0")
+    port_dense(loader, block.text_attn_proj, f"{attn}.to_add_out")
+    # The gate and up projections of the SwiGLU are fused in `linear_in`.
+    port_dense(loader, block.image_mlp.input_layer, f"{prefix}.ff.linear_in")
+    port_dense(loader, block.image_mlp.output_layer, f"{prefix}.ff.linear_out")
+    port_dense(
+        loader, block.text_mlp.input_layer, f"{prefix}.ff_context.linear_in"
+    )
+    port_dense(
+        loader, block.text_mlp.output_layer, f"{prefix}.ff_context.linear_out"
     )
 
 
-def _port_qk_norm(loader, qk_norm, prefix):
-    loader.port_weight(qk_norm.query_norm.scale, f"{prefix}.query_norm.scale")
-    loader.port_weight(qk_norm.key_norm.scale, f"{prefix}.key_norm.scale")
-
-
-def _port_mlp_embedder(loader, embedder, prefix):
-    _port_dense(loader, embedder.input_layer, f"{prefix}.in_layer")
-    _port_dense(loader, embedder.output_layer, f"{prefix}.out_layer")
-
-
-def _port_double_block(loader, block, prefix):
-    for keras_stream, hf_stream in (("image", "img"), ("text", "txt")):
-        _port_dense(
-            loader,
-            getattr(block, f"{keras_stream}_qkv"),
-            f"{prefix}.{hf_stream}_attn.qkv",
-        )
-        _port_qk_norm(
-            loader,
-            getattr(block, f"{keras_stream}_attn_norm"),
-            f"{prefix}.{hf_stream}_attn.norm",
-        )
-        _port_dense(
-            loader,
-            getattr(block, f"{keras_stream}_attn_proj"),
-            f"{prefix}.{hf_stream}_attn.proj",
-        )
-        mlp = getattr(block, f"{keras_stream}_mlp")
-        # `{img,txt}_mlp` is `Sequential(Linear, SiLUActivation, Linear)`.
-        _port_dense(loader, mlp.input_layer, f"{prefix}.{hf_stream}_mlp.0")
-        _port_dense(loader, mlp.output_layer, f"{prefix}.{hf_stream}_mlp.2")
-
-
 def _port_single_block(loader, block, prefix):
-    _port_dense(loader, block.linear1, f"{prefix}.linear1")
-    _port_dense(loader, block.linear2, f"{prefix}.linear2")
-    _port_qk_norm(loader, block.norm, f"{prefix}.norm")
+    attn = f"{prefix}.attn"
+    # `to_qkv_mlp_proj` is `[q, k, v, mlp_gate, mlp_up]`, like `linear1`.
+    port_dense(loader, block.linear1, f"{attn}.to_qkv_mlp_proj")
+    port_qk_norm(loader, block.norm, f"{attn}.norm_q", f"{attn}.norm_k")
+    port_dense(loader, block.linear2, f"{attn}.to_out")
 
 
-def convert_weights(backbone, loader, hf_config):
-    """Map FLUX.2 weights (Black Forest Labs layout) into a `Flux2Backbone`."""
+def convert_weights(backbone, loader):
+    """Port diffusers `Flux2Transformer2DModel` weights into `backbone`.
+
+    Fails unless every backbone weight is assigned exactly once and every
+    checkpoint tensor is read.
+
+    Args:
+        backbone: A `Flux2Backbone`.
+        loader: A `SafetensorLoader` over the diffusers `transformer/`
+            weights.
+    """
     if not isinstance(backbone, Flux2Backbone):
         raise ValueError(
             "The provided backbone must be an instance of Flux2Backbone. "
             f"Received: {type(backbone)}"
         )
-
-    # The shared modulation projections are what tell a FLUX.2 checkpoint
-    # apart, so port them first and fail with a useful message if absent.
-    try:
-        _port_dense(
+    loader = CheckedLoader(loader)
+    port_dense(loader, backbone.image_input_embedder, "x_embedder")
+    port_dense(loader, backbone.text_input_embedder, "context_embedder")
+    port_mlp_embedder(
+        loader,
+        backbone.time_input_embedder,
+        "time_guidance_embed.timestep_embedder",
+    )
+    if backbone.guidance_embed:
+        port_mlp_embedder(
             loader,
-            backbone.double_stream_modulation_image.linear_projection,
-            "double_stream_modulation_img.lin",
+            backbone.guidance_input_embedder,
+            "time_guidance_embed.guidance_embedder",
         )
-    except _MISSING_TENSOR_ERRORS as error:
-        raise ValueError(
-            "The checkpoint has no `double_stream_modulation_img.lin.weight`, "
-            "so it is not a FLUX.2 checkpoint in the Black Forest Labs "
-            "single-file layout. FLUX.1 checkpoints (per-block `img_mod` / "
-            "`txt_mod` modulation) load with `FluxBackbone`. For a diffusers "
-            "repo, convert its single-file checkpoint instead (e.g. "
-            "`flux-2-klein-4b.safetensors` in "
-            "`black-forest-labs/FLUX.2-klein-4B`)."
-        ) from error
-    _port_dense(
+    # One modulation projection per stream, shared by all blocks.
+    port_dense(
+        loader,
+        backbone.double_stream_modulation_image.linear_projection,
+        "double_stream_modulation_img.linear",
+    )
+    port_dense(
         loader,
         backbone.double_stream_modulation_text.linear_projection,
-        "double_stream_modulation_txt.lin",
+        "double_stream_modulation_txt.linear",
     )
-    _port_dense(
+    port_dense(
         loader,
         backbone.single_stream_modulation.linear_projection,
-        "single_stream_modulation.lin",
+        "single_stream_modulation.linear",
     )
-
-    _port_dense(loader, backbone.image_input_embedder, "img_in")
-    _port_dense(loader, backbone.text_input_embedder, "txt_in")
-    _port_mlp_embedder(loader, backbone.time_input_embedder, "time_in")
-    if backbone.guidance_embed:
-        try:
-            _port_mlp_embedder(
-                loader, backbone.guidance_input_embedder, "guidance_in"
-            )
-        except _MISSING_TENSOR_ERRORS as error:
-            raise ValueError(
-                "The backbone was built with `guidance_embed=True`, but the "
-                "checkpoint has no `guidance_in.*` weights. FLUX.2 [klein] "
-                "is not guidance-distilled; only FLUX.2 [dev] is."
-            ) from error
-
-    # A missing block is a hard error: skipping it would leave randomly
-    # initialized layers in a model that still runs.
     for i, block in enumerate(backbone.double_blocks):
-        prefix = f"double_blocks.{i}"
-        try:
-            _port_double_block(loader, block, prefix)
-        except _MISSING_TENSOR_ERRORS as error:
-            raise ValueError(
-                f"The checkpoint is missing weights for `{prefix}` ({error}). "
-                f"Expected {len(backbone.double_blocks)} double-stream blocks."
-            ) from error
-
+        _port_double_block(loader, block, f"transformer_blocks.{i}")
     for i, block in enumerate(backbone.single_blocks):
-        prefix = f"single_blocks.{i}"
-        try:
-            _port_single_block(loader, block, prefix)
-        except _MISSING_TENSOR_ERRORS as error:
-            raise ValueError(
-                f"The checkpoint is missing weights for `{prefix}` ({error}). "
-                f"Expected {len(backbone.single_blocks)} single-stream blocks."
-            ) from error
-
-    _port_dense(
-        loader,
-        backbone.final_layer.adaLN_modulation,
-        "final_layer.adaLN_modulation.1",
+        _port_single_block(loader, block, f"single_transformer_blocks.{i}")
+    port_norm_out(
+        loader, backbone.final_layer.adaLN_modulation, "norm_out.linear"
     )
-    _port_dense(loader, backbone.final_layer.linear, "final_layer.linear")
+    port_dense(loader, backbone.final_layer.linear, "proj_out")
+    loader.check_complete(backbone)
 
 
-# === VAE (`AutoencoderKLFlux2`, diffusers layout) ===
+# === VAE (`AutoencoderKLFlux2`) ===
 
 
 def convert_vae_config(hf_vae_config):
-    """Convert a diffusers `AutoencoderKLFlux2` config to `Flux2VAE` kwargs."""
-    unsupported = {
-        "norm_num_groups": (hf_vae_config.get("norm_num_groups", 32), 32),
-        "act_fn": (hf_vae_config.get("act_fn", "silu"), "silu"),
-        "mid_block_add_attention": (
-            hf_vae_config.get("mid_block_add_attention", True),
-            True,
-        ),
-        "use_quant_conv": (hf_vae_config.get("use_quant_conv", True), True),
-        "use_post_quant_conv": (
-            hf_vae_config.get("use_post_quant_conv", True),
-            True,
-        ),
+    """Convert a diffusers `AutoencoderKLFlux2` config to `Flux2VAE` kwargs.
+
+    Structural keys are read directly, so a missing one fails here, with its
+    name.
+    """
+    supported = {
+        "norm_num_groups": 32,
+        "act_fn": "silu",
+        "mid_block_add_attention": True,
+        "use_quant_conv": True,
+        "use_post_quant_conv": True,
     }
-    for key, (value, expected) in unsupported.items():
-        if value != expected:
+    for key, expected in supported.items():
+        if hf_vae_config[key] != expected:
             raise ValueError(
                 f"`Flux2VAE` only supports `{key}={expected!r}`. "
-                f"Received: {key}={value!r}"
+                f"Received: {key}={hf_vae_config[key]!r}"
             )
-    patch_size = hf_vae_config.get("patch_size", [2, 2])
+    patch_size = hf_vae_config["patch_size"]
     if isinstance(patch_size, (list, tuple)):
         if len(set(patch_size)) != 1:
             raise ValueError(
                 f"Only square patches are supported. Received: {patch_size}"
             )
         patch_size = patch_size[0]
-    filters = list(
-        hf_vae_config.get("block_out_channels", [128, 256, 512, 512])
-    )
+    filters = list(hf_vae_config["block_out_channels"])
+    # As in diffusers, a missing or `None` value means `block_out_channels`.
     decoder_filters = list(
         hf_vae_config.get("decoder_block_out_channels") or filters
     )
-    layers_per_block = hf_vae_config.get("layers_per_block", 2)
+    layers_per_block = hf_vae_config["layers_per_block"]
     return {
         "encoder_num_filters": filters,
         "encoder_num_blocks": [layers_per_block] * len(filters),
@@ -280,35 +210,30 @@ def convert_vae_config(hf_vae_config):
         "decoder_num_filters": decoder_filters[::-1],
         # diffusers' decoder stages have one more ResNet block.
         "decoder_num_blocks": [layers_per_block + 1] * len(decoder_filters),
-        "latent_channels": hf_vae_config.get("latent_channels", 32),
+        "latent_channels": hf_vae_config["latent_channels"],
         "patch_size": patch_size,
-        "batch_norm_epsilon": hf_vae_config.get("batch_norm_eps", 1e-4),
-        "input_channels": hf_vae_config.get("in_channels", 3),
-        "output_channels": hf_vae_config.get("out_channels", 3),
+        "batch_norm_epsilon": hf_vae_config["batch_norm_eps"],
+        "input_channels": hf_vae_config["in_channels"],
+        "output_channels": hf_vae_config["out_channels"],
     }
 
 
-def _port_conv2d(loader, conv, prefix):
+def _port_conv2d(loader, conv, key):
     """PyTorch `[out, in, kh, kw]` -> Keras `[kh, kw, in, out]`."""
-    loader.port_weight(
-        conv.kernel,
-        f"{prefix}.weight",
-        hook_fn=lambda x, _: np.transpose(x, (2, 3, 1, 0)),
-    )
-    loader.port_weight(conv.bias, f"{prefix}.bias")
+    kernel = np.transpose(loader.get_tensor(f"{key}.weight"), (2, 3, 1, 0))
+    loader.assign(conv.kernel, kernel)
+    loader.assign(conv.bias, loader.get_tensor(f"{key}.bias"))
 
 
-def _port_linear_as_conv2d(loader, conv, prefix):
+def _port_linear_as_conv2d(loader, conv, key):
     """diffusers' VAE attention uses `nn.Linear`; KerasHub uses 1x1 convs."""
-    loader.port_weight(
-        conv.kernel, f"{prefix}.weight", hook_fn=lambda x, _: x.T[None, None]
-    )
-    loader.port_weight(conv.bias, f"{prefix}.bias")
+    loader.assign(conv.kernel, loader.get_tensor(f"{key}.weight").T[None, None])
+    loader.assign(conv.bias, loader.get_tensor(f"{key}.bias"))
 
 
-def _port_group_norm(loader, norm, prefix):
-    loader.port_weight(norm.gamma, f"{prefix}.weight")
-    loader.port_weight(norm.beta, f"{prefix}.bias")
+def _port_group_norm(loader, norm, key):
+    loader.assign(norm.gamma, loader.get_tensor(f"{key}.weight"))
+    loader.assign(norm.beta, loader.get_tensor(f"{key}.bias"))
 
 
 def _port_vae_resnet(loader, block, prefix):
@@ -333,13 +258,19 @@ def _port_vae_attention(loader, attention, prefix):
 
 
 def convert_vae_weights(vae, loader):
-    """Map diffusers `AutoencoderKLFlux2` weights into a `Flux2VAE`.
+    """Port diffusers `AutoencoderKLFlux2` weights into a `Flux2VAE`.
 
     Unlike the LDM single-file layout used for Stable Diffusion 3, diffusers
     numbers decoder stages from the lowest resolution (`up_blocks.0`), which
     is also `VAEDecoder`'s order, and its mid-block attention uses linear
-    projections.
+    projections. Fails unless every VAE weight is assigned exactly once and
+    every checkpoint tensor is read.
+
+    Args:
+        vae: A `Flux2VAE`.
+        loader: A `SafetensorLoader` over the diffusers `vae/` weights.
     """
+    loader = CheckedLoader(loader)
     encoder = vae.encoder
     _port_conv2d(loader, encoder.input_projection, "encoder.conv_in")
     block_index = 0
@@ -396,5 +327,11 @@ def convert_vae_weights(vae, loader):
     _port_conv2d(loader, decoder.output_projection, "decoder.conv_out")
 
     normalization = vae.latent_normalization
-    loader.port_weight(normalization.moving_mean, "bn.running_mean")
-    loader.port_weight(normalization.moving_variance, "bn.running_var")
+    loader.assign(
+        normalization.moving_mean, loader.get_tensor("bn.running_mean")
+    )
+    loader.assign(
+        normalization.moving_variance, loader.get_tensor("bn.running_var")
+    )
+    # `num_batches_tracked` is a training counter with no Keras equivalent.
+    loader.check_complete(vae, ignore=["bn.num_batches_tracked"])

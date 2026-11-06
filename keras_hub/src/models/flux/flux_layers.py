@@ -6,20 +6,7 @@ from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 from keras_hub.src.models.flux.flux_maths import rope
-
-
-class ApproximateGELU(layers.Layer):
-    """GELU using the tanh approximation.
-
-    FLUX uses `nn.GELU(approximate="tanh")` in the double-stream MLPs
-    (`activation_fn="gelu-approximate"` in diffusers). Keras's
-    `Activation("gelu")` is the *exact*, erf-based formulation, which is a
-    different function -- close enough to look plausible, but it perturbs
-    every double-block MLP output and compounds across the 19 blocks.
-    """
-
-    def call(self, inputs):
-        return keras.activations.gelu(inputs, approximate=True)
+from keras_hub.src.utils.keras_utils import gelu_approximate
 
 
 class StripTextTokens(layers.Layer):
@@ -309,10 +296,12 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.image_norm2 = keras.layers.LayerNormalization(
             epsilon=1e-6, scale=False, center=False
         )
+        # FLUX uses `nn.GELU(approximate="tanh")` here, not the exact,
+        # erf-based GELU of `Activation("gelu")`.
         self.image_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                ApproximateGELU(),
+                keras.layers.Activation(gelu_approximate),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ],
             name="image_mlp",
@@ -338,7 +327,7 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.text_mlp = keras.Sequential(
             [
                 keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                ApproximateGELU(),
+                keras.layers.Activation(gelu_approximate),
                 keras.layers.Dense(hidden_size, use_bias=True),
             ],
             name="text_mlp",
