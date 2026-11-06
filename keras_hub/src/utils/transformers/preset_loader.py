@@ -29,6 +29,7 @@ from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_mobile_bert
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_mpnet
 from keras_hub.src.utils.transformers import convert_muse_glimmer
@@ -117,6 +118,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen
         elif model_type == "mixtral":
             self.converter = convert_mixtral
+        elif model_type == "mobilebert":
+            self.converter = convert_mobile_bert
         elif model_type == "qwen2_moe":
             self.converter = convert_qwen_moe
         elif model_type == "qwen3_moe":
