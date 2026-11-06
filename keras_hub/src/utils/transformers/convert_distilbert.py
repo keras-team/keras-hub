@@ -152,6 +152,30 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
 
+def convert_text_classifier_head(task, loader, transformers_config):
+    """Port `DistilBertForSequenceClassification` head weights."""
+    del transformers_config
+
+    loader.port_weight(
+        keras_variable=task.pooled_dense.kernel,
+        hf_weight_key="pre_classifier.weight",
+        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor),
+    )
+    loader.port_weight(
+        keras_variable=task.pooled_dense.bias,
+        hf_weight_key="pre_classifier.bias",
+    )
+    loader.port_weight(
+        keras_variable=task.output_dense.kernel,
+        hf_weight_key="classifier.weight",
+        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor),
+    )
+    loader.port_weight(
+        keras_variable=task.output_dense.bias,
+        hf_weight_key="classifier.bias",
+    )
+
+
 def convert_tokenizer(cls, preset, **kwargs):
     transformers_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
     return cls(
