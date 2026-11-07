@@ -29,6 +29,10 @@ class SafetensorLoader(contextlib.ExitStack):
         else:
             self.safetensor_config = None
         self.safetensor_files = {}
+        # Per-file caches: `safe_open(...).keys()` builds a new list on every
+        # call, and the alias map read from the metadata never changes.
+        self.safetensor_keys = {}
+        self.safetensor_aliases = {}
         self.prefix = prefix
 
         if fname is not None and self.safetensor_config is not None:
@@ -88,9 +92,43 @@ class SafetensorLoader(contextlib.ExitStack):
                 safetensors.safe_open(path, framework="np")
             )
             self.safetensor_files[fname] = file
+            self.safetensor_keys[fname] = dict.fromkeys(file.keys())
 
-        full_key = self.get_prefixed_key(hf_weight_key, file)
+        stored_keys = self.safetensor_keys[fname]
+        full_key = self.get_prefixed_key(hf_weight_key, stored_keys)
+        if full_key not in stored_keys:
+            full_key = self.get_tied_key(hf_weight_key, fname)
         return file.get_tensor(full_key)
+
+    def get_tied_key(self, hf_weight_key, fname):
+        """Resolve a weight that is stored under a different (tied) name.
+
+        Tied weights (e.g. a shared input/output embedding) are only stored
+        once in a safetensors file. The other names are recorded in the file
+        metadata as aliases pointing at the stored tensor, so look the key up
+        there and follow the alias. Returns `hf_weight_key` unchanged if no
+        alias exists.
+
+        Only single-file checkpoints are handled. For a sharded checkpoint
+        the `weight_map` lookup in `get_tensor` runs first and raises
+        `KeyError` for a name that exists only as an alias; neither
+        `save_pretrained` nor `save_model` writes that layout today.
+        """
+        if fname not in self.safetensor_aliases:
+            stored_keys = self.safetensor_keys[fname]
+            metadata = self.safetensor_files[fname].metadata() or {}
+            self.safetensor_aliases[fname] = {
+                alias: target
+                for alias, target in metadata.items()
+                if alias != "format"
+                and alias not in stored_keys
+                and target in stored_keys
+            }
+        aliases = self.safetensor_aliases[fname]
+        if not aliases:
+            return hf_weight_key
+        alias = self.get_prefixed_key(hf_weight_key, aliases)
+        return aliases.get(alias, hf_weight_key)
 
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
         hf_tensor = self.get_tensor(hf_weight_key)
