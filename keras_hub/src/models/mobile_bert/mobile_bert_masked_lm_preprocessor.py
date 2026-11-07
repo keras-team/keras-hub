@@ -10,13 +10,12 @@ from keras_hub.src.models.mobile_bert.mobile_bert_tokenizer import (
 
 @keras_hub_export("keras_hub.models.MobileBertMaskedLMPreprocessor")
 class MobileBertMaskedLMPreprocessor(MaskedLMPreprocessor):
-    """BERT preprocessing for the masked language modeling task.
+    """MobileBERT preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
     `keras_hub.models.MobileBertMaskedLM` task model. Preprocessing will occur
-    in
-    multiple steps.
+    in multiple steps.
 
     1. Tokenize any number of input segments using the `tokenizer`.
     2. Pack the inputs together with the appropriate `"[CLS]"`, `"[SEP]"` and
@@ -28,7 +27,8 @@ class MobileBertMaskedLMPreprocessor(MaskedLMPreprocessor):
 
     Args:
         tokenizer: A `keras_hub.models.MobileBertTokenizer` instance.
-        sequence_length: int. The length of the packed inputs.
+        sequence_length: int. The length of the packed inputs. Defaults to
+            `512`.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -39,16 +39,17 @@ class MobileBertMaskedLMPreprocessor(MaskedLMPreprocessor):
                 "waterfall" algorithm that allocates quota in a
                 left-to-right manner and fills up the buckets until we run
                 out of budget. It supports an arbitrary number of segments.
+            Defaults to `"round_robin"`.
         mask_selection_rate: float. The probability an input token will be
-            dynamically masked.
+            dynamically masked. Defaults to `0.15`.
         mask_selection_length: int. The maximum number of masked tokens
-            in a given sample.
-        mask_token_rate: float. The probability the a selected token will be
-            replaced with the mask token.
-        random_token_rate: float. The probability the a selected token will be
+            in a given sample. Defaults to `96`.
+        mask_token_rate: float. The probability that a selected token will be
+            replaced with the mask token. Defaults to `0.8`.
+        random_token_rate: float. The probability that a selected token will be
             replaced with a random token from the vocabulary. A selected token
             will be left as is with probability
-            `1 - mask_token_rate - random_token_rate`.
+            `1 - mask_token_rate - random_token_rate`. Defaults to `0.1`.
 
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
@@ -77,7 +78,7 @@ class MobileBertMaskedLMPreprocessor(MaskedLMPreprocessor):
     # In this case, always convert input to tensors before calling the layer.
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
-    preprocessor((first, second))
+    preprocessor(x=(first, second))
     ```
 
     Mapping with `tf.data.Dataset`.

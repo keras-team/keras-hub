@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
@@ -72,7 +73,8 @@ class MobileBertTextClassifierTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MobileBertTextClassifier,
-            preset="mobile_bert_tiny_en_uncased_sst2",
+            preset="mobilebert_uncased",
+            init_kwargs={"num_classes": 2},
             input_data=self.input_data,
             expected_output_shape=(2, 2),
         )
@@ -87,3 +89,32 @@ class MobileBertTextClassifierTest(TestCase):
                 input_data=self.input_data,
                 expected_output_shape=(2, 2),
             )
+
+    def test_custom_backbone_and_default_dropout(self):
+        features = ["The quick brown fox jumped.", "I forgot my homework."]
+        vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+        vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+        tokenizer = MobileBertTokenizer(vocabulary=vocab)
+        preprocessor = MobileBertTextClassifierPreprocessor(
+            tokenizer=tokenizer,
+            sequence_length=16,
+        )
+        backbone = MobileBertBackbone(
+            vocabulary_size=len(vocab),
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=16,
+            embedding_dim=8,
+            intra_bottleneck_dim=8,
+            intermediate_dim=16,
+            max_sequence_length=16,
+        )
+        classifier = MobileBertTextClassifier(
+            backbone=backbone,
+            preprocessor=preprocessor,
+            num_classes=4,
+        )
+        self.assertEqual(classifier.dropout, 0.0)
+        output = classifier.predict(features, batch_size=2)
+        self.assertEqual(output.shape, (2, 4))
+        self.assertTrue(np.isfinite(output).all())

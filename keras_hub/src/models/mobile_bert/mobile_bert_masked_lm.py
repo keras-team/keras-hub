@@ -15,9 +15,9 @@ from keras_hub.src.models.mobile_bert.mobile_bert_masked_lm_preprocessor import 
 
 @keras_hub_export("keras_hub.models.MobileBertMaskedLM")
 class MobileBertMaskedLM(MaskedLM):
-    """An end-to-end BERT model for the masked language modeling task.
+    """An end-to-end MobileBERT model for the masked language modeling task.
 
-    This model will train BERT on a masked language modeling task.
+    This model will train MobileBERT on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` constructor.
@@ -99,7 +99,8 @@ class MobileBertMaskedLM(MaskedLM):
             embedding_dim=backbone.embedding_dim,
             hidden_dim=backbone.hidden_dim,
             activation=backbone.activation,
-            layer_norm_epsilon=1e-12,
+            layer_norm_epsilon=backbone.layer_norm_epsilon,
+            dtype=backbone.dtype_policy,
             name="mlm_head",
         )
 

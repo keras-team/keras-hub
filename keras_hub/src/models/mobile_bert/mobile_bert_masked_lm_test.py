@@ -1,4 +1,7 @@
+import keras
+import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
     MobileBertBackbone,
@@ -26,7 +29,7 @@ class MobileBertMaskedLMTest(TestCase):
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
-            mask_selection_length=5,
+            mask_selection_length=4,
             sequence_length=5,
         )
         self.backbone = MobileBertBackbone(
@@ -53,7 +56,7 @@ class MobileBertMaskedLMTest(TestCase):
             cls=MobileBertMaskedLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 5, 10),
+            expected_output_shape=(2, 4, 10),
         )
 
     @pytest.mark.large
@@ -72,3 +75,27 @@ class MobileBertMaskedLMTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_layer_norm_epsilon_matches_backbone(self):
+        kwargs = self.init_kwargs.copy()
+        kwargs["backbone"] = MobileBertBackbone.from_config(
+            {**self.backbone.get_config(), "layer_norm_epsilon": 1e-5}
+        )
+        model = MobileBertMaskedLM(**kwargs)
+        self.assertEqual(
+            model.masked_lm_head.transform_layer_norm.epsilon,
+            1e-5,
+        )
+
+    def test_head_dtype_follows_backbone(self):
+        backbone = MobileBertBackbone.from_config(
+            {**self.backbone.get_config(), "dtype": "mixed_float16"}
+        )
+        model = MobileBertMaskedLM(backbone=backbone, preprocessor=None)
+        self.assertEqual(model.masked_lm_head.compute_dtype, "float16")
+        self.assertEqual(model.masked_lm_head.variable_dtype, "float32")
+        output = model(self.input_data)
+        self.assertEqual(
+            keras.backend.standardize_dtype(output.dtype), "float16"
+        )
+        self.assertTrue(np.isfinite(ops.convert_to_numpy(output)).all())

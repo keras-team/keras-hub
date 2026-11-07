@@ -12,15 +12,15 @@ from keras_hub.src.models.text_classifier_preprocessor import (
 
 @keras_hub_export("keras_hub.models.MobileBertTextClassifierPreprocessor")
 class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
-    """A BERT preprocessing layer which tokenizes and packs inputs.
+    """A MobileBERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
     1. Tokenize any number of input segments using the `tokenizer`.
-    2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`.
+    2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
     3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+       `"padding_mask"`, that can be passed directly to a MobileBERT model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -28,7 +28,8 @@ class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
 
     Args:
         tokenizer: A `keras_hub.models.MobileBertTokenizer` instance.
-        sequence_length: The length of the packed inputs.
+        sequence_length: int. The length of the packed inputs. Defaults to
+            `512`.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -39,6 +40,7 @@ class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
                 "waterfall" algorithm that allocates quota in a
                 left-to-right manner and fills up the buckets until we run
                 out of budget. It supports an arbitrary number of segments.
+            Defaults to `"round_robin"`.
 
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
@@ -52,8 +54,10 @@ class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "mobilebert_uncased"
+    preprocessor = (
+        keras_hub.models.MobileBertTextClassifierPreprocessor.from_preset(
+            "mobilebert_uncased"
+        )
     )
 
     # Tokenize and pack a single sentence.
@@ -66,7 +70,7 @@ class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
     # When handling multiple sequences, always convert to tensors first!
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
-    preprocessor((first, second))
+    preprocessor(x=(first, second))
 
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
@@ -80,8 +84,10 @@ class MobileBertTextClassifierPreprocessor(TextClassifierPreprocessor):
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_hub.models.TextClassifierPreprocessor.from_preset(
-        "mobilebert_uncased"
+    preprocessor = (
+        keras_hub.models.MobileBertTextClassifierPreprocessor.from_preset(
+            "mobilebert_uncased"
+        )
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

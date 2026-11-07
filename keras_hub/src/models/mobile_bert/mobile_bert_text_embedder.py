@@ -12,16 +12,17 @@ from keras_hub.src.models.text_embedder import TextEmbedder
 
 @keras_hub_export("keras_hub.models.MobileBertTextEmbedder")
 class MobileBertTextEmbedder(TextEmbedder):
-    """An end-to-end BERT model for generating sentence embeddings.
+    """An end-to-end MobileBERT model for generating sentence embeddings.
 
     This model attaches a mean pooling and L2 normalization head to a
     `keras_hub.models.MobileBertBackbone` instance, mapping from the backbone
     outputs to fixed-size sentence embeddings suitable for semantic
     similarity, clustering, and retrieval tasks.
 
-    This is the architecture used by sentence-transformers models like
-    `all-MiniLM-L6-v2`. For usage of this model with pre-trained weights,
-    use the `from_preset()` constructor.
+    Note: The base `mobilebert_uncased` checkpoint was trained for masked
+    language modeling and next sentence prediction. Its raw pooled embeddings
+    will collapse to a single direction (cosine similarity ~1.0). This model
+    should be fine-tuned on a contrastive loss before the embeddings are useful.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -35,7 +36,8 @@ class MobileBertTextEmbedder(TextEmbedder):
         backbone: A `keras_hub.models.MobileBertBackbone` instance.
         preprocessor: A `keras_hub.models.MobileBertTextEmbedderPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
-            inputs should be preprocessed before calling the model.
+            inputs should be preprocessed before calling the model. Defaults to
+            `None`.
         pooling_mode: str. The pooling strategy to use. One of `"mean"`,
             `"cls"`, or `"max"`. Defaults to `"mean"`.
             - `"mean"`: Attention-mask-aware mean pooling over all tokens.
@@ -49,7 +51,7 @@ class MobileBertTextEmbedder(TextEmbedder):
     Raw string data.
     ```python
     embedder = keras_hub.models.MobileBertTextEmbedder.from_preset(
-        "all_minilm_l6_v2_en",
+        "mobilebert_uncased",
     )
 
     # Semantic search.
@@ -61,7 +63,7 @@ class MobileBertTextEmbedder(TextEmbedder):
     q_emb = embedder.encode_text(query)
     d_embs = embedder.encode_documents(documents)
     sims = embedder.similarity(q_emb, d_embs)
-    print("Best match:", documents[sims.argmax()])
+    print("Best match:", documents[keras.ops.convert_to_numpy(sims).argmax()])
     ```
 
     Preprocessed integer data.
@@ -73,7 +75,7 @@ class MobileBertTextEmbedder(TextEmbedder):
     }
 
     embedder = keras_hub.models.MobileBertTextEmbedder.from_preset(
-        "all_minilm_l6_v2_en",
+        "mobilebert_uncased",
         preprocessor=None,
     )
     embeddings = embedder.predict(features)
@@ -130,16 +132,21 @@ class MobileBertTextEmbedder(TextEmbedder):
 
     @staticmethod
     def _mean_pooling(sequence_output, padding_mask):
-        """Attention-mask-aware mean pooling over token embeddings."""
+        """Attention-mask-aware mean pooling over token embeddings.
+
+        Both sums are accumulated in `float32` and cast back to the input
+        dtype: summing up to 512 tokens overflows `float16` (65504) once
+        the mean token magnitude exceeds ~128.
+        """
+        dtype = sequence_output.dtype
         # Expand mask: [batch, seq_len] -> [batch, seq_len, 1]
-        mask = ops.cast(
-            ops.expand_dims(padding_mask, axis=-1), sequence_output.dtype
-        )
+        mask = ops.cast(ops.expand_dims(padding_mask, axis=-1), "float32")
+        sequence_output = ops.cast(sequence_output, "float32")
         # Sum token embeddings, masked.
         sum_embeddings = ops.sum(sequence_output * mask, axis=1)
         # Sum mask for normalization.
-        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1e-9)
-        return sum_embeddings / sum_mask
+        sum_mask = ops.maximum(ops.sum(mask, axis=1), 1.0)
+        return ops.cast(sum_embeddings / sum_mask, dtype)
 
     @staticmethod
     def _max_pooling(sequence_output, padding_mask):
@@ -150,12 +157,26 @@ class MobileBertTextEmbedder(TextEmbedder):
             ops.convert_to_tensor(float("-inf")), sequence_output.dtype
         )
         masked_output = ops.where(mask, sequence_output, fill_value)
-        return ops.max(masked_output, axis=1)
+        pooled = ops.max(masked_output, axis=1)
+        # Rows with no valid token would otherwise be `-inf` (and `NaN`
+        # after normalization); return zeros, matching `_mean_pooling`.
+        has_valid = ops.any(mask, axis=1)
+        return ops.where(has_valid, pooled, ops.zeros_like(pooled))
 
     @staticmethod
     def _l2_normalize(embeddings):
-        """L2 normalize embeddings to unit length."""
-        return ops.nn.normalize(embeddings, axis=-1, order=2)
+        """L2 normalize embeddings to unit length.
+
+        The norm is computed in `float32`, since the sum of squares can
+        overflow in `float16`. The result is cast back to the input dtype:
+        `ops.nn.normalize` reports a `float32` symbolic output for any input
+        dtype, which would otherwise make the functional model's output spec
+        disagree with its eager output under mixed precision.
+        """
+        dtype = embeddings.dtype
+        embeddings = ops.cast(embeddings, "float32")
+        normalized = ops.nn.normalize(embeddings, axis=-1, order=2)
+        return ops.cast(normalized, dtype)
 
     def get_config(self):
         config = super().get_config()

@@ -8,7 +8,7 @@ backbone_presets = {
                 "Trained on English Wikipedia and BooksCorpus."
             ),
             "params": 24581888,
-            "path": "mobilebert",
+            "path": "mobile_bert",
         },
         "kaggle_handle": "kaggle://keras/mobilebert/keras/mobilebert_uncased/1",
     },

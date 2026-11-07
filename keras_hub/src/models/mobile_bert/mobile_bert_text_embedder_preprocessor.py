@@ -12,8 +12,7 @@ from keras_hub.src.models.text_embedder_preprocessor import (
 
 @keras_hub_export("keras_hub.models.MobileBertTextEmbedderPreprocessor")
 class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
-    """A BERT preprocessing layer which tokenizes and packs inputs for
-    sentence embedding.
+    """A MobileBERT preprocessing layer for sentence embedding.
 
     This preprocessing layer will do three things:
 
@@ -21,7 +20,7 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     2. Pack the inputs together using a `keras_hub.layers.MultiSegmentPacker`
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
     3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+       `"padding_mask"`, that can be passed directly to a MobileBERT model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -29,8 +28,8 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
 
     Args:
         tokenizer: A `keras_hub.models.MobileBertTokenizer` instance.
-        sequence_length: The length of the packed inputs. Defaults to 256,
-            which is the recommended max sequence length for sentence
+        sequence_length: int. The length of the packed inputs. Defaults to
+            `256`, which is the recommended max sequence length for sentence
             embedding models.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -42,6 +41,7 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
                 "waterfall" algorithm that allocates quota in a
                 left-to-right manner and fills up the buckets until we run
                 out of budget. It supports an arbitrary number of segments.
+            Defaults to `"round_robin"`.
 
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
@@ -59,7 +59,8 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     ```python
     preprocessor = (
         keras_hub.models.MobileBertTextEmbedderPreprocessor.from_preset(
-        "all_minilm_l6_v2_en"
+            "mobilebert_uncased"
+        )
     )
 
     # Tokenize and pack a single sentence.
@@ -73,7 +74,8 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     ```python
     preprocessor = (
         keras_hub.models.MobileBertTextEmbedderPreprocessor.from_preset(
-        "all_minilm_l6_v2_en"
+            "mobilebert_uncased"
+        )
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
@@ -88,7 +90,7 @@ class MobileBertTextEmbedderPreprocessor(TextEmbedderPreprocessor):
     tokenizer_cls = MobileBertTokenizer
 
     def _format_output(self, token_ids, segment_ids):
-        """Add BERT-specific padding mask to preprocessor output."""
+        """Add the MobileBERT padding mask to preprocessor output."""
         return {
             "token_ids": token_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,

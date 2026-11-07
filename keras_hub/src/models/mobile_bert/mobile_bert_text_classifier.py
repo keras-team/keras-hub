@@ -4,7 +4,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
     MobileBertBackbone,
 )
-from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
+from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
     mobile_bert_kernel_initializer,
 )
 from keras_hub.src.models.mobile_bert.mobile_bert_text_classifier_preprocessor import (  # noqa: E501
@@ -15,13 +15,12 @@ from keras_hub.src.models.text_classifier import TextClassifier
 
 @keras_hub_export("keras_hub.models.MobileBertTextClassifier")
 class MobileBertTextClassifier(TextClassifier):
-    """An end-to-end BERT model for classification tasks.
+    """An end-to-end MobileBERT model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_hub.model.MobileBertBackbone` instance, mapping from the backbone
-    outputs
-    to logits suitable for a classification task. For usage of this model with
-    pre-trained weights, use the `from_preset()` constructor.
+    `keras_hub.models.MobileBertBackbone` instance, mapping from the backbone
+    outputs to logits suitable for a classification task. For usage of this
+    model with pre-trained weights, use the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -37,13 +36,14 @@ class MobileBertTextClassifier(TextClassifier):
         preprocessor: A
             `keras_hub.models.MobileBertTextClassifierPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
-            inputs should be preprocessed before calling the model.
+            inputs should be preprocessed before calling the model. Defaults to
+            `None`.
         activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.
             Defaults to `None`.
         dropout: float. The dropout probability value, applied to the pooled
-            output.
+            output. Defaults to `0.0`.
 
     Examples:
 
@@ -105,10 +105,12 @@ class MobileBertTextClassifier(TextClassifier):
         sequence_length=128,
     )
     backbone = keras_hub.models.MobileBertBackbone(
-        vocabulary_size=30552,
+        vocabulary_size=len(vocab),
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
+        embedding_dim=128,
+        intra_bottleneck_dim=128,
         intermediate_dim=512,
         max_sequence_length=128,
     )
@@ -130,7 +132,7 @@ class MobileBertTextClassifier(TextClassifier):
         num_classes,
         preprocessor=None,
         activation=None,
-        dropout=0.1,
+        dropout=0.0,
         **kwargs,
     ):
         # === Layers ===

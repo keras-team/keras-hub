@@ -12,30 +12,25 @@ from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
     ]
 )
 class MobileBertTokenizer(WordPieceTokenizer):
-    """A BERT tokenizer using WordPiece subword segmentation.
+    """A MobileBERT tokenizer using WordPiece subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_hub.tokenizers.WordPieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by BERT
-    models and provides a `from_preset()` method to automatically download
-    a matching vocabulary for a BERT preset.
-
-    If input is a batch of strings (rank > 0), the layer will output a
-    `tf.RaggedTensor` where the last dimension of the output is ragged.
-
-    If input is a scalar string (rank == 0), the layer will output a dense
-    `tf.Tensor` with static shape `[None]`.
+    underlying tokenizer, it will check for all special tokens needed by
+    MobileBERT models and provides a `from_preset()` method to automatically
+    download a matching vocabulary for a MobileBERT preset.
 
     Args:
-        vocabulary: A list of strings or a string filename path. If
-            passing a list, each element of the list should be a single word
+        vocabulary: list or str. A list of strings or a string filename path.
+            If passing a list, each element of the list should be a single word
             piece token string. If passing a filename, the file should be a
             plain text file containing a single word piece token per line.
-        lowercase: If `True`, the input text will be first lowered before
-            tokenization.
+            Defaults to `None`.
+        lowercase: bool. If `True`, the input text will be first lowered before
+            tokenization. Defaults to `False`.
         special_tokens_in_strings: bool. A bool to indicate if the tokenizer
             should expect special tokens in input strings that should be
-            tokenized and mapped correctly to their ids. Defaults to False.
+            tokenized and mapped correctly to their ids. Defaults to `False`.
 
     Examples:
     ```python
@@ -65,6 +60,7 @@ class MobileBertTokenizer(WordPieceTokenizer):
         self,
         vocabulary=None,
         lowercase=False,
+        special_tokens_in_strings=False,
         **kwargs,
     ):
         self._add_special_token("[CLS]", "cls_token")
@@ -78,5 +74,6 @@ class MobileBertTokenizer(WordPieceTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
+            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )

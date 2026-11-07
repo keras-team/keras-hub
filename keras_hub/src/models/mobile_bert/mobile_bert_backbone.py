@@ -10,11 +10,12 @@ from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
 from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
     MobileBertTrigramProjection,
 )
-from keras_hub.src.models.mobile_bert.mobile_bert_layers import NoNorm
-
-
-def mobile_bert_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
+from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
+    _build_norm_layer,
+)
+from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
+    mobile_bert_kernel_initializer,
+)
 
 
 @keras_hub_export("keras_hub.models.MobileBertBackbone")
@@ -44,11 +45,11 @@ class MobileBertBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a feedforward network for each transformer.
         num_feedforward_networks: int. Number of stacked feed-forward networks
-            in each transformer layer.
+            in each transformer layer. Defaults to `4`.
         activation: string or callable. The activation function for the hidden
-            layers.
+            layers. Defaults to `"relu"`.
         normalization_type: string. The type of normalization to use. Either
-            `"no_norm"` or `"layer_norm"`.
+            `"no_norm"` or `"layer_norm"`. Defaults to `"no_norm"`.
         layer_norm_epsilon: float. Epsilon value for layer normalization.
             Applied to every normalization layer when
             `normalization_type="layer_norm"`. Note that the Hugging Face
@@ -56,17 +57,52 @@ class MobileBertBackbone(Backbone):
             last feed-forward output norm) at PyTorch's default epsilon of
             1e-5; this port uses `layer_norm_epsilon` uniformly. This has no
             effect for `"no_norm"`, which is what every released MobileBERT
-            checkpoint uses.
+            checkpoint uses. Defaults to `1e-12`.
         use_pooler_dense: boolean. Whether to apply a dense layer to the pooled
-            output.
-        dropout: float. Dropout probability for the hidden layers.
+            output. Defaults to `False`.
+        dropout: float. Dropout probability for the hidden layers. Defaults to
+            `0.0`.
         attention_dropout: float. Dropout probability for the attention probs.
+            Defaults to `0.1`.
         max_sequence_length: int. The maximum sequence length that this encoder
-            can consume.
+            can consume. Defaults to `512`.
         num_segments: int. The number of types that the 'segment_ids' input can
-            take.
+            take. Defaults to `2`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
+            for model computations and weights. `no_norm` checkpoints (every
+            released MobileBERT preset) accumulate activations past `~7e7`,
+            above the IEEE float16 maximum (65504), so run them in
+            `"float32"`, `"bfloat16"` or `"mixed_bfloat16"`; `"float16"` and
+            `"mixed_float16"` produce non-finite outputs, as they do for the
+            upstream PyTorch model. Defaults to `None`.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]]),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained MobileBERT encoder.
+    model = keras_hub.models.MobileBertBackbone.from_preset(
+        "mobilebert_uncased"
+    )
+    model(input_data)
+
+    # Randomly initialized MobileBERT encoder with a custom config.
+    model = keras_hub.models.MobileBertBackbone(
+        vocabulary_size=30522,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        embedding_dim=128,
+        intra_bottleneck_dim=128,
+        intermediate_dim=512,
+        max_sequence_length=128,
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(
@@ -90,6 +126,12 @@ class MobileBertBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        if num_feedforward_networks < 1:
+            raise ValueError(
+                "`num_feedforward_networks` must be >= 1. Received: "
+                f"num_feedforward_networks={num_feedforward_networks}."
+            )
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
@@ -119,16 +161,12 @@ class MobileBertBackbone(Backbone):
         self.embeddings_add = keras.layers.Add(
             dtype=dtype, name="embeddings_add"
         )
-        if normalization_type == "no_norm":
-            self.embeddings_layer_norm = NoNorm(
-                dtype=dtype, name="embeddings_layer_norm"
-            )
-        else:
-            self.embeddings_layer_norm = keras.layers.LayerNormalization(
-                epsilon=layer_norm_epsilon,
-                dtype=dtype,
-                name="embeddings_layer_norm",
-            )
+        self.embeddings_layer_norm = _build_norm_layer(
+            normalization_type,
+            layer_norm_epsilon,
+            dtype,
+            "embeddings_layer_norm",
+        )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             dtype=dtype,
