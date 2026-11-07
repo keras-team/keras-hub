@@ -20,7 +20,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
     QwenVLSpecialTokenMixin,
 )
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -113,6 +113,14 @@ class Qwen2VLCausalLMPreprocessor(
 
     def _check_converters(self, images, videos):
         """Raise when media inputs arrive without a converter to process."""
+        if (images is not None or videos is not None) and in_tf_function():
+            raise NotImplementedError(
+                "Image and video preprocessing is not supported inside "
+                "`tf.function` or `tf.data` tracing yet (tracked in "
+                "https://github.com/keras-team/keras-hub/issues/3226). "
+                "Run eagerly, or preprocess the media before the "
+                "pipeline. Text-only inputs still work under tracing."
+            )
         if images is not None and self.image_converter is None:
             raise ValueError(
                 "This preprocessor was created without an "
@@ -138,7 +146,7 @@ class Qwen2VLCausalLMPreprocessor(
         """Normalize a string / Tensor / list of prompts to a list of str."""
         if isinstance(prompts, str):
             return [prompts], False
-        if isinstance(prompts, tf.Tensor):
+        if tf is not None and isinstance(prompts, tf.Tensor):
             if len(prompts.shape) == 0:
                 return [prompts.numpy().decode("utf-8")], False
             return [p.numpy().decode("utf-8") for p in prompts], True
@@ -146,6 +154,11 @@ class Qwen2VLCausalLMPreprocessor(
             p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
             for p in prompts
         ], True
+
+    def _merge_size(self):
+        """Spatial merge factor from whichever converter is configured."""
+        converter = self.image_converter or self.video_converter
+        return getattr(converter, "merge_size", 2)
 
     def _process_media(self, images, videos):
         """Run converters and count merged tokens per media item."""
@@ -155,8 +168,7 @@ class Qwen2VLCausalLMPreprocessor(
         vision_out_videos = (
             self._preprocess_videos(videos) if videos is not None else None
         )
-        vision_converter = self.image_converter or self.video_converter
-        merge_size = getattr(vision_converter, "merge_size", 2)
+        merge_size = self._merge_size()
 
         def _counts(vision_out):
             if vision_out is None:
@@ -242,7 +254,7 @@ class Qwen2VLCausalLMPreprocessor(
         vid_indices = np.where(
             (token_ids_np == self.video_token_id).reshape(-1)
         )[0]
-        return tf.constant(
+        return ops.convert_to_tensor(
             np.concatenate([img_indices, vid_indices]).astype("int32")
         )
 
@@ -283,7 +295,7 @@ class Qwen2VLCausalLMPreprocessor(
         video_grid_np = _grid_to_numpy(video_grid_thw)
 
         batch_size, seq_len = token_ids_np.shape
-        merge_size = getattr(self.image_converter, "merge_size", 2)
+        merge_size = self._merge_size()
 
         all_pos = np.zeros((batch_size, 3, seq_len), dtype=np.int32)
 
@@ -348,7 +360,7 @@ class Qwen2VLCausalLMPreprocessor(
             all_pos[b, 1] = h_pos
             all_pos[b, 2] = w_pos
 
-        return tf.constant(all_pos, dtype="int32")
+        return ops.convert_to_tensor(all_pos, dtype="int32")
 
     def _preprocess_images(self, images):
         """Convert raw images to patch tensors using the image converter.
@@ -363,7 +375,7 @@ class Qwen2VLCausalLMPreprocessor(
         # Normalize to a flat list of individual 3-D images. A list of
         # differently-shaped images arrives as a `tf.RaggedTensor` after
         # preprocessing input conversion.
-        if isinstance(images, tf.RaggedTensor):
+        if tf is not None and isinstance(images, tf.RaggedTensor):
             flat_images = [np.array(img.to_list()) for img in images]
         elif isinstance(images, (list, tuple)):
             flat_images = []
@@ -388,17 +400,15 @@ class Qwen2VLCausalLMPreprocessor(
             patches = result["patches"]
             grid_thw = result["grid_thw"]
 
-            if not isinstance(patches, tf.Tensor):
-                patches = tf.constant(patches)
-            if not isinstance(grid_thw, tf.Tensor):
-                grid_thw = tf.constant(grid_thw)
+            patches = ops.convert_to_tensor(patches)
+            grid_thw = ops.convert_to_tensor(grid_thw)
 
             all_patches.append(patches)
             all_grid_thw.append(grid_thw)
 
         return {
-            "pixel_values": tf.concat(all_patches, axis=0),
-            "grid_thw": tf.concat(all_grid_thw, axis=0),
+            "pixel_values": ops.concatenate(all_patches, axis=0),
+            "grid_thw": ops.concatenate(all_grid_thw, axis=0),
         }
 
     def _preprocess_videos(self, videos):
@@ -411,7 +421,7 @@ class Qwen2VLCausalLMPreprocessor(
             dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
             ``grid_thw`` ``(num_videos, 3)``.
         """
-        if isinstance(videos, tf.RaggedTensor):
+        if tf is not None and isinstance(videos, tf.RaggedTensor):
             flat_videos = [np.array(vid.to_list()) for vid in videos]
         elif isinstance(videos, (list, tuple)):
             flat_videos = []
@@ -434,17 +444,15 @@ class Qwen2VLCausalLMPreprocessor(
             patches = result["patches"]
             grid_thw = result["grid_thw"]
 
-            if not isinstance(patches, tf.Tensor):
-                patches = tf.constant(patches)
-            if not isinstance(grid_thw, tf.Tensor):
-                grid_thw = tf.constant(grid_thw)
+            patches = ops.convert_to_tensor(patches)
+            grid_thw = ops.convert_to_tensor(grid_thw)
 
             all_patches.append(patches)
             all_grid_thw.append(grid_thw)
 
         return {
-            "pixel_values": tf.concat(all_patches, axis=0),
-            "grid_thw": tf.concat(all_grid_thw, axis=0),
+            "pixel_values": ops.concatenate(all_patches, axis=0),
+            "grid_thw": ops.concatenate(all_grid_thw, axis=0),
         }
 
     @preprocessing_function
@@ -466,7 +474,6 @@ class Qwen2VLCausalLMPreprocessor(
                 sequence_length=sequence_length,
             )
 
-        assert_tf_installed("Qwen2VLCausalLMPreprocessor")
         if not self.built:
             self.build(None)
 
@@ -506,12 +513,8 @@ class Qwen2VLCausalLMPreprocessor(
             response_ids = [
                 self._tokenize_with_special_tokens(r, [], []) for r in responses
             ]
-            prompt_ragged = tf.ragged.constant(
-                expanded_sequences, dtype="int32"
-            )
-            response_ragged = tf.ragged.constant(response_ids, dtype="int32")
             token_ids, segment_ids = self.multi_packer(
-                (prompt_ragged, response_ragged),
+                (expanded_sequences, response_ids),
                 sequence_length=sequence_length + 1,
                 add_start_value=self.add_start_token,
                 add_end_value=self.add_end_token,
@@ -525,11 +528,8 @@ class Qwen2VLCausalLMPreprocessor(
             y = token_ids[..., 1:]
             sample_weight = response_mask[..., 1:]
         else:
-            token_ids_ragged = tf.ragged.constant(
-                expanded_sequences, dtype="int32"
-            )
             token_ids, padding_mask = self.packer(
-                token_ids_ragged,
+                expanded_sequences,
                 sequence_length=sequence_length + 1,
                 add_start_value=self.add_start_token,
                 add_end_value=self.add_end_token,
@@ -563,16 +563,16 @@ class Qwen2VLCausalLMPreprocessor(
             if vision_out_videos is not None:
                 pixel_values_list.append(vision_out_videos["pixel_values"])
                 grid_list.append(vision_out_videos["grid_thw"])
-            x_out["pixel_values"] = tf.concat(pixel_values_list, axis=0)
-            x_out["image_grid_thw"] = tf.concat(grid_list, axis=0)
+            x_out["pixel_values"] = ops.concatenate(pixel_values_list, axis=0)
+            x_out["image_grid_thw"] = ops.concatenate(grid_list, axis=0)
 
         # 6. Squeeze batch dim for unbatched inputs.
         if not batched:
             for key in ("token_ids", "padding_mask", "position_ids"):
                 if key in x_out:
-                    x_out[key] = tf.squeeze(x_out[key], axis=0)
-            y = tf.squeeze(y, axis=0)
-            sample_weight = tf.squeeze(sample_weight, axis=0)
+                    x_out[key] = ops.squeeze(x_out[key], axis=0)
+            y = ops.squeeze(y, axis=0)
+            sample_weight = ops.squeeze(sample_weight, axis=0)
 
         return keras.utils.pack_x_y_sample_weight(x_out, y, sample_weight)
 
@@ -606,7 +606,6 @@ class Qwen2VLCausalLMPreprocessor(
             )
 
         # Multimodal path.
-        assert_tf_installed("Qwen2VLCausalLMPreprocessor with images/videos")
         if not self.built:
             self.build(None)
         self._check_converters(images, videos)
@@ -628,9 +627,8 @@ class Qwen2VLCausalLMPreprocessor(
 
         # 5. Pack to fixed length.
         self._check_sequence_length(expanded_sequences, sequence_length)
-        token_ids_ragged = tf.ragged.constant(expanded_sequences, dtype="int32")
         token_ids, padding_mask = self.packer(
-            token_ids_ragged,
+            expanded_sequences,
             sequence_length=sequence_length,
             add_end_value=False,
         )
@@ -652,18 +650,18 @@ class Qwen2VLCausalLMPreprocessor(
             pixel_values_list.append(vision_out_videos["pixel_values"])
             grid_list.append(vision_out_videos["grid_thw"])
 
-        combined_pixel_values = tf.concat(pixel_values_list, axis=0)
-        combined_grid_thw = tf.concat(grid_list, axis=0)
+        combined_pixel_values = ops.concatenate(pixel_values_list, axis=0)
+        combined_grid_thw = ops.concatenate(grid_list, axis=0)
 
         return {
-            "token_ids": token_ids if batched else tf.squeeze(token_ids, 0),
+            "token_ids": token_ids if batched else ops.squeeze(token_ids, 0),
             "padding_mask": (
-                padding_mask if batched else tf.squeeze(padding_mask, 0)
+                padding_mask if batched else ops.squeeze(padding_mask, 0)
             ),
             "pixel_values": combined_pixel_values,
             "image_grid_thw": combined_grid_thw,
             "vision_indices": vision_indices,
-            "position_ids": (pos_ids if batched else tf.squeeze(pos_ids, 0)),
+            "position_ids": (pos_ids if batched else ops.squeeze(pos_ids, 0)),
         }
 
     def _generate_postprocess_python(self, x):

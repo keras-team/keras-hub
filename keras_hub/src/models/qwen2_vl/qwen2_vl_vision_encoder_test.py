@@ -1,4 +1,3 @@
-import keras
 import numpy as np
 from keras import ops
 
@@ -40,13 +39,21 @@ class Qwen2VLVisionEncoderTest(TestCase):
         ).astype("float32")
 
     def test_vision_encoder_basics(self):
-        keras.utils.set_random_seed(42)
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)
 
         # 1 image with t=2, h=2, w=2 → total_patches = 8
         grid_thw = np.array([[2, 2, 2]], dtype="int32")
         total_patches = int(np.prod(grid_thw))
         hidden_states = self._patches(total_patches)
+
+        encoder(hidden_states, grid_thw)  # build
+        rng = np.random.default_rng(0)
+        for w in encoder.weights:
+            if getattr(w, "name", "") == "gamma":
+                values = 1.0 + rng.normal(0.0, 0.05, size=w.shape)
+            else:
+                values = rng.normal(0.0, 0.05, size=w.shape)
+            w.assign(values.astype("float32"))
 
         output = encoder(hidden_states, grid_thw)
 
@@ -58,20 +65,21 @@ class Qwen2VLVisionEncoderTest(TestCase):
         )
 
         output = ops.convert_to_numpy(output)
-        if keras.backend.backend() == "tensorflow":
-            tol = 2e-3 if running_on_gpu() else 1e-4
-            np.testing.assert_allclose(
-                output[0, :6],
-                [-0.723, -0.3895, 0.116, -0.4222, 0.5193, -0.5394],
-                atol=tol,
-                rtol=tol,
-            )
-            np.testing.assert_allclose(
-                output[1, :4],
-                [-0.7028, -0.0419, 0.1543, -0.2447],
-                atol=tol,
-                rtol=tol,
-            )
+        # fp32 runs as tf32 on gpu and drifts to ~1e-3 over the full
+        # encoder; keep 2x headroom over observed diffs to avoid flakes.
+        tol = 2e-3 if running_on_gpu() else 1e-4
+        np.testing.assert_allclose(
+            output[0, :6],
+            [0.196031, -0.230917, 0.095555, -0.019678, 0.499078, -0.286935],
+            atol=tol,
+            rtol=tol,
+        )
+        np.testing.assert_allclose(
+            output[1, :4],
+            [-0.013209, -0.891259, -0.104224, 0.532287],
+            atol=tol,
+            rtol=tol,
+        )
 
     def test_vision_encoder_config_roundtrip(self):
         encoder = Qwen2VLVisionEncoder(**self.init_kwargs)
@@ -130,6 +138,8 @@ class Qwen2VLVisionEncoderTest(TestCase):
         joint = ops.convert_to_numpy(joint)
 
         n_a = out_a.shape[0]
+        # same tf32 allowance as above; joint and per-image runs differ
+        # by ~1.4e-3 on a100.
         tol = 2e-3 if running_on_gpu() else 1e-5
         np.testing.assert_allclose(joint[:n_a], out_a, atol=tol, rtol=tol)
         np.testing.assert_allclose(joint[n_a:], out_b, atol=tol, rtol=tol)
@@ -166,6 +176,7 @@ class Qwen2VLVisionEncoderTest(TestCase):
         ref = ref @ ops.convert_to_numpy(attn.proj.kernel)
         ref += ops.convert_to_numpy(attn.proj.bias)
 
+        # tf32 noise over 1030 patches hits ~5e-4 on gpu; 2x headroom.
         tol = 1e-3 if running_on_gpu() else 1e-4
         np.testing.assert_allclose(out, ref, atol=tol, rtol=tol)
 

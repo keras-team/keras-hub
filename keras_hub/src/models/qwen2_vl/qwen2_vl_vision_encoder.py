@@ -138,12 +138,13 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
 
             return ops.fori_loop(0, num_chunks, _attend_chunk, out)
 
-        if isinstance(seq_len, int):
-            # Static shape (JAX/eager)
-            out = _full() if seq_len <= chunk else _chunked()
+        static_len = x.shape[0]
+        if isinstance(static_len, int):
+            # Static shape (eager, jit with a fixed signature)
+            out = _full() if static_len <= chunk else _chunked()
         else:
-            # Symbolic shape (tf.function)
-            out = ops.cond(seq_len <= chunk, _full, _chunked)
+            # Symbolic shape (functional graph, tf.function)
+            out = _full()
 
         out = ops.transpose(out, (1, 0, 2))  # (S, H, D)
         out = ops.reshape(out, (seq_len, self.embed_dim))
@@ -565,6 +566,14 @@ class Qwen2VLVisionEncoder(keras.Model):
                 ),
             )
             grid_thw = ops.reshape(grid_thw, (-1, 3))
+
+        # Text-only calls feed a zero-sized pixel_values tensor. When the
+        # patch count is statically zero, skip the transformer entirely
+        if pixel_values.shape[0] == 0:
+            merged = ops.zeros((0, self.out_dim), dtype="float32")
+            if batched:
+                merged = ops.expand_dims(merged, axis=0)
+            return merged
 
         # `ops.cond` can't express a 0-vs-N patch branch under `jax.jit`
         # (branches must return equal shapes). Instead, always encode by
