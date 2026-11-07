@@ -23,24 +23,30 @@ class Llama3Tokenizer(BytePairTokenizer):
     ):
         # Note: all special tokens must also appear in "vocabulary"
 
-        self._add_special_token(bos_token, "start_token")
-        misc_special_tokens -= {bos_token}
-        self._add_special_token(eos_token, "end_token")
-        misc_special_tokens -= {eos_token}
-        for i, token in enumerate(misc_special_tokens):
-            self._add_special_token(token, f"special_token_{i:03d}")
+        if bos_token is not None:
+            self._add_special_token(bos_token, "start_token")
+            if isinstance(misc_special_tokens, (set, list)):
+                misc_special_tokens = set(misc_special_tokens) - {bos_token}
+        else:
+            self.start_token = None
+            self.start_token_id = None
 
-        # Hack:
-        # Llama models use the <|end_of_text|> or the <|eot_id|> as the stop
-        # token. This info can be read from config when loading a Hugging Face
-        # checkpoint but no such config exists for Keras checkpoints.
-        # Setting both probable end tokens when no config is availble will
-        # make text generation work in all cases as it will stop
-        # on both end tokens. However, the packer will always use
-        # "<|end_of_text|>" , which will be the wrong eos_token for "instruct"
-        # variants of Llama3.
-        # TODO: load this correctly from a Keras tokenizer config.
-        if eos_token == "<|end_of_text|>":
+        if eos_token is not None:
+            self._add_special_token(eos_token, "end_token")
+            if isinstance(misc_special_tokens, (set, list)):
+                misc_special_tokens = set(misc_special_tokens) - {eos_token}
+        else:
+            self.end_token = None
+            self.end_token_id = None
+
+        if misc_special_tokens:
+            for i, token in enumerate(sorted(misc_special_tokens)):
+                if vocabulary is None or token in vocabulary:
+                    self._add_special_token(token, f"special_token_{i:03d}")
+
+        if eos_token == "<|end_of_text|>" and (
+            vocabulary is None or "<|eot_id|>" in vocabulary
+        ):
             self._add_special_token("<|eot_id|>", "end_token2")
 
         self.pad_token_id = 0
