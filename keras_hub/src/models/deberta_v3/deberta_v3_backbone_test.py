@@ -30,6 +30,15 @@ class DebertaV3BackboneTest(TestCase):
             expected_output_shape=(2, 5, 2),
         )
 
+    def test_backbone_with_conv_layer(self):
+        # Original DeBERTa-v2 checkpoints use a convolution block.
+        self.run_backbone_test(
+            cls=DebertaV3Backbone,
+            init_kwargs={**self.init_kwargs, "conv_kernel_size": 3},
+            input_data=self.input_data,
+            expected_output_shape=(2, 5, 2),
+        )
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
