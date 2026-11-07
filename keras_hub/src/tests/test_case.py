@@ -88,6 +88,7 @@ def _as_dense_array(x):
     if isinstance(x, dict):
         return None
 
+    orig = x
     try:
         x = np.asarray(x)
     except (ValueError, TypeError, RuntimeError):
@@ -95,6 +96,13 @@ def _as_dense_array(x):
         return None
     if x.dtype.kind == "O":
         return None
+    if not isinstance(orig, np.ndarray) and x.dtype.kind in ("S", "U"):
+        if not all(
+            isinstance(e, (str, bytes))
+            or (isinstance(e, np.ndarray) and e.dtype.kind in ("S", "U"))
+            for e in tree.flatten(orig)
+        ):
+            return None
 
     if x.dtype.kind == "S":
         # Compare all strings as `str`, never as `bytes`. Bytes that are not
@@ -226,6 +234,11 @@ def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
                 try:
                     concat1 = np.concatenate(x1)
                     concat2 = np.concatenate(x2)
+                    if concat1.dtype.kind in (
+                        "S",
+                        "U",
+                    ) or concat2.dtype.kind in ("S", "U"):
+                        raise TypeError
                     if (
                         concat1.ndim == 1
                         and concat2.ndim == 1
@@ -452,9 +465,13 @@ class TestCase(KerasTestCase):
         _compare_structures(x1, x2, _dense_allclose_fn(atol, rtol), msg, "")
 
     def assertDictEqual(self, x1, x2, msg=None):
+        self.assertIsInstance(x1, dict, msg)
+        self.assertIsInstance(x2, dict, msg)
         _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
 
     def assertEqual(self, x1, x2, msg=None):
+        if isinstance(x1, dict) and isinstance(x2, dict):
+            return self.assertDictEqual(x1, x2, msg=msg)
         x1 = tree.map_structure(convert_to_comparible_type, x1)
         x2 = tree.map_structure(convert_to_comparible_type, x2)
         super().assertEqual(x1, x2, msg=msg)

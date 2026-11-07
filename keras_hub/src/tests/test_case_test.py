@@ -1,7 +1,9 @@
 import collections
 import os
 import random
+import shutil
 import unittest
+import warnings
 from types import MappingProxyType
 from unittest import mock
 
@@ -275,6 +277,29 @@ class AssertionsTest(TestCase):
         with self.assertRaises(AssertionError):
             self.assertAllInRange(np.array([0.0, 1.5]), 0.0, 1.0)
 
+    def test_ragged_mixed_dtype_cross_row_promotion(self):
+        self.assertAllEqual([[1, 2], ["3"]], [[1, 2], ["3"]])
+        self.assertAllClose([[1.0], ["a"]], [[1.0], ["a"]])
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual([[1, 2], ["3"]], [["1", "2"], ["3"]])
+        with self.assertRaises(AssertionError):
+            self.assertAllClose([[1.0], ["a"]], [["1.0"], ["a"]])
+
+    @unittest.skipIf(tf is None, "Requires TensorFlow")
+    def test_assert_equal_ragged_vs_dense(self):
+        ragged = tf.ragged.constant([[1, 2], [3, 4]])
+        dense = tf.constant([[1, 2], [3, 4]])
+        self.assertEqual({"a": ragged}, {"a": ragged})
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": ragged}, {"a": dense})
+
+    def test_assert_dict_equal_non_dict(self):
+        self.assertDictEqual({"a": [1, 2]}, {"a": [1, 2]})
+        with self.assertRaises(AssertionError):
+            self.assertDictEqual([1, 2], [1, 2])
+        with self.assertRaises(AssertionError):
+            self.assertDictEqual(1, 1)
+
 
 class GrainSourceFromTensorSlicesTest(TestCase):
     def test_list_of_strings(self):
@@ -448,7 +473,7 @@ class TestCaseTest(TestCase):
         class DummyTask(keras.Model):
             def __init__(self, preprocessor=None, **kwargs):
                 kwargs.pop("compile", None)
-                inputs = {"inputs": keras.Input(shape=(1,))}
+                inputs = {"inputs": keras.Input(shape=(1,), name="inputs")}
                 super().__init__(
                     inputs=inputs, outputs=inputs["inputs"], **kwargs
                 )
@@ -475,7 +500,11 @@ class TestCaseTest(TestCase):
             def get_config(self):
                 return super().get_config()
 
-        with mock.patch("keras_hub.src.tests.test_case.tf", None):
+        with (
+            mock.patch("keras_hub.src.tests.test_case.tf", None),
+            warnings.catch_warnings(record=True) as w,
+        ):
+            warnings.simplefilter("always", UserWarning)
             self.run_task_test(
                 cls=DummyTask,
                 init_kwargs={},
@@ -488,6 +517,9 @@ class TestCaseTest(TestCase):
                 batch_size=2,
                 compile_kwargs={"optimizer": "sgd", "loss": "mse"},
             )
+        self.assertEqual(
+            [warn for warn in w if issubclass(warn.category, UserWarning)], []
+        )
 
     @unittest.skipIf(tf is None, "Requires TF")
     def test_setup_propagates_unrelated_attribute_error(self):
@@ -506,3 +538,7 @@ class TestCaseTest(TestCase):
         with mock.patch.object(keras.utils, "set_random_seed", raise_unrelated):
             with self.assertRaises(AttributeError):
                 self.setUp()
+
+    def test_get_temp_dir_survives_deletion(self):
+        shutil.rmtree(self.get_temp_dir())
+        self.assertFalse(os.path.exists(self.get_temp_dir()))
