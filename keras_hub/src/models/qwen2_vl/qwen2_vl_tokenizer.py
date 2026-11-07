@@ -61,10 +61,9 @@ class Qwen2VLTokenizer(BytePairTokenizer):
     backbone_cls = Qwen2VLBackbone
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
-        # `<|im_end|>` is the EOS for instruct checkpoints; `<|endoftext|>`
-        # doubles as the pad token, matching the HF tokenizer config.
         self._add_special_token("<|im_end|>", "end_token")
         self._add_special_token("<|endoftext|>", "pad_token")
+        self._add_special_token("<|endoftext|>", "end_token2")
         self._add_special_token("<|im_start|>", "im_start_token")
         self._add_special_token("<|vision_start|>", "vision_start_token")
         self._add_special_token("<|vision_end|>", "vision_end_token")

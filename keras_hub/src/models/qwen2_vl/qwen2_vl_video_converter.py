@@ -43,6 +43,10 @@ class Qwen2VLVideoConverter(VideoConverter):
         super().__init__(**kwargs)
         self.image_converter = image_converter or Qwen2VLImageConverter()
 
+    @property
+    def merge_size(self):
+        return self.image_converter.merge_size
+
     def call(self, video):
         return self.image_converter(video)
 

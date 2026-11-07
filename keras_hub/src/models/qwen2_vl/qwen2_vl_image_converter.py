@@ -183,6 +183,7 @@ class Qwen2VLImageConverter(ImageConverter):
                     antialias=True,
                 )
             )
+            image = np.clip(image, 0.0, 255.0)
         patches = image
 
         patches = patches / np.float32(255.0)

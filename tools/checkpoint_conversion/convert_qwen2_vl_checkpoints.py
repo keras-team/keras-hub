@@ -13,10 +13,9 @@ import os
 os.environ["KERAS_BACKEND"] = "torch"
 
 import gc  # noqa: E402
-from io import BytesIO  # noqa: E402
 
+import keras  # noqa: E402
 import numpy as np  # noqa: E402
-import requests  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
@@ -31,25 +30,17 @@ import keras_hub  # noqa: E402
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 PRESET_MAP = {
+    "qwen2_vl_2b_base": "Qwen/Qwen2-VL-2B",
     "qwen2_vl_2b_instruct": "Qwen/Qwen2-VL-2B-Instruct",
+    "qwen2_vl_7b_base": "Qwen/Qwen2-VL-7B",
     "qwen2_vl_7b_instruct": "Qwen/Qwen2-VL-7B-Instruct",
-    "qwen2_vl_72b_instruct": "Qwen/Qwen2-VL-72B-Instruct",
 }
 
 TEXT_PROMPT = "What is the capital of France?"
 MULTIMODAL_PROMPT = (
-    "<"
-    "|im_start|>user\n"
-    "<"
-    "|vision_start|>"
-    "<"
-    "|image_pad|>"
-    "<"
-    "|vision_end|>Describe this image."
-    "<"
-    "|im_end|>\n"
-    "<"
-    "|im_start|>assistant\n"
+    "<|im_start|>user\n<|vision_start|><|image_pad|>"
+    "<|vision_end|>Describe this image."
+    "<|im_end|>\n<|im_start|>assistant\n"
 )
 IMAGE_URL = (
     "https://huggingface.co/datasets/huggingface/"
@@ -77,9 +68,8 @@ def _extract_response(text):
 
 
 def _load_test_image():
-    response = requests.get(IMAGE_URL, timeout=30)
-    response.raise_for_status()
-    return Image.open(BytesIO(response.content)).convert("RGB")
+    path = keras.utils.get_file("qwen2_vl_test_car.jpg", IMAGE_URL)
+    return Image.open(path).convert("RGB")
 
 
 def _count_keras_params(backbone):
@@ -175,12 +165,10 @@ def test_parameter_count(keras_backbone, hf_param_count):
     keras_params = _count_keras_params(keras_backbone)
     print(f"\n  KerasHub params: {keras_params:,}")
     print(f"  HF params:       {hf_param_count:,}")
-    if keras_params == hf_param_count:
-        print("  Parameter counts match.")
-    else:
-        print(
-            f"  Parameter count difference: {hf_param_count - keras_params:,}"
-        )
+    assert keras_params == hf_param_count, (
+        f"Parameter count mismatch: keras={keras_params}, hf={hf_param_count}"
+    )
+    print("  Parameter counts match.")
 
 
 # ---------------------------------------------------------------
@@ -220,8 +208,15 @@ def validate_text_output(keras_model, hf_results):
 
     if not FLAGS.skip_generation:
         keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
-        print(f"  KerasHub: {_extract_response(keras_output)}")
-        print(f"  HF:       {hf_results.get('text_generated', 'N/A')}")
+        keras_text = _extract_response(keras_output)
+        hf_text = _extract_response(hf_results["text_generated"])
+        print(f"  KerasHub: {keras_text}")
+        print(f"  HF:       {hf_text}")
+        assert keras_text == hf_text, (
+            f"Greedy generation mismatch:\n  keras: {keras_text}\n"
+            f"  hf:    {hf_text}"
+        )
+        print("  Greedy generation matches.")
 
 
 # ---------------------------------------------------------------
@@ -250,6 +245,17 @@ def validate_multimodal_output(keras_model, hf_results):
     pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 4, 1))
     pixel_values = ops.convert_to_tensor(pixel_values_np)
     image_grid_thw = ops.convert_to_tensor(hf_results["mm_image_grid_thw"])
+
+    # End-to-end run and comparison of preprocessors
+    preprocessed = keras_model.preprocessor.generate_preprocess(
+        {
+            "prompts": [MULTIMODAL_PROMPT],
+            "images": [np.asarray(hf_results["raw_image"])],
+        }
+    )
+    keras_pixels = ops.convert_to_numpy(preprocessed["pixel_values"])
+    np.testing.assert_allclose(keras_pixels, pixel_values_np, atol=1e-3)
+    print("  Preprocessor pixel values match HF image processor (atol=1e-3).")
 
     image_pad_id = keras_model.preprocessor.image_token_id
     vision_pos = np.where(token_ids_np[0] == image_pad_id)[0]
@@ -281,25 +287,29 @@ def validate_multimodal_output(keras_model, hf_results):
     abs_diff = np.abs(keras_logits - hf_logits)
     print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
-    try:
-        np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3)
-        print("  Logits match within atol=1e-3.")
-    except AssertionError as e:
-        print(f"  Logits do not match within atol=1e-3: {e}")
+    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-2)
+    print("  Logits match within atol=1e-2.")
 
     if not FLAGS.skip_generation:
-        print(f"  HF output: {hf_results.get('mm_generated', 'N/A')}")
         keras_output = keras_model.generate(
             {
                 "prompts": [MULTIMODAL_PROMPT],
                 "images": [np.array(hf_results["raw_image"])],
             },
-            max_length=8192,
+            max_length=512,
         )
         keras_text = (
             keras_output[0] if isinstance(keras_output, list) else keras_output
         )
-        print(f"  KerasHub output: {_extract_response(keras_text)}")
+        keras_text = _extract_response(keras_text)
+        hf_text = _extract_response(hf_results["mm_generated"])
+        print(f"  KerasHub output: {keras_text}")
+        print(f"  HF output:       {hf_text}")
+        assert keras_text == hf_text, (
+            f"Greedy multimodal generation mismatch:\n  keras: {keras_text}\n"
+            f"  hf:    {hf_text}"
+        )
+        print("  Greedy generation matches.")
 
 
 # ---------------------------------------------------------------

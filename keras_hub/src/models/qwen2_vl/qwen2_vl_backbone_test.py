@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 
@@ -112,6 +113,17 @@ class Qwen2VLMultimodalBackboneTest(TestCase):
             run_mixed_precision_check=False,
             run_quantization_check=False,
         )
+
+    def test_mixed_bfloat16_forward(self):
+        """Vision interleave must work under a mixed-bfloat16 policy."""
+        previous = keras.mixed_precision.global_policy()
+        keras.mixed_precision.set_global_policy("mixed_bfloat16")
+        try:
+            backbone = Qwen2VLBackbone(**self.init_kwargs)
+            output = backbone(self._vision_inputs())
+            self.assertDTypeEqual(output, "bfloat16")
+        finally:
+            keras.mixed_precision.set_global_policy(previous)
 
     @pytest.mark.large
     def test_saved_model(self):
