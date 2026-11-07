@@ -140,7 +140,15 @@ class BlockDiffusionLM(Task):
                         **step_kwargs,
                     )
 
-                return ov_infer(self, inputs, stop_token_ids, fn)
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
+                return ov_infer(
+                    self,
+                    inputs,
+                    fn,
+                    static_args=(stop_token_ids,),
+                    cache_key=(stop_token_ids, max_length, kwarg_names),
+                )
 
             self.generate_function = wrapped_generate_function
 
