@@ -29,6 +29,7 @@ from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_mobile_bert
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_mpnet
 from keras_hub.src.utils.transformers import convert_muse_glimmer
@@ -117,6 +118,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen
         elif model_type == "mixtral":
             self.converter = convert_mixtral
+        elif model_type == "mobilebert":
+            self.converter = convert_mobile_bert
         elif model_type == "qwen2_moe":
             self.converter = convert_qwen_moe
         elif model_type == "qwen3_moe":
@@ -171,7 +174,8 @@ class TransformersPresetLoader(PresetLoader):
         return backbone
 
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
-        architecture = self.config["architectures"][0]
+        architectures = self.config.get("architectures")
+        architecture = architectures[0] if architectures else None
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
         # `convert_head` is only defined for task-specific heads (e.g.
@@ -189,7 +193,15 @@ class TransformersPresetLoader(PresetLoader):
             kwargs = {**task_config, **kwargs}
 
         if hasattr(self.converter, "load_task_config"):
-            extra = self.converter.load_task_config(self.preset, self.config)
+            sig = inspect.signature(self.converter.load_task_config)
+            if len(sig.parameters) >= 3:
+                extra = self.converter.load_task_config(
+                    self.preset, self.config, cls
+                )
+            else:
+                extra = self.converter.load_task_config(
+                    self.preset, self.config
+                )
             if extra:
                 kwargs = {**extra, **kwargs}
 
@@ -203,10 +215,10 @@ class TransformersPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # Support loading the classification head for classifier models.
-        if "ForImageClassification" in architecture:
+        if "ForImageClassification" in (architecture or ""):
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights:
+        if load_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
@@ -244,9 +256,15 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
-            extra = self.converter.load_preprocessor_config(
-                self.preset, self.config
-            )
+            sig = inspect.signature(self.converter.load_preprocessor_config)
+            if len(sig.parameters) >= 3:
+                extra = self.converter.load_preprocessor_config(
+                    self.preset, self.config, cls
+                )
+            else:
+                extra = self.converter.load_preprocessor_config(
+                    self.preset, self.config
+                )
             if extra:
                 kwargs = {**extra, **kwargs}
         if config_file is not None:
