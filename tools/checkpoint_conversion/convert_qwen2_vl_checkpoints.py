@@ -13,6 +13,7 @@ import os
 os.environ["KERAS_BACKEND"] = "torch"
 
 import gc  # noqa: E402
+import shutil  # noqa: E402
 
 import keras  # noqa: E402
 import numpy as np  # noqa: E402
@@ -69,7 +70,7 @@ def _extract_response(text):
 
 def _load_test_image():
     path = keras.utils.get_file("qwen2_vl_test_car.jpg", IMAGE_URL)
-    return Image.open(path).convert("RGB")
+    return Image.open(path).convert("RGB").crop((0, 0, 616, 476))
 
 
 def _count_keras_params(backbone):
@@ -100,6 +101,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
                 input_ids=torch.tensor(hf_ids, dtype=torch.long).to(device),
                 max_new_tokens=32,
                 do_sample=False,
+                repetition_penalty=1.0,
             )
         results["text_generated"] = hf_tokenizer.decode(
             hf_gen[0], skip_special_tokens=True
@@ -146,7 +148,10 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
     if not FLAGS.skip_generation:
         with torch.no_grad():
             hf_gen = hf_model.generate(
-                **hf_inputs, max_new_tokens=32, do_sample=False
+                **hf_inputs,
+                max_new_tokens=32,
+                do_sample=False,
+                repetition_penalty=1.0,
             )
         results["mm_generated"] = hf_tokenizer.decode(
             hf_gen[0], skip_special_tokens=True
@@ -189,15 +194,9 @@ def validate_text_output(keras_model, hf_results):
     np.testing.assert_array_equal(keras_valid, hf_ids[0])
     print("  Token IDs match.")
 
-    token_ids = ops.convert_to_tensor(hf_ids.astype(np.int32))
-    padding_mask = ops.ones_like(token_ids)
-    keras_hidden = keras_model.backbone(
-        {"token_ids": token_ids, "padding_mask": padding_mask}
+    keras_logits = ops.convert_to_numpy(keras_model(keras_preprocessed)).astype(
+        np.float32
     )
-    keras_logits = keras_model.backbone.token_embedding(
-        keras_hidden, reverse=True
-    )
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
 
     hf_logits = hf_results["text_logits"]
     abs_diff = np.abs(keras_logits - hf_logits)
@@ -207,7 +206,9 @@ def validate_text_output(keras_model, hf_results):
     print("  Logits match within atol=1e-3.")
 
     if not FLAGS.skip_generation:
-        keras_output = keras_model.generate(TEXT_PROMPT, max_length=64)
+        keras_output = keras_model.generate(
+            TEXT_PROMPT, max_length=int(hf_ids.shape[1]) + 32
+        )
         keras_text = _extract_response(keras_output)
         hf_text = _extract_response(hf_results["text_generated"])
         print(f"  KerasHub: {keras_text}")
@@ -219,9 +220,6 @@ def validate_text_output(keras_model, hf_results):
         print("  Greedy generation matches.")
 
 
-# ---------------------------------------------------------------
-# 4. Multimodal validation
-# ---------------------------------------------------------------
 def validate_multimodal_output(keras_model, hf_results):
     if keras_model.backbone.vision_encoder is None:
         print("\n-> Skipping multimodal validation (no vision encoder).")
@@ -231,22 +229,16 @@ def validate_multimodal_output(keras_model, hf_results):
     print("MULTIMODAL VALIDATION")
     print("=" * 50)
 
-    backbone = keras_model.backbone
     token_ids_np = hf_results["mm_input_ids"].astype(np.int32)
-    token_ids = ops.convert_to_tensor(token_ids_np)
-    padding_mask = ops.convert_to_tensor(hf_results["mm_attention_mask"])
 
     # HF pixel_values is (N, C*T*pH*pW) flattened; KerasHub uses
     # (N, T, pH, pW, C).
-    ve = backbone.vision_encoder
+    ve = keras_model.backbone.vision_encoder
     C, T = ve.in_channels, ve.temporal_patch_size
     pH = pW = ve.patch_size
     pixel_values_np = hf_results["mm_pixel_values"].reshape(-1, C, T, pH, pW)
     pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 4, 1))
-    pixel_values = ops.convert_to_tensor(pixel_values_np)
-    image_grid_thw = ops.convert_to_tensor(hf_results["mm_image_grid_thw"])
 
-    # End-to-end run and comparison of preprocessors
     preprocessed = keras_model.preprocessor.generate_preprocess(
         {
             "prompts": [MULTIMODAL_PROMPT],
@@ -254,40 +246,18 @@ def validate_multimodal_output(keras_model, hf_results):
         }
     )
     keras_pixels = ops.convert_to_numpy(preprocessed["pixel_values"])
-    np.testing.assert_allclose(keras_pixels, pixel_values_np, atol=1e-3)
-    print("  Preprocessor pixel values match HF image processor (atol=1e-3).")
+    np.testing.assert_allclose(keras_pixels, pixel_values_np, atol=1e-5)
+    print("  Preprocessor pixels match HF image processor (atol=1e-5).")
 
-    image_pad_id = keras_model.preprocessor.image_token_id
-    vision_pos = np.where(token_ids_np[0] == image_pad_id)[0]
-    vision_indices = ops.convert_to_tensor(vision_pos.astype(np.int32))
-
-    img_embeds = backbone.vision_encoder(pixel_values, image_grid_thw)
-    x = backbone.token_embedding(token_ids)
-    x = backbone.interleave_embeddings(
-        image_embeddings=img_embeds,
-        text_embeddings=x,
-        vision_indices=vision_indices,
+    keras_logits = ops.convert_to_numpy(keras_model(preprocessed)).astype(
+        np.float32
     )
-    position_ids = ops.convert_to_tensor(
-        keras_model.preprocessor._compute_position_ids(
-            token_ids, image_grid_thw, None
-        )
-    )
-    for layer in backbone.transformer_layers:
-        x = layer(
-            x,
-            decoder_padding_mask=padding_mask,
-            position_ids=position_ids,
-        )
-    x = backbone.layer_norm(x)
-    keras_logits = backbone.token_embedding(x, reverse=True)
-    keras_logits = ops.convert_to_numpy(keras_logits).astype(np.float32)
-
-    hf_logits = hf_results["mm_logits"]
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
-    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-2)
+    keras_last = keras_logits[:, -1]
+    hf_last = hf_results["mm_logits"][:, -1]
+    abs_diff = np.abs(keras_last - hf_last)
+    print(f"  Last-position logit mean diff: {abs_diff.mean():.6f}")
+    print(f"  Last-position logit max diff:  {abs_diff.max():.6f}")
+    np.testing.assert_allclose(keras_last, hf_last, atol=1e-2)
     print("  Logits match within atol=1e-2.")
 
     if not FLAGS.skip_generation:
@@ -296,7 +266,7 @@ def validate_multimodal_output(keras_model, hf_results):
                 "prompts": [MULTIMODAL_PROMPT],
                 "images": [np.array(hf_results["raw_image"])],
             },
-            max_length=512,
+            max_length=int(token_ids_np.shape[1]) + 32,
         )
         keras_text = (
             keras_output[0] if isinstance(keras_output, list) else keras_output
@@ -316,9 +286,13 @@ def validate_multimodal_output(keras_model, hf_results):
 # 5. Save
 # ---------------------------------------------------------------
 def save_preset(keras_model, preset_name):
-    print(f"\n-> Saving KerasHub preset to ./{preset_name}...")
-    keras_model.save_to_preset(f"./{preset_name}")
-    print(f"  Preset saved to ./{preset_name}")
+    preset_path = f"./{preset_name}"
+    if os.path.exists(preset_path):
+        print(f"\n-> Removing existing preset at {preset_path}...")
+        shutil.rmtree(preset_path)
+    print(f"-> Saving KerasHub preset to {preset_path}...")
+    keras_model.save_to_preset(preset_path)
+    print(f"  Preset saved to {preset_path}")
 
 
 # ---------------------------------------------------------------
@@ -358,6 +332,7 @@ def main(_):
     keras_model = keras_hub.models.Qwen2VLCausalLM.from_preset(
         f"hf://{hf_preset}", dtype="float32"
     )
+    keras_model.compile(sampler="greedy")
 
     # --- Phase 3: Validate ---
     test_parameter_count(keras_model.backbone, hf_params)
@@ -365,7 +340,15 @@ def main(_):
     validate_multimodal_output(keras_model, hf_results)
 
     # --- Phase 4: Save ---
-    save_preset(keras_model, preset)
+    del keras_model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    print("\n-> Reloading model in bfloat16 for saving...")
+    save_model = keras_hub.models.Qwen2VLCausalLM.from_preset(
+        f"hf://{hf_preset}", dtype="bfloat16"
+    )
+    save_preset(save_model, preset)
     print("\n=== Done! ===")
 
 

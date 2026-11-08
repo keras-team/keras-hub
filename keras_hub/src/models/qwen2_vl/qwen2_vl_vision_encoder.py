@@ -633,16 +633,20 @@ class Qwen2VLVisionEncoder(keras.Model):
         )
 
     def get_config(self):
-        return {
-            "patch_size": self.patch_size,
-            "temporal_patch_size": self.temporal_patch_size,
-            "in_channels": self.in_channels,
-            "embed_dim": self.embed_dim,
-            "out_dim": self.out_dim,
-            "depth": self.depth,
-            "num_heads": self.num_heads,
-            "mlp_ratio": self.mlp_ratio,
-            "spatial_merge_size": self.spatial_merge_size,
-            "theta": self.theta,
-            "epsilon": self.epsilon,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "patch_size": self.patch_size,
+                "temporal_patch_size": self.temporal_patch_size,
+                "in_channels": self.in_channels,
+                "embed_dim": self.embed_dim,
+                "out_dim": self.out_dim,
+                "depth": self.depth,
+                "num_heads": self.num_heads,
+                "mlp_ratio": self.mlp_ratio,
+                "spatial_merge_size": self.spatial_merge_size,
+                "theta": self.theta,
+                "epsilon": self.epsilon,
+            }
+        )
+        return config

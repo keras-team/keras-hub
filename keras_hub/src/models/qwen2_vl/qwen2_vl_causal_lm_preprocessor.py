@@ -356,6 +356,22 @@ class Qwen2VLCausalLMPreprocessor(
                     current_pos += 1
                     i += 1
 
+            nonpad = np.nonzero(ids != self.tokenizer.pad_token_id)[0]
+            first_pad = int(nonpad[-1]) + 1 if nonpad.size else 0
+            if first_pad > 0 and first_pad < seq_len:
+                real_max = int(
+                    max(
+                        t_pos[:first_pad].max(),
+                        h_pos[:first_pad].max(),
+                        w_pos[:first_pad].max(),
+                    )
+                )
+                delta = real_max + 1 - int(t_pos[first_pad - 1] + 1)
+                if delta > 0:
+                    t_pos[first_pad:] += delta
+                    h_pos[first_pad:] += delta
+                    w_pos[first_pad:] += delta
+
             all_pos[b, 0] = t_pos
             all_pos[b, 1] = h_pos
             all_pos[b, 2] = w_pos
@@ -465,20 +481,31 @@ class Qwen2VLCausalLMPreprocessor(
     ):
         sequence_length = sequence_length or self.sequence_length
 
-        # Text-only fast path for non-dict inputs.
-        if not isinstance(x, dict):
-            return super().call(
-                x,
-                y=y,
-                sample_weight=sample_weight,
-                sequence_length=sequence_length,
+        images = None
+        videos = None
+        if isinstance(x, dict):
+            images = x.get("images", None)
+            videos = x.get("videos", None)
+
+        # Text-only fast path: media-free inputs delegate to the base
+        # class, whose tokenizer/packer path is safe under `tf.data`
+        # tracing. A dict carrying "responses" keeps the eager multimodal
+        # path so labels are packed, since the base path cannot.
+        if images is None and videos is None:
+            responses = (
+                x.get("responses", None) if isinstance(x, dict) else None
             )
+            if responses is None:
+                prompts = x["prompts"] if isinstance(x, dict) else x
+                return super().call(
+                    prompts,
+                    y=y,
+                    sample_weight=sample_weight,
+                    sequence_length=sequence_length,
+                )
 
         if not self.built:
             self.build(None)
-
-        images = x.get("images", None)
-        videos = x.get("videos", None)
 
         def _empty(media):
             # Empty collections behave like absent media, so placeholder

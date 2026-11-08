@@ -27,8 +27,8 @@ def convert_backbone_config(transformers_config):
     vision_encoder = None
     if vision_config is not None:
         vision_encoder = Qwen2VLVisionEncoder(
-            patch_size=vision_config.get("patch_size", 14),
-            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
+            patch_size=vision_config["patch_size"],
+            temporal_patch_size=vision_config["temporal_patch_size"],
             in_channels=vision_config.get(
                 "in_chans", vision_config.get("in_channels", 3)
             ),
@@ -36,14 +36,10 @@ def convert_backbone_config(transformers_config):
                 "embed_dim", vision_config.get("hidden_size", 1280)
             ),
             out_dim=tc["hidden_size"],
-            depth=vision_config.get(
-                "depth", vision_config.get("num_hidden_layers", 32)
-            ),
-            num_heads=vision_config.get(
-                "num_heads", vision_config.get("num_attention_heads", 16)
-            ),
-            mlp_ratio=vision_config.get("mlp_ratio", 4),
-            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
+            depth=vision_config["depth"],
+            num_heads=vision_config["num_heads"],
+            mlp_ratio=vision_config["mlp_ratio"],
+            spatial_merge_size=vision_config["spatial_merge_size"],
             theta=vision_config.get("rope_parameters", {}).get(
                 "rope_theta", vision_config.get("rope_theta", 10000.0)
             ),
@@ -58,10 +54,12 @@ def convert_backbone_config(transformers_config):
         "intermediate_dim": tc["intermediate_size"],
         "rope_max_wavelength": rope_theta,
         "mrope_section": mrope_section,
-        "layer_norm_epsilon": tc.get("rms_norm_eps", 1e-6),
-        "tie_word_embeddings": tc.get("tie_word_embeddings", False),
-        "use_sliding_window_attention": tc.get("use_sliding_window", False),
-        "sliding_window_size": tc.get("sliding_window", 32768),
+        "layer_norm_epsilon": tc["rms_norm_eps"],
+        "tie_word_embeddings": transformers_config.get(
+            "tie_word_embeddings", tc.get("tie_word_embeddings", False)
+        ),
+        "use_sliding_window_attention": tc["use_sliding_window"],
+        "sliding_window_size": tc["sliding_window"],
     }
     if vision_encoder is not None:
         result["vision_encoder"] = vision_encoder
@@ -73,39 +71,27 @@ def load_image_converter_config(preset, transformers_config):
     if "vision_config" not in transformers_config:
         return None
 
-    vision_config = transformers_config["vision_config"]
     preprocessor_config = load_json(preset, "preprocessor_config.json")
 
     # HF nests pixel budgets under "size" as shortest_edge/longest_edge,
     # which are pixel counts (not edge lengths) and map to our
     # min_pixels/max_pixels
     size_config = preprocessor_config.get("size", {})
-    min_pixels = size_config.get(
-        "shortest_edge", preprocessor_config.get("min_pixels", 56 * 56)
-    )
-    max_pixels = size_config.get(
-        "longest_edge", preprocessor_config.get("max_pixels", 12845056)
-    )
+    if "shortest_edge" in size_config:
+        min_pixels = size_config["shortest_edge"]
+        max_pixels = size_config["longest_edge"]
+    else:
+        min_pixels = preprocessor_config["min_pixels"]
+        max_pixels = preprocessor_config["max_pixels"]
 
     return {
         "min_pixels": min_pixels,
         "max_pixels": max_pixels,
-        "patch_size": preprocessor_config.get(
-            "patch_size", vision_config.get("patch_size", 14)
-        ),
-        "temporal_patch_size": preprocessor_config.get(
-            "temporal_patch_size",
-            vision_config.get("temporal_patch_size", 2),
-        ),
-        "merge_size": preprocessor_config.get(
-            "merge_size", vision_config.get("spatial_merge_size", 2)
-        ),
-        "image_mean": preprocessor_config.get(
-            "image_mean", [0.48145466, 0.4578275, 0.40821073]
-        ),
-        "image_std": preprocessor_config.get(
-            "image_std", [0.26862954, 0.26130258, 0.27577711]
-        ),
+        "patch_size": preprocessor_config["patch_size"],
+        "temporal_patch_size": preprocessor_config["temporal_patch_size"],
+        "merge_size": preprocessor_config["merge_size"],
+        "image_mean": preprocessor_config["image_mean"],
+        "image_std": preprocessor_config["image_std"],
     }
 
 

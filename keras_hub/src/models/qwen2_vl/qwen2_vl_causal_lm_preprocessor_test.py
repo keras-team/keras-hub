@@ -9,6 +9,9 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
     Qwen2VLImageConverter,
 )
 from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import Qwen2VLTokenizer
+from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
+    Qwen2VLVideoConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -243,6 +246,75 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         self.assertEqual(list(pos_ids[:, 17]), [3, 3, 3])
         self.assertEqual(list(pos_ids[:, 18]), [4, 4, 4])
 
+    def test_generate_preprocess_with_video_converter_only(self):
+        """Videos work with `image_converter=None`; merge size comes from
+        the video converter's inner image converter."""
+        video_converter = Qwen2VLVideoConverter(
+            image_converter=self._image_converter()
+        )
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=video_converter,
+            sequence_length=32,
+        )
+
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
+
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+
+        token_ids = ops.convert_to_numpy(out["token_ids"])
+        video_id = self.tokenizer.video_token_id
+        self.assertEqual(int(np.sum(token_ids == video_id)), 16)
+        self.assertEqual(
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
+        )
+
+        pos_ids = ops.convert_to_numpy(out["position_ids"])
+        self.assertEqual(
+            list(pos_ids[0, 1:17]),
+            [1] * 4 + [2] * 4 + [3] * 4 + [4] * 4,
+        )
+
+    def test_generate_preprocess_video_decode_position_base(self):
+        """Pad/decode positions rebase to `llm_positions.max() + 1`.
+
+        HF's `mrope_position_deltas` bases generated-token positions on
+        the max position across all three channels — including temporal.
+        A video with more merged frames than the spatial continuation
+        leaves a temporal max above the last text position, so pad
+        positions must start at llm max + 1.
+        """
+        image_converter = self._image_converter()
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=32,
+        )
+
+        # 10 frames → grid [5, 2, 2] → 20 video tokens, t positions 1-5.
+        video = np.ones((10, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+        )
+
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+        pos_ids = ops.convert_to_numpy(out["position_ids"])
+        # Real tokens keep the spatial continuation (positions 21, 22).
+        self.assertEqual(list(pos_ids[:, 21]), [3, 3, 3])
+        self.assertEqual(list(pos_ids[:, 22]), [4, 4, 4])
+        # Pad region starts at llm max + 1 = 6, then runs sequentially.
+        self.assertEqual(list(pos_ids[:, 23]), [6, 6, 6])
+        self.assertEqual(list(pos_ids[:, 31]), [14, 14, 14])
+
     def test_batched_call_with_images(self):
         """Two prompts with two images: each row expands its own span."""
         preprocessor = Qwen2VLCausalLMPreprocessor(
@@ -298,6 +370,19 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
                     "images": [np.ones((4, 4, 3), dtype="float32")],
                 }
             )
+
+    def test_tf_data_map_text_only_dict(self):
+        """Media-free dict inputs trace through `tf.data.Dataset.map`."""
+        import tensorflow as tf
+
+        preprocessor = Qwen2VLCausalLMPreprocessor(**self.init_kwargs)
+        ds = tf.data.Dataset.from_tensor_slices(
+            {"prompts": ["air", "airport"]}
+        ).batch(2)
+        ds = ds.map(preprocessor)
+        for x, y, sw in ds:
+            self.assertEqual(tuple(x["token_ids"].shape), (2, 8))
+            self.assertEqual(tuple(x["padding_mask"].shape), (2, 8))
 
     @pytest.mark.extra_large
     def test_all_presets(self):

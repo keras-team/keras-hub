@@ -56,6 +56,7 @@ class Qwen2VLTokenizerTest(TestCase):
         )
         self.assertEqual(tokenizer.end_token_id, self.vocab["<|im_end|>"])
         self.assertEqual(tokenizer.pad_token_id, self.vocab["<|endoftext|>"])
+        self.assertEqual(tokenizer.end_token2_id, tokenizer.pad_token_id)
 
     def test_vision_tokens_not_split(self):
         """Special tokens must tokenize to a single ID, not sub-word pieces."""
