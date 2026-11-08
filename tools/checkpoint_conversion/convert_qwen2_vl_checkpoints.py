@@ -186,7 +186,7 @@ def validate_text_output(keras_model, hf_results):
 
     hf_ids = hf_results["text_token_ids"]
     keras_preprocessed = keras_model.preprocessor.generate_preprocess(
-        TEXT_PROMPT, sequence_length=hf_ids.shape[1]
+        [TEXT_PROMPT], sequence_length=hf_ids.shape[1]
     )
     keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
     keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
