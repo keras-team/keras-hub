@@ -117,7 +117,7 @@ class WhisperAudioToTextPreprocessorTest(TestCase):
             keras.ops.shape(output["encoder_features"]), (3, 100, 80)
         )
         # Every sequence should start with the bos token.
-        token_ids = keras.ops.convert_to_numpy(output["decoder_token_ids"])
+        token_ids = output["decoder_token_ids"].numpy()
         for i in range(3):
             self.assertEqual(int(token_ids[i, 0]), self.tokenizer.bos_token_id)
 

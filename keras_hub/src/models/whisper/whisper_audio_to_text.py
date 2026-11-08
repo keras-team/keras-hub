@@ -250,8 +250,6 @@ class WhisperAudioToText(AudioToText):
             decoder_token_ids,
             ops.zeros_like(decoder_token_ids),
         )
-        batch_size = ops.shape(encoder_features)[0]
-
         (
             hidden_states,
             encoder_hidden_states,
@@ -262,33 +260,45 @@ class WhisperAudioToText(AudioToText):
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
+            # Carry encoder tensors through the loop, as in Moonshine, so
+            # OpenVINO can trace them and beam search expands every cache leaf.
+            (
+                self_attention_cache,
+                cross_attention_cache,
+                encoder_hidden_states,
+            ) = cache
             cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
             prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
-            def repeat_tensor(x):
-                if ops.shape(x)[0] == num_samples:
-                    return x
-                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
-
-            logits, hidden_states, cache, _ = self.call_decoder_with_cache(
-                encoder_hidden_states=repeat_tensor(encoder_hidden_states),
-                decoder_token_ids=prompt,
-                self_attention_cache=cache,
-                self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_tensor(cross_attention_cache),
-                cross_attention_cache_update_index=None,
+            logits, hidden_states, self_attention_cache, _ = (
+                self.call_decoder_with_cache(
+                    encoder_hidden_states=encoder_hidden_states,
+                    decoder_token_ids=prompt,
+                    self_attention_cache=self_attention_cache,
+                    self_attention_cache_update_index=cache_index,
+                    cross_attention_cache=cross_attention_cache,
+                    cross_attention_cache_update_index=None,
+                )
             )
             return (
                 ops.squeeze(logits, axis=1),
                 ops.squeeze(hidden_states, axis=1),
-                cache,
+                (
+                    self_attention_cache,
+                    cross_attention_cache,
+                    encoder_hidden_states,
+                ),
             )
 
         decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=self_attention_cache,
+            cache=(
+                self_attention_cache,
+                cross_attention_cache,
+                encoder_hidden_states,
+            ),
             index=index,
             mask=decoder_padding_mask,
             stop_token_ids=stop_token_ids,
