@@ -1,16 +1,183 @@
 import functools
 import math
+import sys
+import warnings
 
 import keras
+import numpy as np
 from keras import ops
 from keras import tree
+from keras.src.trainers.data_adapters.data_adapter_utils import (
+    class_weight_to_sample_weights,
+)
 
+from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_tensor_type
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 try:
     import tensorflow as tf
 except ImportError:
     tf = None
+
+
+def _contains_string_data(inputs):
+    """Check if any leaf in a nested structure contains string data."""
+    for x in tree.flatten(inputs):
+        if isinstance(x, (str, bytes)):
+            return True
+        if isinstance(x, np.ndarray):
+            if x.dtype.kind in ("U", "S"):
+                return True
+            if x.dtype.kind == "O" and x.size:
+                if any(isinstance(item, (str, bytes)) for item in x.flat):
+                    return True
+            continue
+        dtype = getattr(x, "dtype", None)
+        if dtype is not None and "string" in str(dtype).lower():
+            return True
+    return False
+
+
+UNBATCHED_INPUT_ERROR = (
+    "`x`, `y`, and `sample_weight` must have a batch dimension when calling "
+    "`fit()`, `evaluate()`, and `predict()`. Received an input with rank 0. "
+    "Please add an outer dimension to your input, e.g., wrap it in a list."
+)
+
+GRAIN_DATA_LOADER_ERROR = (
+    "`PipelineModel` maps preprocessing over the dataset it is given, which "
+    "a `grain.DataLoader` does not support. Pass a `grain.MapDataset` or a "
+    "`grain.IterDataset` instead, e.g. "
+    "`grain.MapDataset.source(source).batch(batch_size)`."
+)
+
+
+def _is_tf_dataset(x):
+    return tf is not None and isinstance(x, tf.data.Dataset)
+
+
+def _is_grain_dataset(x):
+    # `grain.DataLoader` is deliberately not included. It has no `map`, so
+    # preprocessing cannot be applied to one. See `_is_grain_data_loader`.
+    if grain is None:
+        return False
+    return isinstance(x, (grain.MapDataset, grain.IterDataset))
+
+
+def _is_grain_data_loader(x):
+    return grain is not None and isinstance(x, grain.DataLoader)
+
+
+def _map_leaves(inputs, fn):
+    """Map `fn` over the leaves of `inputs`.
+
+    Follows `tf.data.Dataset.from_tensor_slices`, where tuples and dicts are
+    structure but a list is a single tensor. `keras.tree` descends into lists,
+    which would split a list of strings into one leaf per string.
+    """
+    if isinstance(inputs, tuple):
+        return tuple(_map_leaves(i, fn) for i in inputs)
+    if isinstance(inputs, dict):
+        return {k: _map_leaves(v, fn) for k, v in inputs.items()}
+    return fn(inputs)
+
+
+def _flatten_leaves(inputs):
+    """List the leaves of `inputs`, with the same structure rules as above."""
+    if isinstance(inputs, tuple):
+        return [leaf for i in inputs for leaf in _flatten_leaves(i)]
+    if isinstance(inputs, dict):
+        return [leaf for v in inputs.values() for leaf in _flatten_leaves(v)]
+    return [inputs]
+
+
+def _is_ragged(inputs):
+    """Whether any leaf is a `tf.RaggedTensor`, which needs `tf.data`."""
+    if tf is None:
+        return False
+    return any(isinstance(t, tf.RaggedTensor) for t in _flatten_leaves(inputs))
+
+
+class _TensorLikeSource:
+    """A Grain source slicing a nested structure along its batch dimension.
+
+    This is the Grain stand in for `tf.data.Dataset.from_tensor_slices`.
+    """
+
+    def __init__(self, inputs):
+        leaves = _flatten_leaves(inputs)
+        if not leaves or any(len(leaf.shape) == 0 for leaf in leaves):
+            raise ValueError(UNBATCHED_INPUT_ERROR)
+        lengths = set(int(leaf.shape[0]) for leaf in leaves)
+        if len(lengths) > 1:
+            # Left to Grain this would surface as an `IndexError` mid epoch.
+            raise ValueError(
+                "`x`, `y`, and `sample_weight` must all have the same "
+                "batch dimension. Received inputs with batch sizes "
+                f"{sorted(lengths)}."
+            )
+        self.inputs = inputs
+        self.length = lengths.pop()
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        return _map_leaves(self.inputs, lambda leaf: leaf[index])
+
+
+def _convert_to_numpy(inputs):
+    """Convert every leaf of `inputs` to a numpy array.
+
+    `tensor_utils.convert_to_numpy` handles the tf tensors that preprocessing
+    layers hold regardless of the active backend, which
+    `keras.ops.convert_to_numpy` cannot.
+
+    Leaves that arrive as python numbers are narrowed to the dtypes
+    `from_tensor_slices` reads them as. Numpy widens them to 64 bit, and torch
+    picks MPS on Apple Silicon, which has no float64. An array that arrives
+    with a dtype of its own is left alone, as `tf.data` leaves it.
+    """
+
+    def convert(leaf):
+        narrow = not hasattr(leaf, "dtype")
+        leaf = convert_to_numpy(leaf)
+        if narrow:
+            if leaf.dtype == np.float64:
+                return leaf.astype("float32")
+            if leaf.dtype == np.int64:
+                return leaf.astype("int32")
+        return leaf
+
+    return _map_leaves(inputs, convert)
+
+
+def _convert_strings_to_python(inputs):
+    """Convert numpy string arrays to nested lists of python strings.
+
+    Grain stacks strings into numpy arrays, but preprocessing layers take
+    python `str`. See `keras_hub.utils.convert_preprocessing_inputs`.
+    """
+
+    def decode(value):
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        if isinstance(value, list):
+            return [decode(v) for v in value]
+        return value
+
+    def convert(leaf):
+        if isinstance(leaf, np.ndarray) and leaf.dtype.kind in ("U", "S", "O"):
+            return decode(leaf.tolist())
+        return leaf
+
+    return _map_leaves(inputs, convert)
 
 
 def _convert_inputs_to_dataset(
@@ -19,31 +186,55 @@ def _convert_inputs_to_dataset(
     sample_weight=None,
     batch_size=None,
 ):
-    """Convert inputs to a `tf.data.Dataset`.
+    """Convert inputs to a batched dataset.
 
-    This is a stand in for the `TensorLikeDataAdapter` in core Keras.
+    This is a stand in for the `TensorLikeDataAdapter` in core Keras. Inputs
+    are batched into a `grain.MapDataset`, which needs no TensorFlow runtime
+    and feeds `fit()` on all Keras backends. A dataset passed in directly by
+    the caller is validated and returned as is.
     """
-    if isinstance(x, tf.data.Dataset):
+    if _is_grain_data_loader(x):
+        raise ValueError(GRAIN_DATA_LOADER_ERROR)
+
+    if _is_tf_dataset(x) or _is_grain_dataset(x):
+        kind = "tf.data.Dataset" if _is_tf_dataset(x) else "grain dataset"
         if y is not None:
             raise ValueError(
-                "When `x` is a `tf.data.Dataset`, please do not provide "
+                f"When `x` is a {kind}, please do not provide "
                 f"`y`. Received: `type(y)={type(y)}`."
             )
         if sample_weight is not None:
             raise ValueError(
-                "When `x` is a `tf.data.Dataset`, please do not provide "
+                f"When `x` is a {kind}, please do not provide "
                 "`sample_weight`. Received: "
                 f"`type(sample_weight)={type(sample_weight)}`."
             )
         if batch_size is not None:
             raise ValueError(
-                "When `x` is a `tf.data.Dataset`, please do not provide "
+                f"When `x` is a {kind}, please do not provide "
                 "`batch_size`. Received: "
                 f"`type(batch_size)={type(batch_size)}`."
             )
         return x
 
     inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+    # Grain cannot stack ragged inputs.
+    if grain is None or _is_ragged(inputs):
+        return _convert_inputs_to_tf_dataset(inputs, batch_size)
+
+    inputs = _convert_to_numpy(inputs)
+    source = _TensorLikeSource(inputs)
+    return grain.MapDataset.source(source).batch(batch_size or 32)
+
+
+def _convert_inputs_to_tf_dataset(inputs, batch_size=None):
+    """Slice and batch `inputs` with `tf.data`, for ragged or TF-only inputs."""
+    if tf is None:
+        raise ImportError(
+            "Preprocessing these inputs requires `grain` or `tensorflow`. "
+            "Run `pip install grain` to install Grain, the pure-Python data "
+            "loader used by KerasHub."
+        )
     try:
 
         def convert(x):
@@ -60,15 +251,208 @@ def _convert_inputs_to_dataset(
         # message the default from tf.data. We expect this to come up with
         # some frequency, so it's important to have a good sign post here.
         if "only supported for rank >= 1" in str(e):
-            raise ValueError(
-                "`x`, `y`, and `sample_weight` must have a batch dimension "
-                "when calling `fit()`, `evaluate()`, and `predict()`. Received "
-                "an input with rank 0. Please add an outer dimension to your "
-                "input, e.g., wrap it in a list."
-            ) from e
+            raise ValueError(UNBATCHED_INPUT_ERROR) from e
         raise e
 
     return ds.batch(batch_size or 32)
+
+
+def _apply_preprocessing(ds, preprocess_samples):
+    """Map `preprocess_samples` over a batched dataset, with prefetching."""
+    if _is_tf_dataset(ds):
+        return ds.map(
+            preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+        ).prefetch(tf.data.AUTOTUNE)
+
+    if not _is_grain_dataset(ds):
+        raise ValueError(
+            "Expected `x` to be a `grain` or `tf.data` dataset. Received: "
+            f"`type(x)={type(ds)}`."
+        )
+
+    # `MapDataset.__iter__` already calls `to_iter_dataset()`, which reads
+    # ahead on a thread pool. Calling it here would only discard `__len__`.
+    return ds.map(functools.partial(_grain_preprocess, preprocess_samples))
+
+
+def _grain_preprocess(preprocess_samples, element):
+    """Run `preprocess_samples` over one batch of a grain dataset."""
+    # Grain passes the whole element as one argument, unlike `tf.data`.
+    x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(element)
+    # Convert strings after unpacking, or `unpack_x_y_sample_weight` would
+    # read the samples of a single string input as separate fields.
+    x = _convert_strings_to_python(x)
+    y = _convert_strings_to_python(y)
+    sample_weight = _convert_strings_to_python(sample_weight)
+    outputs = preprocess_samples(x, y, sample_weight)
+    # `preprocess_samples` can return tf tensors, which jax rejects since
+    # `GrainDatasetAdapter.get_jax_iterator` does not convert them. This is
+    # the same conversion preprocessing layers apply to their own outputs
+    # inside a grain pipeline, ragged and string data included.
+    return convert_preprocessing_outputs_grain(outputs)
+
+
+def _grain_can_carry_preprocessing(ds, preprocess_samples):
+    """Whether grain can feed what `preprocess_samples` produces.
+
+    Grain has no ragged type, so ragged and string outputs come back as nested
+    python lists, which `GrainDatasetAdapter` flattens down to scalars and then
+    rejects as rank 0. `tf.data` carries both end to end, so a pipeline that
+    preprocesses into either belongs there instead. Deciding needs the answer,
+    so this runs `preprocess_samples` over the first batch, which is why it
+    has to be free of side effects.
+
+    Raising counts as an answer too. Preprocessing written against tf tensors
+    fails on the numpy grain hands it, and `tf.data` is where that code was
+    meant to run, so send it there. If it fails again the traceback is the
+    user's own, rather than one routed out of grain's thread pool. With no
+    TensorFlow installed there is nowhere else to go, so grain keeps it.
+    """
+    try:
+        outputs = _grain_preprocess(preprocess_samples, ds[0])
+    except Exception:
+        return tf is None
+    return all(
+        leaf is None or hasattr(leaf, "shape") for leaf in tree.flatten(outputs)
+    )
+
+
+def _apply_class_weight(class_weight, element):
+    """Fold `class_weight` into the batch's `sample_weight`.
+
+    `GrainDatasetAdapter` takes no `class_weight`, where `TFDatasetAdapter`
+    applies it for us, so do here what `make_class_weight_map_fn` does there.
+    """
+    x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(element)
+    if y is None:
+        raise ValueError(
+            "`class_weight` needs `y` to weight, but this dataset has none."
+        )
+    if sample_weight is not None:
+        raise ValueError(
+            "You cannot `class_weight` and `sample_weight` at the same time."
+        )
+    if tree.is_nested(y):
+        raise ValueError(
+            "`class_weight` is only supported for a single output. Received: "
+            f"`y={y}`."
+        )
+    sample_weight = class_weight_to_sample_weights(y, class_weight)
+    return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+
+
+RAN_OUT_OF_DATA_WARNING = (
+    "Your input ran out of data; interrupting training. Make sure that your "
+    "dataset or generator can generate at least `steps_per_epoch * epochs` "
+    "batches. You may need to use the `.repeat()` function when building your "
+    "dataset."
+)
+
+
+# Batches grain reads ahead of the one being trained on. Grain's own default
+# is 500, sized for throughput pipelines rather than for the short datasets
+# `fit(x, y)` builds, where it costs whole passes of preprocessing that
+# nothing ever reads. Eight is what Keras samples to infer the batch spec.
+_READ_AHEAD_BATCHES = 8
+
+
+def _batches_in(ds):
+    """Batches in one pass over `ds`, or `None` when it does not say.
+
+    A dataset the caller already repeated has no end, which grain reports as
+    a length of `sys.maxsize`. That is not a number of batches, and repeating
+    such a dataset again raises.
+    """
+    try:
+        length = len(ds)
+    except TypeError:
+        return None
+    return None if length >= sys.maxsize else length
+
+
+class _ShortDatasetWarner(keras.callbacks.Callback):
+    """Warns that a declared step count outruns the dataset it counts.
+
+    On `tf.data` Keras notices this itself, because the adapter reports
+    `num_batches` and the pass stops at the end of the data. A grain dataset
+    reports `None` and is repeated here to survive the epoch boundary, so it
+    never runs dry for Keras to notice.
+
+    Training warns once an epoch and validation once a validation run, which
+    is not the same thing under `validation_freq`.
+    """
+
+    def __init__(self, train, validation):
+        super().__init__()
+        self.train = train
+        self.validation = validation
+
+    def on_epoch_end(self, epoch, logs=None):
+        if self.train:
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+
+    def on_test_end(self, logs=None):
+        if self.validation:
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
+
+
+def _declare_steps(ds, steps, passes=1):
+    """Return `ds`, the count to run it for, and whether `steps` outran it.
+
+    `GrainDatasetAdapter.num_batches` is always `None`, so Keras has no idea
+    how long a pass is. Left alone it finds out by running the iterator dry,
+    which warns as if training had been cut short on Keras 3.15.1 and, once a
+    count is declared, hands the next epoch a drained iterator. Both go away
+    by telling Keras the length up front, which the dataset does know.
+
+    Declaring it is what makes Keras hold one iterator across epochs, so the
+    dataset is repeated for as many passes as there are. The repeat is counted
+    rather than endless: an endless one would have grain's read ahead
+    preprocessing hundreds of batches past the last one anybody asks for.
+
+    A declared count that outruns the data is capped to it, the way `tf.data`
+    stops an over-long `steps_per_epoch` at the end of the data rather than
+    cycling, and reported so the caller still hears about it.
+    """
+    if not _is_grain_dataset(ds):
+        return ds, steps, False
+    length = _batches_in(ds)
+    if length is None:
+        # An `IterDataset`, or one the caller already repeated. Nothing to
+        # declare, so leave it to Keras.
+        return ds, steps, False
+    over = steps is not None and steps > length
+    steps = length if over or steps is None else steps
+    # `MapDataset.__iter__` reads ahead 500 elements by default, so Keras'
+    # adapter spends 45 batches of preprocessing on the 8 it samples to infer
+    # the batch spec. Bounding the buffer brings that down to 10, and stops
+    # the repeat above from multiplying it: 100 batches cost 119 calls rather
+    # than 261. `__len__` goes with the conversion, so the length is read
+    # first.
+    return (
+        ds.repeat(passes).to_iter_dataset(
+            grain.ReadOptions(prefetch_buffer_size=_READ_AHEAD_BATCHES)
+        ),
+        steps,
+        over,
+    )
+
+
+def _build_dataset(x, y, sample_weight, batch_size, preprocess_samples):
+    """Batch `x`, `y` and `sample_weight`, then map preprocessing over them.
+
+    Choosing between grain and `tf.data` runs `preprocess_samples` over the
+    first batch, so it runs once more than the batches it is mapped over and
+    must be free of side effects.
+    """
+    ds = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+    built_here = _is_grain_dataset(ds) and ds is not x
+    if built_here and not _grain_can_carry_preprocessing(
+        ds, preprocess_samples
+    ):
+        inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+        ds = _convert_inputs_to_tf_dataset(inputs, batch_size)
+    return _apply_preprocessing(ds, preprocess_samples)
 
 
 def _train_validation_split(arrays, validation_split):
@@ -139,12 +523,35 @@ class PipelineModel(keras.Model):
         super().__init__(*args, **kwargs)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        """An overridable function which preprocesses entire samples."""
+        """An overridable function which preprocesses entire samples.
+
+        This must be free of side effects. It is run over the first batch to
+        decide whether the pipeline can be built on grain, and then again over
+        every batch including that one.
+        """
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     # ========================================================================
     # Below are overrides to keras.Model methods to apply the functions above.
     # ========================================================================
+    def __call__(self, *args, **kwargs):
+        inputs = args[0] if args else kwargs.get("inputs")
+        if _contains_string_data(inputs):
+            message = (
+                "Calling a model directly, e.g. `model(x)`, does not apply "
+                "preprocessing, but the model received string input. Use "
+                "`model.predict(x)`, `model.fit(x, y)` or "
+                "`model.evaluate(x, y)` instead, which will preprocess "
+                "string input before running the model."
+            )
+            if getattr(self, "preprocessor", None) is not None:
+                message += (
+                    " Alternatively, preprocess the input first, e.g. "
+                    "`model(model.preprocessor(x))`."
+                )
+            raise ValueError(message)
+        return super().__call__(*args, **kwargs)
+
     def fit(
         self,
         x=None,
@@ -160,19 +567,55 @@ class PipelineModel(keras.Model):
                 (x, y, sample_weight), validation_split=validation_split
             )
 
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
+        x = _build_dataset(
+            x, y, sample_weight, batch_size, self.preprocess_samples
+        )
 
         if validation_data is not None:
-            if not isinstance(validation_data, tf.data.Dataset):
+            if _is_tf_dataset(validation_data) or _is_grain_dataset(
+                validation_data
+            ):
+                validation_data = _apply_preprocessing(
+                    validation_data, self.preprocess_samples
+                )
+            else:
                 (vx, vy, vsw) = keras.utils.unpack_x_y_sample_weight(
                     validation_data
                 )
-                validation_data = _convert_inputs_to_dataset(
-                    vx, vy, vsw, batch_size
+                validation_data = _build_dataset(
+                    vx, vy, vsw, batch_size, self.preprocess_samples
                 )
+
+        # `TFDatasetAdapter` applies `class_weight` itself and
+        # `GrainDatasetAdapter` rejects it. Fold it into the training samples
+        # and keep it off both.
+        class_weight = kwargs.pop("class_weight", None)
+        if class_weight is not None and _is_grain_dataset(x):
+            x = x.map(functools.partial(_apply_class_weight, class_weight))
+        elif class_weight is not None:
+            kwargs["class_weight"] = class_weight
+
+        passes = kwargs.get("epochs", 1)
+        x, steps_per_epoch, short_train = _declare_steps(
+            x, kwargs.get("steps_per_epoch"), passes
+        )
+        if steps_per_epoch is not None:
+            kwargs["steps_per_epoch"] = steps_per_epoch
+
+        short_validation = False
+        if validation_data is not None:
+            validation_data, validation_steps, short_validation = (
+                _declare_steps(
+                    validation_data, kwargs.get("validation_steps"), passes
+                )
+            )
+            if validation_steps is not None:
+                kwargs["validation_steps"] = validation_steps
+
+        if short_train or short_validation:
+            kwargs["callbacks"] = list(kwargs.get("callbacks") or []) + [
+                _ShortDatasetWarner(short_train, short_validation)
+            ]
 
         return super().fit(
             x=x,
@@ -191,15 +634,25 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        # During `fit()`, `keras.Model` attempts to cache the validation
-        # dataset and ignores the values for `x`, `y`, and `sample_weight`.
-        # We don't want that behavior here, as the validation dataset still
-        # needs preprocessing.
-        kwargs.pop("_use_cached_eval_dataset", None)
-        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
+        # `fit()` already preprocessed `validation_data`, so use the iterator
+        # `keras.Model` cached from it rather than building another one.
+        if kwargs.get("_use_cached_eval_dataset", False):
+            return super().evaluate(
+                x=x,
+                y=y,
+                batch_size=batch_size,
+                sample_weight=sample_weight,
+                **kwargs,
+            )
+        x = _build_dataset(
+            x, y, sample_weight, batch_size, self.preprocess_samples
+        )
+        x, steps, over = _declare_steps(x, kwargs.get("steps"))
+        if steps is not None:
+            kwargs["steps"] = steps
+        if over:
+            # One pass, so one warning, which is what `tf.data` gives here.
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
         return super().evaluate(
             x=x,
             y=None,
@@ -213,10 +666,13 @@ class PipelineModel(keras.Model):
         batch_size=None,
         **kwargs,
     ):
-        x = _convert_inputs_to_dataset(x, None, None, batch_size)
-        x = x.map(
-            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-        ).prefetch(tf.data.AUTOTUNE)
+        x = _build_dataset(x, None, None, batch_size, self.preprocess_samples)
+        x, steps, over = _declare_steps(x, kwargs.get("steps"))
+        if steps is not None:
+            kwargs["steps"] = steps
+        if over:
+            # One pass, so one warning, which is what `tf.data` gives here.
+            warnings.warn(RAN_OUT_OF_DATA_WARNING, stacklevel=2)
         return super().predict(
             x=x,
             batch_size=None,

@@ -110,6 +110,13 @@ class BytePairTokenizerTest(TestCase):
         encoded = self.tokenizer.tokenize(input_data)
         self.assertAllEqual(encoded, [31876, 4])
 
+    def test_tokenize_scalar_dtype(self):
+        # An unbatched sequence is dense, so it must come back with the
+        # layer's `compute_dtype` rather than NumPy's default int64.
+        output = self.tokenizer("brown.")
+        self.assertLen(output.shape, 1)
+        self.assertDTypeEqual(output, "int32")
+
     def test_detokenize_scalar_input(self):
         input_data = ["quick brown fox."]
         encoded = self.tokenizer.tokenize(input_data)

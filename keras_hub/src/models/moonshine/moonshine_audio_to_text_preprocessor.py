@@ -1,9 +1,5 @@
 import keras
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.models.audio_to_text_preprocessor import (
@@ -14,6 +10,7 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
 from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.MoonshineAudioToTextPreprocessor")
@@ -266,7 +263,8 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
                 and 0 <= token < vocab_size
             ]
             processed_sequences.append(filtered_tokens)
-        processed_sequences = tf.ragged.constant(
-            processed_sequences, dtype=tf.int32
-        )
+        if self._use_tf_workflow():
+            processed_sequences = tf.ragged.constant(
+                processed_sequences, dtype=tf.int32
+            )
         return self.tokenizer.detokenize(processed_sequences)

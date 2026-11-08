@@ -174,7 +174,7 @@ class T5GemmaSeq2SeqLMPreprocessor(Seq2SeqLMPreprocessor):
             decoder_text = x["decoder_text"]
         else:
             encoder_text = x
-            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+            decoder_text = self._empty_decoder_text(encoder_text)
 
         if encoder_sequence_length is None:
             encoder_sequence_length = self.encoder_sequence_length

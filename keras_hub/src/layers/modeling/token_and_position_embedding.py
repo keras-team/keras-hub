@@ -1,7 +1,7 @@
 import keras
 from keras.layers import ReversibleEmbedding
-from keras.src.backend import get_keras_mask
-from keras.src.backend import set_keras_mask
+from keras.src.backend.common.masking import get_keras_mask
+from keras.src.backend.common.masking import set_keras_mask
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.modeling.position_embedding import PositionEmbedding

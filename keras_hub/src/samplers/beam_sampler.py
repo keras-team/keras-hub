@@ -70,12 +70,15 @@ class BeamSampler(Sampler):
 
         def flatten_beams(x):
             """Combine the beam dim and batch dim."""
-            flat_shape = (batch_size * self.num_beams,) + ops.shape(x)[2:]
+            # `-1` rather than `batch_size * self.num_beams`: this is called
+            # from the `while_loop` body, which may not reference anything
+            # derived from a model input under OpenVINO.
+            flat_shape = (-1,) + ops.shape(x)[2:]
             return ops.reshape(x, flat_shape)
 
         def unflatten_beams(x):
             """Separate the beam dim and batch dim."""
-            unflat_shape = (batch_size, self.num_beams) + ops.shape(x)[1:]
+            unflat_shape = (-1, self.num_beams) + ops.shape(x)[1:]
             return ops.reshape(x, unflat_shape)
 
         if mask is None:
@@ -93,7 +96,12 @@ class BeamSampler(Sampler):
         log_probs = ops.array(
             [[0.0] + [-1e9] * (self.num_beams - 1)], dtype="float32"
         )
-        log_probs = flatten_beams(ops.repeat(log_probs, batch_size, axis=0))
+        # `broadcast_to` rather than `ops.repeat(..., batch_size, ...)`:
+        # `batch_size` is symbolic when the batch dim is dynamic, and
+        # OpenVINO's `repeat` only accepts a 1-D repeat count, not a scalar
+        # tensor. Broadcasting the single row is equivalent here.
+        log_probs = ops.broadcast_to(log_probs, (batch_size, self.num_beams))
+        log_probs = flatten_beams(log_probs)
 
         def cond(prompt, cache, index, mask, log_probs):
             if stop_token_ids is None:
@@ -112,7 +120,9 @@ class BeamSampler(Sampler):
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = ops.log(probs) + log_probs[..., None]
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-            next_log_probs = ops.reshape(next_log_probs, [batch_size, -1])
+            next_log_probs = ops.reshape(
+                next_log_probs, [-1, self.num_beams * vocab_size]
+            )
 
             # Compute the top beam indices and next tokens.
             next_log_probs, indices = ops.top_k(

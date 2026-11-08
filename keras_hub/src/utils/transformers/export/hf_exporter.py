@@ -15,10 +15,31 @@ from keras_hub.src.utils.transformers.export.gemma import get_gemma_weights_map
 # --- Gemma 3 Utils ---
 from keras_hub.src.utils.transformers.export.gemma3 import get_gemma3_config
 from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_generation_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_image_converter_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_processor_config,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
+    get_gemma3_special_tokens_map,
+)
+from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gemma3 import (
     get_gemma3_weights_map,
+)
+
+# --- Gemma 4 Utils ---
+from keras_hub.src.utils.transformers.export.gemma4 import get_gemma4_config
+from keras_hub.src.utils.transformers.export.gemma4 import (
+    get_gemma4_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.gemma4 import (
+    get_gemma4_weights_map,
 )
 
 # --- GPT2 Utils ---
@@ -27,6 +48,18 @@ from keras_hub.src.utils.transformers.export.gpt2 import (
     get_gpt2_tokenizer_config,
 )
 from keras_hub.src.utils.transformers.export.gpt2 import get_gpt2_weights_map
+
+# --- Llama3 Utils ---
+from keras_hub.src.utils.transformers.export.llama3 import (
+    build_llama3_tokenizer_json,
+)
+from keras_hub.src.utils.transformers.export.llama3 import get_llama3_config
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_tokenizer_config,
+)
+from keras_hub.src.utils.transformers.export.llama3 import (
+    get_llama3_weights_map,
+)
 
 # --- Mistral Utils ---
 from keras_hub.src.utils.transformers.export.mistral import get_mistral_config
@@ -56,6 +89,8 @@ from keras_hub.src.utils.transformers.export.qwen3_5 import (
 MODEL_CONFIGS = {
     "GemmaBackbone": get_gemma_config,
     "Gemma3Backbone": get_gemma3_config,
+    "Gemma4Backbone": get_gemma4_config,
+    "Llama3Backbone": get_llama3_config,
     "MistralBackbone": get_mistral_config,
     "QwenBackbone": get_qwen_config,
     "Qwen3_5Backbone": get_qwen3_5_config,
@@ -65,6 +100,8 @@ MODEL_CONFIGS = {
 MODEL_EXPORTERS = {
     "GemmaBackbone": get_gemma_weights_map,
     "Gemma3Backbone": get_gemma3_weights_map,
+    "Gemma4Backbone": get_gemma4_weights_map,
+    "Llama3Backbone": get_llama3_weights_map,
     "MistralBackbone": get_mistral_weights_map,
     "QwenBackbone": get_qwen_weights_map,
     "Qwen3_5Backbone": get_qwen3_5_weights_map,
@@ -74,6 +111,8 @@ MODEL_EXPORTERS = {
 MODEL_TOKENIZER_CONFIGS = {
     "GemmaTokenizer": get_gemma_tokenizer_config,
     "Gemma3Tokenizer": get_gemma3_tokenizer_config,
+    "Gemma4Tokenizer": get_gemma4_tokenizer_config,
+    "Llama3Tokenizer": get_llama3_tokenizer_config,
     "MistralTokenizer": get_mistral_tokenizer_config,
     "QwenTokenizer": get_qwen_tokenizer_config,
     "Qwen3_5Tokenizer": get_qwen3_5_tokenizer_config,
@@ -81,13 +120,28 @@ MODEL_TOKENIZER_CONFIGS = {
 }
 
 
-def export_backbone(backbone, path, include_lm_head=False):
+def _to_numpy_dict(weights_dict):
+    """Convert a weight dict to a plain numpy dict for safetensors."""
+    import numpy as np
+
+    result = {}
+    for k, v in weights_dict.items():
+        tensor = v.value if hasattr(v, "value") else v
+        result[k] = np.array(
+            tensor.numpy() if hasattr(tensor, "numpy") else tensor
+        )
+    return result
+
+
+def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
     """Export the backbone model to HuggingFace format.
 
     Args:
         backbone: The Keras backbone model to convert.
         path: str. Path to save the exported model.
         include_lm_head: bool. If True, include lm_head weights if applicable.
+        tokenizer: Optional tokenizer instance. When provided, model-specific
+            config functions may use it to populate token ID fields.
     """
     backend = keras.config.backend()
     model_type = backbone.__class__.__name__
@@ -103,6 +157,15 @@ def export_backbone(backbone, path, include_lm_head=False):
     # Get config
     get_config_fn = MODEL_CONFIGS[model_type]
     hf_config = get_config_fn(backbone)
+    if tokenizer is not None:
+        if tokenizer.start_token is not None:
+            hf_config["bos_token_id"] = tokenizer.token_to_id(
+                tokenizer.start_token
+            )
+        if tokenizer.end_token is not None:
+            hf_config["eos_token_id"] = tokenizer.token_to_id(
+                tokenizer.end_token
+            )
 
     # Get weights
     get_weights_fn = MODEL_EXPORTERS[model_type]
@@ -196,17 +259,30 @@ def export_backbone(backbone, path, include_lm_head=False):
                 if hasattr(t, "contiguous"):
                     t = t.contiguous()
 
-                b = t.view(torch.uint8).numpy().tobytes()
+                # reshape(-1) handles 0-D scalars (e.g. layer_scalar)
+                b = t.reshape(-1).view(torch.uint8).numpy().tobytes()
                 f.write(b)
 
     elif backend == "tensorflow":
-        from safetensors.tensorflow import save_file
+        # Use safetensors.numpy for backend-agnostic serialization; this
+        # correctly handles 0-D scalar tensors that the TF writer rejects.
+        from safetensors.numpy import save_file
 
-        save_file(weights_dict, weights_path, metadata={"format": "pt"})
+        save_file(
+            _to_numpy_dict(weights_dict),
+            weights_path,
+            metadata={"format": "pt"},
+        )
     elif backend == "jax":
-        from safetensors.flax import save_file
+        # Same as TF: convert to numpy first so safetensors.numpy handles
+        # all tensor shapes uniformly.
+        from safetensors.numpy import save_file
 
-        save_file(weights_dict, weights_path, metadata={"format": "pt"})
+        save_file(
+            _to_numpy_dict(weights_dict),
+            weights_path,
+            metadata={"format": "pt"},
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 
@@ -235,10 +311,11 @@ def export_tokenizer(tokenizer, path):
 
     # Rename files to match Hugging Face expectations
 
-    # 1. SentencePiece Models (Gemma / Gemma 3 / Mistral)
+    # 1. SentencePiece Models (Gemma / Gemma 3 / Gemma 4 / Mistral)
     if tokenizer_type in [
         "GemmaTokenizer",
         "Gemma3Tokenizer",
+        "Gemma4Tokenizer",
         "MistralTokenizer",
     ]:
         vocab_spm_path = os.path.join(path, "vocabulary.spm")
@@ -263,6 +340,64 @@ def export_tokenizer(tokenizer, path):
                 f"{vocab_json_path} not found.Tokenizer may not load correctly."
             )
 
+    # 3. For Llama3 specifically, write tokenizer.json so that
+    #    PreTrainedTokenizerFast can load without sentencepiece / tiktoken.
+    #    vocab and merges are embedded inside tokenizer.json, so the loose
+    #    vocabulary.json and merges.txt written by save_assets() are removed.
+    if tokenizer_type == "Llama3Tokenizer":
+        tokenizer_json = build_llama3_tokenizer_json(tokenizer)
+        tokenizer_json_path = os.path.join(path, "tokenizer.json")
+        with open(tokenizer_json_path, "w", encoding="utf-8") as f:
+            json.dump(tokenizer_json, f, indent=2, ensure_ascii=False)
+        for leftover in ("vocabulary.json", "merges.txt"):
+            leftover_path = os.path.join(path, leftover)
+            if os.path.exists(leftover_path):
+                os.remove(leftover_path)
+
+    # 4. Generate special_tokens_map.json for Gemma3
+    if tokenizer_type == "Gemma3Tokenizer":
+        special_tokens_map = get_gemma3_special_tokens_map(tokenizer)
+        special_tokens_map_path = os.path.join(path, "special_tokens_map.json")
+        with open(special_tokens_map_path, "w") as f:
+            json.dump(special_tokens_map, f, indent=2)
+
+
+def export_image_converter(backbone, path):
+    """Export image converter config for vision models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        preprocessor_config = get_gemma3_image_converter_config(backbone)
+        if preprocessor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            preprocessor_config_path = os.path.join(
+                path, "preprocessor_config.json"
+            )
+            with open(preprocessor_config_path, "w") as f:
+                json.dump(preprocessor_config, f, indent=2)
+
+
+def export_processor_config(backbone, path):
+    """Export processor config for vision models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        processor_config = get_gemma3_processor_config(backbone)
+        if processor_config is not None:
+            os.makedirs(path, exist_ok=True)
+            processor_config_path = os.path.join(path, "processor_config.json")
+            with open(processor_config_path, "w") as f:
+                json.dump(processor_config, f, indent=2)
+
+
+def export_generation_config(backbone, path):
+    """Export generation config for models."""
+    model_type = backbone.__class__.__name__
+    if model_type == "Gemma3Backbone":
+        generation_config = get_gemma3_generation_config(backbone)
+        os.makedirs(path, exist_ok=True)
+        generation_config_path = os.path.join(path, "generation_config.json")
+        with open(generation_config_path, "w") as f:
+            json.dump(generation_config, f, indent=2)
+
 
 def export_to_safetensors(keras_model, path):
     """Converts a Keras model to Hugging Face Transformers format.
@@ -277,7 +412,15 @@ def export_to_safetensors(keras_model, path):
           config and tokenizer will be saved.
     """
     backbone = keras_model.backbone
-    export_backbone(backbone, path, include_lm_head=True)
+    tokenizer = (
+        keras_model.preprocessor.tokenizer
+        if keras_model.preprocessor is not None
+        else None
+    )
+    export_backbone(backbone, path, include_lm_head=True, tokenizer=tokenizer)
+    export_image_converter(backbone, path)
+    export_processor_config(backbone, path)
+    export_generation_config(backbone, path)
     if (
         keras_model.preprocessor is not None
         and keras_model.preprocessor.tokenizer is None

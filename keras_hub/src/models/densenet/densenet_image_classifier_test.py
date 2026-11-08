@@ -5,6 +5,12 @@ from keras_hub.src.models.densenet.densenet_backbone import DenseNetBackbone
 from keras_hub.src.models.densenet.densenet_image_classifier import (
     DenseNetImageClassifier,
 )
+from keras_hub.src.models.densenet.densenet_image_classifier_preprocessor import (  # noqa: E501
+    DenseNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.densenet.densenet_image_converter import (
+    DenseNetImageConverter,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -12,7 +18,7 @@ class DenseNetImageClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
         self.images = np.ones((2, 224, 224, 3), dtype="float32")
-        self.labels = [0, 3]
+        self.labels = [0, 1]
         self.backbone = DenseNetBackbone(
             stackwise_num_repeats=[6, 12, 24, 16],
             compression_ratio=0.5,
@@ -24,6 +30,9 @@ class DenseNetImageClassifierTest(TestCase):
             "num_classes": 2,
             "activation": "softmax",
             "pooling": "avg",
+            "preprocessor": DenseNetImageClassifierPreprocessor(
+                image_converter=DenseNetImageConverter(image_size=(224, 224))
+            ),
         }
         self.train_data = (
             self.images,
@@ -31,9 +40,6 @@ class DenseNetImageClassifierTest(TestCase):
         )
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=DenseNetImageClassifier,
             init_kwargs=self.init_kwargs,

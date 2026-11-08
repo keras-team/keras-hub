@@ -26,10 +26,16 @@ class CachedMistralAttention(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
+        rope_type="linear",
+        beta_fast=32.0,
+        beta_slow=1.0,
+        original_max_position_embeddings=4096,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
         dropout=0,
         head_dim=None,
+        llama_4_scaling_beta=None,
+        attention_factor=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -47,6 +53,14 @@ class CachedMistralAttention(keras.layers.Layer):
         )
 
         self._rope_scaling_factor = rope_scaling_factor
+        self._rope_type = rope_type
+        self._beta_fast = beta_fast
+        self._beta_slow = beta_slow
+        self._original_max_position_embeddings = (
+            original_max_position_embeddings
+        )
+        self._llama_4_scaling_beta = llama_4_scaling_beta
+        self._attention_factor = attention_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -122,6 +136,13 @@ class CachedMistralAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
             scaling_factor=self._rope_scaling_factor,
+            rope_type=self._rope_type,
+            beta_fast=self._beta_fast,
+            beta_slow=self._beta_slow,
+            original_max_position_embeddings=(
+                self._original_max_position_embeddings
+            ),
+            attention_factor=self._attention_factor,
             dtype=self.dtype_policy,
         )
 
@@ -157,6 +178,8 @@ class CachedMistralAttention(keras.layers.Layer):
 
         # Compute RoPE for queries
         query = self.rotary_embedding_layer(query, start_index=start_index)
+        if self._llama_4_scaling_beta is not None:
+            query = self._apply_llama_4_scaling(query, start_index=start_index)
 
         def _compute_key_value(x):
             key, value = self._key_dense(x), self._value_dense(x)
@@ -217,6 +240,8 @@ class CachedMistralAttention(keras.layers.Layer):
         query = self.rotary_embedding_layer(
             self._query_dense(hidden_states), positions=positions
         )
+        if self._llama_4_scaling_beta is not None:
+            query = self._apply_llama_4_scaling(query, positions=positions)
         key = self.rotary_embedding_layer(
             self._key_dense(hidden_states), positions=positions
         )
@@ -234,6 +259,36 @@ class CachedMistralAttention(keras.layers.Layer):
         if cache is not None:
             return attention_output, cache
         return attention_output
+
+    def _apply_llama_4_scaling(self, query, start_index=0, positions=None):
+        """Scale query magnitude by absolute position.
+
+        Matches HF's Llama4-style `attn_temperature_tuning`: `query *= 1 +
+        llama_4_scaling_beta * log(1 + floor(pos /
+        original_max_position_embeddings))`.
+
+        Args:
+            query: Tensor of shape `(batch, seq_len, heads, head_dim)`.
+            start_index: int or int Tensor. The position of the first token.
+                The method ignores it when `positions` is set.
+            positions: Optional int Tensor of shape `(batch, seq_len)`. The
+                absolute position of each token. If `None`, the positions
+                are `start_index + arange(seq_len)` for every batch row.
+        """
+        if positions is None:
+            seq_len = ops.shape(query)[1]
+            positions = ops.arange(seq_len, dtype="float32") + ops.cast(
+                start_index, "float32"
+            )
+            positions = ops.reshape(positions, (1, -1))
+        positions = ops.cast(positions, "float32")
+        floor_scale = ops.cast(
+            self._original_max_position_embeddings, "float32"
+        )
+        attn_scales = ops.log(ops.floor(positions / floor_scale) + 1.0)
+        attn_scales = attn_scales * self._llama_4_scaling_beta + 1.0
+        attn_scales = ops.expand_dims(ops.expand_dims(attn_scales, -1), -1)
+        return ops.multiply(query, ops.cast(attn_scales, query.dtype))
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         if attention_mask is not None:
@@ -281,12 +336,20 @@ class CachedMistralAttention(keras.layers.Layer):
                 "num_key_value_heads": self._num_key_value_heads,
                 "rope_max_wavelength": self._rope_max_wavelength,
                 "rope_scaling_factor": self._rope_scaling_factor,
+                "rope_type": self._rope_type,
+                "beta_fast": self._beta_fast,
+                "beta_slow": self._beta_slow,
+                "original_max_position_embeddings": (
+                    self._original_max_position_embeddings
+                ),
                 "kernel_initializer": keras.initializers.serialize(
                     self._kernel_initializer
                 ),
                 "sliding_window": self._sliding_window,
                 "dropout": self._dropout,
                 "head_dim": self._head_dim,
+                "llama_4_scaling_beta": self._llama_4_scaling_beta,
+                "attention_factor": self._attention_factor,
             }
         )
         return config

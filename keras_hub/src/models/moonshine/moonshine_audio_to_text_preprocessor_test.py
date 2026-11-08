@@ -14,6 +14,12 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.tests.test_case import assert_grain_safe_types
+
+try:
+    import grain
+except ImportError:
+    grain = None
 
 
 class MoonshineAudioToTextPreprocessorTest(TestCase):
@@ -41,7 +47,7 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
 
     def test_preprocessor_basics(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
-        output = preprocessor.call(self.input_data[0])
+        output = preprocessor(*self.input_data)
         x_out, y_out, sample_weight_out = output
         self.assertIn("encoder_input_values", x_out)
         self.assertIn("encoder_padding_mask", x_out)
@@ -61,6 +67,25 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
         )
         self.assertAllEqual(keras.ops.shape(y_out), (1, 8))
         self.assertAllEqual(keras.ops.shape(sample_weight_out), (1, 8))
+
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
+    def test_grain_pipeline(self):
+        # `MoonshineAudioConverter` requires a batch dimension on its audio
+        # input, so this preprocessor is mapped over batched Grain elements
+        # rather than one sample at a time.
+        preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
+        expected = preprocessor(*self.input_data)
+        ds = grain.MapDataset.source([self.input_data])
+        (output,) = list(ds.map(lambda x: preprocessor(*x)))
+        assert_grain_safe_types(output)
+        self.assertAllClose(output, expected)
+        # Update the decoder sequence length.
+        preprocessor.decoder_sequence_length = 5
+        (output,) = list(ds.map(lambda x: preprocessor(*x)))
+        x_out, y_out, sample_weight_out = output
+        self.assertEqual(x_out["decoder_token_ids"].shape, (1, 5))
+        self.assertEqual(y_out.shape, (1, 5))
+        self.assertEqual(sample_weight_out.shape, (1, 5))
 
     def test_generate_preprocess(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)

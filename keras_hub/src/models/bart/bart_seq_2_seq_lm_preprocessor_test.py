@@ -1,4 +1,5 @@
 import pytest
+import tensorflow as tf
 
 from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
@@ -86,3 +87,24 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+    def test_generate_preprocess_without_decoder_text(self):
+        preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
+        expected = preprocessor.generate_preprocess(
+            {
+                "encoder_text": [" airplane at airport"],
+                "decoder_text": [""],
+            }
+        )
+        output = preprocessor.generate_preprocess([" airplane at airport"])
+        self.assertAllClose(output, expected)
+
+    def test_empty_decoder_text(self):
+        preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
+        # Raw inputs (the TensorFlow-free path) and tensors are both handled.
+        self.assertEqual(preprocessor._empty_decoder_text("a"), "")
+        self.assertEqual(preprocessor._empty_decoder_text(["a", "b"]), ["", ""])
+        self.assertAllEqual(
+            preprocessor._empty_decoder_text(tf.constant(["a", "b"])),
+            ["", ""],
+        )

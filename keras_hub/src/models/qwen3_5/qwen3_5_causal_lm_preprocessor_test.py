@@ -123,3 +123,46 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
 
         # position ids should have 4 channels: [4, 16]
         self.assertEqual(tuple(out["position_ids"].shape), (4, 16))
+
+    def test_generate_preprocess_with_videos_no_start_token(self):
+        tokenizer = Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges)
+
+        video_converter = Qwen3_5VideoConverter(
+            patch_size=2,
+            temporal_patch_size=2,
+            spatial_merge_size=1,
+            min_pixels=16,
+            max_pixels=100,
+            scale=[1.0 / (0.5 * 255)] * 3,
+            offset=[-0.5 / 0.5] * 3,
+        )
+        preprocessor = Qwen3_5CausalLMPreprocessor(
+            tokenizer=tokenizer,
+            sequence_length=16,
+            video_converter=video_converter,
+            add_start_token=False,
+        )
+
+        video = np.ones((2, 4, 4, 3))
+        prompt = "<|video_pad|> air"
+
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+
+        self.assertAllEqual(
+            out["token_ids"],
+            [5, 5, 5, 5, 31, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        )
+        self.assertAllEqual(
+            out["padding_mask"],
+            [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+
+        self.assertEqual(tuple(out["image_grid_thw"].shape), (1, 3))
+        self.assertEqual(
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [1, 2, 2]
+        )
+        self.assertIn("vision_indices", out)
+        self.assertAllEqual(out["vision_indices"], [0, 1, 2, 3])
+        self.assertEqual(tuple(out["position_ids"].shape), (4, 16))

@@ -1,5 +1,9 @@
 import os
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
+import grain
+import numpy as np
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
@@ -55,6 +59,13 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(call_output, [6, 5, 3, 4])
         self.assertAllEqual(tokenize_output, [6, 5, 3, 4])
 
+    def test_tokenize_scalar_dtype(self):
+        # An unbatched sequence is dense, so it must come back with the
+        # layer's `compute_dtype` rather than NumPy's default int64.
+        output = self.tokenizer("the quick brown fox.")
+        self.assertLen(output.shape, 1)
+        self.assertDTypeEqual(output, "int32")
+
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
@@ -102,6 +113,28 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(
             output_data, [["<s>", "▁the", "▁quick", "▁brown", "▁fox.", "</s>"]]
         )
+
+    def test_grain_outputs_numpy(self):
+        input_data = ["the quick brown fox.", "the quick"]
+        # Ragged outputs are python lists.
+        (outputs,) = list(
+            grain.MapDataset.source([input_data]).map(self.tokenizer)
+        )
+        self.assertIsInstance(outputs, list)
+        self.assertEqual(outputs, [[6, 5, 3, 4], [6, 5]])
+        # Dense outputs are numpy arrays.
+        tokenizer = SentencePieceTokenizer(
+            proto=self.proto,
+            sequence_length=5,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        outputs = list(grain.MapDataset.source(input_data).map(tokenizer))
+        for output in outputs:
+            self.assertIsInstance(output, np.ndarray)
+        (batch,) = list(
+            grain.MapDataset.source(input_data).map(tokenizer).batch(2)
+        )
+        self.assertAllEqual(batch, [[6, 5, 3, 4, 0], [6, 5, 0, 0, 0]])
 
     def test_detokenize(self):
         outputs = self.tokenizer.detokenize([6, 5, 3, 4])
@@ -154,6 +187,52 @@ class SentencePieceTokenizerTest(TestCase):
                 r"model archive.*Proto file: .*model\.spm",
             ):
                 tokenizer.set_proto(proto_path)
+
+    def test_init_with_swig_wrapper(self):
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
+            # SWIG wrapper (sentencepiece < 0.2.2)
+            processor = MagicMock()
+            processor.vocab_size.return_value = 7
+            processor.IdToPiece.return_value = ["a", "b", "c"]
+            processor.unk_id.return_value = 0
+
+            self.assertTrue(hasattr(processor, "Init"))
+            mock_spm.SentencePieceProcessor.return_value = processor
+
+            SentencePieceTokenizer(proto=self.proto)
+            processor.Init.assert_called_once()
+            mock_spm.SentencePieceProcessor.assert_called_with()
+
+    def test_init_with_pybind11_wrapper(self):
+        with patch(
+            "keras_hub.src.tokenizers.sentence_piece_tokenizer.spm"
+        ) as mock_spm:
+            # pybind11 wrapper (sentencepiece >= 0.2.2)
+            processor = MagicMock()
+            processor.vocab_size.return_value = 7
+            processor.IdToPiece.return_value = ["a", "b", "c"]
+            processor.unk_id.return_value = 0
+
+            del mock_spm.SentencePieceProcessor.Init
+            del processor.Init
+            self.assertFalse(hasattr(mock_spm.SentencePieceProcessor, "Init"))
+            self.assertFalse(hasattr(processor, "Init"))
+            mock_spm.SentencePieceProcessor.return_value = processor
+
+            SentencePieceTokenizer(proto=self.proto)
+
+            with open(self.proto, "rb") as f:
+                expected_proto = f.read()
+
+            mock_spm.SentencePieceProcessor.assert_called_with(
+                model_proto=expected_proto,
+                out_type=int,
+                add_bos=False,
+                add_eos=False,
+                alpha=1.0,
+            )
 
 
 class SentencePieceTokenizerTFTest(SentencePieceTokenizerTest):
