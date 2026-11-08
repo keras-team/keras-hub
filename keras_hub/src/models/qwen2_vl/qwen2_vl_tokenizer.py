@@ -28,6 +28,17 @@ class Qwen2VLTokenizer(BytePairTokenizer):
     - ``vision_end_token``: ``<|vision_end|>`` (HF ID 151653). Marks the end
       of a vision token block.
 
+    It also registers the text and chat special tokens:
+
+    - ``end_token``: ``<|im_end|>`` (HF ID 151645). Primary EOS;
+      terminates assistant turns.
+    - ``end_token2``: ``<|endoftext|>`` (HF ID 151643). Second EOS;
+      generation stops on either token, matching HF's
+      ``generation_config.eos_token_id = [151645, 151643]``. Also
+      registered as ``pad_token``.
+    - ``im_start_token``: ``<|im_start|>`` (HF ID 151644). Marks a chat
+      turn start.
+
     Note: ``<|image_pad|>`` and ``<|video_pad|>`` are defined in
     HuggingFace's ``tokenizer_config.json`` (``added_tokens_decoder``)
     but are absent from ``tokenizer.json``'s ``added_tokens`` list.
