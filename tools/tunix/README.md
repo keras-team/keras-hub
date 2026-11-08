@@ -1,9 +1,11 @@
 # Gemma3 checkpoint export and Tunix fine-tuning
 
-This example exports a KerasHub Gemma3 causal LM to Hugging Face safetensors,
-loads it into Tunix, compares logits on identical tokens, and runs a short
-supervised fine-tuning loop with Tunix's `PeftTrainer`. It reuses existing
-APIs and adds no required dependencies to KerasHub.
+This example loads the pretrained `google/gemma-3-270m-it` checkpoint in
+KerasHub, exports it to Hugging Face safetensors, loads it in Tunix, compares
+logits, and runs two supervised fine-tuning steps with `PeftTrainer`.
+It reuses existing APIs and adds no required dependencies to KerasHub.
+
+## Setup
 
 Use a separate Python 3.12 environment. From the repository root:
 
@@ -13,69 +15,48 @@ source .venv-tunix/bin/activate
 python -m pip install -e . -r tools/tunix/requirements.txt
 ```
 
-The requirements pin the optional integration dependencies used for this
-example. JAX uses the CPU installation here; for accelerator runs, install
-the matching JAX accelerator packages for the same version separately.
-The example uses one device, without distributed training.
+Accept the Gemma model terms on Hugging Face and authenticate with an account
+that can download `google/gemma-3-270m-it`. Keep authentication tokens out of
+the notebook. The optional requirements pin the integration dependencies.
+JAX uses CPU here; accelerator runs need matching JAX accelerator packages
+for the same version. The example uses one device.
 
-## CPU smoke check
+## Run
 
 ```shell
 KERAS_BACKEND=jax JAX_PLATFORMS=cpu PYTHONPATH=. \
     python tools/tunix/finetune_gemma3.py \
-    --output_dir /tmp/gemma3-tunix-smoke
-```
-
-Without `--preset`, the script builds a small randomly initialized model with
-six layers, including local and global attention. The local window is shorter
-than the input sequence. Token IDs and a completion mask are synthetic, so this
-check requires no checkpoint download or tokenizer. It verifies:
-
-- Equal parameter counts after checkpoint conversion.
-- Logits match within `atol=1e-4, rtol=1e-4`, in float32.
-- Two SFT steps update model parameters and reduce loss on the same batch.
-- Trained parameters saved with Orbax reproduce the trained logits on reload.
-
-A batch without active next-token targets raises `ValueError` before model
-evaluation or training, rather than reporting a zero or non-finite loss.
-
-This is a test of the integration, not pretrained model quality. Assertions
-abort the script if a check fails. `results.json` contains numerical errors,
-losses, package versions, and the device used. `export/` holds the original
-KerasHub export; `trained_parameters/` holds the trained Tunix parameters.
-Use a dedicated output directory: rerunning replaces these artifacts.
-
-## Gemma3 270M IT
-
-Accept the Gemma model terms on Hugging Face and authenticate with an account
-that can download `google/gemma-3-270m-it`. Then run:
-
-```shell
-KERAS_BACKEND=jax PYTHONPATH=. \
-    python tools/tunix/finetune_gemma3.py \
-    --preset hf://google/gemma-3-270m-it --logit_atol 1e-3 \
     --output_dir /tmp/gemma3-270m-tunix
 ```
 
-The smoke check retains its default `1e-4` absolute tolerance. The pretrained
-command explicitly uses `--logit_atol 1e-3` (relative tolerance remains `1e-4`).
-It also requires argmax agreement at every input position. The original `1e-4`
-threshold failed on 70 of 3,932,160 pretrained logits; maximum absolute error
-was `3.28e-4`, with all argmax tokens identical. A separate HF float32 model loaded from the same export gave maximum errors of `8.24e-4` for KerasHub and `6.52e-4` for Tunix.
-These measurements cover this input and CPU environment, not all prompts.
+The checkpoint's tokenizer encodes a single instruction/completion pair:
+"Say hello." / "Hello!". Only the completion and its turn-ending token
+contribute to loss. The script checks:
 
-The original `1e-3` SGD learning rate increased the pretrained batch loss.
-The default is now `1e-5`; this short run checks the training path rather than
-establishing a general fine-tuning recipe.
+- Matching parameter counts: 268,098,176.
+- Float32 logits within `atol=1e-3, rtol=1e-4`, with identical argmax tokens.
+- Two full-fine-tuning steps update parameters and reduce the same-batch loss.
+- Trained parameters saved with Orbax reproduce logits exactly on reload.
 
-This mode uses the checkpoint's tokenizer and a short prompt/completion pair.
-Only completion tokens contribute to the loss. It performs full fine-tuning
-with SGD for two steps in float32, using `--learning_rate 1e-5` by default. Model copies, gradients, and checkpoint
-validation require more memory than loading the 270M checkpoint alone.
-Access failures are reported directly; the script does not fall back to random
-weights. The notebook includes separate CPU runs for the small random model and the
-real 270M checkpoint. It contains no authentication tokens.
+The CPU run recorded maximum/mean logits errors of `3.28e-4` / `4.96e-5`.
+A separate HF float32 model loaded from the same export gave maximum errors
+of `8.24e-4` for KerasHub and `6.52e-4` for Tunix, also with identical argmax
+predictions. These measurements cover this input and environment.
 
-The example currently covers text-only Gemma3, unpadded input, and one training
-batch. Gemma4, LoRA, training quality evaluation, and importing Tunix-trained
-weights back into KerasHub are separate follow-up work.
+SGD uses `--learning_rate 1e-5` by default. On the single training example,
+loss decreased from `4.57253` to `0.01496`. This checks gradient computation
+and parameter updates; it does not measure generalization or establish a
+fine-tuning recipe. `--steps` and `--logit_atol` are configurable as well.
+A batch with no active next-token targets raises `ValueError` before model
+evaluation or training. The notebook includes target-mask regression checks.
+
+Assertions abort the script if a check fails. `results.json` records errors,
+losses, versions, and the device. `export/` contains the original KerasHub
+export and `trained_parameters/` contains trained Tunix parameters. Use a
+dedicated output directory: rerunning replaces these artifacts. Allow several
+GB of memory for model copies, gradients, and checkpoint validation.
+
+The notebook includes an executed CPU run with the real checkpoint. The
+example covers text-only Gemma3, unpadded input, and one training batch.
+Gemma4, LoRA, distributed training, training quality evaluation, and importing
+trained weights back into KerasHub are separate follow-up work.

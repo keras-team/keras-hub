@@ -2,13 +2,10 @@
 
 Run with the optional dependencies in requirements.txt in this directory:
 
-    KERAS_BACKEND=jax PYTHONPATH=. python tools/tunix/finetune_gemma3.py
-
-The default is a small random model for a CPU smoke check. To use real weights:
-
     KERAS_BACKEND=jax PYTHONPATH=. python tools/tunix/finetune_gemma3.py \
-        --preset hf://google/gemma-3-270m-it --logit_atol 1e-3 \
         --output_dir /tmp/gemma3-tunix
+
+Requires authorized access to google/gemma-3-270m-it on Hugging Face.
 """
 
 import argparse
@@ -30,33 +27,7 @@ from tunix.models.gemma3 import params_safetensors
 from tunix.sft import peft_trainer
 from tunix.sft import utils
 
-from keras_hub.src.models.gemma3.gemma3_backbone import Gemma3Backbone
 from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM
-
-
-def create_model(preset):
-    if preset:
-        if preset != "hf://google/gemma-3-270m-it":
-            raise ValueError("This example supports Gemma3 270M IT only.")
-        return Gemma3CausalLM.from_preset(preset, dtype="float32")
-    # Six layers exercise both local and global attention. The window is
-    # shorter than the input to check local masking as well as weight loading.
-    backbone = Gemma3Backbone(
-        vocabulary_size=64,
-        image_size=None,
-        num_layers=6,
-        num_query_heads=2,
-        num_key_value_heads=1,
-        hidden_dim=32,
-        intermediate_dim=64,
-        head_dim=16,
-        use_post_ffw_norm=True,
-        use_post_attention_norm=True,
-        use_sliding_window_attention=True,
-        sliding_window_size=4,
-        dtype="float32",
-    )
-    return Gemma3CausalLM(backbone=backbone, preprocessor=None)
 
 
 def model_inputs(batch):
@@ -91,7 +62,7 @@ def loss(model, batch):
     return float(jnp.sum(losses * weights) / num_targets)
 
 
-def run(preset, output_dir, steps, logit_atol=1e-4, learning_rate=1e-5):
+def run(preset, output_dir, steps, logit_atol=1e-3, learning_rate=1e-5):
     if keras.config.backend() != "jax":
         raise ValueError("Set KERAS_BACKEND=jax before running this example.")
     if steps < 1:
@@ -103,29 +74,24 @@ def run(preset, output_dir, steps, logit_atol=1e-4, learning_rate=1e-5):
     keras.utils.set_random_seed(42)
     output_dir.mkdir(parents=True, exist_ok=True)
     export_dir = output_dir / "export"
-    keras_model = create_model(preset)
+    keras_model = Gemma3CausalLM.from_preset(preset, dtype="float32")
     backbone = keras_model.backbone
     keras_model.export_to_transformers(str(export_dir))
 
-    if preset:
-        # Prompt tokens are inputs, while only completion tokens contribute
-        # to the supervised loss. This is a plumbing demo, not a benchmark.
-        tokenizer = keras_model.preprocessor.tokenizer
-        prompt = tokenizer(
-            "<start_of_turn>user\nSay hello.<end_of_turn>\n"
-            "<start_of_turn>model\n"
-        )
-        completion = tokenizer("Hello!<end_of_turn>")
-        prompt = np.asarray(prompt, dtype="int32").reshape(-1)
-        completion = np.asarray(completion, dtype="int32").reshape(-1)
-        tokens = np.concatenate(
-            ([tokenizer.start_token_id], prompt, completion)
-        )[None].astype("int32")
-        mask = np.zeros_like(tokens, dtype="bool")
-        mask[:, 1 + len(prompt) :] = True
-    else:
-        tokens = np.array([[2, 3, 4, 5, 6, 7, 8, 9]], dtype="int32")
-        mask = np.array([[False] * 4 + [True] * 4])
+    # Prompt tokens are inputs, while only completion tokens contribute
+    # to the supervised loss. This is a plumbing demo, not a benchmark.
+    tokenizer = keras_model.preprocessor.tokenizer
+    prompt = tokenizer(
+        "<start_of_turn>user\nSay hello.<end_of_turn>\n<start_of_turn>model\n"
+    )
+    completion = tokenizer("Hello!<end_of_turn>")
+    prompt = np.asarray(prompt, dtype="int32").reshape(-1)
+    completion = np.asarray(completion, dtype="int32").reshape(-1)
+    tokens = np.concatenate(([tokenizer.start_token_id], prompt, completion))[
+        None
+    ].astype("int32")
+    mask = np.zeros_like(tokens, dtype="bool")
+    mask[:, 1 + len(prompt) :] = True
     batch = peft_trainer.TrainingInput(input_tokens=tokens, input_mask=mask)
     keras_logits = np.asarray(
         keras.ops.convert_to_numpy(
@@ -224,7 +190,7 @@ def run(preset, output_dir, steps, logit_atol=1e-4, learning_rate=1e-5):
         np.testing.assert_array_equal(after, restored_logits)
 
     results = {
-        "preset": preset or "random Gemma3 CPU smoke check",
+        "preset": preset,
         "versions": {
             name: importlib.metadata.version(name)
             for name in ("keras", "google-tunix", "jax", "flax", "safetensors")
@@ -254,10 +220,14 @@ def run(preset, output_dir, steps, logit_atol=1e-4, learning_rate=1e-5):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--preset")
+    parser.add_argument(
+        "--preset",
+        default="hf://google/gemma-3-270m-it",
+        choices=["hf://google/gemma-3-270m-it"],
+    )
     parser.add_argument("--output_dir", type=Path)
     parser.add_argument("--steps", type=int, default=2)
-    parser.add_argument("--logit_atol", type=float, default=1e-4)
+    parser.add_argument("--logit_atol", type=float, default=1e-3)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     args = parser.parse_args()
     if args.output_dir:
