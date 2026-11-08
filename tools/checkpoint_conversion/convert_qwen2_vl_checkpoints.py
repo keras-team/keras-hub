@@ -252,7 +252,8 @@ def validate_multimodal_output(keras_model, hf_results):
     keras_logits = ops.convert_to_numpy(keras_model(preprocessed)).astype(
         np.float32
     )
-    keras_last = keras_logits[:, -1]
+    last_real = int(ops.convert_to_numpy(preprocessed["padding_mask"]).sum())
+    keras_last = keras_logits[:, last_real - 1]
     hf_last = hf_results["mm_logits"][:, -1]
     abs_diff = np.abs(keras_last - hf_last)
     print(f"  Last-position logit mean diff: {abs_diff.mean():.6f}")
