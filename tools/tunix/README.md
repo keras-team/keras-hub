@@ -53,17 +53,28 @@ that can download `google/gemma-3-270m-it`. Then run:
 ```shell
 KERAS_BACKEND=jax PYTHONPATH=. \
     python tools/tunix/finetune_gemma3.py \
-    --preset hf://google/gemma-3-270m-it \
+    --preset hf://google/gemma-3-270m-it --logit_atol 1e-3 \
     --output_dir /tmp/gemma3-270m-tunix
 ```
 
+The smoke check retains its default `1e-4` absolute tolerance. The pretrained
+command explicitly uses `--logit_atol 1e-3` (relative tolerance remains `1e-4`).
+It also requires argmax agreement at every input position. The original `1e-4`
+threshold failed on 70 of 3,932,160 pretrained logits; maximum absolute error
+was `3.28e-4`, with all argmax tokens identical. A separate HF float32 model loaded from the same export gave maximum errors of `8.24e-4` for KerasHub and `6.52e-4` for Tunix.
+These measurements cover this input and CPU environment, not all prompts.
+
+The original `1e-3` SGD learning rate increased the pretrained batch loss.
+The default is now `1e-5`; this short run checks the training path rather than
+establishing a general fine-tuning recipe.
+
 This mode uses the checkpoint's tokenizer and a short prompt/completion pair.
 Only completion tokens contribute to the loss. It performs full fine-tuning
-with SGD for two steps in float32. Model copies, gradients, and checkpoint
+with SGD for two steps in float32, using `--learning_rate 1e-5` by default. Model copies, gradients, and checkpoint
 validation require more memory than loading the 270M checkpoint alone.
 Access failures are reported directly; the script does not fall back to random
-weights. The pretrained mode still needs validation with authorized model
-access; the included notebook output covers only the CPU smoke check.
+weights. The notebook includes separate CPU runs for the small random model and the
+real 270M checkpoint. It contains no authentication tokens.
 
 The example currently covers text-only Gemma3, unpadded input, and one training
 batch. Gemma4, LoRA, training quality evaluation, and importing Tunix-trained

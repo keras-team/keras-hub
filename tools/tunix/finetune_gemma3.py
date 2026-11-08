@@ -7,10 +7,12 @@ Run with the optional dependencies in requirements.txt in this directory:
 The default is a small random model for a CPU smoke check. To use real weights:
 
     KERAS_BACKEND=jax PYTHONPATH=. python tools/tunix/finetune_gemma3.py \
-        --preset hf://google/gemma-3-270m-it --output_dir /tmp/gemma3-tunix
+        --preset hf://google/gemma-3-270m-it --logit_atol 1e-3 \
+        --output_dir /tmp/gemma3-tunix
 """
 
 import argparse
+import gc
 import importlib.metadata
 import json
 import tempfile
@@ -89,11 +91,15 @@ def loss(model, batch):
     return float(jnp.sum(losses * weights) / num_targets)
 
 
-def run(preset, output_dir, steps):
+def run(preset, output_dir, steps, logit_atol=1e-4, learning_rate=1e-5):
     if keras.config.backend() != "jax":
         raise ValueError("Set KERAS_BACKEND=jax before running this example.")
     if steps < 1:
         raise ValueError("steps must be positive.")
+    if not np.isfinite(logit_atol) or logit_atol <= 0:
+        raise ValueError("logit_atol must be finite and positive.")
+    if not np.isfinite(learning_rate) or learning_rate <= 0:
+        raise ValueError("learning_rate must be finite and positive.")
     keras.utils.set_random_seed(42)
     output_dir.mkdir(parents=True, exist_ok=True)
     export_dir = output_dir / "export"
@@ -145,6 +151,9 @@ def run(preset, output_dir, steps):
         global_base_frequency=1_000_000,
         param_dtype=jnp.float32,
     )
+    keras_parameter_count = backbone.count_params()
+    del keras_model, backbone
+    gc.collect()
     mesh = jax.make_mesh(
         (1, 1),
         ("fsdp", "tp"),
@@ -156,15 +165,26 @@ def run(preset, output_dir, steps):
         )
         before = np.asarray(logits(tunix_model, batch))
         difference = np.abs(keras_logits - before)
-        np.testing.assert_allclose(keras_logits, before, atol=1e-4, rtol=1e-4)
+        print(
+            f"Logits: max abs diff={difference.max():.6g}, "
+            f"mean abs diff={difference.mean():.6g}",
+            flush=True,
+        )
+        np.testing.assert_allclose(
+            keras_logits, before, atol=logit_atol, rtol=1e-4
+        )
+        argmax_agreement = float(
+            np.mean(keras_logits.argmax(-1) == before.argmax(-1))
+        )
+        assert argmax_agreement == 1.0
         state = nnx.state(tunix_model, nnx.Param)
         parameter_count = sum(x.size for x in jax.tree.leaves(state))
-        assert parameter_count == backbone.count_params()
+        assert parameter_count == keras_parameter_count
         original_parameters = [np.array(x) for x in jax.tree.leaves(state)]
         initial_loss = loss(tunix_model, batch)
         trainer = peft_trainer.PeftTrainer(
             model=tunix_model,
-            optimizer=optax.sgd(learning_rate=1e-3),
+            optimizer=optax.sgd(learning_rate=learning_rate),
             training_config=peft_trainer.TrainingConfig(
                 eval_every_n_steps=steps + 1,
                 max_steps=steps,
@@ -186,6 +206,8 @@ def run(preset, output_dir, steps):
             )
         )
         assert parameter_change > 0, "Training did not update parameters."
+        del original_parameters, state, trainer
+        gc.collect()
         # Save the trained NNX parameters separately from the original export.
         checkpoint_path = str((output_dir / "trained_parameters").resolve())
         with ocp.StandardCheckpointer() as checkpointer:
@@ -211,7 +233,11 @@ def run(preset, output_dir, steps):
         "parameters": parameter_count,
         "max_absolute_logit_error": float(difference.max()),
         "mean_absolute_logit_error": float(difference.mean()),
+        "logit_atol": logit_atol,
+        "logit_rtol": 1e-4,
+        "argmax_agreement": argmax_agreement,
         "training_steps": steps,
+        "learning_rate": learning_rate,
         "initial_loss": initial_loss,
         "final_loss": final_loss,
         "max_logit_change_after_training": float(
@@ -231,12 +257,26 @@ def main():
     parser.add_argument("--preset")
     parser.add_argument("--output_dir", type=Path)
     parser.add_argument("--steps", type=int, default=2)
+    parser.add_argument("--logit_atol", type=float, default=1e-4)
+    parser.add_argument("--learning_rate", type=float, default=1e-5)
     args = parser.parse_args()
     if args.output_dir:
-        run(args.preset, args.output_dir, args.steps)
+        run(
+            args.preset,
+            args.output_dir,
+            args.steps,
+            args.logit_atol,
+            args.learning_rate,
+        )
     else:
         with tempfile.TemporaryDirectory(prefix="gemma3-tunix-") as directory:
-            run(args.preset, Path(directory), args.steps)
+            run(
+                args.preset,
+                Path(directory),
+                args.steps,
+                args.logit_atol,
+                args.learning_rate,
+            )
 
 
 if __name__ == "__main__":
