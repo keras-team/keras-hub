@@ -59,6 +59,45 @@ class TransformerDecoderTest(TestCase):
             expected_num_non_trainable_variables=5,  # dropout rng seeds
         )
 
+    def test_regularizer_serialization(self):
+        self.run_layer_test(
+            cls=TransformerDecoder,
+            init_kwargs={
+                "intermediate_dim": 4,
+                "num_heads": 2,
+                "kernel_regularizer": "l2",
+                "bias_regularizer": "l1",
+                "activity_regularizer": "l2",
+            },
+            input_data=random.uniform(shape=(2, 4, 6)),
+            expected_output_shape=(2, 4, 6),
+            expected_num_trainable_weights=16,
+            # 12 weight regularizers (self-attention 4 kernels + 4 biases,
+            # 2 kernels + 2 biases in the dense layers) + 1 activity loss.
+            expected_num_losses=13,
+        )
+
+    def test_regularizer_serialization_with_cross_attention(self):
+        self.run_layer_test(
+            cls=TransformerDecoder,
+            init_kwargs={
+                "intermediate_dim": 4,
+                "num_heads": 2,
+                "kernel_regularizer": "l2",
+                "bias_regularizer": "l1",
+                "activity_regularizer": "l2",
+            },
+            input_data={
+                "decoder_sequence": random.uniform(shape=(2, 4, 6)),
+                "encoder_sequence": random.uniform(shape=(2, 4, 6)),
+            },
+            expected_output_shape=(2, 4, 6),
+            expected_num_trainable_weights=26,
+            # 20 weight regularizers (self and cross attention 8 each,
+            # 4 in the dense layers) + 1 activity loss.
+            expected_num_losses=21,
+        )
+
     def test_invalid_calls(self):
         encoder_input = ops.zeros((2, 4, 6))
         decoder_input = ops.zeros((2, 4, 6))
@@ -233,3 +272,4 @@ class TransformerDecoderTest(TestCase):
         self.assertAllClose(
             cross_cache, no_loop_cross_cache, atol=tol, rtol=tol
         )
+        
