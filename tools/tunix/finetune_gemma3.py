@@ -79,11 +79,14 @@ def logits(model, batch):
 
 
 def loss(model, batch):
+    weights = batch.input_mask[:, 1:]
+    num_targets = int(jnp.sum(weights))
+    if num_targets == 0:
+        raise ValueError("The batch must contain at least one target token.")
     values = logits(model, batch)[:, :-1].astype(jnp.float32)
     targets = batch.input_tokens[:, 1:]
-    weights = batch.input_mask[:, 1:]
     losses = optax.softmax_cross_entropy_with_integer_labels(values, targets)
-    return float(jnp.sum(losses * weights) / jnp.sum(weights))
+    return float(jnp.sum(losses * weights) / num_targets)
 
 
 def run(preset, output_dir, steps):

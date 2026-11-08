@@ -36,6 +36,9 @@ check requires no checkpoint download or tokenizer. It verifies:
 - Two SFT steps update model parameters and reduce loss on the same batch.
 - Trained parameters saved with Orbax reproduce the trained logits on reload.
 
+A batch without active next-token targets raises `ValueError` before model
+evaluation or training, rather than reporting a zero or non-finite loss.
+
 This is a test of the integration, not pretrained model quality. Assertions
 abort the script if a check fails. `results.json` contains numerical errors,
 losses, package versions, and the device used. `export/` holds the original
