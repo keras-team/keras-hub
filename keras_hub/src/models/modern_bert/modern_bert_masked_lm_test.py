@@ -1,5 +1,10 @@
+import importlib.util
+import json
 import os
+import subprocess
+import sys
 
+import keras
 import numpy as np
 import pytest
 
@@ -14,6 +19,24 @@ from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+
+# Saves task weights with a known decoder bias. Run in a subprocess so the
+# weights can be saved under a different backend than the test's.
+SAVE_TASK_WEIGHTS_SCRIPT = """
+import json
+import sys
+
+import numpy as np
+
+import keras_hub
+
+config, path = sys.argv[1:]
+backbone = keras_hub.models.ModernBertBackbone.from_config(json.loads(config))
+model = keras_hub.models.ModernBertMaskedLM(backbone=backbone)
+bias = model.mlm_head_decoder_bias
+bias.assign(np.linspace(-1.0, 1.0, bias.shape[0]).astype("float32"))
+model.save_task_weights(path)
+"""
 
 
 class ModernBertMaskedLMTest(TestCase):
@@ -138,26 +161,68 @@ class ModernBertMaskedLMTest(TestCase):
         )
 
     def test_decoder_bias_is_trained_and_saved(self):
-        """The decoder bias must be a tracked weight on every backend.
+        """The decoder bias must be trained and saved on every backend.
 
         Regression test for keras-team/keras-hub#3210. On torch the bias was
-        untracked, so it was never trained or saved, and task weights saved
-        on other backends failed to load.
+        untracked, so it was never trained or saved.
         """
-        bias = self.model.mlm_head_decoder_bias
+        model = ModernBertMaskedLM(backbone=self.backbone, preprocessor=None)
+        bias = model.mlm_head_decoder_bias
         self.assertTrue(
-            any(weight is bias for weight in self.model.trainable_weights)
+            any(weight is bias for weight in model.trainable_weights)
         )
 
-        # Use a non-zero bias so that a dropped variable cannot pass the
-        # round trip by keeping its zero initial value.
-        bias.assign(np.linspace(-1.0, 1.0, bias.shape[0]).astype("float32"))
-        path = os.path.join(self.get_temp_dir(), "task.weights.h5")
-        self.model.save_task_weights(path)
+        # Mask tokens in every sample so the loss has a gradient.
+        preprocessor = (
+            modern_bert_masked_lm_preprocessor.ModernBertMaskedLMPreprocessor
+        )(
+            tokenizer=self.tokenizer,
+            sequence_length=12,
+            mask_selection_rate=1.0,
+            mask_selection_length=2,
+        )
+        x, y, sample_weight = preprocessor(self.input_data)
 
-        restored = ModernBertMaskedLM(
-            backbone=ModernBertBackbone.from_config(self.backbone.get_config()),
+        # One `fit()` step only moves the zero-initialized bias if the bias
+        # is wired into the logits.
+        model.fit(x, y, sample_weight=sample_weight)
+        self.assertNotAllClose(bias, np.zeros(bias.shape))
+
+        # Reload the task weights on the same backbone and compare logits.
+        path = os.path.join(self.get_temp_dir(), "task.weights.h5")
+        model.save_task_weights(path)
+        restored = ModernBertMaskedLM(backbone=self.backbone, preprocessor=None)
+        restored.load_task_weights(path)
+        self.assertAllClose(restored.predict(x), model.predict(x))
+
+    def test_task_weights_load_across_backends(self):
+        """Task weights saved under another backend must load on this one.
+
+        Regression test for keras-team/keras-hub#3210. Presets saved on jax
+        failed to load on torch, which same-backend round trips cannot catch.
+        """
+        other_backend = "jax" if keras.config.backend() == "torch" else "torch"
+        if importlib.util.find_spec(other_backend) is None:
+            self.skipTest(f"Requires the {other_backend} backend.")
+
+        config = self.backbone.get_config()
+        path = os.path.join(self.get_temp_dir(), "task.weights.h5")
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                SAVE_TASK_WEIGHTS_SCRIPT,
+                json.dumps(config),
+                path,
+            ],
+            env={**os.environ, "KERAS_BACKEND": other_backend},
+            check=True,
+        )
+
+        model = ModernBertMaskedLM(
+            backbone=ModernBertBackbone.from_config(config),
             preprocessor=None,
         )
-        restored.load_task_weights(path)
-        self.assertAllClose(restored.mlm_head_decoder_bias, bias)
+        model.load_task_weights(path)
+        bias = model.mlm_head_decoder_bias
+        self.assertAllClose(bias, np.linspace(-1.0, 1.0, bias.shape[0]))
