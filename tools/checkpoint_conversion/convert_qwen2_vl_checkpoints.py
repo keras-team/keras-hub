@@ -136,13 +136,7 @@ def precompute_hf_outputs(hf_model, hf_tokenizer, hf_preset):
         hf_out = hf_model(**hf_inputs)
     results["mm_logits"] = hf_out.logits.detach().cpu().float().numpy()
     results["mm_input_ids"] = hf_inputs["input_ids"].cpu().numpy()
-    results["mm_attention_mask"] = (
-        hf_inputs["attention_mask"].cpu().numpy().astype(np.int32)
-    )
     results["mm_pixel_values"] = hf_inputs["pixel_values"].cpu().float().numpy()
-    results["mm_image_grid_thw"] = (
-        hf_inputs["image_grid_thw"].cpu().numpy().astype(np.int32)
-    )
     results["raw_image"] = raw_image
 
     if not FLAGS.skip_generation:
@@ -220,17 +214,7 @@ def validate_text_output(keras_model, hf_results):
         print("  Greedy generation matches.")
 
 
-def validate_multimodal_output(keras_model, hf_results):
-    if keras_model.backbone.vision_encoder is None:
-        print("\n-> Skipping multimodal validation (no vision encoder).")
-        return
-
-    print("\n" + "=" * 50)
-    print("MULTIMODAL VALIDATION")
-    print("=" * 50)
-
-    token_ids_np = hf_results["mm_input_ids"].astype(np.int32)
-
+def validate_e2e_parity(keras_model, hf_results):
     # HF pixel_values is (N, C*T*pH*pW) flattened; KerasHub uses
     # (N, T, pH, pW, C).
     ve = keras_model.backbone.vision_encoder
@@ -252,14 +236,54 @@ def validate_multimodal_output(keras_model, hf_results):
     keras_logits = ops.convert_to_numpy(keras_model(preprocessed)).astype(
         np.float32
     )
-    last_real = int(ops.convert_to_numpy(preprocessed["padding_mask"]).sum())
-    keras_last = keras_logits[:, last_real - 1]
-    hf_last = hf_results["mm_logits"][:, -1]
-    abs_diff = np.abs(keras_last - hf_last)
-    print(f"  Last-position logit mean diff: {abs_diff.mean():.6f}")
-    print(f"  Last-position logit max diff:  {abs_diff.max():.6f}")
-    np.testing.assert_allclose(keras_last, hf_last, atol=1e-2)
-    print("  Logits match within atol=1e-2.")
+
+    # Positions holding `<|image_pad|>` are reported separately from text.
+    keras_ids = ops.convert_to_numpy(preprocessed["token_ids"])
+    keras_mask = ops.convert_to_numpy(preprocessed["padding_mask"])
+    keras_valid = int(keras_mask.sum())
+    hf_ids = hf_results["mm_input_ids"]
+    common_len = min(hf_ids.shape[1], keras_valid)
+    np.testing.assert_array_equal(
+        keras_ids[:, :common_len], hf_ids[:, :common_len]
+    )
+    print("  Multimodal token IDs match.")
+
+    hf_logits = hf_results["mm_logits"][:, :common_len]
+    keras_real = keras_logits[:, :common_len]
+    abs_diff = np.abs(keras_real - hf_logits)
+    image_token_id = keras_model.preprocessor.tokenizer.image_token_id
+    is_image = hf_ids[:, :common_len] == image_token_id
+    text_diff = abs_diff[~is_image]
+    image_diff = abs_diff[is_image]
+    print(f"  max@text       logit diff: {text_diff.max():.6f}")
+    print(f"  max@<|image_pad|> logit diff: {image_diff.max():.6f}")
+    # Text positions carry the exact embedding -> LM path and hold ~1e-4;
+    # image positions accumulate vision-tower fp drift across ~1.5k
+    # patches (~2e-2 on A100), so each class gets its own bound.
+    np.testing.assert_allclose(
+        keras_real[~is_image], hf_logits[~is_image], atol=1e-3
+    )
+    np.testing.assert_allclose(
+        keras_real[is_image], hf_logits[is_image], atol=5e-2
+    )
+    print(
+        "  Logits match over all real positions "
+        "(text atol=1e-3, image atol=5e-2)."
+    )
+
+
+def validate_multimodal_output(keras_model, hf_results):
+    if keras_model.backbone.vision_encoder is None:
+        print("\n-> Skipping multimodal validation (no vision encoder).")
+        return
+
+    print("\n" + "=" * 50)
+    print("MULTIMODAL VALIDATION")
+    print("=" * 50)
+
+    validate_e2e_parity(keras_model, hf_results)
+
+    token_ids_np = hf_results["mm_input_ids"].astype(np.int32)
 
     if not FLAGS.skip_generation:
         keras_output = keras_model.generate(
