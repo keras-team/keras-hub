@@ -272,4 +272,3 @@ class TransformerDecoderTest(TestCase):
         self.assertAllClose(
             cross_cache, no_loop_cross_cache, atol=tol, rtol=tol
         )
-        

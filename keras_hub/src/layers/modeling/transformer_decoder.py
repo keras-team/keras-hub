@@ -511,4 +511,3 @@ class TransformerDecoder(keras.layers.Layer):
 
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
-        

@@ -298,4 +298,3 @@ class TransformerEncoder(keras.layers.Layer):
 
     def compute_output_shape(self, inputs_shape):
         return inputs_shape
-        
