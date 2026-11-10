@@ -15,13 +15,15 @@ def _make_converter(**overrides):
     kwargs = {
         "min_pixels": 56 * 56,
         "max_pixels": 56 * 56 * 4,
-        "patch_size": 14,
-        "temporal_patch_size": 2,
-        "merge_size": 2,
     }
     kwargs.update(overrides)
     return Qwen2_5VLVideoConverter(
-        image_converter=Qwen2_5VLImageConverter(**kwargs)
+        image_converter=Qwen2_5VLImageConverter(
+            patch_size=14,
+            temporal_patch_size=2,
+            merge_size=2,
+        ),
+        **kwargs,
     )
 
 
@@ -61,12 +63,10 @@ class Qwen2_5VLVideoConverterTest(TestCase):
         video = _make_video()
         result = converter(video)
         expected = Qwen2_5VLImageConverter(
-            min_pixels=56 * 56,
-            max_pixels=56 * 56 * 4,
             patch_size=14,
             temporal_patch_size=2,
             merge_size=2,
-        )(video)
+        )(video, min_pixels=56 * 56, max_pixels=56 * 56 * 4)
         self.assertAllClose(result["patches"], expected["patches"])
         self.assertAllEqual(result["grid_thw"], expected["grid_thw"])
 
@@ -79,11 +79,32 @@ class Qwen2_5VLVideoConverterTest(TestCase):
         self.assertEqual(result["patches"].shape[0], 32 + 16)
         self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [1, 4, 4]])
 
+    def test_default_video_bounds(self):
+        """A default converter applies HF video bounds, not image bounds."""
+        converter = Qwen2_5VLVideoConverter()
+        # 56x56 frames are below the video `min_pixels` (100352) and get
+        # upscaled to a 24x24 patch grid (336x336 px).
+        result = converter(_make_video(num_frames=4))
+        self.assertAllEqual(result["grid_thw"], [[2, 24, 24]])
+
+    def test_cap_pixels_per_frame(self):
+        """The cap shrinks frames once the token budget is exceeded."""
+        video = _make_video(num_frames=4, height=200, width=200)
+        uncapped = _make_converter()(video)
+        capped = _make_converter(
+            cap_pixels_per_frame=True, max_video_tokens=32
+        )(video)
+        self.assertAllEqual(uncapped["grid_thw"], [[2, 8, 8]])
+        # 32*28*28*0.9*2 // 4 frames = 11289 px/frame budget → 84x84 px.
+        self.assertAllEqual(capped["grid_thw"], [[2, 6, 6]])
+
     def test_config_roundtrip(self):
         converter = _make_converter(max_pixels=56 * 56 * 8)
         self.run_serialization_test(converter)
         cfg = converter.get_config()
+        self.assertEqual(cfg["max_pixels"], 56 * 56 * 8)
+        self.assertEqual(cfg["min_pixels"], 56 * 56)
+        self.assertFalse(cfg["cap_pixels_per_frame"])
         image_cfg = cfg["image_converter"]["config"]
-        self.assertEqual(image_cfg["max_pixels"], 56 * 56 * 8)
         self.assertEqual(image_cfg["patch_size"], 14)
         self.assertEqual(image_cfg["temporal_patch_size"], 2)

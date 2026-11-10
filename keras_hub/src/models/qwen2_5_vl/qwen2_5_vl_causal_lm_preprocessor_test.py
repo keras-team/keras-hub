@@ -51,6 +51,14 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
             max_pixels=100,
         )
 
+    def _video_converter(self):
+        """Video converter with small bounds so test grids stay tiny."""
+        return Qwen2_5VLVideoConverter(
+            image_converter=self._image_converter(),
+            min_pixels=16,
+            max_pixels=100,
+        )
+
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
             cls=Qwen2_5VLCausalLMPreprocessor,
@@ -218,10 +226,9 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess_with_video(self):
         """Video input: temporal grid produces t*h*w tokens."""
-        image_converter = self._image_converter()
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             sequence_length=32,
         )
 
@@ -252,9 +259,7 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
     def test_generate_preprocess_with_video_converter_only(self):
         """Videos work with `image_converter=None`; merge size comes from
         the video converter's inner image converter."""
-        video_converter = Qwen2_5VLVideoConverter(
-            image_converter=self._image_converter()
-        )
+        video_converter = self._video_converter()
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             video_converter=video_converter,
@@ -295,10 +300,9 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         With `time_interval` scaling, the temporal max (13) exceeds the
         spatial continuation (5), so pad positions must start at 14.
         """
-        image_converter = self._image_converter()
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             sequence_length=32,
         )
 
@@ -328,10 +332,9 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         interval = tokens_per_second * sgt; fractional intervals truncate
         per frame (HF `(arange(t) * interval).long()`).
         """
-        image_converter = self._image_converter()
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             sequence_length=32,
         )
 
@@ -376,7 +379,7 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         # Custom tokens_per_second scales the interval.
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             tokens_per_second=2,
             sequence_length=32,
         )
@@ -435,6 +438,23 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         # Placeholder with no images at all.
         with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
             preprocessor({"prompts": [pad + " air"], "images": []})
+
+    def test_video_converter_autowrap(self):
+        """An image-converter-only preprocessor auto-wraps a video
+        converter so videos get video bounds, not image bounds."""
+        image_converter = self._image_converter()
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=32,
+        )
+        video_converter = preprocessor.video_converter
+        self.assertIsNotNone(video_converter)
+        self.assertIsInstance(video_converter, Qwen2_5VLVideoConverter)
+        self.assertIs(video_converter.image_converter, image_converter)
+        # Video-level HF bounds, not the image converter's 16/100.
+        self.assertEqual(video_converter.min_pixels, 100352)
+        self.assertEqual(video_converter.max_pixels, 602112)
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
