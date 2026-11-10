@@ -4,7 +4,7 @@ import unittest.mock
 import keras
 import numpy as np
 import openvino as ov
-import openvino.opset16 as ov_opset
+import openvino.opset14 as ov_opset
 import pytest
 from openvino import Core
 
