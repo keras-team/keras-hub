@@ -58,9 +58,7 @@ from transformers import AutoModelForImageTextToText  # noqa: E402
 from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
-from keras_hub.src.models.gemma3.gemma3_causal_lm import (  # noqa: E402
-    Gemma3CausalLM,
-)
+from keras_hub.src.models.gemma3.gemma3_causal_lm import Gemma3CausalLM  # noqa: E402
 
 print(f"Keras backend: {keras.config.backend()}")
 print(f"Keras version: {keras.__version__}")
