@@ -79,19 +79,7 @@ class QwenTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = QwenAttention(
-            num_query_heads=self.num_query_heads,
-            num_key_value_heads=self.num_key_value_heads,
-            rope_max_wavelength=self.rope_max_wavelength,
-            rope_scaling_factor=self.rope_scaling_factor,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            dropout=self.dropout,
-            use_sliding_window_attention=self.use_sliding_window_attention,
-            sliding_window_size=self.sliding_window_size,
-            dtype=self.dtype_policy,
-            name="self_attention",
-        )
-        self._self_attention_layer.build(decoder_sequence_shape)
+        self._build_self_attention_layer(decoder_sequence_shape)
 
         self._self_attention_layernorm = QwenLayerNorm(
             epsilon=self.layer_norm_epsilon,
@@ -147,6 +135,21 @@ class QwenTransformerDecoder(keras.layers.Layer):
         self._feedforward_layernorm.build(decoder_sequence_shape)
 
         self.built = True
+
+    def _build_self_attention_layer(self, decoder_sequence_shape):
+        self._self_attention_layer = QwenAttention(
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            rope_max_wavelength=self.rope_max_wavelength,
+            rope_scaling_factor=self.rope_scaling_factor,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            dropout=self.dropout,
+            use_sliding_window_attention=self.use_sliding_window_attention,
+            sliding_window_size=self.sliding_window_size,
+            dtype=self.dtype_policy,
+            name="self_attention",
+        )
+        self._self_attention_layer.build(decoder_sequence_shape)
 
     def call(
         self,
