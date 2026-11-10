@@ -58,8 +58,15 @@ def _flatten_media(node, leaf_ndim):
         arr = np.asarray(node)
     except (ValueError, TypeError):
         arr = None
-    if arr is not None and arr.dtype != object and arr.ndim >= leaf_ndim:
-        return _flatten_media(arr, leaf_ndim)
+    if arr is not None and arr.dtype != object:
+        if arr.ndim > leaf_ndim:
+            return _flatten_media(arr, leaf_ndim)
+        if arr.ndim == leaf_ndim and any(
+            isinstance(elem, (list, tuple)) for elem in node
+        ):
+            # A single leaf expressed as nested lists (e.g. a
+            # `RaggedTensor.to_list()` row), not a list of elements.
+            return [arr]
     return [leaf for elem in node for leaf in _flatten_media(elem, leaf_ndim)]
 
 
