@@ -14,9 +14,7 @@ class Qwen2_5VLCausalLM(Qwen2VLCausalLM):
 
     Functionally identical to ``Qwen2VLCausalLM`` — generation, KV-cache
     decoding and multimodal interleaving are unchanged. The Qwen2.5-VL
-    delta lives in the vision encoder and preprocessor; this subclass
-    exists so presets resolve to the correct backbone and preprocessor
-    classes.
+    differs in terms of the vision encoder and preprocessor.
 
     This model supports multimodal (image/video + text) inputs when the
     backbone has a ``vision_encoder`` attached and the preprocessor has an

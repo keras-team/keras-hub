@@ -13,9 +13,7 @@ class Qwen2_5VLImageConverter(Qwen2VLImageConverter):
 
     Identical pipeline to ``Qwen2VLImageConverter``: smart-resize to
     ``patch_size * merge_size`` multiples, rescale to ``[0, 1]``,
-    CLIP-mean/std normalization, temporal padding, patch reshape. HF's
-    ``Qwen2_5_VLImageProcessor`` is likewise a direct subclass of
-    ``Qwen2VLImageProcessor``.
+    CLIP-mean/std normalization, temporal padding, patch reshape.
 
     Args:
         min_pixels: int. Minimum total pixel count after resize.
