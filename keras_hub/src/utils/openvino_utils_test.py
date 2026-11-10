@@ -1,8 +1,10 @@
+import types
 import unittest.mock
 
 import keras
 import numpy as np
 import openvino as ov
+import openvino.opset16 as ov_opset
 import pytest
 from openvino import Core
 
@@ -183,6 +185,20 @@ class OpenVINOCacheTest(TestCase):
         self.assertEqual(
             outputs, {"token_ids": "b", "images": None, "padding_mask": "a"}
         )
+
+    def test_compile_model_drops_none_outputs(self):
+        param = ov_opset.parameter([2], ov.Type.f32)
+
+        def wrap(node):
+            return types.SimpleNamespace(output=node.output(0))
+
+        outputs = [
+            wrap(ov_opset.relu(param)),
+            None,
+            wrap(ov_opset.negative(param)),
+        ]
+        compiled = compile_model([wrap(param)], outputs, "CPU", "f32")
+        self.assertEqual(len(compiled.outputs), 2)
 
     def count_compiles(self, calls):
         class MockModel:
