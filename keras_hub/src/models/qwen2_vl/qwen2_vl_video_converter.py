@@ -23,16 +23,16 @@ class Qwen2VLVideoConverter(VideoConverter):
         image_converter: `Qwen2VLImageConverter`. The converter applied to
             each frame stack. Pass an instance to customize resizing or
             normalization; defaults to a `Qwen2VLImageConverter` with the
-            standard Qwen2-VL configuration. Its pixel bounds are not used
-            for video — frames are bounded by ``min_pixels``/``max_pixels``
-            below, matching Hugging Face where the video processor keeps
-            its own size config.
-        min_pixels: int. Minimum total pixel count per frame after resize.
-            Defaults to ``128 * 28 * 28 = 100352``, matching Hugging Face's
-            video ``shortest_edge``.
-        max_pixels: int. Maximum total pixel count per frame after resize.
-            Defaults to ``768 * 28 * 28 = 602112``, matching Hugging Face's
-            video ``longest_edge``.
+            standard Qwen2-VL configuration. Per-frame pixel bounds also
+            default to this converter's bounds, matching Hugging Face
+            where ``from_pretrained`` maps the image processor's
+            ``min_pixels``/``max_pixels`` onto the video processor's size.
+        min_pixels: int or ``None``. Minimum total pixel count per frame
+            after resize. ``None`` inherits ``image_converter.min_pixels``
+            (``3136`` for a default converter).
+        max_pixels: int or ``None``. Maximum total pixel count per frame
+            after resize. ``None`` inherits ``image_converter.max_pixels``
+            (``12845056`` for a default converter).
         cap_pixels_per_frame: bool. Whether to bound each frame's resized
             pixel count so the whole video stays within an even share of
             the ``max_video_tokens`` budget (90% of it), matching the
@@ -61,16 +61,24 @@ class Qwen2VLVideoConverter(VideoConverter):
     def __init__(
         self,
         image_converter=None,
-        min_pixels=128 * 28 * 28,
-        max_pixels=768 * 28 * 28,
+        min_pixels=None,
+        max_pixels=None,
         cap_pixels_per_frame=False,
         max_video_tokens=128000,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.image_converter = image_converter or Qwen2VLImageConverter()
-        self.min_pixels = min_pixels
-        self.max_pixels = max_pixels
+        self.min_pixels = (
+            self.image_converter.min_pixels
+            if min_pixels is None
+            else min_pixels
+        )
+        self.max_pixels = (
+            self.image_converter.max_pixels
+            if max_pixels is None
+            else max_pixels
+        )
         self.cap_pixels_per_frame = cap_pixels_per_frame
         self.max_video_tokens = max_video_tokens
 

@@ -80,12 +80,15 @@ class Qwen2VLVideoConverterTest(TestCase):
         self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [1, 4, 4]])
 
     def test_default_video_bounds(self):
-        """A default converter applies HF video bounds, not image bounds."""
+        """A default converter applies image bounds, matching HF
+        ``from_pretrained`` which maps image `min_pixels`/`max_pixels`
+        onto the video processor's size."""
         converter = Qwen2VLVideoConverter()
-        # 56x56 frames are below the video `min_pixels` (100352) and get
-        # upscaled to a 24x24 patch grid (336x336 px).
+        self.assertEqual(converter.min_pixels, 3136)
+        self.assertEqual(converter.max_pixels, 12845056)
+        # 56x56 frames sit exactly on the 3136 floor and are not resized.
         result = converter(_make_video(num_frames=4))
-        self.assertAllEqual(result["grid_thw"], [[2, 24, 24]])
+        self.assertAllEqual(result["grid_thw"], [[2, 4, 4]])
 
     def test_cap_pixels_per_frame(self):
         """The cap shrinks frames once the token budget is exceeded."""
