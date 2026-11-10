@@ -163,11 +163,11 @@ def ov_infer(model, inputs, fn, static_args=(), cache_key=None):
 
     # Compile a new model
     struct_params = model._parameterize_data(inputs)
-    model.struct_outputs = fn(struct_params, *static_args)
+    struct_outputs = fn(struct_params, *static_args)
     model_dtype = "f16" if model.dtype in ("float16", "bfloat16") else "f32"
-    model.ov_compiled_model = compile_model(
-        struct_params, model.struct_outputs, device, model_dtype
-    )
+    compiled = compile_model(struct_params, struct_outputs, device, model_dtype)
+    model.struct_outputs = struct_outputs
+    model.ov_compiled_model = compiled
     model.ov_signature = signature
     return get_outputs(
         inputs,

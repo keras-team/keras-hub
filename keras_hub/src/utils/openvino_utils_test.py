@@ -236,3 +236,35 @@ class OpenVINOCacheTest(TestCase):
         x = [np.zeros((2, 5), dtype="int32")]
         calls = [(x, (None,)), (x, ((2,),))]
         self.assertEqual(self.count_compiles(calls), 2)
+
+    def test_ov_infer_keeps_cache_when_compile_fails(self):
+        class MockModel:
+            dtype = "float32"
+
+            def _parameterize_data(self, inputs):
+                return ["mock_param"]
+
+            def _unpack_singleton(self, x):
+                return x
+
+        model = MockModel()
+        with (
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.get_device",
+                return_value="CPU",
+            ),
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.compile_model",
+                side_effect=["compiled", RuntimeError("compile failed")],
+            ),
+            unittest.mock.patch(
+                "keras_hub.src.utils.openvino_utils.get_outputs"
+            ),
+        ):
+            ov_infer(model, [np.zeros((2, 5))], lambda p: ["old"])
+            signature = model.ov_signature
+            with self.assertRaises(RuntimeError):
+                ov_infer(model, [np.zeros((2, 8))], lambda p: ["new"])
+        self.assertEqual(model.struct_outputs, ["old"])
+        self.assertEqual(model.ov_compiled_model, "compiled")
+        self.assertEqual(model.ov_signature, signature)
