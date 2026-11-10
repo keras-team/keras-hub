@@ -740,6 +740,21 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_backbone import (
+    Qwen2_5VLBackbone as Qwen2_5VLBackbone,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_causal_lm import (
+    Qwen2_5VLCausalLM as Qwen2_5VLCausalLM,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_causal_lm_preprocessor import (
+    Qwen2_5VLCausalLMPreprocessor as Qwen2_5VLCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_tokenizer import (
+    Qwen2_5VLTokenizer as Qwen2_5VLTokenizer,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_vision_encoder import (
+    Qwen2_5VLVisionEncoder as Qwen2_5VLVisionEncoder,
+)
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import (
     Qwen2VLBackbone as Qwen2VLBackbone,
 )

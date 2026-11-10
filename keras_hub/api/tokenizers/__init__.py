@@ -117,6 +117,9 @@ from keras_hub.src.models.qwen.qwen_tokenizer import (
 from keras_hub.src.models.qwen.qwen_tokenizer import (
     QwenTokenizer as QwenTokenizer,
 )
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_tokenizer import (
+    Qwen2_5VLTokenizer as Qwen2_5VLTokenizer,
+)
 from keras_hub.src.models.qwen2_vl.qwen2_vl_tokenizer import (
     Qwen2VLTokenizer as Qwen2VLTokenizer,
 )
