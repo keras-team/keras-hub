@@ -65,3 +65,35 @@ class GPTNeoXBackboneTest(TestCase):
         self.assertEqual(
             default_backbone.get_config()["activation"], default_serialized
         )
+
+    def test_presets(self):
+        expected_presets = [
+            "pythia_70m_en",
+            "pythia_160m_en",
+            "pythia_410m_en",
+            "pythia_1.4b_en",
+            "pythia_2.8b_en",
+            "pythia_6.9b_en",
+            "pythia_12b_en",
+            "gpt_neox_20b_en",
+        ]
+        for preset in expected_presets:
+            self.assertIn(preset, GPTNeoXBackbone.presets)
+            self.assertTrue(
+                GPTNeoXBackbone.presets[preset]["kaggle_handle"].startswith(
+                    f"kaggle://keras/gpt_neox/keras/{preset}/"
+                )
+            )
+
+    @pytest.mark.extra_large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=GPTNeoXBackbone,
+            preset="pythia_70m_en",
+            input_data={
+                "token_ids": ops.array([[1, 2, 3, 4]], dtype="int32"),
+                "padding_mask": ops.array([[1, 1, 1, 1]], dtype="int32"),
+            },
+            expected_output_shape=(1, 4, 512),
+            expected_partial_output=None,
+        )

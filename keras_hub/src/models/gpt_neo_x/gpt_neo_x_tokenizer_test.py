@@ -38,3 +38,11 @@ class GPTNeoXTokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             GPTNeoXTokenizer(vocabulary=["a", "b", "c"], merges=[])
+
+    def test_pad_token_id(self):
+        tokenizer = GPTNeoXTokenizer(**self.init_kwargs)
+        self.assertEqual(tokenizer.pad_token_id, 0)
+        # Pythia vocabularies have a dedicated padding token.
+        vocab = {**self.vocab, "<|padding|>": len(self.vocab)}
+        tokenizer = GPTNeoXTokenizer(vocabulary=vocab, merges=self.merges)
+        self.assertEqual(tokenizer.pad_token_id, len(self.vocab))

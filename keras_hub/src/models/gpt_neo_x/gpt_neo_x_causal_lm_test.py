@@ -171,6 +171,43 @@ class GPTNeoXCausalLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
+    def test_generate_with_end_token_at_id_zero(self):
+        # Pythia vocabularies put "<|endoftext|>" at id 0. Padding must not
+        # reuse that id, or `generate()` stops before the first new token.
+        tokens = [t for t in self.vocab if t != "<|endoftext|>"]
+        vocab = {"<|endoftext|>": 0, "<|padding|>": 1}
+        vocab.update({token: i + 2 for i, token in enumerate(tokens)})
+        preprocessor = GPTNeoXCausalLMPreprocessor(
+            GPTNeoXTokenizer(vocabulary=vocab, merges=self.merges),
+            sequence_length=8,
+        )
+        backbone = GPTNeoXBackbone(
+            vocabulary_size=len(vocab),
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=4,
+            intermediate_dim=8,
+            max_sequence_length=8,
+        )
+        causal_lm = GPTNeoXCausalLM(
+            backbone=backbone, preprocessor=preprocessor
+        )
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor the "!" token."""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            index = vocab["!"]
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
+            return logits, hidden_states, cache
+
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            output = causal_lm.generate(" airplane at airport")
+            # Start token plus five prompt tokens leaves room for two more.
+            self.assertEqual(output, " airplane at airport!!")
+
     def test_generate_compilation(self):
         causal_lm = GPTNeoXCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
@@ -198,3 +235,31 @@ class GPTNeoXCausalLMTest(TestCase):
             input_data=self.input_data,
             output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
         )
+
+    def test_presets(self):
+        expected_presets = [
+            "pythia_70m_en",
+            "pythia_160m_en",
+            "pythia_410m_en",
+            "pythia_1.4b_en",
+            "pythia_2.8b_en",
+            "pythia_6.9b_en",
+            "pythia_12b_en",
+            "gpt_neox_20b_en",
+        ]
+        for preset in expected_presets:
+            self.assertIn(preset, GPTNeoXCausalLM.presets)
+            self.assertTrue(
+                GPTNeoXCausalLM.presets[preset]["kaggle_handle"].startswith(
+                    f"kaggle://keras/gpt_neox/keras/{preset}/"
+                )
+            )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in GPTNeoXCausalLM.presets:
+            self.run_preset_test(
+                cls=GPTNeoXCausalLM,
+                preset=preset,
+                input_data=self.input_data,
+            )

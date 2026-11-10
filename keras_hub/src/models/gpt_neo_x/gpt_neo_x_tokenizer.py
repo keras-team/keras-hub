@@ -50,3 +50,11 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
+
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
+        # GPT-NeoX and Pythia vocabularies put "<|endoftext|>" at id 0 and
+        # have a dedicated "<|padding|>" token. Padding with id 0 there would
+        # make every padded position look like an end token, and
+        # `generate()` would stop before producing anything.
+        self.pad_token_id = (self.vocabulary or {}).get("<|padding|>", 0)
