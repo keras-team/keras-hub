@@ -87,6 +87,14 @@ class Qwen2VLCausalLMPreprocessor(
             **kwargs,
         )
         self.image_converter = image_converter
+        if video_converter is None and image_converter is not None:
+            # HF routes videos through a dedicated video processor with its
+            # own size bounds. Auto-wrap a given image converter so the
+            # image-converter-only + videos configuration still applies
+            # video bounds rather than image bounds.
+            video_converter = self.video_converter_cls(
+                image_converter=image_converter
+            )
         self.video_converter = video_converter
 
         # Token strings — these are static.

@@ -34,6 +34,11 @@ class Qwen2_5VLBackboneTest(TestCase):
             expected_output_shape=(1, 5, 128),
         )
 
+    def test_num_parameters(self):
+        model = Qwen2_5VLBackbone(**self.init_kwargs)
+        # Pinned so architecture changes have to be intentional.
+        self.assertEqual(model.count_params(), 552064)
+
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
@@ -185,4 +190,4 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
         out_mrope = backbone(inputs)
         inputs_1d = {k: v for k, v in inputs.items() if k != "position_ids"}
         out_1d = backbone(inputs_1d)
-        self.assertAllClose(out_mrope, out_1d, atol=1e-5)
+        self.assertAllClose(out_mrope, out_1d, atol=0.0, rtol=0.0)

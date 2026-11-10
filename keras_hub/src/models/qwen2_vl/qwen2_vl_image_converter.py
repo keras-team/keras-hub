@@ -127,7 +127,7 @@ class Qwen2VLImageConverter(ImageConverter):
         self.image_std = np.array(image_std, dtype="float32")
         self._factor = patch_size * merge_size
 
-    def call(self, image):
+    def call(self, image, min_pixels=None, max_pixels=None):
         """Preprocess a single image, a video clip, or a list of images.
 
         Args:
@@ -135,6 +135,14 @@ class Qwen2VLImageConverter(ImageConverter):
                 ``(T, H, W, C)`` for a video clip, or a **list** of
                 NumPy arrays (each ``(H, W, C)``) for multiple separate
                 images. Pixel values should be in ``[0, 255]``.
+            min_pixels: int or ``None``. Optional per-call override for
+                ``self.min_pixels``, used by ``Qwen2VLVideoConverter`` to
+                apply video-specific bounds. ``None`` uses the configured
+                value.
+            max_pixels: int or ``None``. Optional per-call override for
+                ``self.max_pixels``, used by ``Qwen2VLVideoConverter`` to
+                enforce the per-frame video pixel budget. ``None`` uses
+                the configured value.
 
         Returns:
             Dict with keys:
@@ -151,7 +159,9 @@ class Qwen2VLImageConverter(ImageConverter):
             all_patches = []
             all_grids = []
             for img in image:
-                out = self.call(img)
+                out = self.call(
+                    img, min_pixels=min_pixels, max_pixels=max_pixels
+                )
                 all_patches.append(out["patches"])
                 all_grids.append(out["grid_thw"])
             return {
@@ -166,12 +176,18 @@ class Qwen2VLImageConverter(ImageConverter):
             image = image[np.newaxis]
 
         height, width = image.shape[1], image.shape[2]
+        effective_min_pixels = (
+            self.min_pixels if min_pixels is None else min_pixels
+        )
+        effective_max_pixels = (
+            self.max_pixels if max_pixels is None else max_pixels
+        )
         resized_h, resized_w = smart_resize(
             height,
             width,
             factor=self._factor,
-            min_pixels=self.min_pixels,
-            max_pixels=self.max_pixels,
+            min_pixels=effective_min_pixels,
+            max_pixels=effective_max_pixels,
         )
 
         if resized_h != height or resized_w != width:
