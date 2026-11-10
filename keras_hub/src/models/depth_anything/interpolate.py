@@ -13,30 +13,7 @@ def interpolate(x, size, data_format=None):
         data_format: One of `channels_last` or `channels_first`.
     """
     data_format = standardize_data_format(data_format)
-    if backend.backend() == "jax":
-        import jax
-
-        if data_format == "channels_first":
-            x = ops.transpose(x, (0, 2, 3, 1))
-        scale = ops.convert_to_tensor(
-            [
-                (size[0] - 1.0) / (x.shape[1] - 1.0),
-                (size[1] - 1.0) / (x.shape[2] - 1.0),
-            ]
-        )
-        translation = -(scale / 2.0 - 0.5)
-        x = jax.image.scale_and_translate(
-            x,
-            (x.shape[0], *size, x.shape[-1]),
-            method="bilinear",
-            scale=scale,
-            spatial_dims=(1, 2),
-            translation=translation,
-            antialias=False,
-        )
-        if data_format == "channels_first":
-            x = ops.transpose(x, (0, 3, 1, 2))
-    elif backend.backend() == "tensorflow":
+    if backend.backend() == "tensorflow":
         import tensorflow as tf
 
         if data_format == "channels_first":
@@ -58,9 +35,6 @@ def interpolate(x, size, data_format=None):
         if data_format == "channels_last":
             x = ops.transpose(x, (0, 2, 3, 1))
     else:
-        # Backend-agnostic fallback, mirroring the JAX branch above via
-        # `keras.ops`. Used by backends without a native `F.interpolate`
-        # equivalent, such as OpenVINO and NumPy.
         if data_format == "channels_first":
             x = ops.transpose(x, (0, 2, 3, 1))
         scale = ops.convert_to_tensor(
