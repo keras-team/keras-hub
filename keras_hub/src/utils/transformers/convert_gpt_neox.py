@@ -149,4 +149,9 @@ def convert_tokenizer(cls, preset, **kwargs):
     if merges and isinstance(merges[0], list) and len(merges[0]) == 2:
         merges = [" ".join(merge) for merge in merges]
 
+    # Pythia and GPT-NeoX keep one token per run of 2 to 24 spaces in
+    # `added_tokens`, outside the byte-pair vocabulary.
+    for token in tokenizer_config.get("added_tokens", []):
+        vocab[token["content"]] = token["id"]
+
     return cls(vocabulary=vocab, merges=merges, **kwargs)

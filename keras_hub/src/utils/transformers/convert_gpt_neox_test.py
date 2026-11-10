@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 from keras import ops
@@ -6,7 +8,9 @@ from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_causal_lm import GPTNeoXCausalLM
+from keras_hub.src.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.transformers import convert_gpt_neox
 from keras_hub.src.utils.transformers.convert_gpt_neox import (
     convert_backbone_config,
 )
@@ -68,3 +72,32 @@ class ConvertGPTNeoXTest(TestCase):
                     "layer_norm_eps": 1.0,
                 }
             )
+
+    def test_convert_tokenizer_added_tokens(self):
+        tokenizer_config = {
+            "model": {
+                "vocab": {
+                    "<|endoftext|>": 0,
+                    "<|padding|>": 1,
+                    "a": 2,
+                    "b": 3,
+                    "ab": 4,
+                },
+                "merges": [["a", "b"]],
+            },
+            "added_tokens": [
+                {"id": 0, "content": "<|endoftext|>"},
+                {"id": 1, "content": "<|padding|>"},
+                {"id": 5, "content": "   "},
+                {"id": 6, "content": "  "},
+            ],
+        }
+        with patch.object(
+            convert_gpt_neox, "load_json", return_value=tokenizer_config
+        ):
+            tokenizer = convert_gpt_neox.convert_tokenizer(
+                GPTNeoXTokenizer, "unused"
+            )
+        self.assertEqual(tokenizer.vocabulary_size(), 7)
+        self.assertEqual(tokenizer.pad_token_id, 1)
+        self.assertAllEqual(tokenizer("a   ab  a"), [2, 5, 4, 6, 2])
