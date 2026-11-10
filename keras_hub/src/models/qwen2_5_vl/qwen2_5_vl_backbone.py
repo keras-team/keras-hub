@@ -6,11 +6,15 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 class Qwen2_5VLBackbone(Qwen2VLBackbone):
     """Qwen2.5-VL multimodal backbone.
 
-    Identical to ``Qwen2VLBackbone``: the Qwen2.5-VL text decoder and
-    M-RoPE wiring are unchanged. The architecture delta lives entirely in
-    ``Qwen2_5VLVisionEncoder`` (windowed attention, RMSNorm, gated SiLU
-    MLP) and in the preprocessor's time-aware video positions; pass a
-    ``Qwen2_5VLVisionEncoder`` instance as ``vision_encoder``.
+    A 3D vision encoder produces patch features that are merged into the
+    text embedding stream at ``vision_indices``; the Qwen2.5 decoder then
+    applies multimodal RoPE (M-RoPE) from three-channel ``position_ids``
+    (temporal, height, width). The text-side architecture is unchanged
+    from ``Qwen2VLBackbone`` — the Qwen2.5-VL deltas live in
+    ``Qwen2_5VLVisionEncoder`` (windowed attention selected via
+    ``fullatt_block_indexes``, RMSNorm, gated SiLU MLP) and in the
+    preprocessor's absolute-time temporal positions driven by per-video
+    ``second_per_grid_ts``.
 
     Args:
         vocabulary_size: int. Vocabulary size of the text model.
@@ -23,14 +27,19 @@ class Qwen2_5VLBackbone(Qwen2VLBackbone):
             for a text-only model.
         mrope_section: list of int or None. M-RoPE section sizes
             ``[s_t, s_h, s_w]`` in rotary pairs, summing to
-            ``head_dim // 2``. Defaults to ``[16, 24, 24]``.
+            ``head_dim // 2``. Defaults to ``[16, 24, 24]`` (the value
+            used by released Qwen2.5-VL checkpoints, whose ``head_dim``
+            is 128).
         rope_max_wavelength: int. RoPE base wavelength for the text model.
-        rope_scaling_factor: float. RoPE scaling factor.
-        layer_norm_epsilon: float. Epsilon for RMS norm layers.
-        dropout: float. Dropout rate.
+            Defaults to ``1000000``.
+        rope_scaling_factor: float. RoPE scaling factor. Defaults to ``1.0``.
+        layer_norm_epsilon: float. Epsilon for RMS norm layers. Defaults to
+            ``1e-6``.
+        dropout: float. Dropout rate. Defaults to ``0``.
         tie_word_embeddings: bool. Whether to tie input/output embeddings.
+            Defaults to ``False``.
         use_sliding_window_attention: bool. Whether to use sliding window
-            attention.
-        sliding_window_size: int. Sliding window size.
+            attention. Defaults to ``False``.
+        sliding_window_size: int. Sliding window size. Defaults to ``32768``.
         dtype: string or ``keras.mixed_precision.DTypePolicy``.
     """
