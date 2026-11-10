@@ -375,9 +375,10 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         self.assertIsNotNone(video_converter)
         self.assertIsInstance(video_converter, Qwen2VLVideoConverter)
         self.assertIs(video_converter.image_converter, image_converter)
-        # Video-level HF bounds, not the image converter's 16/100.
-        self.assertEqual(video_converter.min_pixels, 100352)
-        self.assertEqual(video_converter.max_pixels, 602112)
+        # Per-frame video bounds inherit the image converter's bounds,
+        # matching HF's `from_pretrained` image-config fallback.
+        self.assertEqual(video_converter.min_pixels, image_converter.min_pixels)
+        self.assertEqual(video_converter.max_pixels, image_converter.max_pixels)
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2VLCausalLMPreprocessor(
