@@ -61,7 +61,7 @@ def _flatten_media(node, leaf_ndim):
     if arr is not None and arr.dtype != object:
         if arr.ndim > leaf_ndim:
             return _flatten_media(arr, leaf_ndim)
-        if arr.ndim == leaf_ndim and any(
+        if arr.ndim <= leaf_ndim and any(
             isinstance(elem, (list, tuple)) for elem in node
         ):
             # A single leaf expressed as nested lists (e.g. a
