@@ -258,7 +258,27 @@ class Qwen2VLCausalLMPreprocessor(
             np.concatenate([img_indices, vid_indices]).astype("int32")
         )
 
-    def _compute_position_ids(self, token_ids, image_grid_thw, video_grid_thw):
+    def _temporal_position(self, frame, is_video, media_index, sgt):
+        """Temporal position component for a vision token.
+
+        Qwen2-VL uses the raw frame index for all media. Subclasses may
+        override to apply time-aware scaling — e.g. Qwen2.5-VL multiplies
+        the frame index by ``tokens_per_second * second_per_grid_ts``.
+
+        Args:
+            frame: int. Temporal patch index of the token.
+            is_video: bool. Whether the token belongs to a video span.
+            media_index: int. Index of the media item in its grid.
+            sgt: ``second_per_grid_ts`` list from ``_compute_position_ids``,
+                or ``None``.
+        Returns:
+            int temporal offset to add to the span's ``current_pos``.
+        """
+        return frame
+
+    def _compute_position_ids(
+        self, token_ids, image_grid_thw, video_grid_thw, second_per_grid_ts=None
+    ):
         """Build 3-channel M-RoPE position IDs matching HF's algorithm.
 
         For text tokens all 3 channels hold the same sequential position.
@@ -279,6 +299,9 @@ class Qwen2VLCausalLMPreprocessor(
             token_ids: int32 tensor ``(batch, seq_len)``.
             image_grid_thw: int32 tensor ``(num_images, 3)`` or ``None``.
             video_grid_thw: int32 tensor ``(num_videos, 3)`` or ``None``.
+            second_per_grid_ts: optional per-video temporal scale. Unused by
+                Qwen2-VL (fixed interval 1); consumed by subclasses via
+                ``_temporal_position``.
         Returns:
             int32 tensor ``(batch, 3, seq_len)``.
         """
@@ -326,11 +349,13 @@ class Qwen2VLCausalLMPreprocessor(
                         t_grid = int(image_grid_np[img_idx, 0])
                         h_grid = int(image_grid_np[img_idx, 1])
                         w_grid = int(image_grid_np[img_idx, 2])
+                        media_index = img_idx
                         img_idx += 1
                     else:
                         t_grid = int(video_grid_np[vid_idx, 0])
                         h_grid = int(video_grid_np[vid_idx, 1])
                         w_grid = int(video_grid_np[vid_idx, 2])
+                        media_index = vid_idx
                         vid_idx += 1
 
                     llm_grid_h = h_grid // merge_size
@@ -343,7 +368,12 @@ class Qwen2VLCausalLMPreprocessor(
                         frame = vi // frame_tokens
                         h_idx = (vi // llm_grid_w) % llm_grid_h
                         w_idx = vi % llm_grid_w
-                        t_pos[i + vi] = current_pos + frame
+                        t_pos[i + vi] = current_pos + self._temporal_position(
+                            frame,
+                            is_video,
+                            media_index,
+                            second_per_grid_ts,
+                        )
                         h_pos[i + vi] = current_pos + h_idx
                         w_pos[i + vi] = current_pos + w_idx
 
@@ -577,7 +607,10 @@ class Qwen2VLCausalLMPreprocessor(
                 vision_out_videos["grid_thw"] if vision_out_videos else None
             )
             pos_ids = self._compute_position_ids(
-                x_out["token_ids"], img_grid, vid_grid
+                x_out["token_ids"],
+                img_grid,
+                vid_grid,
+                second_per_grid_ts=x.get("second_per_grid_ts"),
             )
             x_out["vision_indices"] = vision_indices
             x_out["position_ids"] = pos_ids
@@ -665,7 +698,12 @@ class Qwen2VLCausalLMPreprocessor(
 
         img_grid = vision_out_images["grid_thw"] if vision_out_images else None
         vid_grid = vision_out_videos["grid_thw"] if vision_out_videos else None
-        pos_ids = self._compute_position_ids(token_ids, img_grid, vid_grid)
+        pos_ids = self._compute_position_ids(
+            token_ids,
+            img_grid,
+            vid_grid,
+            second_per_grid_ts=x.get("second_per_grid_ts"),
+        )
 
         # 7. Build combined pixel_values / image_grid_thw for the encoder.
         pixel_values_list = []
