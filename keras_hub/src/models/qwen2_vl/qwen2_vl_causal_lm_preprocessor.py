@@ -30,6 +30,39 @@ except ImportError:
     tf = None
 
 
+def _flatten_media(node, leaf_ndim):
+    """Recursively flatten arbitrarily nested media to leaf arrays.
+
+    Media values may arrive as plain arrays, lists of arrays (with
+    matching or differing shapes), batched tensors, or nested lists
+    (e.g. media grouped per prompt through `generate()`). A leaf is an
+    array of ``leaf_ndim`` or fewer dims — ``(H, W, C)``/``(H, W)`` for
+    images, ``(T, H, W, C)`` for videos. Deeper arrays are split along
+    axis 0; ragged nodes are flattened element-wise.
+    """
+    if not isinstance(node, (list, tuple)):
+        try:
+            arr = np.asarray(node)
+        except (ValueError, TypeError):
+            arr = None
+        if arr is None or arr.dtype == object:
+            return [node]
+        if arr.ndim <= leaf_ndim:
+            return [arr]
+        return [
+            leaf
+            for i in range(arr.shape[0])
+            for leaf in _flatten_media(arr[i], leaf_ndim)
+        ]
+    try:
+        arr = np.asarray(node)
+    except (ValueError, TypeError):
+        arr = None
+    if arr is not None and arr.dtype != object and arr.ndim >= leaf_ndim:
+        return _flatten_media(arr, leaf_ndim)
+    return [leaf for elem in node for leaf in _flatten_media(elem, leaf_ndim)]
+
+
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
 class Qwen2VLCausalLMPreprocessor(
     QwenVLSpecialTokenMixin, CausalLMPreprocessor
@@ -426,23 +459,13 @@ class Qwen2VLCausalLMPreprocessor(
             dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
             ``image_grid_thw`` ``(num_images, 3)``.
         """
-        # Normalize to a flat list of individual 3-D images. A list of
-        # differently-shaped images arrives as a `tf.RaggedTensor` after
-        # preprocessing input conversion.
+        # Normalize to a flat list of individual 3-D images. Media may
+        # arrive nested (e.g. per-prompt batching through `generate()`),
+        # as `tf.RaggedTensor`s, or as dense tensors; flatten
+        # recursively to leaf arrays.
         if tf is not None and isinstance(images, tf.RaggedTensor):
-            flat_images = [np.array(img.to_list()) for img in images]
-        elif isinstance(images, (list, tuple)):
-            flat_images = []
-            for img in images:
-                if hasattr(img, "shape") and len(img.shape) == 4:
-                    for i in range(img.shape[0]):
-                        flat_images.append(img[i])
-                else:
-                    flat_images.append(img)
-        elif hasattr(images, "shape") and len(images.shape) == 4:
-            flat_images = [images[i] for i in range(images.shape[0])]
-        else:
-            flat_images = [images]
+            images = images.to_list()
+        flat_images = _flatten_media(images, leaf_ndim=3)
 
         all_patches = []
         all_grid_thw = []
@@ -475,20 +498,10 @@ class Qwen2VLCausalLMPreprocessor(
             dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
             ``grid_thw`` ``(num_videos, 3)``.
         """
+        # Same flattening as images, with 4-D ``(T, H, W, C)`` leaves.
         if tf is not None and isinstance(videos, tf.RaggedTensor):
-            flat_videos = [np.array(vid.to_list()) for vid in videos]
-        elif isinstance(videos, (list, tuple)):
-            flat_videos = []
-            for vid in videos:
-                if hasattr(vid, "shape") and len(vid.shape) == 5:
-                    for i in range(vid.shape[0]):
-                        flat_videos.append(vid[i])
-                else:
-                    flat_videos.append(vid)
-        elif hasattr(videos, "shape") and len(videos.shape) == 5:
-            flat_videos = [videos[i] for i in range(videos.shape[0])]
-        else:
-            flat_videos = [videos]
+            videos = videos.to_list()
+        flat_videos = _flatten_media(videos, leaf_ndim=4)
 
         converter = self.video_converter or self.image_converter
         all_patches = []
