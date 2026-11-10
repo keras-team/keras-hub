@@ -1,6 +1,6 @@
 import collections
+import inspect
 import os
-import random
 import shutil
 import unittest
 import warnings
@@ -105,6 +105,14 @@ class AssertionsTest(TestCase):
         self.assertAllEqual(None, None)
         with self.assertRaises(AssertionError):
             self.assertAllClose(None, [1.0])
+
+    def test_assert_almost_equal_signature(self):
+        # `tf.test.TestCase` exposed `unittest`'s `places=` / `delta=`
+        # signature; Keras' base class takes `decimal=` instead. Pin the
+        # explicit `unittest` signature so a `*args, **kwargs` passthrough
+        # cannot quietly come back.
+        params = list(inspect.signature(self.assertAlmostEqual).parameters)
+        self.assertEqual(params, ["first", "second", "places", "msg", "delta"])
 
     def test_assert_almost_equal(self):
         self.assertAlmostEqual(1.0, 1.0000001, places=5)
@@ -412,54 +420,6 @@ class GrainHarnessTest(TestCase):
 
 
 class TestCaseTest(TestCase):
-    def test_setup_with_empty_tensorflow(self):
-        """Pin the `setUp` guard against a partly uninstalled TensorFlow.
-
-        keras#23713 fixed `LazyModule.available`; the test now exercises the
-        fallback directly because the environment that used to trigger it no
-        longer exists on Keras >= 3.16, while 3.15 still needs the guard. The
-        fallback ensures that `np.random` and `torch` get reseeded even when
-        `tf` fails.
-        """
-
-        def raise_attribute_error(*args, **kwargs):
-            raise AttributeError(
-                "module 'tensorflow' has no attribute 'random'"
-            )
-
-        with mock.patch(
-            "keras.utils.set_random_seed", side_effect=raise_attribute_error
-        ):
-            with mock.patch("keras_hub.src.tests.test_case.tf", None):
-                self.setUp()
-
-                # Test random is seeded
-                first_random = random.random()
-                first_np = float(np.random.rand())
-
-                if keras.config.backend() == "torch":
-                    first_torch = float(torch.rand(1))
-
-                self.setUp()
-
-                second_random = random.random()
-                second_np = float(np.random.rand())
-
-                if keras.config.backend() == "torch":
-                    second_torch = float(torch.rand(1))
-
-                self.assertEqual(
-                    first_random, second_random, "setUp did not reseed random"
-                )
-                self.assertEqual(
-                    first_np, second_np, "setUp did not reseed np.random"
-                )
-
-                if keras.config.backend() == "torch":
-                    self.assertEqual(
-                        first_torch, second_torch, "setUp did not reseed torch"
-                    )
-
     def test_run_task_test_tf_none(self):
         @keras.saving.register_keras_serializable(package="TestDummy")
         class DummyPreprocessor(keras.layers.Layer):
@@ -520,24 +480,6 @@ class TestCaseTest(TestCase):
         self.assertEqual(
             [warn for warn in w if issubclass(warn.category, UserWarning)], []
         )
-
-    @unittest.skipIf(tf is None, "Requires TF")
-    def test_setup_propagates_unrelated_attribute_error(self):
-        """The guard must not swallow an unrelated `AttributeError`.
-
-        It exists for a partly uninstalled TensorFlow, which is exactly the
-        state where `tensor_utils.tf` is None. With TensorFlow healthy, an
-        `AttributeError` from inside `set_random_seed` is a real bug, and
-        swallowing it would leave the whole suite running unseeded with no
-        diagnostic.
-        """
-
-        def raise_unrelated(seed):
-            raise AttributeError("nothing to do with TensorFlow")
-
-        with mock.patch.object(keras.utils, "set_random_seed", raise_unrelated):
-            with self.assertRaises(AttributeError):
-                self.setUp()
 
     def test_get_temp_dir_survives_deletion(self):
         shutil.rmtree(self.get_temp_dir())

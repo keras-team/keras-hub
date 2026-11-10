@@ -3,7 +3,6 @@ import gc
 import json
 import os
 import pathlib
-import random
 import re
 import shutil
 import tempfile
@@ -131,11 +130,9 @@ def _is_leaf(x):
 
 
 def _is_1d_row(row):
-    if isinstance(row, np.ndarray) and row.ndim == 1:
-        return True
-    if isinstance(row, (list, tuple)):
-        return True
-    return False
+    return (isinstance(row, np.ndarray) and row.ndim == 1) or isinstance(
+        row, (list, tuple)
+    )
 
 
 def _format_failure(err_msg, msg, path):
@@ -427,35 +424,7 @@ class TestCase(KerasTestCase):
 
     def setUp(self):
         super().setUp()
-        try:
-            keras.utils.set_random_seed(_TEST_SEED)
-        except AttributeError:
-            # A partly uninstalled TensorFlow makes Keras' `tf.available`
-            # true, so `set_random_seed` raises on `tf.random`.
-            #
-            # `tensor_utils.tf` is None in exactly that state, so anything
-            # else is a real `AttributeError` and must not be swallowed --
-            # the suite would otherwise run silently unseeded.
-            #
-            # This repairs `setUp` only. Other `tf.available` call sites in
-            # Keras Core fail the same way in that environment, notably
-            # `serialization_lib`, which `run_serialization_test` reaches.
-            #
-            # TODO(keras>=3.16): delete this whole `except` block and the two
-            # tests that pin it (`test_setup_with_empty_tensorflow`,
-            # `test_setup_propagates_unrelated_attribute_error`). Keras fixed
-            # the root cause in keras-team/keras#23713 -- `LazyModule` now
-            # treats a namespace package as unavailable -- which ships in
-            # 3.16. Until that is KerasHub's minimum, Keras 3.15 still raises
-            # here.
-            if tf is not None:
-                raise
-            random.seed(_TEST_SEED)
-            np.random.seed(_TEST_SEED)
-            if keras.config.backend() == "torch":
-                import torch
-
-                torch.manual_seed(_TEST_SEED)
+        keras.utils.set_random_seed(_TEST_SEED)
 
     def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
         if x1.__class__.__name__ == "_MetricDict":
@@ -490,12 +459,14 @@ class TestCase(KerasTestCase):
             f"\nValues: {x1}"
         )
 
-    def assertAlmostEqual(self, x1, x2, *args, **kwargs):
+    def assertAlmostEqual(
+        self, first, second, places=None, msg=None, delta=None
+    ):
         # `tf.test.TestCase` inherited `unittest`'s signature, which takes
         # `places=` and `delta=`. Keras replaces both with `decimal=`, so go
         # straight to `unittest` and keep the existing call sites working.
         return unittest.TestCase.assertAlmostEqual(
-            self, x1, x2, *args, **kwargs
+            self, first, second, places=places, msg=msg, delta=delta
         )
 
     def assertAllInRange(self, x, lower_bound, upper_bound, msg=None):
