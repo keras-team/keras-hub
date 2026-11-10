@@ -125,7 +125,7 @@ class BlockDiffusionLM(Task):
                 # `ov_infer` reuses the compiled model across calls. Pass the
                 # extra generation arguments as model inputs, so each call
                 # reads its own values instead of the first call's constants.
-                kwarg_names = tuple(kwargs)
+                kwarg_names = tuple(sorted(kwargs))
                 inputs = tree.map_structure(
                     ops.convert_to_numpy, {**inputs, **kwargs}
                 )
