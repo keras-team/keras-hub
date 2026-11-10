@@ -7,7 +7,6 @@ from keras_hub.src.utils.tensor_utils import tf
 
 class MockGemma3Tokenizer(MockGemmaTokenizerBase):
     def _setup_tokens(self):
-
         self.vocabulary = [
             "<pad>",
             "<bos>",
