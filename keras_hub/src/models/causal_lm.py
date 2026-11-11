@@ -137,10 +137,15 @@ class CausalLM(Task):
             from keras_hub.src.utils.openvino_utils import ov_infer
 
             def wrapped_generate_function(inputs, stop_token_ids=None):
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
                 # Convert to numpy for OpenVINO backend
                 inputs = tree.map_structure(ops.convert_to_numpy, inputs)
                 return ov_infer(
-                    self, inputs, stop_token_ids, self.generate_step
+                    self,
+                    inputs,
+                    self.generate_step,
+                    static_args=(stop_token_ids,),
                 )
 
             self.generate_function = wrapped_generate_function

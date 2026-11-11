@@ -125,7 +125,7 @@ class BlockDiffusionLM(Task):
                 # `ov_infer` reuses the compiled model across calls. Pass the
                 # extra generation arguments as model inputs, so each call
                 # reads its own values instead of the first call's constants.
-                kwarg_names = tuple(kwargs)
+                kwarg_names = tuple(sorted(kwargs))
                 inputs = tree.map_structure(
                     ops.convert_to_numpy, {**inputs, **kwargs}
                 )
@@ -140,7 +140,15 @@ class BlockDiffusionLM(Task):
                         **step_kwargs,
                     )
 
-                return ov_infer(self, inputs, stop_token_ids, fn)
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
+                return ov_infer(
+                    self,
+                    inputs,
+                    fn,
+                    static_args=(stop_token_ids,),
+                    cache_key=(stop_token_ids, max_length, kwarg_names),
+                )
 
             self.generate_function = wrapped_generate_function
 
