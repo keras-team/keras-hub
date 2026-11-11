@@ -628,6 +628,10 @@ class Gemma4CausalLMPreprocessor(CausalLMPreprocessor):
             videos = tf.convert_to_tensor(videos)
         elif isinstance(videos, list):
             videos = tf.ragged.constant(videos)
+        elif keras.ops.is_tensor(videos) and not isinstance(
+            videos, (tf.Tensor, tf.RaggedTensor)
+        ):
+            videos = tf.convert_to_tensor(keras.ops.convert_to_numpy(videos))
 
         if isinstance(videos, tf.RaggedTensor):
             if not batched:

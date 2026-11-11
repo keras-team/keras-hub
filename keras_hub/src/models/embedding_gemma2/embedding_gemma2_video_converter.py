@@ -87,6 +87,7 @@ class EmbeddingGemma2VideoConverter(Gemma4VideoConverter):
         all_pixel_position_ids = []
 
         for video in videos:
+            video = ops.convert_to_tensor(video)
             total_frames = ops.shape(video)[0]
 
             indices = self._get_indices(total_frames)

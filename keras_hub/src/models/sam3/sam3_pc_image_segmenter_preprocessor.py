@@ -178,6 +178,12 @@ class SAM3PromptableConceptImageSegmenterPreprocessor(Preprocessor):
         self.built = True
 
     def _preprocess_boxes(self, boxes, box_labels, height, width):
+        def to_tf(x):
+            if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+                return x
+            return tf.convert_to_tensor(keras.ops.convert_to_numpy(x))
+
+        boxes, box_labels = to_tf(boxes), to_tf(box_labels)
         if isinstance(boxes, tf.RaggedTensor):
             max_num_boxes = tf.reduce_max(boxes.row_lengths(axis=1))
             boxes = boxes.to_tensor(

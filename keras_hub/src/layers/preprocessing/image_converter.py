@@ -256,7 +256,7 @@ class ImageConverter(PreprocessingLayer):
             import tensorflow as tf
 
             return tf.cast(x, dtype), tf.cast(y, dtype)
-        x = ops.cast(x, dtype)
+        x = ops.cast(ops.convert_to_tensor(x), dtype)
         y = ops.cast(y, dtype)
         if keras.backend.backend() == "torch":
             # Place on the same device as x (the image).
