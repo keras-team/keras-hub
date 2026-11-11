@@ -44,6 +44,54 @@ def convert_backbone_config(transformers_config):
             "sliding_window_size": transformers_config["sliding_window"],
             "use_sliding_window_attention": True,
         }
+    elif transformers_config["model_type"] == "vaultgemma":
+        # Determine sliding window attention usage from layer_types or config
+        sliding_window = transformers_config.get("sliding_window", None)
+        layer_types = transformers_config.get("layer_types", [])
+
+        if layer_types:
+            use_sliding_window_attention = any(
+                lt == "sliding_attention" for lt in layer_types
+            )
+        else:
+            use_sliding_window_attention = sliding_window not in (None, 0)
+
+        # `GemmaBackbone` applies sliding window attention to even layers only.
+        expected_layer_types = [
+            "sliding_attention" if i % 2 == 0 else "full_attention"
+            for i in range(len(layer_types))
+        ]
+        if use_sliding_window_attention and layer_types != expected_layer_types:
+            raise ValueError(
+                "`GemmaBackbone` only supports sliding window attention on "
+                "even layers and full attention on odd layers. Received "
+                f"`layer_types={layer_types}`."
+            )
+
+        # Build VaultGemma backbone configuration
+        backbone_config = {
+            "vocabulary_size": transformers_config["vocab_size"],
+            "num_layers": transformers_config["num_hidden_layers"],
+            "num_query_heads": transformers_config["num_attention_heads"],
+            "num_key_value_heads": transformers_config["num_key_value_heads"],
+            "hidden_dim": transformers_config["hidden_size"],
+            "intermediate_dim": transformers_config["intermediate_size"] * 2,
+            "head_dim": transformers_config["head_dim"],
+            "query_head_dim_normalize": (
+                transformers_config["head_dim"]
+                == transformers_config["query_pre_attn_scalar"]
+            ),
+            "use_post_ffw_norm": False,
+            "use_post_attention_norm": False,
+            "final_logit_soft_cap": transformers_config.get(
+                "final_logit_softcapping"
+            ),
+            "attention_logit_soft_cap": transformers_config.get(
+                "attn_logit_softcapping"
+            ),
+            "sliding_window_size": transformers_config["sliding_window"],
+            "use_sliding_window_attention": use_sliding_window_attention,
+        }
     return backbone_config
 
 
@@ -74,7 +122,7 @@ def convert_weights(backbone, loader, transformers_config):
                 keras_variable=decoder_layer.pre_ffw_norm.scale,
                 hf_weight_key=f"model.layers.{i}.post_attention_layernorm.weight",
             )
-        elif transformers_config["model_type"] == "gemma2":
+        elif transformers_config["model_type"] in ("gemma2", "vaultgemma"):
             loader.port_weight(
                 keras_variable=decoder_layer.pre_ffw_norm.scale,
                 hf_weight_key=f"model.layers.{i}.pre_feedforward_layernorm.weight",
