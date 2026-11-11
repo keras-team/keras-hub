@@ -5,6 +5,9 @@ import numpy as np
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
+    O200K_SPLIT_PATTERN,
+)
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = OpenAIPrivacyFilterBackbone
@@ -19,13 +22,11 @@ def convert_task_config(transformers_config):
 
 def convert_backbone_config(transformers_config):
     rope_params = transformers_config["rope_parameters"]
-    if rope_params.get("rope_type") != "yarn":
+    if rope_params["rope_type"] != "yarn":
         raise ValueError("rope_type must be 'yarn'")
-    if transformers_config.get("attention_bias", True) is not True:
+    if transformers_config["attention_bias"] is not True:
         raise ValueError("attention_bias must be True")
 
-    # HF config.json omits swiglu_alpha and swiglu_limit when they match
-    # defaults.
     return {
         "vocabulary_size": transformers_config["vocab_size"],
         "num_layers": transformers_config["num_hidden_layers"],
@@ -44,8 +45,11 @@ def convert_backbone_config(transformers_config):
             "original_max_position_embeddings"
         ],
         "truncate": rope_params["truncate"],
-        "swiglu_alpha": transformers_config.get("swiglu_alpha", 1.702),
-        "swiglu_limit": transformers_config.get("swiglu_limit", 7.0),
+        # HF hardcodes the SwiGLU alpha and limit in
+        # `modeling_openai_privacy_filter.py`; `config.json` has no key for
+        # them.
+        "swiglu_alpha": 1.702,
+        "swiglu_limit": 7.0,
         "rms_norm_eps": transformers_config["rms_norm_eps"],
         "sliding_window": transformers_config["sliding_window"],
         "attention_dropout": transformers_config["attention_dropout"],
@@ -144,9 +148,15 @@ def convert_weights(backbone, loader, transformers_config):
 
 def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_data = load_json(preset, "tokenizer.json")
-    vocabulary = tokenizer_data.get("model", {}).get("vocab", {})
-    merges = tokenizer_data.get("model", {}).get("merges", [])
-    added_tokens = tokenizer_data.get("added_tokens", [])
+    vocabulary = tokenizer_data["model"]["vocab"]
+    merges = tokenizer_data["model"]["merges"]
+    added_tokens = tokenizer_data["added_tokens"]
+
+    regex = tokenizer_data["pre_tokenizer"]["pretokenizers"][0]["pattern"][
+        "Regex"
+    ]
+    if regex != O200K_SPLIT_PATTERN:
+        raise ValueError("O200K_SPLIT_PATTERN mismatch in pre_tokenizer")
 
     vocab_dict = {}
     for token, token_id in vocabulary.items():

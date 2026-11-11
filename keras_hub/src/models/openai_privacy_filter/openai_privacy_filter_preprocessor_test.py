@@ -1,28 +1,27 @@
+import re
+
 import keras
 import numpy as np
 import pytest
 
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
+    _SHORT_Y_MESSAGE,
+)
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
     OpenAIPrivacyFilterPreprocessor,
 )
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
+from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
+
+SHORT_Y = re.escape(_SHORT_Y_MESSAGE)
 
 
 class OpenAIPrivacyFilterPreprocessorTest(TestCase):
     def setUp(self):
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.vocab = []
-        for merge in self.merges:
-            a, b = merge.split(" ")
-            self.vocab.extend([a, b, a + b])
-        self.vocab += ["!", "<|endoftext|>"]
-        self.vocab = sorted(set(self.vocab))
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.vocab, self.merges = get_bpe_fixture()
         self.tokenizer = OpenAIPrivacyFilterTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -150,21 +149,20 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         import tensorflow as tf
 
         preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
-        short = "shorter than its unpadded token count"
-        with self.assertRaisesRegex(ValueError, short):
+        with self.assertRaisesRegex(ValueError, SHORT_Y):
             preprocessor(["airplane at airport"], [[1]])
-        with self.assertRaisesRegex(ValueError, short):
+        with self.assertRaisesRegex(ValueError, SHORT_Y):
             preprocessor("airplane at airport", [1])
-        with self.assertRaisesRegex(ValueError, short):
+        with self.assertRaisesRegex(ValueError, SHORT_Y):
             preprocessor(["airplane at airport", "at"], [[1, 2, 0, 0, 0], [1]])
 
         ds = tf.data.Dataset.from_tensors(("airplane at airport", [1]))
-        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, short):
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, SHORT_Y):
             ds.map(preprocessor).get_single_element()
         ds = tf.data.Dataset.from_tensor_slices(
             (["airplane at airport", "at"], tf.ragged.constant([[1], [1]]))
         ).batch(2)
-        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, short):
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, SHORT_Y):
             list(ds.map(preprocessor))
 
         # The TensorFlow workflow run eagerly, as on the TF backend, sees
@@ -174,8 +172,115 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         preprocessor._allow_python_workflow = False
         _, y, _ = preprocessor(["airplane at airport"], [[1, 2, 0, 0, 0]])
         self.assertAllEqual(y, [[1, 2, 0, 0, 0, 0, 0, 0]])
-        with self.assertRaisesRegex(Exception, short):
+        with self.assertRaisesRegex(Exception, SHORT_Y):
             preprocessor(["airplane at airport"], [[1]])
+
+    def test_eager_tf_workflow_ragged_batch(self):
+        # Run eagerly, the TensorFlow workflow receives the tokenizer's Python
+        # output: a list of lists for a ragged batch ("at" is 2 tokens). The
+        # `y` length check must accept it rather than fail to build a dense
+        # tensor from it.
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor._allow_python_workflow = False
+        _, y, _ = preprocessor(
+            ["airplane at airport", "at"], [[1, 2, 0, 0, 0], [1, 1]]
+        )
+        self.assertAllEqual(
+            y, [[1, 2, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0, 0, 0, 0]]
+        )
+
+    def test_eager_tf_workflow_keeps_float_sample_weight(self):
+        # Outside a graph, the TensorFlow workflow pads `sample_weight` by
+        # hand like the Python workflow, so per-token float weights keep
+        # their dtype and values instead of being cast to int32.
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor._allow_python_workflow = False
+        _, _, sw = preprocessor(
+            ["airplane at airport"], [[1, 2, 0, 0, 0]], [[1.0, 0.5]]
+        )
+        self.assertDTypeEqual(sw, "float32")
+        self.assertAllClose(sw, [[1.0, 0.5] + [0.0] * 6])
+
+    def test_row_count_mismatch_raises(self):
+        # Fewer `y` rows than `x` rows used to be truncated silently by `zip`
+        # on the Python workflow, which now raises. Inside `tf.data` the
+        # per-row length assert rejects the mismatch when the row counts
+        # cannot broadcast (a one-row `y` still broadcasts; see the PR body).
+        import tensorflow as tf
+
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        texts = ["airplane at airport"] * 3
+        labels = [[1, 2, 0, 0, 0]] * 2
+        with self.assertRaisesRegex(ValueError, "has 3 rows but"):
+            preprocessor(texts, labels)
+
+        # Inside `tf.data`, the per-row length assert compares two different
+        # row counts and fails at run time.
+        ds = tf.data.Dataset.from_tensors((texts, labels))
+        with self.assertRaises(tf.errors.InvalidArgumentError):
+            ds.map(preprocessor).get_single_element()
+
+    def test_truncated_y_and_mismatched_batch_shapes(self):
+        import tensorflow as tf
+
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        # "airplane at airport " * 3 has 16 tokens.
+        # It gets truncated to 8 tokens (init_kwargs has sequence_length=8).
+        # A y of length 8 should be accepted. A y of length 7 should raise.
+        text = "airplane at airport " * 3
+        _, y_out, _ = preprocessor(text, [1] * 8)
+        self.assertAllEqual(y_out, [1] * 8)
+
+        ds = tf.data.Dataset.from_tensors((text, [1] * 8))
+        _, y_tf, _ = ds.map(preprocessor).get_single_element()
+        self.assertAllEqual(y_tf, [1] * 8)
+
+        preprocessor._allow_python_workflow = False
+        _, y_eager, _ = preprocessor(text, [1] * 8)
+        self.assertAllEqual(y_eager, [1] * 8)
+        preprocessor._allow_python_workflow = True
+
+        with self.assertRaisesRegex(ValueError, SHORT_Y):
+            preprocessor(text, [1] * 7)
+
+        ds = tf.data.Dataset.from_tensors((text, [1] * 7))
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, SHORT_Y):
+            ds.map(preprocessor).get_single_element()
+
+        # A per-call `sequence_length` moves the truncation point, and the
+        # length check with it: 10 labels pass, 9 raise, on both workflows.
+        _, y_out, _ = preprocessor(text, [1] * 10, sequence_length=10)
+        self.assertAllEqual(y_out, [1] * 10)
+        with self.assertRaisesRegex(ValueError, SHORT_Y):
+            preprocessor(text, [1] * 9, sequence_length=10)
+
+        def map_fn(x, y):
+            return preprocessor(x, y, sequence_length=10)
+
+        ds = tf.data.Dataset.from_tensors((text, [1] * 10))
+        _, y_tf, _ = ds.map(map_fn).get_single_element()
+        self.assertAllEqual(y_tf, [1] * 10)
+        ds = tf.data.Dataset.from_tensors((text, [1] * 9))
+        with self.assertRaisesRegex(tf.errors.InvalidArgumentError, SHORT_Y):
+            ds.map(map_fn).get_single_element()
+
+        # Test T59 mismatched batched ranks
+        mismatch = "must have the same rank"
+        with self.assertRaisesRegex(ValueError, mismatch):
+            preprocessor(["!"], y=[1])
+        with self.assertRaisesRegex(ValueError, mismatch):
+            preprocessor(["!", "!"], y=[1, 2])
+
+        ds = tf.data.Dataset.from_tensors((["!", "!"], [1, 2]))
+        with self.assertRaisesRegex(ValueError, mismatch):
+            ds.map(preprocessor)
+
+    def test_default_sample_weight(self):
+        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        x_dict, y, sample_weight = preprocessor(
+            "airplane at airport", [1, 2, 3, 4, 5]
+        )
+        self.assertAllEqual(sample_weight, x_dict["padding_mask"])
 
     @pytest.mark.extra_large
     def test_all_presets(self):

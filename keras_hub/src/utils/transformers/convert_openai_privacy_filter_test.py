@@ -72,11 +72,9 @@ class TestTask(TestCase):
         self.assertEqual(config["swiglu_alpha"], 1.702)
         self.assertEqual(config["swiglu_limit"], 7.0)
 
-        # Test overriding swiglu and rope parameters
+        # Test overriding rope parameters
         hf_config_override = {
             **hf_config,
-            "swiglu_alpha": 1.5,
-            "swiglu_limit": 5.0,
             "rope_parameters": {
                 **hf_config["rope_parameters"],
                 "beta_fast": 16.0,
@@ -84,8 +82,6 @@ class TestTask(TestCase):
         }
         config_override = convert_backbone_config(hf_config_override)
         self.assertEqual(config_override["beta_fast"], 16.0)
-        self.assertEqual(config_override["swiglu_alpha"], 1.5)
-        self.assertEqual(config_override["swiglu_limit"], 5.0)
 
         self.assertEqual(
             convert_task_config(hf_config),

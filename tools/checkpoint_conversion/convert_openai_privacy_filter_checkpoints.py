@@ -18,7 +18,6 @@ import numpy as np
 import torch
 from absl import app
 from absl import flags
-from keras import ops
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
 
@@ -53,19 +52,6 @@ def compute_hf_output(hf_model, hf_tokenizer, text):
         hf_outputs.logits.detach().cpu().float().numpy(),
         hf_inputs["input_ids"].detach().cpu().numpy(),
     )
-
-
-def compute_keras_output(keras_model, token_ids_np):
-    """Compute KerasHub model output logits using given token IDs."""
-    padding_mask = np.ones_like(token_ids_np, dtype="int32")
-    inputs = {
-        "token_ids": torch.tensor(token_ids_np, dtype=torch.int32).to(device),
-        "padding_mask": torch.tensor(padding_mask, dtype=torch.int32).to(
-            device
-        ),
-    }
-    keras_output = keras_model(inputs)
-    return ops.convert_to_numpy(keras_output)
 
 
 def main(_):
@@ -176,22 +162,12 @@ def main(_):
         )
     print("  ✅ Parameter count matches")
 
-    # === Save preset ===
-    print(f"\n→ Saving preset to ./{preset}/")
-    keras_classifier.preprocessor = preprocessor
-    keras_classifier.save_to_preset(f"./{preset}")
-    print("  ✅ Preset saved")
-
     # === Check predictions match on varying lengths ===
     print("\n→ Checking predict([text]) parity...")
-    # Load back the saved preset to ensure it works
-    loaded_classifier = (
-        keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
-            f"./{preset}", dtype=FLAGS.dtype
-        )
-    )
+    keras_classifier.preprocessor = preprocessor
     # The check is about parity; increase sequence_length so we do not truncate.
-    loaded_classifier.preprocessor.sequence_length = 1024
+    orig_sequence_length = preprocessor.sequence_length
+    keras_classifier.preprocessor.sequence_length = 1024
 
     test_texts = [
         "My name is John Smith and my email is john@example.com",
@@ -207,7 +183,7 @@ def main(_):
         valid_len = len(hf_preds)
         print(f"\n  Text {i + 1} length: {valid_len} tokens")
 
-        keras_logits = loaded_classifier.predict([text], verbose=0)
+        keras_logits = keras_classifier.predict([text], verbose=0)
         # We only care about unpadded tokens.
         keras_valid_logits = keras_logits[0][:valid_len]
         keras_preds = np.argmax(keras_valid_logits, axis=-1)
@@ -228,6 +204,33 @@ def main(_):
 
     print(f"  Parity measured at dtype={FLAGS.dtype}")
     print("  ✅ Prediction parity verified for all lengths")
+
+    # === Save preset ===
+    print(f"\n→ Saving preset to ./{preset}/")
+    # Restore the default so the saved preset does not carry the parity
+    # override.
+    keras_classifier.preprocessor.sequence_length = orig_sequence_length
+    keras_classifier.save_to_preset(f"./{preset}")
+    print("  ✅ Preset saved")
+
+    # === Verify saved preset ===
+    print("\n→ Verifying saved preset...")
+    loaded_classifier = (
+        keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
+            f"./{preset}", dtype=FLAGS.dtype
+        )
+    )
+    assert (
+        loaded_classifier.preprocessor.sequence_length == orig_sequence_length
+    ), loaded_classifier.preprocessor.sequence_length
+    loaded_logits = loaded_classifier.predict([test_texts[0]], verbose=0)
+    keras_logits_0 = keras_classifier.predict([test_texts[0]], verbose=0)
+
+    np.testing.assert_allclose(
+        keras_logits_0, loaded_logits, atol=1e-5, rtol=1e-5
+    )
+    print("  ✅ Saved preset parity verified")
+
     print("\n🎉 Conversion complete!")
 
 

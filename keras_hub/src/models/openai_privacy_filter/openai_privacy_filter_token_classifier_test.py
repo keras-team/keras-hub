@@ -13,21 +13,13 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_clas
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
+from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
 
 
 class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
     def setUp(self):
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.vocab = []
-        for merge in self.merges:
-            a, b = merge.split(" ")
-            self.vocab.extend([a, b, a + b])
-        self.vocab += ["!", "<|endoftext|>"]
-        self.vocab = sorted(set(self.vocab))
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.vocab, self.merges = get_bpe_fixture()
         self.preprocessor = OpenAIPrivacyFilterPreprocessor(
             OpenAIPrivacyFilterTokenizer(
                 vocabulary=self.vocab, merges=self.merges
@@ -91,3 +83,12 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
         )
         model_softmax.compile(optimizer="adam", loss="auto")
         self.assertFalse(model_softmax.loss.get_config()["from_logits"])
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in OpenAIPrivacyFilterTokenClassifier.presets:
+            self.run_preset_test(
+                cls=OpenAIPrivacyFilterTokenClassifier,
+                preset=preset,
+                input_data=["The quick brown fox jumps."],
+            )

@@ -61,6 +61,22 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
     the same ids, except for a run of spaces at the very end of a text,
     where RE2's lack of lookahead leaves one split different.
 
+    Examples:
+
+    ```python
+    # Unbatched input.
+    tokenizer = keras_hub.models.OpenAIPrivacyFilterTokenizer.from_preset(
+        "hf://openai/privacy-filter"
+    )
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+    ```
+
     Args:
         vocabulary: string or dict, maps token to integer ids.
         merges: string or list, contains the merge rule.

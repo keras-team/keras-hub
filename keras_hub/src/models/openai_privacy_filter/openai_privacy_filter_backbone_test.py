@@ -9,6 +9,9 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone i
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_layers import (  # noqa: E501
     OpenAIPrivacyFilterAttention,
 )
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_layers import (  # noqa: E501
+    OpenAIPrivacyFilterTopKRouter,
+)
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
@@ -248,6 +251,72 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
             attention.key_dense.kernel, attention.value_dense.kernel
         )
 
+    def test_router_computes_in_float32(self):
+        router = OpenAIPrivacyFilterTopKRouter(
+            num_experts=16, top_k=4, dtype="bfloat16"
+        )
+        router.build((None, 64))
+        rng = np.random.default_rng(0)
+        x_np = rng.normal(size=(64, 64)).astype("float32")
+        x_bf16 = keras.ops.convert_to_tensor(x_np, "bfloat16")
+
+        scores = router(x_bf16)
+        self.assertEqual(
+            keras.backend.standardize_dtype(scores.dtype), "float32"
+        )
+
+        # Reference in float32
+        x_f32 = keras.ops.convert_to_numpy(x_bf16).astype("float32")
+        kernel = keras.ops.convert_to_numpy(router.router_dense.kernel).astype(
+            "float32"
+        )
+        bias = keras.ops.convert_to_numpy(router.router_dense.bias).astype(
+            "float32"
+        )
+        logits = x_f32 @ kernel + bias
+
+        top_k = 4
+        top_indices = np.argsort(logits, axis=-1)[:, -top_k:][:, ::-1]
+        top_logits = np.take_along_axis(logits, top_indices, axis=-1)
+
+        top_logits = top_logits - np.max(top_logits, axis=-1, keepdims=True)
+        exp = np.exp(top_logits)
+        weights = exp / np.sum(exp, axis=-1, keepdims=True)
+        weights = weights / top_k
+
+        ref_scores = np.zeros_like(logits)
+        np.put_along_axis(ref_scores, top_indices, weights, axis=-1)
+
+        self.assertAllClose(scores, ref_scores, atol=1e-4)
+
+    def test_router_is_not_quantized(self):
+        # The router reads `router_dense.kernel` and `bias` directly and
+        # computes in float32, so its `Dense` refuses quantization and
+        # `Model.quantize` skips it (with a warning) instead of handing the
+        # router an unscaled int8 kernel.
+        model = OpenAIPrivacyFilterBackbone(**self.init_kwargs)
+        routers = [
+            layer
+            for layer in model._flatten_layers()
+            if isinstance(layer, OpenAIPrivacyFilterTopKRouter)
+        ]
+        self.assertLen(routers, self.init_kwargs["num_layers"])
+        rng = np.random.default_rng(0)
+        x_np = rng.normal(size=(16, self.init_kwargs["hidden_dim"]))
+        x = ops.convert_to_tensor(x_np.astype("float32"))
+        before = [ops.convert_to_numpy(router(x)) for router in routers]
+
+        with self.assertWarnsRegex(UserWarning, "left unquantized"):
+            model.quantize("int8")
+
+        for router, scores in zip(routers, before):
+            self.assertIsNone(router.router_dense.quantization_mode)
+            self.assertAllClose(router(x), scores)
+        # `type_check=False` bypasses Keras' own subclass guard, so this
+        # exercises the override itself.
+        with self.assertRaisesRegex(NotImplementedError, "left unquantized"):
+            routers[0].router_dense.quantize("int8", type_check=False)
+
     def test_precision_policies(self):
         # Mirrors `TestCase.run_precision_test`, with one deliberate
         # exception: `sinks` stays float32 under every policy to match HF,
@@ -267,6 +336,13 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
 
             output_spec = model.compute_output_spec(self.input_data)
             self.assertDTypeEqual(output_spec, policy.compute_dtype)
+
+            layer_spec = model.encoder_layers[0].compute_output_spec(
+                keras.KerasTensor(
+                    (2, 8, self.init_kwargs["hidden_dim"]), dtype="float32"
+                )
+            )
+            self.assertDTypeEqual(layer_spec, policy.compute_dtype)
 
             for sublayer in model._flatten_layers():
                 if isinstance(sublayer, keras.layers.Softmax):

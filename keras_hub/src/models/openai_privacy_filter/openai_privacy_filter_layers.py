@@ -316,7 +316,31 @@ class OpenAIPrivacyFilterExperts(keras.layers.Layer):
 # ---------------------------------------------------------------------------
 # Router — Dense with bias, fp32 cast, softmax+top_k, div by top_k
 # ---------------------------------------------------------------------------
+class _Float32RouterDense(keras.layers.Dense):
+    """`Dense` whose weights the router reads directly in float32.
+
+    `OpenAIPrivacyFilterTopKRouter.call` casts `kernel` and `bias` to
+    float32 itself, so a quantized kernel would be read unscaled. Keras
+    already refuses `quantize()` on any `Dense` subclass when
+    `type_check=True` (the path `Model.quantize` takes, which then skips
+    the layer with a warning); the override below keeps the refusal for
+    `type_check=False` callers too, with a message that names the layer.
+    """
+
+    def quantize(self, mode=None, type_check=True, config=None):
+        raise NotImplementedError(
+            "OpenAIPrivacyFilterTopKRouter computes in float32; its "
+            "`router_dense` is left unquantized and skipped by "
+            "`Model.quantize`."
+        )
+
+
 class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
+    """Top-k router of the sparse MoE block.
+
+    The router computes in float32 and is excluded from quantization.
+    """
+
     def __init__(
         self,
         num_experts,
@@ -330,7 +354,7 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, hidden_states_shape):
-        self.router_dense = keras.layers.Dense(
+        self.router_dense = _Float32RouterDense(
             self.num_experts,
             use_bias=True,
             kernel_initializer=self.kernel_initializer,
@@ -341,7 +365,10 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        router_logits = self.router_dense(hidden_states)
+        router_logits = ops.matmul(
+            ops.cast(hidden_states, "float32"),
+            ops.cast(self.router_dense.kernel, "float32"),
+        ) + ops.cast(self.router_dense.bias, "float32")
         routing_weights, selected_experts = ops.top_k(
             router_logits, k=self.top_k
         )
@@ -350,7 +377,7 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         routing_weights = routing_weights / self.top_k
 
         expert_mask = ops.one_hot(selected_experts, self.num_experts)
-        expert_mask = ops.cast(expert_mask, dtype=routing_weights.dtype)
+        expert_mask = ops.cast(expert_mask, dtype="float32")
         weighted_mask = expert_mask * ops.expand_dims(routing_weights, axis=-1)
         router_scores = ops.sum(weighted_mask, axis=1)
         return router_scores
@@ -426,6 +453,9 @@ class OpenAIPrivacyFilterSparseMoeBlock(keras.layers.Layer):
         # Weight expert outputs by router scores and sum
         router_scores_t = ops.transpose(router_scores)
         router_scores_expanded = ops.expand_dims(router_scores_t, axis=-1)
+        router_scores_expanded = ops.cast(
+            router_scores_expanded, dtype=expert_outputs.dtype
+        )
         weighted = expert_outputs * router_scores_expanded
         final = ops.sum(weighted, axis=0)
 

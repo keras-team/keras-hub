@@ -3,21 +3,13 @@ import pytest
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
+from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
 
 
 class OpenAIPrivacyFilterTokenizerTest(TestCase):
     def setUp(self):
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
-        self.merges += ["Ġai r", "Ġa i", "pla ne"]
-        self.vocab = []
-        for merge in self.merges:
-            a, b = merge.split(" ")
-            self.vocab.extend([a, b, a + b])
-        self.vocab += ["!", "<|endoftext|>"]
-        self.vocab = sorted(set(self.vocab))
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.vocab, self.merges = get_bpe_fixture()
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
@@ -142,3 +134,12 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
                     )
         finally:
             kh_tok._allow_python_workflow = saved_flag
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in OpenAIPrivacyFilterTokenizer.presets:
+            self.run_preset_test(
+                cls=OpenAIPrivacyFilterTokenizer,
+                preset=preset,
+                input_data=["The quick brown fox jumps."],
+            )

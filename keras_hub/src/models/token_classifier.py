@@ -18,7 +18,9 @@ class TokenClassifier(Task):
     where `x` is a string and `y` is an integer tensor
     with values in `[0, num_classes)`. When `x` is a string or list of strings,
     `y` will be padded (with label 0) or truncated to match the model's
-    `sequence_length`. Padding positions are automatically masked via
+    `sequence_length`; a row with fewer labels than its (truncated) token
+    count is rejected.
+    Padding positions are automatically masked via
     `sample_weight`.
 
     All `TokenClassifier` tasks include a `from_preset()` constructor for
