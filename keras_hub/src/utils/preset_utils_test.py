@@ -17,7 +17,6 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
-from keras_hub.src.utils.preset_utils import _join_within
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import upload_preset
 
@@ -253,23 +252,29 @@ class PresetUtilsTest(TestCase):
             with self.assertRaises(FileNotFoundError):
                 get_file("hf://username/bert_base_en", "missing.json")
 
-    @parameterized.parameters("../outside.json", "/abs/outside.json")
-    def test_config_file_outside_preset_dir(self, config_file):
-        with self.assertRaisesRegex(ValueError, "plain JSON filename"):
-            Tokenizer(config_file=config_file)
-        with self.assertRaisesRegex(ValueError, "plain JSON filename"):
-            Preprocessor(config_file=config_file)
+    @parameterized.product(
+        cls=[Tokenizer, Preprocessor],
+        config_file=[
+            "../outside.json",
+            "/abs/outside.json",
+            "my.tokenizer.json",
+            "tokenizer.JSON",
+        ],
+    )
+    def test_invalid_config_file(self, cls, config_file):
+        pattern = r"\[A-Za-z0-9\]\[A-Za-z0-9_-\]\*\\\.json"
+        with self.assertRaisesRegex(ValueError, pattern):
+            cls(config_file=config_file)
+
+        temp_dir = self.get_temp_dir()
+        preset_dir = os.path.join(temp_dir, "preset")
+        layer = cls()
+        layer.config_file = config_file
+        with self.assertRaisesRegex(ValueError, pattern):
+            layer.save_to_preset(preset_dir)
+        self.assertEqual(os.listdir(temp_dir), ["preset"])
+        self.assertEqual(os.listdir(preset_dir), [])
 
     def test_custom_config_file(self):
         tokenizer = Tokenizer(config_file="clip_l_tokenizer.json")
         self.assertEqual(tokenizer.config_file, "clip_l_tokenizer.json")
-
-    def test_join_within(self):
-        base_dir = self.get_temp_dir()
-        self.assertEqual(
-            _join_within(base_dir, "assets", "tokenizer"),
-            os.path.abspath(os.path.join(base_dir, "assets", "tokenizer")),
-        )
-        for parts in [("..", "outside.json"), ("/abs/outside.json",)]:
-            with self.assertRaisesRegex(ValueError, "outside the preset"):
-                _join_within(base_dir, *parts)

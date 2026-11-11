@@ -340,23 +340,11 @@ def validate_config_file(config_file):
         and _SAFE_CONFIG_FILE_RE.fullmatch(config_file)
     ):
         raise ValueError(
-            "`config_file` must be a plain JSON filename such as "
-            "`'tokenizer.json'`, with no directory components. "
-            f"Received: config_file={config_file!r}"
+            "`config_file` must be a plain JSON filename matching "
+            "`[A-Za-z0-9][A-Za-z0-9_-]*\\.json` (for example, "
+            f"`'tokenizer.json'`). Received: config_file={config_file!r}"
         )
     return config_file
-
-
-def _join_within(base_dir, *parts):
-    """Join `parts` onto `base_dir`, refusing results outside `base_dir`."""
-    base = os.path.abspath(base_dir)
-    path = os.path.abspath(os.path.join(base, *parts))
-    if os.path.commonpath([base, path]) != base:
-        raise ValueError(
-            f"Refusing to write outside the preset directory `{base_dir}`. "
-            f"Resolved path: `{path}`."
-        )
-    return path
 
 
 def _validate_backbone(preset):
@@ -928,7 +916,7 @@ class KerasPresetSaver:
         self._save_serialized_object(tokenizer, config_file)
         # Save assets.
         subdir = config_file.split(".")[0]
-        asset_dir = _join_within(self.preset_dir, ASSET_DIR, subdir)
+        asset_dir = os.path.join(self.preset_dir, ASSET_DIR, subdir)
         os.makedirs(asset_dir, exist_ok=True)
         tokenizer.save_assets(asset_dir)
 
@@ -979,7 +967,7 @@ class KerasPresetSaver:
                 self._recursive_pop(value, key)
 
     def _save_serialized_object(self, layer, config_file):
-        config_path = _join_within(self.preset_dir, config_file)
+        config_path = os.path.join(self.preset_dir, config_file)
         config = keras.saving.serialize_keras_object(layer)
         config_to_skip = ["compile_config", "build_config"]
         for key in config_to_skip:
