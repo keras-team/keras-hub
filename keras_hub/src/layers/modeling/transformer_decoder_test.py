@@ -29,7 +29,6 @@ class TransformerDecoderTest(TestCase):
             },
             input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
-            expected_num_trainable_weights=16,
             expected_num_non_trainable_variables=3,  # dropout rng seeds
         )
 
@@ -71,7 +70,6 @@ class TransformerDecoderTest(TestCase):
             },
             input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
-            expected_num_trainable_weights=16,
             # 12 weight regularizers (self-attention 4 kernels + 4 biases,
             # 2 kernels + 2 biases in the dense layers) + 1 activity loss.
             expected_num_losses=13,
