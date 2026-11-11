@@ -6,7 +6,6 @@ from tokenizers import pre_tokenizers
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
-from keras_hub.src.tokenizers.byte_pair_tokenizer import SPECIAL_WHITESPACES
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.byte_pair_tokenizer import create_static_hashtable
 from keras_hub.src.utils.tensor_utils import is_int_dtype
@@ -21,9 +20,13 @@ except ImportError:
 # A private use character marking a split point in the TensorFlow path. It is
 # removed from the text, so it is assumed not to appear in any input.
 _SPLIT_MARKER = "\ue000"
-# Whitespace characters, as a regex class body. RE2's `\s` is ASCII only and
-# leaves out the vertical tab.
-_WHITESPACE = rf"\s\x{{0b}}{SPECIAL_WHITESPACES}"
+# Unicode whitespace, as a regex class body. This is what `\s` means in the
+# GPT-2 pre-tokenizer; RE2's `\s` is ASCII only and leaves out the vertical
+# tab.
+_WHITESPACE = (
+    r"\s\x{0b}\x{85}\x{a0}\x{1680}\x{2000}-\x{200a}"
+    r"\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}"
+)
 # The GPT-2 pre-tokenizer pattern, without its lookahead. See `_tokenize_tf`.
 _SPLIT_PATTERN = (
     r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+"
@@ -165,11 +168,16 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             flat_pieces, whole or _SPLIT_MARKER
         )
 
+        text = tf.where(is_whole, "", flat_pieces)
+        if self.add_prefix_space:
+            # As in the Python workflow, every piece of text that does not
+            # start with a space gets one.
+            text = tf.strings.regex_replace(text, "^([^ ])", r" \1")
         # GPT-2 matches whitespace with `\s+(?!\S)|\s+`: a run of whitespace
         # followed by text gives up its last character. RE2 has no
         # lookahead, so mark that split point first.
         text = tf.strings.regex_replace(
-            tf.where(is_whole, "", flat_pieces),
+            text,
             rf"([{_WHITESPACE}])([{_WHITESPACE}])([^{_WHITESPACE}])",
             rf"\1{_SPLIT_MARKER}\2\3",
         )
@@ -188,8 +196,6 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         unbatched = inputs.shape.rank == 0
         if unbatched:
             inputs = tf.expand_dims(inputs, 0)
-        if self.add_prefix_space:
-            inputs = tf.strings.join([" ", inputs])
 
         words = self._split_words_tf(inputs)
         flat_words = words.flat_values

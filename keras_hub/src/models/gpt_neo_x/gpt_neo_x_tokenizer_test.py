@@ -28,15 +28,16 @@ class GPTNeoXTokenizerTest(TestCase):
             " airplane airport",
         ]
         # A vocabulary shaped like the Pythia one: a padding token, tokens
-        # for runs of spaces, and a newline with a merge.
-        extra = ["<|padding|>", "  ", "   ", "Ċ", "ĊĊ"]
+        # for runs of spaces, and newline and other whitespace with merges.
+        extra = ["<|padding|>", "  ", "   ", "Ċ", "ĊĊ", "Ã", "©"]
+        extra += ["ċ", "Ġċ", "Â", "ħ", "ĠÂ"]
         self.pythia_vocab = {
             **self.vocab,
             **{token: len(self.vocab) + i for i, token in enumerate(extra)},
         }
         self.pythia_kwargs = {
             "vocabulary": self.pythia_vocab,
-            "merges": self.merges + ["Ċ Ċ"],
+            "merges": self.merges + ["Ċ Ċ", "Ġ ċ", "Ġ Â"],
             "_allow_python_workflow": self._allow_python_workflow,
         }
 
@@ -112,6 +113,33 @@ class GPTNeoXTokenizerTest(TestCase):
         self.assert_tokens(
             tokenizer, " at\n\n<|endoftext|>", ["Ġat", "ĊĊ", "<|endoftext|>"]
         )
+
+    def test_unicode_whitespace(self):
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        # Whitespace other than ASCII also stands apart from a space before
+        # it. "ċ" is the vertical tab, and "Â", "ħ" the bytes of U+0085.
+        self.assert_tokens(tokenizer, " at \x0bat", ["Ġat", "Ġ", "ċ", "a", "t"])
+        self.assert_tokens(
+            tokenizer, " at \x85at", ["Ġat", "Ġ", "Â", "ħ", "a", "t"]
+        )
+
+    def test_nfc_normalization(self):
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        # "e" and a combining acute accent become "é", bytes "Ã" and "©".
+        self.assert_tokens(tokenizer, "e\u0301", ["Ã", "©"])
+
+    def test_add_prefix_space(self):
+        tokenizer = GPTNeoXTokenizer(
+            add_prefix_space=True, **self.pythia_kwargs
+        )
+        # Each piece of text gets the prefix, also after a whitespace run.
+        self.assert_tokens(tokenizer, "at  at", ["Ġat", "  ", "Ġat"])
+        self.assert_tokens(tokenizer, " at", ["Ġat"])
+
+    def test_rank_2_input_raises(self):
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        with self.assertRaises(ValueError):
+            tokenizer([[" at"]])
 
 
 class GPTNeoXTokenizerTFTest(GPTNeoXTokenizerTest):
