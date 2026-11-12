@@ -142,6 +142,31 @@ class SentencePieceTokenizerTest(TestCase):
         outputs = self.tokenizer.detokenize([[6, 5, 3, 4], [6, 4]])
         self.assertAllEqual(outputs, ["the quick brown fox.", "the fox."])
 
+    def test_detokenize_special_tokens(self):
+        class SpecialTokenTokenizer(SentencePieceTokenizer):
+            def __init__(self, **kwargs):
+                self._add_special_token("<s>", "start_token")
+                self._add_special_token("</s>", "end_token")
+                super().__init__(**kwargs)
+
+        tokenizer = SpecialTokenTokenizer(
+            proto=self.proto,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        # `"<s>"` (1) and `"</s>"` (2) are `CONTROL` pieces in the proto, which
+        # SentencePiece decodes to an empty string. Registered special tokens
+        # should be kept, without dropping the whitespace that follows them.
+        outputs = tokenizer.detokenize([[1, 6, 5, 3, 4, 2], [6, 5, 2, 3, 4]])
+        self.assertAllEqual(
+            outputs,
+            ["<s> the quick brown fox.</s>", "the quick</s> brown fox."],
+        )
+        # Special tokens in input text are still not tokenized as such.
+        self.assertAllEqual(tokenizer("the <s>"), [6, 0])
+        # `CONTROL` pieces that are not special tokens are still dropped.
+        outputs = self.tokenizer.detokenize([1, 6, 5, 3, 4, 2])
+        self.assertAllEqual(outputs, "the quick brown fox.")
+
     def test_accessors(self):
         self.assertEqual(
             self.tokenizer.get_vocabulary(),

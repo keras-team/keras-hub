@@ -42,7 +42,36 @@ class DebertaV3TokenizerTest(TestCase):
         self.assertEqual(tokenizer.token_to_id("[MASK]"), 4)
         input_data = [[5, 10, 6, 8, self.tokenizer.mask_token_id]]
         output = tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
+        self.assertEqual(output, ["the quick brown fox[MASK]"])
+
+    def test_detokenize_special_tokens(self):
+        tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
+        input_data = [
+            [
+                tokenizer.cls_token_id,
+                *[5, 10, 6, 8],
+                tokenizer.sep_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(output, ["[CLS] the quick brown fox[SEP][PAD]"])
+
+    def test_detokenize_mask_token_not_in_proto(self):
+        # Rename the `"[MASK]"` piece, so that the mask token is appended to
+        # the end of the vocabulary, as with the DeBERTaV3 presets.
+        from sentencepiece import sentencepiece_model_pb2
+
+        model_proto = sentencepiece_model_pb2.ModelProto()
+        with open(self.init_kwargs["proto"], "rb") as f:
+            model_proto.ParseFromString(f.read())
+        model_proto.pieces[4].piece = "[UNUSED]"
+        tokenizer = DebertaV3Tokenizer(
+            **{**self.init_kwargs, "proto": model_proto.SerializeToString()}
+        )
+        self.assertEqual(tokenizer.mask_token_id, 12)
+        output = tokenizer.detokenize([[5, tokenizer.mask_token_id, 6, 8]])
+        self.assertAllEqual(output, ["the[MASK] brown fox"])
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):
