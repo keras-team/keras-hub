@@ -168,6 +168,12 @@ from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
 from keras_hub.src.models.parseq.parseq_image_converter import (
     PARSeqImageConverter as PARSeqImageConverter,
 )
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_image_converter import (
+    Qwen2_5VLImageConverter as Qwen2_5VLImageConverter,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_video_converter import (
+    Qwen2_5VLVideoConverter as Qwen2_5VLVideoConverter,
+)
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
     Qwen2VLImageConverter as Qwen2VLImageConverter,
 )

@@ -1,0 +1,368 @@
+"""Convert HuggingFace Qwen2.5-VL weights to KerasHub."""
+
+import numpy as np
+
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_backbone import (
+    Qwen2_5VLBackbone,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_image_converter import (
+    Qwen2_5VLImageConverter,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_vision_encoder import (
+    Qwen2_5VLVisionEncoder,
+)
+from keras_hub.src.utils.preset_utils import load_json
+
+backbone_cls = Qwen2_5VLBackbone
+
+
+def convert_backbone_config(transformers_config):
+    # Newer transformers nest text params under "text_config".
+    tc = transformers_config.get("text_config", transformers_config)
+    vision_config = transformers_config.get("vision_config", None)
+    rope_params = tc.get("rope_parameters", tc.get("rope_scaling", {}))
+    rope_theta = tc.get("rope_theta", rope_params.get("rope_theta", 1000000))
+    # M-RoPE section lives inside rope_parameters/rope_scaling in the HF
+    # config; HF defaults to [16, 24, 24].
+    mrope_section = rope_params.get("mrope_section", [16, 24, 24])
+
+    vision_encoder = None
+    if vision_config is not None:
+        vision_encoder = Qwen2_5VLVisionEncoder(
+            patch_size=vision_config["patch_size"],
+            temporal_patch_size=vision_config["temporal_patch_size"],
+            in_channels=vision_config.get(
+                "in_chans", vision_config.get("in_channels", 3)
+            ),
+            embed_dim=vision_config.get(
+                "embed_dim", vision_config.get("hidden_size", 1280)
+            ),
+            out_dim=vision_config["out_hidden_size"],
+            depth=vision_config["depth"],
+            num_heads=vision_config["num_heads"],
+            intermediate_dim=vision_config["intermediate_size"],
+            spatial_merge_size=vision_config["spatial_merge_size"],
+            window_size=vision_config["window_size"],
+            fullatt_block_indexes=vision_config["fullatt_block_indexes"],
+            theta=vision_config.get("rope_parameters", {}).get(
+                "rope_theta", vision_config.get("rope_theta", 10000.0)
+            ),
+        )
+
+    result = {
+        "vocabulary_size": tc["vocab_size"],
+        "num_layers": tc["num_hidden_layers"],
+        "num_query_heads": tc["num_attention_heads"],
+        "num_key_value_heads": tc["num_key_value_heads"],
+        "hidden_dim": tc["hidden_size"],
+        "intermediate_dim": tc["intermediate_size"],
+        "rope_max_wavelength": rope_theta,
+        "mrope_section": mrope_section,
+        "layer_norm_epsilon": tc["rms_norm_eps"],
+        # Outer level in transformers 5.x; inside text_config in 4.x.
+        "tie_word_embeddings": transformers_config.get(
+            "tie_word_embeddings", tc.get("tie_word_embeddings", False)
+        ),
+        "use_sliding_window_attention": tc["use_sliding_window"],
+        "sliding_window_size": tc["sliding_window"],
+    }
+    if vision_encoder is not None:
+        result["vision_encoder"] = vision_encoder
+    return result
+
+
+def load_preprocessor_config(preset, transformers_config):
+    """Extra kwargs for ``Qwen2_5VLCausalLMPreprocessor``.
+
+    ``tokens_per_second`` lives in HF ``vision_config`` and scales video
+    temporal M-RoPE positions.
+    """
+    vision_config = transformers_config.get("vision_config")
+    if vision_config is None:
+        return None
+    return {"tokens_per_second": vision_config["tokens_per_second"]}
+
+
+def load_image_converter_config(preset, transformers_config):
+    """Return kwargs for ``Qwen2_5VLImageConverter``, or None if text-only."""
+    if "vision_config" not in transformers_config:
+        return None
+
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+
+    # HF nests pixel budgets under "size" as shortest_edge/longest_edge,
+    # which are pixel counts (not edge lengths) and map to our
+    # min_pixels/max_pixels. transformers 4.x ships them flat instead.
+    size_config = preprocessor_config.get("size", {})
+    if "shortest_edge" in size_config:
+        min_pixels = size_config["shortest_edge"]
+        max_pixels = size_config["longest_edge"]
+    else:
+        min_pixels = preprocessor_config["min_pixels"]
+        max_pixels = preprocessor_config["max_pixels"]
+
+    return {
+        "min_pixels": min_pixels,
+        "max_pixels": max_pixels,
+        "patch_size": preprocessor_config["patch_size"],
+        "temporal_patch_size": preprocessor_config["temporal_patch_size"],
+        "merge_size": preprocessor_config["merge_size"],
+        "image_mean": preprocessor_config["image_mean"],
+        "image_std": preprocessor_config["image_std"],
+    }
+
+
+def load_video_converter_config(preset, transformers_config):
+    """Return kwargs for ``Qwen2_5VLVideoConverter``, or None if text-only.
+
+    Qwen2.5-VL applies identical preprocessing to videos and images, and
+    its checkpoints do not ship a ``video_preprocessor_config.json``, so
+    this delegates to ``load_image_converter_config``.
+    """
+    image_kwargs = load_image_converter_config(preset, transformers_config)
+    if image_kwargs is None:
+        return None
+    return {"image_converter": Qwen2_5VLImageConverter(**image_kwargs)}
+
+
+def convert_weights(backbone, loader, transformers_config):
+    # ── helpers ──────────────────────────────────────────────────────
+    def transpose_and_reshape(x, shape):
+        return np.reshape(np.transpose(x), shape)
+
+    def transpose_2d(x, _):
+        return np.transpose(x, axes=(1, 0))
+
+    # ── token embeddings ────────────────────────────────────────────
+    loader.port_weight(
+        keras_variable=backbone.get_layer("token_embedding").embeddings,
+        hf_weight_key="model.embed_tokens.weight",
+    )
+    if not backbone.tie_word_embeddings:
+        loader.port_weight(
+            keras_variable=backbone.get_layer(
+                "token_embedding"
+            ).reverse_embeddings,
+            hf_weight_key="lm_head.weight",
+            hook_fn=transpose_2d,
+        )
+
+    # ── text decoder layers ─────────────────────────────────────────
+    for i in range(backbone.num_layers):
+        decoder = backbone.get_layer(f"transformer_layer_{i}")
+
+        # Pre-attention RMSNorm
+        loader.port_weight(
+            keras_variable=decoder._self_attention_layernorm.scale,
+            hf_weight_key=f"model.layers.{i}.input_layernorm.weight",
+        )
+
+        # Q/K/V projections (EinsumDense → transpose + reshape)
+        loader.port_weight(
+            keras_variable=(decoder._self_attention_layer._query_dense.kernel),
+            hf_weight_key=(f"model.layers.{i}.self_attn.q_proj.weight"),
+            hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=decoder._self_attention_layer._query_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.q_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=(decoder._self_attention_layer._key_dense.kernel),
+            hf_weight_key=(f"model.layers.{i}.self_attn.k_proj.weight"),
+            hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=decoder._self_attention_layer._key_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.k_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=(decoder._self_attention_layer._value_dense.kernel),
+            hf_weight_key=(f"model.layers.{i}.self_attn.v_proj.weight"),
+            hook_fn=transpose_and_reshape,
+        )
+        loader.port_weight(
+            keras_variable=decoder._self_attention_layer._value_dense.bias,
+            hf_weight_key=f"model.layers.{i}.self_attn.v_proj.bias",
+            hook_fn=transpose_and_reshape,
+        )
+
+        # Output projection
+        loader.port_weight(
+            keras_variable=(decoder._self_attention_layer._output_dense.kernel),
+            hf_weight_key=f"model.layers.{i}.self_attn.o_proj.weight",
+            hook_fn=transpose_and_reshape,
+        )
+
+        # MLP (gate / up / down)
+        loader.port_weight(
+            keras_variable=decoder._feedforward_gate_dense.kernel,
+            hf_weight_key=f"model.layers.{i}.mlp.gate_proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=decoder._feedforward_intermediate_dense.kernel,
+            hf_weight_key=f"model.layers.{i}.mlp.up_proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=decoder._feedforward_output_dense.kernel,
+            hf_weight_key=f"model.layers.{i}.mlp.down_proj.weight",
+            hook_fn=transpose_2d,
+        )
+
+        # Post-attention RMSNorm
+        loader.port_weight(
+            keras_variable=decoder._feedforward_layernorm.scale,
+            hf_weight_key=(f"model.layers.{i}.post_attention_layernorm.weight"),
+        )
+
+    # Final layernorm
+    loader.port_weight(
+        keras_variable=backbone.get_layer("sequence_output_layernorm").scale,
+        hf_weight_key="model.norm.weight",
+    )
+
+    # ── vision encoder ──────────────────────────────────────────────
+    vision = backbone.vision_encoder
+    if vision is None:
+        return backbone
+
+    # Patch embedding (Conv3D)
+    # HF: (embed_dim, C, T, kH, kW) → Keras: (T, kH, kW, C, embed_dim)
+    loader.port_weight(
+        keras_variable=vision.patch_embed.kernel,
+        hf_weight_key="visual.patch_embed.proj.weight",
+        hook_fn=lambda x, _: np.transpose(x, (2, 3, 4, 1, 0)),
+    )
+
+    # Vision blocks
+    for i in range(vision.depth):
+        block = vision.blocks[i]
+        prefix = f"visual.blocks.{i}"
+
+        # RMSNorm 1 (weight only — no bias, unlike Qwen2-VL's LayerNorm)
+        loader.port_weight(
+            keras_variable=block.norm1.scale,
+            hf_weight_key=f"{prefix}.norm1.weight",
+        )
+
+        # Fused QKV attention
+        loader.port_weight(
+            keras_variable=block.attn.qkv.kernel,
+            hf_weight_key=f"{prefix}.attn.qkv.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=block.attn.qkv.bias,
+            hf_weight_key=f"{prefix}.attn.qkv.bias",
+        )
+
+        # Output projection
+        loader.port_weight(
+            keras_variable=block.attn.proj.kernel,
+            hf_weight_key=f"{prefix}.attn.proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=block.attn.proj.bias,
+            hf_weight_key=f"{prefix}.attn.proj.bias",
+        )
+
+        # RMSNorm 2
+        loader.port_weight(
+            keras_variable=block.norm2.scale,
+            hf_weight_key=f"{prefix}.norm2.weight",
+        )
+
+        # Gated SiLU MLP (bias=True, unlike the text MLP)
+        loader.port_weight(
+            keras_variable=block.mlp.gate_proj.kernel,
+            hf_weight_key=f"{prefix}.mlp.gate_proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=block.mlp.gate_proj.bias,
+            hf_weight_key=f"{prefix}.mlp.gate_proj.bias",
+        )
+        loader.port_weight(
+            keras_variable=block.mlp.up_proj.kernel,
+            hf_weight_key=f"{prefix}.mlp.up_proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=block.mlp.up_proj.bias,
+            hf_weight_key=f"{prefix}.mlp.up_proj.bias",
+        )
+        loader.port_weight(
+            keras_variable=block.mlp.down_proj.kernel,
+            hf_weight_key=f"{prefix}.mlp.down_proj.weight",
+            hook_fn=transpose_2d,
+        )
+        loader.port_weight(
+            keras_variable=block.mlp.down_proj.bias,
+            hf_weight_key=f"{prefix}.mlp.down_proj.bias",
+        )
+
+    # Patch merger
+    merger = vision.merger
+    loader.port_weight(
+        keras_variable=merger.ln_q.scale,
+        hf_weight_key="visual.merger.ln_q.weight",
+    )
+    # HF merger MLP is nn.Sequential(Linear, GELU, Linear)
+    # sub-indices: .0 = fc1, .1 = GELU (no weights), .2 = fc2
+    loader.port_weight(
+        keras_variable=merger.mlp_fc1.kernel,
+        hf_weight_key="visual.merger.mlp.0.weight",
+        hook_fn=transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc1.bias,
+        hf_weight_key="visual.merger.mlp.0.bias",
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc2.kernel,
+        hf_weight_key="visual.merger.mlp.2.weight",
+        hook_fn=transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc2.bias,
+        hf_weight_key="visual.merger.mlp.2.bias",
+    )
+
+    return backbone
+
+
+def convert_tokenizer(cls, preset, **kwargs):
+    tokenizer_config = load_json(preset, "tokenizer.json")
+    vocab = tokenizer_config["model"]["vocab"]
+    merges = tokenizer_config["model"]["merges"]
+
+    # Load all special tokens except reserved placeholders.
+    special_tokens = set()
+    reserved_prefix = "<" + "|reserved_special_token_"
+    for token in tokenizer_config["added_tokens"]:
+        if not token["content"].startswith(reserved_prefix):
+            vocab[token["content"]] = token["id"]
+            special_tokens.add(token["content"])
+
+    # HF's tokenizer.json added_tokens goes up to the vision-pad ids but
+    # tokenizer_config.json also defines the image/video pad tokens in
+    # added_tokens_decoder. Load those too.
+    tok_cfg = load_json(preset, "tokenizer_config.json")
+    for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
+        content = meta["content"]
+        if content not in vocab and not content.startswith(reserved_prefix):
+            vocab[content] = int(_id_str)
+            special_tokens.add(content)
+
+    kwargs.update(
+        {
+            "unsplittable_tokens": list(special_tokens),
+        }
+    )
+
+    return cls(vocabulary=vocab, merges=merges, **kwargs)
