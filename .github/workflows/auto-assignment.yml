@@ -15,9 +15,8 @@ permissions:
 
 jobs:
   auto_assign:
-    uses: keras-team/shared-workflows/.github/workflows/auto-assignment.yml@5ee0604fc2fb4bf0ff6032083a20d1da69e8b923 # v2
+    uses: keras-team/shared-workflows/.github/workflows/auto-assignment.yml@e7f0e52833999f2acb171ed14028ca69c82cd73f
     with:
-      ref: '5ee0604fc2fb4bf0ff6032083a20d1da69e8b923'
       issue_assignees: 'maitry63,mrinalghoshh,dhantule'
       # TODO(jeffcarp): Transition to CODEOWNERS for this.
       pr_reviewers: 'laxmareddyp,JyotinderSingh'
