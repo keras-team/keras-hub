@@ -1,6 +1,5 @@
 import unittest
 
-import keras
 import numpy as np
 
 import keras_hub
@@ -62,8 +61,6 @@ class NoTensorflow(unittest.TestCase):
     def test_image_converter_works(self):
         # `Gemma4ImageConverter` has `keras.ops` branches for every TensorFlow
         # op, guarded by `in_tf_function()`, so it runs without TensorFlow.
-        if keras.config.backend() == "openvino":
-            self.skipTest("Image ops are not supported on OpenVINO.")
         converter = keras_hub.layers.Gemma4ImageConverter(
             patch_size=4, max_soft_tokens=1
         )
@@ -74,8 +71,6 @@ class NoTensorflow(unittest.TestCase):
     def test_muse_glimmer_generate_preprocess_works(self):
         # The `generate()` path of the MuseGlimmer preprocessor builds the
         # vision inputs without TensorFlow.
-        if keras.config.backend() == "openvino":
-            self.skipTest("Image ops are not supported on OpenVINO.")
         merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         merges += ["Ġai r", "Ġa i", "pla ne"]
@@ -122,8 +117,6 @@ class NoTensorflow(unittest.TestCase):
     def test_muse_glimmer_video_generate_preprocess_works(self):
         # The video layout (frame sampling, timestamps and separators) is
         # also built without TensorFlow.
-        if keras.config.backend() == "openvino":
-            self.skipTest("Image ops are not supported on OpenVINO.")
         merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         merges += ["Ġai r", "Ġa i", "pla ne"]

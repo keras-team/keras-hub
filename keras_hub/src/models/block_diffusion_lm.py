@@ -9,6 +9,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.utils.keras_utils import get_backend_package
 from keras_hub.src.utils.tensor_utils import tf
 
 
@@ -113,44 +114,15 @@ class BlockDiffusionLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if keras.config.backend() == "openvino":
-            from keras_hub.src.utils.openvino_utils import ov_infer
-
-            def wrapped_generate_function(
-                inputs,
-                max_length=None,
-                stop_token_ids=None,
-                **kwargs,
-            ):
-                # `ov_infer` reuses the compiled model across calls. Pass the
-                # extra generation arguments as model inputs, so each call
-                # reads its own values instead of the first call's constants.
-                kwarg_names = tuple(sorted(kwargs))
-                inputs = tree.map_structure(
-                    ops.convert_to_numpy, {**inputs, **kwargs}
-                )
-
-                def fn(x, stops):
-                    x = dict(x)
-                    step_kwargs = {name: x.pop(name) for name in kwarg_names}
-                    return self.generate_step(
-                        x,
-                        max_length=max_length,
-                        stop_token_ids=stops,
-                        **step_kwargs,
-                    )
-
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
-                return ov_infer(
-                    self,
-                    inputs,
-                    fn,
-                    static_args=(stop_token_ids,),
-                    cache_key=(stop_token_ids, max_length, kwarg_names),
-                )
-
-            self.generate_function = wrapped_generate_function
+        backend_hook = getattr(
+            get_backend_package(), "make_generate_function", None
+        )
+        if backend_hook is not None:
+            self.generate_function = backend_hook(
+                self,
+                self.generate_step,
+                static_argnames=("max_length", "stop_token_ids"),
+            )
 
         if keras.config.backend() == "torch":
             import torch

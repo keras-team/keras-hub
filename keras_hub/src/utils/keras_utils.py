@@ -1,3 +1,4 @@
+import importlib
 import inspect
 import sys
 
@@ -175,3 +176,14 @@ def sharded_weights_available():
     """
     save_weights_signature = inspect.signature(keras.saving.save_weights)
     return "max_shard_size" in save_weights_signature.parameters
+
+
+def get_backend_package():
+    """Return the package of a pluggable backend."""
+    backend = keras.config.backend()
+    if backend in ("jax", "numpy", "tensorflow", "torch"):
+        return None
+    try:
+        return importlib.import_module(f"keras_{backend}")
+    except ImportError:
+        return None

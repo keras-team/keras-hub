@@ -9,6 +9,7 @@ from keras.src.distribution import distribution_lib
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.utils.keras_utils import get_backend_package
 
 try:
     import tensorflow as tf
@@ -133,22 +134,13 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if keras.config.backend() == "openvino":
-            from keras_hub.src.utils.openvino_utils import ov_infer
-
-            def wrapped_generate_function(inputs, stop_token_ids=None):
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
-                # Convert to numpy for OpenVINO backend
-                inputs = tree.map_structure(ops.convert_to_numpy, inputs)
-                return ov_infer(
-                    self,
-                    inputs,
-                    self.generate_step,
-                    static_args=(stop_token_ids,),
-                )
-
-            self.generate_function = wrapped_generate_function
+        backend_hook = getattr(
+            get_backend_package(), "make_generate_function", None
+        )
+        if backend_hook is not None:
+            self.generate_function = backend_hook(
+                self, self.generate_step, static_argnames=("stop_token_ids",)
+            )
         if keras.config.backend() == "torch":
             import torch
 
