@@ -89,6 +89,9 @@ from keras_hub.src.models.mistral3.mistral3_tokenizer import (
 from keras_hub.src.models.mixtral.mixtral_tokenizer import (
     MixtralTokenizer as MixtralTokenizer,
 )
+from keras_hub.src.models.mobile_bert.mobile_bert_tokenizer import (
+    MobileBertTokenizer as MobileBertTokenizer,
+)
 from keras_hub.src.models.modern_bert.modern_bert_tokenizer import (
     ModernBertTokenizer as ModernBertTokenizer,
 )
