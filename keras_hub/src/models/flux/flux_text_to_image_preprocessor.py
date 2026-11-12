@@ -2,7 +2,7 @@ import keras
 from keras import layers
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.flux.flux_model import FluxBackbone
+from keras_hub.src.models.flux.flux_backbone import FluxBackbone
 from keras_hub.src.models.preprocessor import Preprocessor
 
 
