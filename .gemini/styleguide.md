@@ -1,772 +1,96 @@
+## Code Review Guardrails (High-Signal & Anti-False-Positive Rules)
 
-When performing code reviews on pull requests, you must strictly adhere to the following principles in addition to the API design guidelines above:
+When performing code reviews on pull requests in `keras-team/keras-hub`, strictly adhere to these top-level rules before applying any guideline below:
 
-1. **Question the Necessity of Changes**: Do not assume that the pull request changes are strictly necessary. Critically review the proposed changes to ensure they add real value. Point out any code that solving a non-existent problem or adding unnecessary complexity.
+1. **Check End-to-End Consistency Without Critiquing Untouched Code**:
+   - **DO check**: When a PR adds or modifies a layer, backbone, converter, preprocessor, task, or checkpoint converter, verify that `__init__` attributes, `get_config()`, `build()`, `call()`, and sibling hooks stay synchronized, and flag genuine bugs or spelling typos in newly added identifiers/docstrings/tests.
+   - **Do NOT flag**: Untouched context lines, moved/renamed code, or pre-existing entries/logic adjacent to a `+`/`-` line (such as unrelated lines in `conftest.py` or `openvino_excluded_tests.txt`). Never widen `start_line..end_line` across a diff hunk just to critique pre-existing code when the PR only made a narrow fix, rename, or migration nearby.
+2. **Verify Imports, Base Classes & Package Versions Before Claiming Errors**:
+   - Unchanged `*_test.py` files and `keras_hub/src/tests/test_case.py` are omitted from auxiliary `<FILES>` context (`keras_hub.src.tests.test_case.TestCase` inherits from `tf.test.TestCase` and `parameterized.TestCase`, and defines `assertAllClose`, `assertEqual`, `assertAllEqual`, `assertDTypeEqual`, `run_layer_test`, `run_preprocessing_layer_test`, `run_grain_preprocessing_test`, `run_preprocessor_test`, `run_serialization_test`, `run_precision_test`, `run_quantization_test`, `run_model_saving_test`, `run_litert_export_test`, `run_backbone_test`, `run_vision_backbone_test`, `run_task_test`, `run_preset_test`, `get_temp_dir`, `get_test_data_dir`, and `load_test_image`).
+   - **Do NOT flag** unverified `NameError` or missing-method/attribute claims unless verified against full file imports, core Keras 3 exports (e.g., `keras.layers.ReversibleEmbedding` is in core Keras 3), and base classes, and **Do NOT claim** a third-party package version, pip extra (e.g., `jax[cuda13]`), or GitHub Action tag (e.g., `astral-sh/ruff-pre-commit` `v0.17.3`) does not exist based on your knowledge cutoff.
+3. **Catch Real Bugs, Not Speculative Defensive Boilerplate**:
+   - Check for uninitialized/`None` attributes dereferenced across control-flow paths, `assert` used instead of `ValueError` for user-input validation in library code, dtype mismatches in mixed precision (`float16`/`bfloat16`), and unguarded TensorFlow usage in shared paths.
+   - **Do NOT flag** hypothetical `None`/empty inputs outside an internal helper's caller invariants, replacing intentional `config["key"]` or `config.pop("key")` lookups with silent `.get("key", default)` fallbacks, `getattr(backbone, ...)` fallbacks for attributes always set on that `Backbone`, `RuntimeWarning` wrappers in tests (`pyproject.toml` ignores `RuntimeWarning`), English i18n string nags, caching `keras.ops` tensor outputs with `functools.lru_cache`, or cold-path micro-optimizations/caching outside per-step hot paths (such as one-time setup, config parsing, `tools/checkpoint_conversion/**`, or `keras_hub/src/utils/transformers/**`).
+4. **Skip Checks Enforced by CI**:
+   - Pre-commit and CI run `ruff check` (`E`, `F`, `I`), `ruff format --check`, `shell/api_gen.sh` (`keras_hub/api/**`), and `zizmor`. **Do NOT flag** formatting, line length, import sorting, unused imports (`F401`), or tell authors to run `pre-commit run --all-files`.
+5. **Respect Existing Repo Patterns**:
+   - Before suggesting review comments, actively check existing design patterns across `keras-hub`. Do not suggest boilerplate or structures that contradict established repository conventions:
+     - **Sub-layer & attribute tracking**: `Backbone`, `Task` (`CausalLM`, `TextClassifier`, etc.), and `Preprocessor` classes assign `self.backbone = backbone`, `self.preprocessor = preprocessor`, `self.tokenizer = tokenizer`, and sub-layers via normal attribute assignment so Keras tracks their weights/state (**Do NOT** ask to wrap normal sub-layer, `backbone`, `preprocessor`, or converter assignments in `object.__setattr__`; `object.__setattr__` is ONLY used when storing an auxiliary `Layer`/`Model` reference that must intentionally remain *untracked* by Keras, such as a cached external speculative-decoding assistant model).
+     - **Internal layer serialization**: Unexported internal model sub-layers (not decorated with `@keras_hub_export`) serialize via Keras's module-path mechanism (**Do NOT** ask to add `@keras.saving.register_keras_serializable` to unexported internal helper layers).
+     - **Keras 3 constructor & tokenizer idioms**: `keras.Sequential` does NOT accept a `dtype` keyword argument (`TypeError` in Keras 3.15), standard Keras `Layer` constructors already accept `dtype` strings/policies/serialized dicts without manual `keras.dtype_policies.get(dtype)`, and `Tokenizer._add_special_token(...)` is intentionally designed to run **before** `super().__init__(...)`.
 
-2. **Call out "AI Slop"**: Actively look for and identify "AI slop"—generic, overly verbose, or hallucinated code that lacks context or violates best practices. If you suspect the code is AI slop, explicitly call it out.
-
-3. **Poke Holes in the Implementation**: Your goal is to critically test the logic. Actively search for and point out failing edge cases, race conditions, or unhandled exceptions in the implementation.
-
-4. **Demand Robustness**: Do not accept fragile code. If the proposed code is not robust enough or lacks proper error handling, explicitly tell the author why the current approach is brittle and what must be done to reinforce it.
-
-5. **Respect Existing Repo Patterns**: Before suggesting review comments (like asking users to add boilerplate or specific patterns), actively check for existing design patterns across the repository. Do not suggest adding useless code or structures that contradict or fall outside the established Keras repo coding style.
-
-
+---
 
 ## Key Principles
 
-- **Modularity**: Models are broken down into distinct, reusable components: Backbone, Converter (Tokenizer, ImageConverter, etc.), Preprocessor, and Task.
-- **Consistency**: Strict adherence to naming and file structure conventions is crucial for predictability and maintainability.
-- **Validation**: Every component must be validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
-- **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic.
-- **Backend Agnostic**: All code must be keras 3 backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
-- **Model license**: The model must use a permissive license, such as MIT or Apache. If the model is under a copyleft license, the PR must flag this immediately, and the pull request should be marked to be closed.
+- **Modularity**: Models are broken down into distinct, reusable components: `Backbone`, `Converter` (`Tokenizer`, `ImageConverter`, `AudioConverter`, etc.), `Preprocessor`, and `Task`.
+- **Consistency**: Strict adherence to naming and file structure conventions across models is crucial for predictability and maintainability.
+- **Validation**: When porting a **new model**, components must be validated against the original model's implementation, with numerical equivalence demonstrated via Colab notebooks or verification output in the PR description (**Do NOT flag** missing Colab links on bug fixes, refactors, CI/infra changes, or updates to existing models).
+- **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic. Custom layers should only be added for architectural differences not covered by existing components.
+- **Backend Agnostic**: All modeling code must be Keras 3 backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
+- **Model license**: New model ports must use a permissive/approved license (Apache 2.0, MIT, Llama Community License, or Gemma). If a newly contributed model is under a copyleft license (e.g., GPL, AGPL, CC-BY-NC), flag this immediately.
 
-## Directory and File Structure
+---
 
-All new model contributions must follow a standardized directory and file structure within `keras_hub/src/models/`. For a model named `MyModel`, the structure must be:
+## Directory Structure and Naming Conventions
 
-```
-keras_hub/
-└── src/
-    └── models/
-        └── my_model/
-            ├── __init__.py
-            ├── my_model_backbone.py
-            ├── my_model_backbone_test.py
-            ├── my_model_tokenizer.py             # For NLP models
-            ├── my_model_tokenizer_test.py        # For NLP models
-            ├── my_model_image_converter.py       # For Vision models
-            ├── my_model_image_converter_test.py  # For Vision models
-            ├── my_model_audio_converter.py       # For Audio models
-            ├── my_model_audio_converter_test.py  # For Audio models
-            ├── my_model_classifier.py            # Example task
-            ├── my_model_classifier_test.py       # Example task test
-            ├── my_model_preprocessor.py          # Preprocessor for all tasks
-            ├── my_model_preprocessor_test.py
-            └── my_model_presets.py
-```
+### New Model Directory Structure
+New model contributions live under `keras_hub/src/models/<model_name>/` with standardized component files (`__init__.py`, `<model_name>_backbone.py`, `<model_name>_presets.py`, modality converters `<model_name>_{tokenizer,image_converter,video_converter,audio_converter}.py`, `<model_name>_*preprocessor.py`, task classes `<model_name>_<task>.py`, and corresponding `*_test.py` files). Checkpoint conversion scripts live in `tools/checkpoint_conversion/convert_<model_name>_checkpoints.py`; HuggingFace converters live in `keras_hub/src/utils/transformers/convert_<model_name>.py` (and `convert_<model_name>_test.py`); Timm converters live in `keras_hub/src/utils/timm/`. (**Do NOT** demand every component file in a single PR when a contributor ports Backbone, Tokenizer, Presets, or Tasks across staged PRs, or when a modality is not applicable.)
 
-Checkpoint conversion scripts have their own location:
-```
-tools/
-└── checkpoint_conversion/
-    └── convert_my_model_checkpoints.py
-```
+### Naming Rules
+- **Files**: Lowercase `snake_case` matching `<model_name>_<component_type>.py` (e.g., `distil_bert_backbone.py`, `xlm_roberta_tokenizer.py`; keep acronyms as a single segment).
+- **Classes**: `PascalCase` matching `<ModelName><ComponentType>` (e.g., `DistilBertBackbone`, `GPT2CausalLM`, `XLMRobertaBackbone`; capitalize acronyms like `GPT2`/`LSTM`, treat pronounceable acronyms like `Bert`/`Deberta` as words).
+- **Functions, Methods, and Presets**: Lowercase `snake_case` (e.g., `from_preset()`, `bert_base_en_uncased`; do not abbreviate preset sizes like `extra_small`/`extra_large`).
+- **Standardized Model Inputs & Args**: Use `token_ids` and `padding_mask` for text models, `pixel_values` for image models, `audio_features` for audio models, and keep hyperparameter names consistent with sibling models in the repository (`vocabulary_size`, `num_layers`, `num_heads`, `hidden_dim`, `intermediate_dim`, `dropout`).
 
-For models being ported from HuggingFace, converters should be added to:
-```
-keras_hub/src/utils/transformers/
-├── convert_my_model.py
-└── convert_my_model_test.py
-```
+---
 
-## Naming Conventions
+## Component & Layer Implementation Guidelines
 
-### Files
-- **Format**: All filenames must be lowercase with underscores (snake_case).
-- **Pattern**: Follow the pattern `<model_name>_<component_type>.py`.
-- **Examples**: `distil_bert_backbone.py`, `distil_bert_tokenizer.py`, `distil_bert_classifier_test.py`.
+### Backbones, Converters, Preprocessors, Tasks, and Presets
+- **Backbone (`<model_name>_backbone.py`)**: Subclass `Backbone` (`keras_hub.src.models.backbone.Backbone`), export with `@keras_hub_export("keras_hub.models.<ModelName>Backbone")`, instantiate sub-layers in `__init__`, build the Keras Functional API graph (`inputs={...}`, `outputs=...`) inside `__init__`, and pass `dtype=dtype, **kwargs` to `super().__init__`.
+- **Data Converters (`<model_name>_tokenizer.py`, etc.)**: Subclass the appropriate KerasHub base converter (`WordPieceTokenizer`, `BytePairTokenizer`, `SentencePieceTokenizer`, `ImageConverter`, `AudioConverter`), export under both `keras_hub.tokenizers.*` / `keras_hub.layers.*` and `keras_hub.models.*` where appropriate, and set `backbone_cls`.
+- **Preprocessors (`<model_name>_*preprocessor.py`)**: Subclass the appropriate base `Preprocessor` (e.g., `TextClassifierPreprocessor`, `CausalLMPreprocessor`), set `backbone_cls` and `tokenizer_cls` (or modality converter classes), and format outputs as a dictionary matching the backbone's input signature (**Do NOT** ask to re-serialize attributes in `get_config()` that `super().get_config()` already serializes, and **Do NOT** insert `keras.ops.*` calls such as `ops.cast` on `bool` `padding_mask` in `tf.data`-mapped preprocessor paths where non-TF backend ops raise `NotImplementedError`).
+- **Task Models (`<model_name>_<task>.py`)**: Subclass `Task` (`CausalLM`, `TextClassifier`, `MaskedLM`, etc.), set `backbone_cls` and `preprocessor_cls`, wire `backbone` and task head in `__init__` via the Functional API (`super().__init__(inputs=inputs, outputs=outputs, **kwargs)`), and support `fit()`, `predict()`, and `generate()` where applicable (**Do NOT** require `__init__` or `get_config` on abstract base task classes like `TextClassifier` or `TokenClassifier` whose concrete subclasses build the head).
+- **Presets (`<model_name>_presets.py`)**: Define `backbone_presets` with `snake_case` preset names, `metadata` (`description`, `params`, `path`), and `kaggle_handle`.
 
-### Classes
-- **Format**: All class names must use CapWords (PascalCase).
-- **Pattern**: Follow the pattern `<ModelName><ComponentType>`.
-- **Examples**: `DistilBertBackbone`, `DistilBertTokenizer`, `DistilBertClassifier`, `DistilBertPreprocessor`.
+### Ideal Layer & Serialization Style
+1. **Accept `**kwargs`** in `__init__` and forward to `super().__init__(**kwargs)`.
+2. **Store `__init__` arguments** as Python attributes on `self` with matching names and passed values (clone shared initializer instances across distinct sub-layers rather than reusing a single stateful initializer object). Instantiate shape-independent sub-layers (such as `Dropout` or `Softmax`) in `__init__` rather than `build()`.
+3. **Implement `get_config()`** chaining `config = super().get_config()` and `config.update({...})` for every `__init__` argument introduced by the class so `from_config` / `run_serialization_test` round-trips idempotently.
+4. **Avoid `assert` for user-input validation**: Raise `ValueError` (or `ImportError` for missing optional packages) with a clear message including the received value.
 
-### Functions and Methods
-- **Format**: Use lowercase with underscores (snake_case).
-- **Examples**: `from_preset()`, `call()`, `predict()`.
+---
 
-### Model Inputs
-Use standardized names for model input arguments to ensure interoperability:
-- **Text Models**: `token_ids`, `padding_mask`, etc
-- **Image Models**: `pixel_values`, etc
-- **Audio Models**: `audio_features`, etc
+## Multi-Backend, Shapes, Dtypes & TensorFlow Decoupling
 
-### Class arg names
-Use standardized names for arg names that should be consistent with other models in the repository
+### Import Conventions & TensorFlow Decoupling
+- **Internal vs. public imports**: Inside `keras_hub/src/**`, import `keras` as a top-level module (`import keras`, `from keras import ops`, `from keras import tree`) and import internal KerasHub symbols from `keras_hub.src.*` (never `import keras_hub` inside `keras_hub/src/**`, except in `integration_tests/**` and docstring examples, and avoid importing private symbols from `keras.src.backend`).
+- **No unguarded TensorFlow imports in `keras_hub/src/**`**: Never add a top-level `import tensorflow as tf` or unguarded `import tensorflow_text` in `keras_hub/src/**` (outside TF-specific tests). Import `tf` via `from keras_hub.src.utils.tensor_utils import tf` (which returns `None` when TensorFlow is uninstalled) so layers, models, tokenizers, and preprocessors can be imported, constructed, and run on the pure-Python / Grain path without TensorFlow (**Do NOT flag** `import tensorflow` in standalone `tools/**` scripts, TF-specific tests, local imports guarded behind `keras.config.backend() == "tensorflow"` / `in_tf_function()`, or files that already guard `tf` via `tensor_utils`).
+- **Mixed-tensor NumPy conversion in preprocessing/metrics**: In preprocessors, tokenizers, and metrics that may receive `tf.Tensor`, `tf.RaggedTensor`, backend tensors, NumPy arrays, or Python lists, use `tensor_utils.convert_to_numpy(x)` instead of `keras.ops.convert_to_numpy(x)` (which only accepts tensors of the active backend). Note that `CausalLM` `generate_preprocess()` and `generate_postprocess()` run eagerly on concrete host inputs during `generate()`, never inside `tf.data` or a traced `tf.function`/`jax.jit` (**Do NOT** claim `np.asarray` or Python control flow inside `generate_preprocess`-only helpers fails under `tf.function`/`tf.data`).
 
-## Code Implementation Style
+### Multi-Backend Tensor, Shape & Dtype Rules
+- **No NumPy/eager conversions in layer `call()`**: Inside `Layer.call()` / `Backbone` forward passes, use `keras.ops`—never call `ops.convert_to_numpy`, `.numpy()`, NumPy, or SciPy on symbolic/backend tensors, and use `ops.less`, `ops.greater`, `ops.equal`, etc. instead of Python `<`, `>`, `==` on tensors (plain Python operators `+`, `-`, `*`, `//` are right for shape dimensions).
+- **Dynamic shapes & `jax.jit` / `tf.function` accuracy**:
+  - In `call()`, use `ops.shape(x)` instead of `x.shape` when indexing a batch/sequence/time dimension that can be `None` symbolically (`x.shape` and `len(x.shape)` are fine in `build(self, input_shape)`, `compute_output_shape`, or for static rank/channel dims).
+  - Under `jax.jit`, tensor shapes (`ops.shape(x)[i]`) are concrete static Python `int`s at trace time (only tensor values are tracers), whereas under `tf.function` unknown dimensions in `ops.shape(x)[i]` are dynamic `tf.Tensor`s (**Do NOT** branch with Python `if` on a potentially unknown `ops.shape(x)[i]` in `tf.function`, and **Do NOT** claim `ops.shape(x)[i]` is a dynamic tracer that breaks `ops.slice` or `ops.reshape` under `jax.jit`).
+  - `keras.ops.slice(inputs, start_indices, shape)` takes the **slice `shape` (sizes)** as its third argument (same convention as `tf.slice`), **NOT** exclusive `limit_indices`—**never** claim `ops.slice` expects `limit_indices`.
+- **Dtypes & numerical stability**:
+  - Python `int` and `float` literals (`0`, `1`, `0.0`, `1.0`) are **weakly typed** in Keras 3 ops (`ops.where(cond, x, 0.0)` preserves `float16`/`bfloat16`)—**Do NOT** claim Python float scalars upcast `float16`/`bfloat16` to `float32`.
+  - When dividing by a mask sum in `float16` (such as masked mean pooling), clamp the divisor with `ops.maximum(sum_mask, 1.0)` or `ops.divide_no_nan` rather than `1e-9` (which underflows to `0.0` in `float16`). Note `ops.softmax` already subtracts `max` internally for numerical stability.
 
-### Backbone Models (`<model_name>_backbone.py`)
+---
 
-**Structure**: The backbone model must be a class that inherits from `keras.Model`.
+## Docstrings, Converters & Testing
 
-**Implementation**: Use the Keras Functional API to define the model graph inside the class `__init__` method.
+### Docstrings and Type Hints
+- **Google-style docstrings**: Document public `@keras_hub_export` classes, functions, and methods with a concise one-line summary (on the opening `"""` line), description, paper `Reference:` (if applicable), `Args:` (with types formatted as `arg_name: type. Description.`), `Returns:`/`Raises:` where relevant, and `Example:`/`Examples:` using full `keras_hub.*` paths. Document constructor arguments on the class docstring rather than `__init__`; `build()` and `call()` generally do not need separate docstrings (**Do NOT flag** missing `Examples:` on internal helpers or unexported sub-layers, and flag comments that narrate PR history/"previously" instead of explaining non-obvious invariants).
+- **No signature type annotations**: KerasHub does **not** use Python type hints in function or `__init__` signatures (default values like `None` or `"channels_last"` are fine); put types in docstring `Args:`.
 
-**Reusability**: Prefer using layers from `keras.layers` and `keras_hub.layers`. Custom layers should only be implemented for significant architectural deviations not covered by existing Keras components.
+### Checkpoint & HuggingFace / Timm Converters
+- **HuggingFace / Timm converters (`keras_hub/src/utils/{transformers,timm}/`)**: Define `backbone_cls`, `convert_backbone_config(transformers_config)`, and `convert_weights(backbone, loader, transformers_config)`. Index required config keys directly (`transformers_config["vocab_size"]`) so missing keys fail loudly rather than silently defaulting with `.get(...)`, while handling keys that are legitimately `None`/absent across upstream checkpoints. Open JSON files with UTF-8 encoding (e.g., `load_json`). Test converters with `load_weights=False` and `Backbone.from_preset` / task class detection.
+- **Checkpoint conversion scripts (`tools/checkpoint_conversion/`)**: Validate numerical parity against the reference implementation using elementwise `np.testing.assert_allclose` / **maximum absolute difference** (`atol` around `1e-4`–`1e-3`, using `torch.no_grad()` for PyTorch forward passes)—**Do NOT** ask authors to replace maximum absolute difference or elementwise `assert_allclose` checks with mean logits difference tolerances (mean over `(batch, seq, vocab)` hides localized bugs).
 
-**Example Structure**:
-```python
-@keras_hub_export("keras_hub.models.MyModelBackbone")
-class MyModelBackbone(Backbone):
-    """MyModel core network with hyperparameters.
-    
-    This backbone implements the base architecture for MyModel.
-    
-    Args:
-        vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
-        hidden_dim: int. The size of the transformer hidden state.
-        intermediate_dim: int. The output dimension of the first Dense layer.
-        dropout: float. Dropout probability for the Transformer encoder.
-        max_sequence_length: int. The maximum sequence length that this encoder
-            can consume.
-        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
-            for model computations and weights.
-        
-    Example:
-    ```python
-    input_data = {
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
-    }
-    
-    # Pretrained MyModel backbone.
-    model = keras_hub.models.MyModelBackbone.from_preset("my_model_base")
-    model(input_data)
-    ```
-    """
-    
-    def __init__(
-        self,
-        vocabulary_size,
-        num_layers,
-        # ... other parameters
-        dtype=None,
-        **kwargs,
-    ):
-        super().__init__(dtype=dtype, **kwargs)
-        
-        # === Layers ===
-        self.token_embedding = keras.layers.Embedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            name="token_embedding",
-        )
-        # ... other layers
-        
-        # === Functional Model ===
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
-        
-        # ... model graph definition
-        
-        super().__init__(
-            inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            },
-            outputs=outputs,
-            **kwargs,
-        )
-```
-
-### Data Converters (`<model_name>_tokenizer.py`, etc.)
-
-**Purpose**: Converters transform raw data (text, images, audio) into a numerical format. They handle tasks like vocabulary mapping, resizing, or feature extraction.
-
-**Structure**:
-- Text models use a `Tokenizer` class (e.g., `MyModelTokenizer`).
-- Image models use an `ImageConverter` class (e.g., `MyModelImageConverter`).
-- Audio models use an `AudioConverter` class (e.g., `MyModelAudioConverter`).
-
-**Inheritance**: Subclass from the appropriate base class in KerasHub where available.
-
-**Example Tokenizer**:
-```python
-@keras_hub_export(
-    [
-        "keras_hub.tokenizers.MyModelTokenizer",
-        "keras_hub.models.MyModelTokenizer",
-    ]
-)
-class MyModelTokenizer(WordPieceTokenizer):
-    """A MyModel tokenizer using WordPiece subword segmentation.
-    
-    This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_hub.tokenizers.WordPieceTokenizer`.
-    
-    Args:
-        vocabulary: list of strings or str. A list of strings or a string filename path.
-        lowercase: bool. If `True`, the input text will be first lowered before tokenization.
-        
-    Examples:
-    ```python
-    # Unbatched input.
-    tokenizer = keras_hub.models.MyModelTokenizer.from_preset("my_model_base")
-    tokenizer("The quick brown fox jumped.")
-    ```
-    """
-    
-    backbone_cls = MyModelBackbone
-    
-    def __init__(
-        self,
-        vocabulary=None,
-        lowercase=False,
-        **kwargs,
-    ):
-        super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
-        
-        # Add special tokens
-        self.start_token_id = self.token_to_id("[CLS]")
-        self.end_token_id = self.token_to_id("[SEP]")
-        self.pad_token_id = self.token_to_id("[PAD]")
-        self.mask_token_id = self.token_to_id("[MASK]")
-```
-
-### Preprocessors (`<model_name>_preprocessor.py`)
-
-**Purpose**: A preprocessor is a `keras.layers.Layer` that orchestrates the entire preprocessing pipeline, turning raw user input into model-ready tensors.
-
-**Structure**: It internally instantiates and uses the model's specific Converter (e.g., `MyModelTokenizer`).
-
-**Functionality**: It handles padding, truncation, generating attention masks, and formatting the output into a dictionary of tensors that match the backbone's input signature (e.g., `{"token_ids": ..., "padding_mask": ...}`).
-
-**Example Preprocessor**:
-```python
-@keras_hub_export("keras_hub.models.MyModelPreprocessor")
-class MyModelPreprocessor(TextClassifierPreprocessor):
-    """MyModel preprocessing for text classification.
-    
-    This preprocessing layer will prepare inputs for text classification.
-    
-    Args:
-        tokenizer: `keras_hub.models.MyModelTokenizer`. A tokenizer instance.
-        sequence_length: int. The length of the packed inputs.
-        
-    Examples:
-    ```python
-    preprocessor = keras_hub.models.MyModelPreprocessor.from_preset("my_model_base")
-    preprocessor("The quick brown fox jumped.")
-    ```
-    """
-    
-    backbone_cls = MyModelBackbone
-    tokenizer_cls = MyModelTokenizer
-    
-    def __init__(
-        self,
-        tokenizer,
-        sequence_length=512,
-        **kwargs,
-    ):
-        super().__init__(tokenizer=tokenizer, sequence_length=sequence_length, **kwargs)
-```
-```
-
-### Task Models (`<model_name>_<task>.py`)
-
-**Purpose**: A task model combines a Backbone, a Preprocessor, and a task-specific head (e.g., a classification or generation head).
-
-**Structure**: It should be a class that inherits from `keras.Model`.
-
-**API**: Provide a simple, high-level API for end-users, such as `predict()`, `fit()`, and `generate()`.
-
-**Example Task Model**:
-```python
-@keras_hub_export("keras_hub.models.MyModelCausalLM")
-class MyModelCausalLM(CausalLM):
-    """An end-to-end MyModel for causal language modeling.
-
-    A causal language model (LM) predicts the next token based on previous
-    tokens. This task setup can be used to train the model unsupervised on
-    plain text input, or to autoregressively generate plain text similar to
-    the data used for training. This task can be used for pre-training or
-    fine-tuning a MyModel, simply by calling `fit()`.
-
-    This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_hub.samplers` objects to control the generation. By
-    default, `"greedy"` sampling will be used.
-
-    This model can optionally be configured with a `preprocessor` layer, in
-    which case it will automatically apply preprocessing to string inputs during
-    `fit()`, `predict()`, `evaluate()` and `generate()`. This is done by default
-    when creating the model with `from_preset()`.
-
-    Args:
-        backbone: A `keras_hub.models.MyModelBackbone` instance.
-        preprocessor: A `keras_hub.models.MyModelCausalLMPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
-
-    Examples:
-
-    Use `generate()` to do text generation.
-    ```python
-    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
-    model.generate("I want to say", max_length=30)
-
-    # Generate with batched prompts.
-    model.generate(["This is a", "Where are you"], max_length=30)
-    ```
-
-    Compile the `generate()` function with a custom sampler.
-    ```python
-    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
-    model.compile(sampler="top_k")
-    model.generate("I want to say", max_length=30)
-
-    model.compile(sampler=keras_hub.samplers.BeamSampler(num_beams=2))
-    model.generate("I want to say", max_length=30)
-    ```
-
-    Call `fit()` on a single batch.
-    ```python
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    model = keras_hub.models.MyModelCausalLM.from_preset("my_model_base")
-    model.fit(x=features, batch_size=2)
-    ```
-    """
-
-    backbone_cls = MyModelBackbone
-    preprocessor_cls = MyModelPreprocessor
-
-    def __init__(
-        self,
-        backbone,
-        preprocessor=None,
-        **kwargs,
-    ):
-        # === Layers ===
-        self.backbone = backbone
-        self.preprocessor = preprocessor
-
-        # === Functional Model ===
-        inputs = backbone.input
-        hidden_states = backbone(inputs)
-        outputs = backbone.token_embedding(hidden_states, reverse=True)
-        super().__init__(
-            inputs=inputs,
-            outputs=outputs,
-            **kwargs,
-        )
-```
-
-### Presets (`<model_name>_presets.py`)
-
-**Purpose**: This file defines a dictionary of preset configurations for the model.
-
-**Content**: Each entry includes the configuration arguments for the model (`config`), a description, and the URL to the pre-trained weights hosted on Kaggle (`weights_url`). The preset names have to be in snake_case.
-
-
-**Example Presets**:
-```python
-"""MyModel preset configurations."""
-
-backbone_presets = {
-    "my_model_base_en": {
-        "metadata": {
-            "description": "Base MyModel model trained on English text.",
-            "params": 110000000,
-            "path": "my_model",
-        },
-        "kaggle_handle": "kaggle://keras/my_model/keras/my_model_base_en/1",
-    },
-    "my_model_large_en": {
-        "metadata": {
-            "description": "Large MyModel model trained on English text.",
-            "params": 340000000,
-            "path": "my_model",
-        },
-        "kaggle_handle": "kaggle://keras/my_model/keras/my_model_large_en/1",
-    },
-}
-```
-
-## Docstrings and Type Hinting
-
-### Docstrings
-- Use Google-style docstrings for all public classes, methods, and functions.
-- The first line should be a concise summary.
-- Include comprehensive examples showing usage patterns.
-- Document all parameters, return values, and exceptions.
-
-### Type Hints
-- KerasHub does not use type hints in function signatures or `__init__` methods. Default values are okay(example: None, "string_value", etc).
-- Type information is provided in the docstring Args section using the format `arg_name: type. description`.
-- Focus on clear, descriptive parameter names and comprehensive docstrings.
-
-**Example of good docstring with type hints in Args section**:
-```python
-def load_vocabulary(vocab_path):
-    """Loads a vocabulary file into a dictionary.
-
-    Args:
-        vocab_path: str. The path to the vocabulary file. Each line in the
-            file should contain a single token.
-
-    Returns:
-        A dictionary mapping tokens to their integer IDs.
-        
-    Raises:
-        FileNotFoundError: If the vocabulary file does not exist.
-    """
-    vocab = {}
-    with open(vocab_path, "r") as reader:
-        for index, token in enumerate(reader):
-            token = token.strip()
-            vocab[token] = index
-    return vocab
-```
-
-## Testing and Validation
-
-### Testing Requirements
-Testing is a non-negotiable part of every contribution. Beyond the existence of test files, the tests themselves must follow standardized routines to ensure all core functionality is covered.
-When a test is set up, the test inputs should be small to allow for fast testing. Example: Test with (16,16,3) image size instead of (256, 256, 3)
 ### Unit Tests
-**Requirement**: Every `.py` file containing logic (backbone, tokenizer, task, etc.) must have a corresponding `_test.py` file.
-
-### Standardized Test Routines
-KerasHub provides helper methods in the `TestCase` class that handle the standardized test routines. Users should use these methods instead of writing tests from scratch:
-
-#### 1. Basic Usage and Shape Inference
-**Method**: Use `self.run_backbone_test()` for backbone models or `self.run_layer_test()` for layers.
-**Purpose**: Verifies that the model can be instantiated and called with valid inputs, checks output shapes, and runs additional validation.
-
-#### 2. Variable Input Shapes
-**Method**: Handled automatically by `self.run_backbone_test()` and `self.run_layer_test()`.
-**Purpose**: Ensures the model works with dynamic input shapes (e.g., variable batch size or sequence length).
-
-#### 3. from_preset() Functionality
-**Method**: Use `self.run_preset_test()` for testing preset loading.
-**Purpose**: Confirms that all model presets can be loaded correctly and produce expected outputs.
-
-#### 4. Serialization (save() and load_model())
-**Method**: Use `self.run_model_saving_test()` for testing model serialization.
-**Purpose**: Guarantees that the model can be saved and reloaded without losing its state.
-
-#### 5. Attached Preprocessor (for Task Models)
-**Method**: Use `self.run_task_test()` for testing task models with preprocessors.
-**Purpose**: Verifies the end-to-end functionality of a task model with raw inputs.
-
-#### Available Test Helper Methods:
-- `self.run_backbone_test()` - For backbone models
-- `self.run_vision_backbone_test()` - For vision backbone models  
-- `self.run_layer_test()` - For individual layers
-- `self.run_preprocessor_test()` - For preprocessors
-- `self.run_task_test()` - For task models
-- `self.run_preset_test()` - For testing preset loading
-- `self.run_model_saving_test()` - For testing serialization
-
-### Example Test Structure
-```python
-import pytest
-from keras import ops
-
-from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.tests.test_case import TestCase
-
-
-class MyModelBackboneTest(TestCase):
-    def setUp(self):
-        self.init_kwargs = {
-            "vocabulary_size": 10,
-            "num_layers": 2,
-            "hidden_dim": 16,
-            "intermediate_dim": 32,
-        }
-        self.input_data = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
-        }
-
-    def test_backbone_basics(self):
-        self.run_backbone_test(
-            cls=MyModelBackbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-            expected_output_shape=(2, 5, 16),
-        )
-
-    @pytest.mark.large
-    def test_saved_model(self):
-        self.run_model_saving_test(
-            cls=MyModelBackbone,
-            init_kwargs=self.init_kwargs,
-            input_data=self.input_data,
-        )
-
-    @pytest.mark.large
-    def test_smallest_preset(self):
-        self.run_preset_test(
-            cls=MyModelBackbone,
-            preset="my_model_base",
-            input_data=self.input_data,
-            expected_output_shape=(2, 5, 16),
-            expected_partial_output=ops.array([1.0, 2.0, 3.0, 4.0, 5.0]),
-        )
-
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in MyModelBackbone.presets:
-            self.run_preset_test(
-                cls=MyModelBackbone,
-                preset=preset,
-                input_data=self.input_data,
-            )
-```
-
-## Validation Colab Notebooks
-
-### Requirement
-Each pull request must include links to Colab notebooks that demonstrate numerical equivalence with the original model's implementation.
-
-### Structure
-Provide separate Colabs for each major component:
-
-1. **Backbone Validation**: Load original weights into your KerasHub backbone and show that for the same input tensor, the output tensor is numerically identical (or within a very small tolerance).
-
-2. **Converter/Preprocessor Validation**: Show that your preprocessor pipeline produces the same token IDs, padding masks, or pixel values as the original library's preprocessing functions.
-
-3. **End-to-End Validation**: Use `MyModelTask.from_preset()` to load your pre-trained model and run a full task (e.g., classification). The final output (e.g., logits, probabilities) must match the original model.
-
-## Import Conventions
-
-### KerasHub Imports
-```python
-from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.tests.test_case import TestCase
-```
-
-## Layer Implementation Guidelines
-
-### Ideal Layer Style
-When writing a new KerasHub layer (or tokenizer or metric), follow these guidelines:
-
-1. **Accept `**kwargs`** in `__init__` and forward this to the super class.
-2. **Keep Python attributes** on the layer for each `__init__` argument to the layer. The name and value should match the passed value.
-3. **Write a `get_config()`** which chains to super.
-4. **Document thoroughly** including call behavior through a class level docstring.
-5. **Include usage examples** using the full symbol location in `keras_hub`.
-6. **Include reference citations** if applicable.
-
-### Example Layer Implementation
-```python
-@keras_hub_export("keras_hub.layers.MyCustomLayer")
-class MyCustomLayer(keras.layers.Layer):
-    """A custom layer for specific functionality.
-
-    This layer implements [specific functionality] as described in
-    [reference paper]. It accepts [input description] and outputs
-    [output description].
-
-    Args:
-        param1: int. Description of parameter 1.
-        param2: str. Description of parameter 2.
-
-    Example:
-    ```python
-    layer = keras_hub.layers.MyCustomLayer(param1=10, param2=20)
-    output = layer(input_tensor)
-    ```
-
-    Reference:
-     - [Author et al., Year](https://arxiv.org/abs/paper_id)
-    """
-
-    def __init__(self, param1, param2, **kwargs):
-        super().__init__(**kwargs)
-        self.param1 = param1
-        self.param2 = param2
-
-    def build(self, input_shape):
-        # Layer building logic
-        super().build(input_shape)
-
-    def call(self, inputs):
-        # Layer computation logic
-        return processed_output
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "param1": self.param1,
-            "param2": self.param2,
-        })
-        return config
-```
-
-## Checkpoint Conversion
-
-### Script Location
-All checkpoint conversion scripts should be placed in `tools/checkpoint_conversion/`.
-
-### Script Requirements
-- Must be reusable and well-documented
-- Should handle all presets for the model
-- Must demonstrate numerical equivalence with original implementation
-- Should include proper error handling and validation
-
-### Example Conversion Script Structure
-```python
-"""Convert MyModel checkpoints from original format to KerasHub."""
-
-import argparse
-import json
-import os
-
-import keras
-import numpy as np
-
-from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-
-
-def convert_checkpoint(checkpoint_path, output_dir, preset_name):
-    """Convert a MyModel checkpoint to KerasHub format."""
-    # Load original checkpoint
-    # Convert weights to KerasHub format
-    # Save in KerasHub format
-    # Validate numerical equivalence
-    pass
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Convert MyModel checkpoints")
-    parser.add_argument("--checkpoint_path", required=True)
-    parser.add_argument("--output_dir", required=True)
-    parser.add_argument("--preset_name", required=True)
-    
-    args = parser.parse_args()
-    convert_checkpoint(args.checkpoint_path, args.output_dir, args.preset_name)
-
-
-if __name__ == "__main__":
-    main()
-```
-
-## HuggingFace Converters
-
-### When to Add
-If the model is being ported from HuggingFace Transformers, a converter must be added to `keras_hub/src/utils/transformers/`.
-If the model is an image model with presets avaialble on Timm, a converter must be added to `keras_hub/src/utils/timm/`.
-
-
-### Converter Structure
-Each HuggingFace converter should include:
-
-1. **Configuration conversion**: `convert_backbone_config()` function that maps HuggingFace config to KerasHub config
-2. **Weight conversion**: `convert_weights()` function that maps HuggingFace weights to KerasHub weights
-3. **Backbone class reference**: `backbone_cls` variable pointing to the KerasHub backbone class
-
-### Example HuggingFace Converter
-```python
-"""Convert MyModel from HuggingFace format to KerasHub."""
-
-import numpy as np
-
-from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.utils.preset_utils import get_file
-
-backbone_cls = MyModelBackbone
-
-
-def convert_backbone_config(transformers_config):
-    """Convert HuggingFace config to KerasHub config."""
-    return {
-        "vocabulary_size": transformers_config["vocab_size"],
-        "num_layers": transformers_config["num_hidden_layers"],
-        "num_heads": transformers_config["num_attention_heads"],
-        "hidden_dim": transformers_config["hidden_size"],
-        "intermediate_dim": transformers_config["intermediate_size"],
-    }
-
-
-def convert_weights(backbone, loader, transformers_config):
-    """Convert HuggingFace weights to KerasHub weights."""
-    # Embedding layer
-    loader.port_weight(
-        keras_variable=backbone.get_layer("token_embedding").embeddings,
-        hf_weight_key="model.embed_tokens.weight",
-    )
-
-    # Transformer layers
-    for i in range(backbone.num_layers):
-        layer = backbone.get_layer(f"transformer_layer_{i}")
-        hf_prefix = f"model.layers.{i}"
-
-        # Attention weights
-        loader.port_weight(
-            keras_variable=layer.attention.query_dense.kernel,
-            hf_weight_key=f"{hf_prefix}.self_attn.q_proj.weight",
-            hook_fn=lambda hf_tensor, keras_shape: np.transpose(
-                np.reshape(
-                    hf_tensor, (keras_shape[0], keras_shape[2], keras_shape[1])
-                ),
-                axes=(0, 2, 1),
-            ),
-        )
-        # ... additional weight mappings
-```
-
-### Converter Test Requirements
-- Test that the converter can load HuggingFace models correctly
-- Verify class detection works for both backbone and task models
-- Test with `load_weights=False` to ensure config conversion works
-- Include numerical equivalence tests when possible
-
-### Example Converter Test
-```python
-"""Tests for MyModel HuggingFace converter."""
-
-import pytest
-
-from keras_hub.src.models.backbone import Backbone
-from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.models.my_model.my_model_text_classifier import (
-    MyModelTextClassifier,
-)
-from keras_hub.src.models.text_classifier import TextClassifier
-from keras_hub.src.tests.test_case import TestCase
-
-
-class TestMyModelConverter(TestCase):
-    @pytest.mark.large
-    def test_convert_preset(self):
-        model = MyModelTextClassifier.from_preset(
-            "hf://huggingface/my-model-base", num_classes=2
-        )
-        prompt = "This is a test sentence."
-        model.predict([prompt])
-
-    @pytest.mark.large
-    def test_class_detection(self):
-        model = TextClassifier.from_preset(
-            "hf://huggingface/my-model-base",
-            num_classes=2,
-            load_weights=False,
-        )
-        self.assertIsInstance(model, MyModelTextClassifier)
-
-        model = Backbone.from_preset(
-            "hf://huggingface/my-model-base",
-            load_weights=False,
-        )
-        self.assertIsInstance(model, MyModelBackbone)
-```
-
-## Code Quality Standards
-
-### Formatting
-- Use `ruff` for code formatting
-- If code format test fails, add a comment to run code formatting using `pre-commit run --all-files`
-
-### Error Handling
-- Provide meaningful error messages
-- Use appropriate exception types
-- Include context in error messages
-
-### Performance
-- Support XLA compilation where applicable
-- Use efficient data structures and algorithms
-
-### Documentation
-- All public APIs must be documented
-- Include comprehensive examples
-- Document edge cases and limitations
-- Keep documentation up-to-date with code changes
+- **Corresponding `_test.py` & fast inputs**: Logic modules in `keras_hub/src/` must have unit tests in `<module>_test.py` using tiny fast configs/inputs (e.g., `(16, 16, 3)` images, `hidden_dim=16`, `num_layers=2`) (**Do NOT** demand `_test.py` files for `__init__.py`, `*_presets.py`, `version.py`, `tools/checkpoint_conversion/**`, docs, `.gemini/`, or `.github/`).
+- **Use `TestCase` helpers & meaningful assertions**: Prefer `self.run_backbone_test`, `self.run_vision_backbone_test`, `self.run_layer_test`, `self.run_preprocessing_layer_test`, `self.run_preprocessor_test`, `self.run_task_test`, `self.run_preset_test` (`@pytest.mark.large` / `@pytest.mark.extra_large`), `self.run_model_saving_test`, and `self.run_litert_export_test`. Tests must check values/outputs and be able to fail if the feature/fix under test is broken. Write temporary files only under `self.get_temp_dir()`. (**Do NOT** flag explicit `atol=0.0, rtol=0.0` exact-match assertions when testing deterministic/lossless operations.)
