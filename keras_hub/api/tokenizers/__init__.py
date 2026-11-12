@@ -166,6 +166,9 @@ from keras_hub.src.models.t5gemma.t5gemma_tokenizer import (
 from keras_hub.src.models.t5gemma2.t5gemma2_tokenizer import (
     T5Gemma2Tokenizer as T5Gemma2Tokenizer,
 )
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
+    UnlimitedOCRTokenizer as UnlimitedOCRTokenizer,
+)
 from keras_hub.src.models.video_prism.video_prism_tokenizer import (
     VideoPrismTokenizer as VideoPrismTokenizer,
 )

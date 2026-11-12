@@ -1,6 +1,8 @@
 import keras
 from keras import ops
 
+from keras_hub.src.utils.keras_utils import fused_attention_op_available
+
 
 class MLP(keras.layers.Layer):
     """A MLP block with architecture.
@@ -28,10 +30,26 @@ class MLP(keras.layers.Layer):
         h = [intermediate_dim]
         self.dense_net = []
         for intermediate_dim in h:
-            self.dense_net.append(keras.layers.Dense(intermediate_dim))
-            self.dense_net.append(keras.layers.Activation(activation))
-        self.dense_net.append(keras.layers.Dense(hidden_dim))
-        self.dense_net = keras.models.Sequential(self.dense_net)
+            self.dense_net.append(
+                keras.layers.Dense(
+                    intermediate_dim, dtype=self.dtype_policy, name="dense_1"
+                )
+            )
+            self.dense_net.append(
+                keras.layers.Activation(
+                    activation, dtype=self.dtype_policy, name="activation"
+                )
+            )
+        self.dense_net.append(
+            keras.layers.Dense(
+                hidden_dim, dtype=self.dtype_policy, name="dense_2"
+            )
+        )
+        self.dense_net = keras.models.Sequential(
+            self.dense_net, name="dense_net"
+        )
+        # `Sequential` takes no `dtype` argument. Set the policy directly.
+        self.dense_net.dtype_policy = self.dtype_policy
 
     def build(self, input_shape):
         self.dense_net.build(input_shape)
@@ -85,9 +103,11 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
                 positions.
         """
         max_rel_dist = 2 * max(query_size, key_size) - 1
+        rel_pos_resized = rel_pos
         if ops.shape(rel_pos)[0] != max_rel_dist:
+            # Resize the table along its length axis, then gather below.
             rel_pos_resized = ops.image.resize(
-                image=ops.reshape(
+                ops.reshape(
                     rel_pos,
                     (1, ops.shape(rel_pos)[0], ops.shape(rel_pos)[1], 1),
                 ),
@@ -95,9 +115,6 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
                 interpolation="bilinear",
             )
             rel_pos_resized = ops.squeeze(rel_pos_resized, axis=(0, -1))
-            return rel_pos_resized
-        else:
-            rel_pos_resized = rel_pos
         # Query coordinates
         query_coordinates = ops.cast(
             ops.arange(query_size), dtype=self.compute_dtype
@@ -203,9 +220,16 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         self.input_size = input_size
         self.use_rel_pos = use_rel_pos
         self.qkv = keras.layers.Dense(
-            key_dim * self.num_heads * 3, use_bias=self.use_bias
+            key_dim * self.num_heads * 3,
+            use_bias=self.use_bias,
+            dtype=self.dtype_policy,
+            name="qkv",
         )
-        self.projection = keras.layers.Dense(key_dim * self.num_heads)
+        self.projection = keras.layers.Dense(
+            key_dim * self.num_heads,
+            dtype=self.dtype_policy,
+            name="projection",
+        )
         if self.use_rel_pos:
             if input_size is None:
                 raise ValueError(
@@ -213,7 +237,7 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
                     "positional encoding."
                 )
             self.add_decomposed_relative_pe = AddRelativePositionalEmbedding(
-                self.input_size, self.key_dim
+                self.input_size, self.key_dim, dtype=self.dtype_policy
             )
 
     def build(self, input_shape=None):
@@ -223,6 +247,42 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+    def _fused_attention(self, queries, keys, values, height, width):
+        """Runs the fused attention op and returns `(batch, h, w, heads, dim)`.
+
+        The relative position terms enter as an additive bias. The inputs
+        have shape `(batch * heads, height * width, key_dim)`.
+        """
+        length = height * width
+        bias = None
+        if self.use_rel_pos:
+            # The layer adds its terms to the map. Zeros give the bare bias.
+            bias = self.add_decomposed_relative_pe(
+                ops.zeros(
+                    (ops.shape(queries)[0], length, length),
+                    dtype=queries.dtype,
+                ),
+                queries=queries,
+                query_size=(height, width),
+                key_size=(height, width),
+            )
+            bias = ops.reshape(bias, (-1, self.num_heads, length, length))
+
+        def to_heads(tensor):
+            tensor = ops.reshape(
+                tensor, (-1, self.num_heads, length, self.key_dim)
+            )
+            return ops.transpose(tensor, axes=(0, 2, 1, 3))
+
+        x = ops.dot_product_attention(
+            to_heads(queries),
+            to_heads(keys),
+            to_heads(values),
+            bias=bias,
+            scale=self.scale,
+        )
+        return ops.reshape(x, (-1, height, width, self.num_heads, self.key_dim))
 
     def call(self, x):
         batch, height, width, channels = ops.shape(x)
@@ -237,22 +297,25 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
             qkv, (3, batch * self.num_heads, height * width, self.key_dim)
         )
         queries, keys, values = ops.unstack(qkv, axis=0)
-        attention_map = (queries * self.scale) @ ops.transpose(
-            keys, axes=(0, 2, 1)
-        )
-        if self.use_rel_pos:
-            attention_map = self.add_decomposed_relative_pe(
-                attention_map,
-                queries=queries,
-                query_size=(height, width),
-                key_size=(height, width),
+        if fused_attention_op_available():
+            x = self._fused_attention(queries, keys, values, height, width)
+        else:
+            attention_map = (queries * self.scale) @ ops.transpose(
+                keys, axes=(0, 2, 1)
             )
-        attention_map = ops.softmax(attention_map, axis=-1)
-        x = ops.reshape(
-            attention_map @ values,
-            (batch, self.num_heads, height, width, self.key_dim),
-        )
-        x = ops.transpose(x, axes=(0, 2, 3, 1, 4))
+            if self.use_rel_pos:
+                attention_map = self.add_decomposed_relative_pe(
+                    attention_map,
+                    queries=queries,
+                    query_size=(height, width),
+                    key_size=(height, width),
+                )
+            attention_map = ops.softmax(attention_map, axis=-1)
+            x = ops.reshape(
+                attention_map @ values,
+                (batch, self.num_heads, height, width, self.key_dim),
+            )
+            x = ops.transpose(x, axes=(0, 2, 3, 1, 4))
         x = ops.reshape(x, (batch, height, width, channels))
         x = self.projection(x)
 
@@ -392,10 +455,14 @@ class WindowedTransformerEncoder(keras.layers.Layer):
         self.use_rel_pos = use_rel_pos
 
         self.layer_norm1 = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="layer_norm1",
         )
         self.layer_norm2 = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="layer_norm2",
         )
         self.attention = MultiHeadAttentionWithRelativePE(
             num_heads=self.num_heads,
@@ -405,13 +472,19 @@ class WindowedTransformerEncoder(keras.layers.Layer):
             input_size=(
                 input_size if window_size == 0 else (window_size, window_size)
             ),
+            dtype=self.dtype_policy,
+            name="attention",
         )
         self.mlp_block = MLP(
             intermediate_dim,
             project_dim,
             activation="gelu",
+            dtype=self.dtype_policy,
+            name="mlp_block",
         )
-        self.window_partitioning = WindowPartitioning(window_size)
+        self.window_partitioning = WindowPartitioning(
+            window_size, dtype=self.dtype_policy, name="window_partitioning"
+        )
 
     def build(self, input_shape=None):
         self.layer_norm1.build([None, None, None, self.project_dim])
@@ -462,8 +535,7 @@ class WindowedTransformerEncoder(keras.layers.Layer):
 
 
 class ViTDetPatchingAndEmbedding(keras.layers.Layer):
-    """
-    Implements an image patch and embedding layer.
+    """Implements an image patch and embedding layer.
 
     Image to Patch Embedding using only a conv layer (without
     layer normalization).The code has been adapted from [Segment Anything
@@ -486,7 +558,10 @@ class ViTDetPatchingAndEmbedding(keras.layers.Layer):
         super().__init__(**kwargs)
 
         self.projection = keras.layers.Conv2D(
-            embed_dim, kernel_size=kernel_size, strides=strides
+            embed_dim,
+            kernel_size=kernel_size,
+            strides=strides,
+            dtype=self.dtype_policy,
         )
         self.kernel_size = kernel_size
         self.strides = strides
