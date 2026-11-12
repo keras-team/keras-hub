@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   cpu_tests:
-    name: CPU Tests (${{ matrix.config.backend }}, ${{ matrix.config.version }}, shard ${{ matrix.shard }})
+    name: CPU Tests (${{ matrix.config.backend }}, ${{ matrix.config.version }}${{ matrix.config.python && format(', py{0}', matrix.config.python) || '' }}, shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
@@ -38,10 +38,19 @@ jobs:
             version: keras-nightly
           - backend: openvino
             version: keras-nightly
+          # Forward compatibility on newer Python with the next Keras. JAX >= 0.11
+          # and NumPy >= 2.5 ship no 3.11 wheels, so the 3.11 jobs above resolve
+          # to older releases of both.
+          - backend: jax
+            version: keras-nightly
+            python: '3.12'
+          - backend: jax
+            version: keras-nightly
+            python: '3.13'
         shard: ${{ fromJSON(inputs.shards) }}
 
     container:
-      image: python:3.11-slim
+      image: python:${{ matrix.config.python || '3.11' }}-slim
 
     runs-on: linux-x86-n4-16
     timeout-minutes: ${{ inputs.timeout }}
