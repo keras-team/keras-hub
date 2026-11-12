@@ -234,6 +234,9 @@ from keras_hub.src.models.swin_transformer.swin_transformer_image_converter impo
 from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
     T5Gemma2ImageConverter as T5Gemma2ImageConverter,
 )
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_image_converter import (
+    UnlimitedOCRImageConverter as UnlimitedOCRImageConverter,
+)
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
 )
