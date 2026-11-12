@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import tempfile
+from unittest.mock import patch
 
 import grain
 import keras
@@ -1309,6 +1310,88 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         task = cls(**init_kwargs, compile=False)
         with self.assertRaisesRegex(ValueError, "You must call `compile"):
             task.fit(ds)
+
+    def run_generate_test(self, cls, init_kwargs, prompt):
+        """Check `generate` on raw strings and on preprocessed token ids."""
+        causal_lm = cls(**init_kwargs)
+        output = causal_lm.generate(prompt)
+        self.assertIn(prompt, output)
+        # Without a preprocessor, the prompt tokens must be passed through.
+        prompt_ids = causal_lm.preprocessor.generate_preprocess([prompt])
+        num_prompt_tokens = int(
+            ops.convert_to_numpy(
+                ops.sum(ops.cast(prompt_ids["padding_mask"], "int32"))
+            )
+        )
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.assertAllEqual(
+            outputs["token_ids"][:, :num_prompt_tokens],
+            prompt_ids["token_ids"][:, :num_prompt_tokens],
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :num_prompt_tokens],
+            prompt_ids["padding_mask"][:, :num_prompt_tokens],
+        )
+
+    def run_generate_compilation_test(self, cls, init_kwargs, prompt):
+        """Check the generate function is reused until `compile` is called."""
+        causal_lm = cls(**init_kwargs)
+        causal_lm.generate(prompt)
+        first_fn = causal_lm.generate_function
+        # Assert we do not recompile with successive calls.
+        causal_lm.generate(prompt)
+        second_fn = causal_lm.generate_function
+        self.assertEqual(first_fn, second_fn)
+        # Assert we do recompile after compile is called.
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)
+
+    def run_early_stopping_test(
+        self, cls, init_kwargs, prompt, stop_token_ids="auto"
+    ):
+        """Check generation stops once every sequence has hit a stop token."""
+        causal_lm = cls(**init_kwargs)
+        preprocessor = causal_lm.preprocessor
+        if stop_token_ids == "auto":
+            stop_token_ids = (preprocessor.tokenizer.end_token_id,)
+        # Always favor a stop token, so each sequence stops at its first
+        # generated position.
+        forced_id = stop_token_ids[0]
+        call_with_cache = causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor `forced_id`"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            update = ops.ones_like(logits[..., :1]) * 1.0e9
+            logits = ops.slice_update(logits, (0, 0, forced_id), update)
+            return logits, hidden_states, cache
+
+        prompt_ids = preprocessor.generate_preprocess(prompt)
+        token_ids = ops.convert_to_numpy(prompt_ids["token_ids"])
+        longest_prompt = int(
+            ops.convert_to_numpy(
+                ops.max(
+                    ops.sum(ops.cast(prompt_ids["padding_mask"], "int32"), -1)
+                )
+            )
+        )
+        # Positions past the longest prompt's first generated token are only
+        # left untouched if generation really stopped. The forced token must
+        # differ from the padding value for that to be observable.
+        self.assertLess(longest_prompt + 1, token_ids.shape[1])
+        self.assertNotEqual(forced_id, token_ids[0, -1])
+
+        causal_lm.preprocessor = None
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+            generate_function = causal_lm.make_generate_function()
+            outputs = generate_function(
+                prompt_ids, stop_token_ids=stop_token_ids
+            )
+        self.assertAllEqual(
+            ops.convert_to_numpy(outputs["token_ids"])[:, longest_prompt + 1 :],
+            token_ids[:, longest_prompt + 1 :],
+        )
 
     def run_preset_test(
         self,
