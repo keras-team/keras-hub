@@ -38,6 +38,10 @@ class GPTNeoXBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
+        tie_word_embeddings: bool. If `True`, the output layer will share
+            weights with the embedding layer.
+        activation: string or function. The activation function to use for the
+            intermediate layers of the transformer.
         layer_norm_epsilon: float. a value added to the denominator for
             numerical stability.
         rotary_max_wavelength: int. The maximum angular wavelength of the
@@ -62,6 +66,8 @@ class GPTNeoXBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout=0.0,
+        tie_word_embeddings=True,
+        activation=gelu_approximate,
         rotary_percentage=0.25,
         rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
@@ -70,9 +76,12 @@ class GPTNeoXBackbone(Backbone):
         **kwargs,
     ):
         # === Layers ===
+        activation = keras.activations.get(activation)
+
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            tie_weights=tie_word_embeddings,
             embeddings_initializer=_gpt_neo_x_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -92,7 +101,7 @@ class GPTNeoXBackbone(Backbone):
                 rotary_percentage=rotary_percentage,
                 rotary_max_wavelength=rotary_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
-                activation=gelu_approximate,
+                activation=activation,
                 kernel_initializer=_gpt_neo_x_kernel_initializer(stddev=0.02),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -135,6 +144,8 @@ class GPTNeoXBackbone(Backbone):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
+        self.tie_word_embeddings = tie_word_embeddings
+        self.activation = activation
         self.rotary_percentage = rotary_percentage
         self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
@@ -150,6 +161,8 @@ class GPTNeoXBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
+                "tie_word_embeddings": self.tie_word_embeddings,
+                "activation": keras.activations.serialize(self.activation),
                 "rotary_percentage": self.rotary_percentage,
                 "rotary_max_wavelength": self.rotary_max_wavelength,
                 "max_sequence_length": self.max_sequence_length,

@@ -205,7 +205,12 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot = self.rotary_embedding_layer(query_rot)
+        start_index = (
+            cache_update_index if cache_update_index is not None else 0
+        )
+        query_rot = self.rotary_embedding_layer(
+            query_rot, start_index=start_index
+        )
         key_rot = self.rotary_embedding_layer(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
