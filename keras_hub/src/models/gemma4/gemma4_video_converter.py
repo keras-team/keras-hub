@@ -59,6 +59,7 @@ class Gemma4VideoConverter(VideoConverter):
             return outputs
         else:
             # Assume 5D tensor (batch, frames, height, width, channels)
+            inputs = ops.convert_to_tensor(inputs)
             shape = ops.shape(inputs)
             batch_size = shape[0]
             total_frames = shape[1]

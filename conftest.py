@@ -87,6 +87,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/utils/transformers/export/mistral_test.py",
     "keras_hub/src/utils/transformers/export/qwen3_5_test.py",
     "keras_hub/src/utils/transformers/export/qwen_test.py",
+    "keras_hub/src/utils/transformers/safetensor_utils_test.py",
     "keras_hub/src/vllm",
     "keras_hub/src/models/albert",
     "keras_hub/src/models/audio_to_text_preprocessor_test.py",
@@ -130,6 +131,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/embedding_gemma2/embedding_gemma2_encoder_block_test.py",  # noqa: E501
     "keras_hub/src/models/embedding_gemma2/embedding_gemma2_image_converter_test.py",  # noqa: E501
     "keras_hub/src/models/embedding_gemma2/embedding_gemma2_lora_test.py",
+    "keras_hub/src/models/embedding_gemma2/embedding_gemma2_text_embedder_preprocessor_test.py",  # noqa: E501
     "keras_hub/src/models/embedding_gemma2/embedding_gemma2_tokenizer_test.py",
     "keras_hub/src/models/embedding_gemma2/embedding_gemma2_video_converter_test.py",  # noqa: E501
     "keras_hub/src/models/esm/esm_classifier_preprocessor_test.py",
@@ -145,6 +147,7 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/gemma3n",
     "keras_hub/src/models/gemma4/gemma4_audio_converter_test.py",
     "keras_hub/src/models/gemma4/gemma4_backbone_test.py",
+    "keras_hub/src/models/gemma4/gemma4_causal_lm_preprocessor_test.py",
     "keras_hub/src/models/gemma4/gemma4_decoder_block_test.py",
     "keras_hub/src/models/gemma4/gemma4_image_converter_test.py",
     "keras_hub/src/models/gemma4/gemma4_layers_test.py",
@@ -196,8 +199,15 @@ OPENVINO_SUPPORTED_PATHS = [
     "keras_hub/src/models/phi3",
     "keras_hub/src/models/preprocessor_test.py",
     "keras_hub/src/models/qwen",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_backbone_test.py",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_causal_lm_test.py",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_image_converter_test.py",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_tokenizer_test.py",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_video_converter_test.py",
+    "keras_hub/src/models/qwen2_vl/qwen2_vl_vision_encoder_test.py",
     "keras_hub/src/models/qwen3",
     "keras_hub/src/models/qwen3_5/qwen3_5_backbone_test.py",
+    "keras_hub/src/models/qwen3_5/qwen3_5_causal_lm_preprocessor_test.py",  # noqa: E501
     "keras_hub/src/models/qwen3_5/qwen3_5_video_converter_test.py",
     "keras_hub/src/models/qwen3_5/qwen3_5_vision_encoder_test.py",
     "keras_hub/src/models/qwen3_5_moe/qwen3_5_moe_backbone_test.py",

@@ -2,7 +2,6 @@ import re
 
 import keras
 import numpy as np
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -15,6 +14,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
     Qwen3_5VideoConverter,
 )
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -224,7 +224,7 @@ class Qwen3_5CausalLMPreprocessor(
         Returns:
             int32 tensor ``(total_vision_tokens,)``.
         """
-        token_ids_np = ops.convert_to_numpy(token_ids)
+        token_ids_np = convert_to_numpy(token_ids)
         img_mask = (token_ids_np == self.image_token_id).reshape(-1)
         img_indices = np.where(img_mask)[0].astype(np.int32)
 
@@ -362,16 +362,16 @@ class Qwen3_5CausalLMPreprocessor(
         Returns:
             int32 tensor ``(batch, 4, seq_len)``.
         """
-        token_ids_np = ops.convert_to_numpy(token_ids)
+        token_ids_np = convert_to_numpy(token_ids)
         if hasattr(image_grid_thw, "numpy"):
-            image_grid_np = ops.convert_to_numpy(image_grid_thw)
+            image_grid_np = convert_to_numpy(image_grid_thw)
         elif image_grid_thw is not None:
             image_grid_np = np.array(image_grid_thw)
         else:
             image_grid_np = np.zeros((0, 3), dtype=np.int32)
 
         if hasattr(video_grid_thw, "numpy"):
-            video_grid_np = ops.convert_to_numpy(video_grid_thw)
+            video_grid_np = convert_to_numpy(video_grid_thw)
         elif video_grid_thw is not None:
             video_grid_np = np.array(video_grid_thw)
         else:
