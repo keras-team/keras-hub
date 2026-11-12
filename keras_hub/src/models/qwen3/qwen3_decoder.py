@@ -77,24 +77,11 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = Qwen3Attention(
-            num_query_heads=self.num_query_heads,
-            num_key_value_heads=self.num_key_value_heads,
-            rope_max_wavelength=self.rope_max_wavelength,
-            head_dim=self.head_dim,
-            rope_scaling_factor=self.rope_scaling_factor,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            dropout=self.dropout,
-            sliding_window_size=self.sliding_window_size,
-            dtype=self.dtype_policy,
-            name="self_attention",
-        )
+        self._self_attention_layer = self._make_self_attention()
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = Qwen3LayerNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="self_attention_layernorm",
+        self._self_attention_layernorm = self._make_layer_norm(
+            "self_attention_layernorm"
         )
 
         self._self_attention_layernorm.build(decoder_sequence_shape)
@@ -137,14 +124,35 @@ class Qwen3TransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_layernorm = Qwen3LayerNorm(
-            epsilon=self.layer_norm_epsilon,
-            dtype=self.dtype_policy,
-            name="feedforward_layernorm",
+        self._feedforward_layernorm = self._make_layer_norm(
+            "feedforward_layernorm"
         )
         self._feedforward_layernorm.build(decoder_sequence_shape)
 
         self.built = True
+
+    def _make_self_attention(self):
+        """Create the self-attention layer. Subclasses can swap it."""
+        return Qwen3Attention(
+            num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
+            rope_max_wavelength=self.rope_max_wavelength,
+            head_dim=self.head_dim,
+            rope_scaling_factor=self.rope_scaling_factor,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            dropout=self.dropout,
+            sliding_window_size=self.sliding_window_size,
+            dtype=self.dtype_policy,
+            name="self_attention",
+        )
+
+    def _make_layer_norm(self, name):
+        """Create an RMSNorm layer. Subclasses can swap it."""
+        return Qwen3LayerNorm(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name=name,
+        )
 
     def call(
         self,
