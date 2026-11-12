@@ -112,7 +112,7 @@ def pytest_collection_modifyitems(config, items):
     )
     # A pluggable backend can list the tests it supports, in a text file at
     # the root of its repository.
-    supported_tests = read_backend_test_list("keras_hub_tests.txt")
+    supported_tests = read_backend_test_list("keras_hub_tests_whitelist.txt")
     skip_unsupported = pytest.mark.skip(
         reason=f"Not supported by the {keras.config.backend()} backend"
     )

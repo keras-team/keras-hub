@@ -179,7 +179,7 @@ def sharded_weights_available():
 
 
 def get_backend_package():
-    """Return the package of a pluggable backend, such as `keras_openvino`."""
+    """Return the package of a pluggable backend."""
     backend = keras.config.backend()
     if backend in ("jax", "numpy", "tensorflow", "torch"):
         return None
