@@ -587,7 +587,7 @@ def get_preset_loader(preset):
     if not check_file_exists(preset, CONFIG_FILE):
         if check_file_exists(preset, DIFFUSERS_MODEL_INDEX_FILE):
             # Avoid circular import.
-            from keras_hub.src.utils.transformers.preset_loader import (
+            from keras_hub.src.utils.diffusers.preset_loader import (
                 DiffusersPresetLoader,
             )
 

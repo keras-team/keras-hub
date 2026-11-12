@@ -5,17 +5,27 @@ diffusers pipeline repo, such as `hf://black-forest-labs/FLUX.2-klein-4B`,
 through `DiffusersPresetLoader`. Only the key maps that differ from FLUX.1
 live here: the shared modulation projections, the fused single-block
 projection, the SwiGLU feed-forward layers, the missing biases and the VAE.
+
+The `load_task_config` and `convert_tokenizer` hooks load the rest of a
+`Flux2KleinPipeline` (the Qwen3 text encoder and tokenizer, and the VAE) for
+`Flux2TextToImage`.
 """
+
+import functools
+import os
 
 import numpy as np
 
 from keras_hub.src.models.flux2.flux2_backbone import Flux2Backbone
-from keras_hub.src.utils.transformers.convert_flux import CheckedLoader
-from keras_hub.src.utils.transformers.convert_flux import port_dense
-from keras_hub.src.utils.transformers.convert_flux import port_fused_dense
-from keras_hub.src.utils.transformers.convert_flux import port_mlp_embedder
-from keras_hub.src.utils.transformers.convert_flux import port_norm_out
-from keras_hub.src.utils.transformers.convert_flux import port_qk_norm
+from keras_hub.src.models.flux2.flux2_vae import Flux2VAE
+from keras_hub.src.utils.diffusers.convert_flux import CheckedLoader
+from keras_hub.src.utils.diffusers.convert_flux import port_dense
+from keras_hub.src.utils.diffusers.convert_flux import port_fused_dense
+from keras_hub.src.utils.diffusers.convert_flux import port_mlp_embedder
+from keras_hub.src.utils.diffusers.convert_flux import port_norm_out
+from keras_hub.src.utils.diffusers.convert_flux import port_qk_norm
+from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.transformers import convert_qwen3
 
 backbone_cls = Flux2Backbone
 
@@ -335,3 +345,69 @@ def convert_vae_weights(vae, loader):
     )
     # `num_batches_tracked` is a training counter with no Keras equivalent.
     loader.check_complete(vae, ignore=["bn.num_batches_tracked"])
+
+
+# === Pipeline (`Flux2KleinPipeline`) ===
+
+
+def _load_text_encoder(loader, load_weights, dtype):
+    """Build the Qwen3 text encoder from the `text_encoder/` folder."""
+    hf_config = loader.load_component_config("text_encoder", "Qwen3ForCausalLM")
+    text_encoder = convert_qwen3.backbone_cls(
+        **convert_qwen3.convert_backbone_config(hf_config), dtype=dtype
+    )
+    if load_weights:
+        loader.load_component_weights(
+            "text_encoder",
+            text_encoder,
+            functools.partial(
+                convert_qwen3.convert_weights, transformers_config=hf_config
+            ),
+        )
+    return text_encoder
+
+
+def _load_vae(loader, load_weights, dtype):
+    """Build the VAE from the `vae/` folder."""
+    hf_config = loader.load_component_config("vae", "AutoencoderKLFlux2")
+    vae = Flux2VAE(**convert_vae_config(hf_config), dtype=dtype)
+    if load_weights:
+        loader.load_component_weights("vae", vae, convert_vae_weights)
+    return vae
+
+
+def load_task_config(loader, load_weights, **kwargs):
+    """Load the `Flux2TextToImage` kwargs other than its backbone.
+
+    Called by `DiffusersPresetLoader.load_task`. The text encoder and the VAE
+    are built from their folders of the diffusers repo, unless they are
+    passed to `from_preset()`.
+
+    Args:
+        loader: The `DiffusersPresetLoader` of the repo.
+        load_weights: Whether to load the weights of the components.
+        **kwargs: The kwargs passed to `from_preset()`.
+    """
+    dtype = kwargs.get("dtype")
+    task_config = {
+        # `Flux2KleinPipeline` defaults to `is_distilled=False` too.
+        "is_distilled": loader.config.get("is_distilled", False),
+    }
+    if "text_encoder" not in kwargs:
+        task_config["text_encoder"] = _load_text_encoder(
+            loader, load_weights, dtype
+        )
+    if "vae" not in kwargs:
+        task_config["vae"] = _load_vae(loader, load_weights, dtype)
+    return task_config
+
+
+def convert_tokenizer(cls, preset, **kwargs):
+    """Load the Qwen3 tokenizer from the `tokenizer/` folder.
+
+    Called by `DiffusersPresetLoader.load_tokenizer`.
+    """
+    # `get_file` fetches `tokenizer/tokenizer.json` (downloading it for
+    # `hf://` presets); its local folder is a preset `convert_qwen3` reads.
+    path = get_file(preset, "tokenizer/tokenizer.json")
+    return convert_qwen3.convert_tokenizer(cls, os.path.dirname(path), **kwargs)

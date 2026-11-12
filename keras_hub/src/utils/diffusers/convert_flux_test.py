@@ -8,8 +8,8 @@ from keras import ops
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.flux.flux_backbone import FluxBackbone
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers import convert_flux
-from keras_hub.src.utils.transformers.preset_loader import (
+from keras_hub.src.utils.diffusers import convert_flux
+from keras_hub.src.utils.diffusers.preset_loader import (
     DiffusersSafetensorLoader,
 )
 

@@ -11,8 +11,8 @@ from keras_hub.src.models.flux2.flux2_text_to_image import Flux2TextToImage
 from keras_hub.src.models.flux2.flux2_vae import Flux2VAE
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.transformers import convert_flux2
-from keras_hub.src.utils.transformers.preset_loader import (
+from keras_hub.src.utils.diffusers import convert_flux2
+from keras_hub.src.utils.diffusers.preset_loader import (
     DiffusersSafetensorLoader,
 )
 
@@ -376,9 +376,8 @@ SPECIAL_TOKENS = ["<|endoftext|>", "<|im_start|>", "<|im_end|>"]
 SPECIAL_TOKENS += ["<think>", "</think>"]
 
 
-def save_tiny_text_encoder(preset_dir):
-    """Save a tiny `Qwen3ForCausalLM` and its tokenizer, as klein does."""
-    transformers = pytest.importorskip("transformers")
+def write_tiny_tokenizer(preset_dir):
+    """Write a tiny Qwen3 `tokenizer/tokenizer.json`; return its size."""
     tokens = sorted({t for pair in MERGES for t in pair + ["".join(pair)]})
     tokens += [chr(c) for c in range(ord("a"), ord("z") + 1)]
     tokens += ["Ċ", "ĊĊ", "Ġ"]
@@ -398,8 +397,15 @@ def save_tiny_text_encoder(preset_dir):
             },
             f,
         )
+    return len(vocab) + len(added)
+
+
+def save_tiny_text_encoder(preset_dir):
+    """Save a tiny `Qwen3ForCausalLM` and its tokenizer, as klein does."""
+    transformers = pytest.importorskip("transformers")
+    vocabulary_size = write_tiny_tokenizer(preset_dir)
     config = transformers.Qwen3Config(
-        vocab_size=len(vocab) + len(added),
+        vocab_size=vocabulary_size,
         hidden_size=16,
         intermediate_size=32,
         # `Flux2TextToImage` reads hidden states 9, 18 and 27.
@@ -440,12 +446,13 @@ class ConvertFlux2PipelineTest(TestCase):
 
     def test_flux1_repo_has_no_task(self):
         preset_dir = self.get_temp_dir()
-        from keras_hub.src.utils.transformers.convert_flux_test import (
+        from keras_hub.src.utils.diffusers.convert_flux_test import (
             save_tiny_flux,
         )
 
         save_tiny_flux(preset_dir)
-        with self.assertRaisesRegex(ValueError, "FLUX.1"):
+        # `convert_flux` defines no `load_task_config` hook.
+        with self.assertRaisesRegex(ValueError, "only load the backbone"):
             TextToImage.from_preset(preset_dir)
 
 
