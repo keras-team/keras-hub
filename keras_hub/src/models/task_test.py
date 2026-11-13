@@ -50,6 +50,15 @@ class SimpleTask(Task):
         super().__init__(inputs, outputs, **kwargs)
 
 
+class VariableTask(Task):
+    def __init__(self, **kwargs):
+        # A variable owned by the task itself, not by one of its layers.
+        self.scale = keras.Variable(1.0, name="scale")
+        inputs = keras.Input(shape=(5,))
+        outputs = keras.layers.Dense(5)(inputs)
+        super().__init__(inputs, outputs, **kwargs)
+
+
 class TestTask(TestCase):
     def test_preset_accessors(self):
         bert_presets = set(BertTextClassifier.presets.keys())
@@ -107,6 +116,15 @@ class TestTask(TestCase):
         summary = []
         model.summary(print_fn=lambda x, line_break=False: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
+
+    def test_variable_set_before_init_is_tracked(self):
+        # Regression test for keras-team/keras-hub#3210. On torch, attributes
+        # set before `super().__init__()` skip Keras tracking, which used to
+        # leave a bare variable untrained and unsaved.
+        model = VariableTask()
+        self.assertTrue(
+            any(weight is model.scale for weight in model.trainable_weights)
+        )
 
     @parameterized.named_parameters(
         {
