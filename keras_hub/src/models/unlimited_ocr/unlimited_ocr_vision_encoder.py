@@ -13,10 +13,6 @@ from keras_hub.src.models.vit_det.vit_layers import ViTDetPatchingAndEmbedding
 from keras_hub.src.models.vit_det.vit_layers import WindowedTransformerEncoder
 
 
-def _kernel_initializer(stddev=0.02):
-    return keras.initializers.RandomNormal(stddev=stddev)
-
-
 @keras_hub_export("keras_hub.models.UnlimitedOCRVisionEncoder")
 class UnlimitedOCRVisionEncoder(keras.Model):
     """The Unlimited-OCR vision tower: a SAM encoder followed by a CLIP encoder.
@@ -167,7 +163,7 @@ class UnlimitedOCRVisionEncoder(keras.Model):
             sam_output_channels,
             kernel_size=1,
             use_bias=False,
-            kernel_initializer=_kernel_initializer(),
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
             dtype=self.dtype_policy,
             name="sam_neck_conv_1",
         )
@@ -179,7 +175,7 @@ class UnlimitedOCRVisionEncoder(keras.Model):
             kernel_size=3,
             padding="same",
             use_bias=False,
-            kernel_initializer=_kernel_initializer(),
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
             dtype=self.dtype_policy,
             name="sam_neck_conv_2",
         )
@@ -198,7 +194,7 @@ class UnlimitedOCRVisionEncoder(keras.Model):
             kernel_size=3,
             strides=2,
             use_bias=False,
-            kernel_initializer=_kernel_initializer(),
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
             dtype=self.dtype_policy,
             name="sam_net_2",
         )
@@ -210,7 +206,7 @@ class UnlimitedOCRVisionEncoder(keras.Model):
             kernel_size=3,
             strides=2,
             use_bias=False,
-            kernel_initializer=_kernel_initializer(),
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
             dtype=self.dtype_policy,
             name="sam_net_3",
         )

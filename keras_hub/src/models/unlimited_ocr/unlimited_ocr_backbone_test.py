@@ -132,6 +132,69 @@ class UnlimitedOCRBackboneTest(TestCase):
         self.assertFalse(model.transformer_layers[0].sparse)
         self.assertTrue(model.transformer_layers[1].sparse)
 
+    def test_mlp_layer_types_set_the_layer_structure(self):
+        kwargs = {**self.init_kwargs, "num_layers": 3}
+        model = UnlimitedOCRBackbone(
+            **kwargs, mlp_layer_types=["sparse", "dense", "sparse"]
+        )
+        self.assertEqual(
+            [layer.sparse for layer in model.transformer_layers],
+            [True, False, True],
+        )
+        revived = UnlimitedOCRBackbone.from_config(model.get_config())
+        self.assertEqual(
+            [layer.sparse for layer in revived.transformer_layers],
+            [True, False, True],
+        )
+
+    def test_grouped_key_value_heads(self):
+        model = UnlimitedOCRBackbone(**self.init_kwargs, num_key_value_heads=1)
+        attention = model.transformer_layers[0]._self_attention_layer
+        # 2 query heads share 1 key and value head of size 8.
+        self.assertEqual(tuple(attention.query_dense.kernel.shape), (16, 2, 8))
+        self.assertEqual(tuple(attention.key_dense.kernel.shape), (16, 1, 8))
+        self.assertEqual(tuple(attention.value_dense.kernel.shape), (16, 1, 8))
+        output = model(self.input_data)
+        self.assertEqual(tuple(output.shape), (2, 20, 16))
+        revived = UnlimitedOCRBackbone.from_config(model.get_config())
+        self.assertEqual(revived.num_key_value_heads, 1)
+
+    def test_key_value_heads_default_to_query_heads(self):
+        model = UnlimitedOCRBackbone(**self.init_kwargs)
+        self.assertEqual(model.num_key_value_heads, 2)
+
+    def test_layer_types_set_the_attention_window(self):
+        layer_types = ["full_attention", "reference_sliding_attention"]
+        model = UnlimitedOCRBackbone(
+            **self.init_kwargs, layer_types=layer_types
+        )
+        window = self.init_kwargs["sliding_window"]
+        self.assertEqual(
+            [layer.sliding_window for layer in model.transformer_layers],
+            [None, window],
+        )
+        revived = UnlimitedOCRBackbone.from_config(model.get_config())
+        self.assertEqual(
+            [layer.sliding_window for layer in revived.transformer_layers],
+            [None, window],
+        )
+
+    def test_invalid_layer_types_raise(self):
+        for layer_types in (["full_attention"], ["full_attention", "swa"]):
+            with self.subTest(layer_types=layer_types):
+                with self.assertRaisesRegex(ValueError, "layer_types"):
+                    UnlimitedOCRBackbone(
+                        **self.init_kwargs, layer_types=layer_types
+                    )
+
+    def test_invalid_mlp_layer_types_raise(self):
+        for mlp_layer_types in (["dense"], ["dense", "moe"]):
+            with self.subTest(mlp_layer_types=mlp_layer_types):
+                with self.assertRaisesRegex(ValueError, "mlp_layer_types"):
+                    UnlimitedOCRBackbone(
+                        **self.init_kwargs, mlp_layer_types=mlp_layer_types
+                    )
+
     def test_image_features_reach_the_placeholders(self):
         model = UnlimitedOCRBackbone(**self.init_kwargs)
         original = ops.convert_to_numpy(model(self.input_data))

@@ -9,15 +9,19 @@ from keras_hub.src.utils.keras_utils import fused_attention_op_available
 
 
 class UnlimitedOCRAttention(keras.layers.Layer):
-    """Multi-head self-attention with rotary embeddings and no bias.
+    """Self-attention with rotary embeddings, grouped heads and no bias.
 
-    The layer computes full multi-head attention. The number of key and value
-    heads equals the number of query heads. The query and key tensors get
-    rotary embeddings in the rotate-half layout. The layer supports a
-    key/value cache for generation.
+    The layer computes multi-head attention. Each key and value head serves
+    `num_query_heads // num_key_value_heads` query heads. The query and key
+    tensors get rotary embeddings in the rotate-half layout. The layer
+    supports a key/value cache for generation. The cache holds the key and
+    value heads, not the repeated heads.
 
     Args:
         num_query_heads: int. The number of attention heads.
+        num_key_value_heads: int or `None`. The number of key and value
+            heads. It must divide `num_query_heads`. If `None`, it equals
+            `num_query_heads`. Defaults to `None`.
         rope_max_wavelength: int. The maximum wavelength of the rotary
             embedding. Defaults to `10000`.
         kernel_initializer: string or `keras.initializers` initializer. The
@@ -28,12 +32,23 @@ class UnlimitedOCRAttention(keras.layers.Layer):
     def __init__(
         self,
         num_query_heads,
+        num_key_value_heads=None,
         rope_max_wavelength=10000,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
+        if num_key_value_heads is None:
+            num_key_value_heads = num_query_heads
+        if num_query_heads % num_key_value_heads != 0:
+            raise ValueError(
+                "`num_key_value_heads` must divide `num_query_heads`. "
+                f"Received: num_query_heads={num_query_heads}, "
+                f"num_key_value_heads={num_key_value_heads}"
+            )
         self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
         self.rope_max_wavelength = rope_max_wavelength
         self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
@@ -58,7 +73,7 @@ class UnlimitedOCRAttention(keras.layers.Layer):
 
         self.key_dense = keras.layers.EinsumDense(
             equation="bkm,muh->bkuh",
-            output_shape=(None, self.num_query_heads, head_dim),
+            output_shape=(None, self.num_key_value_heads, head_dim),
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
             name="key",
@@ -67,7 +82,7 @@ class UnlimitedOCRAttention(keras.layers.Layer):
 
         self.value_dense = keras.layers.EinsumDense(
             equation="bkm,muh->bkuh",
-            output_shape=(None, self.num_query_heads, head_dim),
+            output_shape=(None, self.num_key_value_heads, head_dim),
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
             name="value",
@@ -99,6 +114,7 @@ class UnlimitedOCRAttention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        cache_write_mask=None,
     ):
         """Apply attention to the hidden states.
 
@@ -111,6 +127,9 @@ class UnlimitedOCRAttention(keras.layers.Layer):
                 holds the cached keys and values.
             cache_update_index: Optional int. The position of the first
                 token in `hidden_states`.
+            cache_write_mask: Optional boolean tensor of shape `(batch,)`.
+                A row with `False` keeps its cached keys and values at the
+                updated positions.
 
         Returns:
             The attention output. When `cache` is set, the layer returns an
@@ -137,6 +156,13 @@ class UnlimitedOCRAttention(keras.layers.Layer):
             else:
                 key_update, value_update = _compute_key_value(hidden_states)
                 start = [0, cache_update_index, 0, 0]
+                if cache_write_mask is not None:
+                    write = ops.reshape(cache_write_mask, (-1, 1, 1, 1))
+                    shape = ops.shape(key_update)
+                    old_key = ops.slice(key_cache, start, shape)
+                    old_value = ops.slice(value_cache, start, shape)
+                    key_update = ops.where(write, key_update, old_key)
+                    value_update = ops.where(write, value_update, old_value)
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
                 cache = ops.stack((key, value), axis=1)
@@ -159,6 +185,9 @@ class UnlimitedOCRAttention(keras.layers.Layer):
         return attention_output
 
     def _compute_attention(self, query, key, value, attention_mask=None):
+        if self.num_key_value_groups > 1:
+            key = ops.repeat(key, self.num_key_value_groups, axis=2)
+            value = ops.repeat(value, self.num_key_value_groups, axis=2)
         if fused_attention_op_available():
             if attention_mask is not None:
                 attention_mask = ops.cast(
@@ -191,6 +220,7 @@ class UnlimitedOCRAttention(keras.layers.Layer):
         config.update(
             {
                 "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

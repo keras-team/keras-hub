@@ -241,6 +241,24 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
                 mapped = next(iter(make_dataset(x).map(function)))
                 self.assert_outputs_match(direct, mapped)
 
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_data_empty_images_match_direct_call(self):
+        # An empty image list means no images, as in the Python path.
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        x = {"prompts": ["airplane at airport"], "images": []}
+        direct = preprocessor(x)
+        mapped = next(iter(tf.data.Dataset.from_tensors(x).map(preprocessor)))
+        self.assert_outputs_match(direct, mapped)
+        generated = next(
+            iter(
+                tf.data.Dataset.from_tensors(x).map(
+                    preprocessor.generate_preprocess
+                )
+            )
+        )
+        shape = tuple(generated["pixel_values"].shape)
+        self.assertEqual(shape, (1, 0, 64, 64, 3))
+
     def test_grain_matches_direct_call(self):
         # The Python path must return NumPy arrays inside Grain.
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
@@ -300,6 +318,19 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
                     tf.errors.InvalidArgumentError, message
                 ):
                     next(iter(ds.map(preprocessor.generate_preprocess)))
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_image_rank_error_is_a_value_error(self):
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        for images in (np.zeros((50, 100), "float32"), tf.zeros((50,))):
+            with self.subTest(rank=len(images.shape)):
+                with self.assertRaisesRegex(ValueError, "3, 4 or 5 dimensions"):
+                    preprocessor._process_tf(
+                        tf.constant(["<image>airport"]),
+                        images,
+                        preprocessor.sequence_length,
+                        False,
+                    )
 
     def test_mismatched_image_count_raises(self):
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)

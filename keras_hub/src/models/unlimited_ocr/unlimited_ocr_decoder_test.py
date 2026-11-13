@@ -62,6 +62,28 @@ class UnlimitedOCRDecoderTest(TestCase):
         expected[1, 0, [0, 1, 2, 3, 4, 5]] = True
         self.assertAllEqual(mask, expected)
 
+    def test_no_sliding_window_gives_full_causal_mask(self):
+        layer = UnlimitedOCRTransformerDecoder(
+            **{**self.init_kwargs, "sliding_window": None}
+        )
+        # The same call as the R-SWA mask test. Without a window, a query at
+        # position 5 sees every position up to 5 in both rows.
+        mask = layer._compute_self_attention_mask(
+            decoder_sequence=ops.convert_to_tensor(
+                np.zeros((2, 1, 16), dtype="float32")
+            ),
+            decoder_padding_mask=None,
+            decoder_attention_mask=None,
+            self_attention_cache=ops.convert_to_tensor(
+                np.zeros((2, 2, 8, 2, 8), dtype="float32")
+            ),
+            self_attention_cache_update_index=5,
+            prefill_length=ops.convert_to_tensor([2, 4], dtype="int32"),
+        )
+        expected = np.zeros((2, 1, 8), dtype="bool")
+        expected[:, 0, :6] = True
+        self.assertAllEqual(ops.convert_to_numpy(mask), expected)
+
     def test_cached_decode_matches_reference_mask(self):
         layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
         seq_len, prefill = 8, np.array([4, 3], dtype="int32")
