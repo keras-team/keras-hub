@@ -81,6 +81,7 @@ class Task(PipelineModel):
         is_torch = keras.config.backend() == "torch"
         # A bare variable is not covered by the functional model, so it must
         # still go through Keras tracking, or torch never trains or saves it.
+        # ref: https://github.com/keras-team/keras-hub/issues/3210.
         is_variable = isinstance(value, keras.Variable)
         if is_torch and (is_property or is_unitialized) and not is_variable:
             return object.__setattr__(self, name, value)
