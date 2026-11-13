@@ -273,6 +273,18 @@ class AssertionsTest(TestCase):
                 tf.constant([[1, 2], [3, 4]]),
             )
 
+    @unittest.skipIf(tf is None, "Requires TensorFlow")
+    def test_string_ragged_and_dense_compare_by_value(self):
+        self.assertAllEqual(
+            tf.ragged.constant([["a"], ["b"]]),
+            tf.constant([["a"], ["b"]]),
+        )
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(
+                tf.ragged.constant([["a"], ["b"]]),
+                tf.constant([["a"], ["c"]]),
+            )
+
     def test_assert_not_all_equal(self):
         self.assertNotAllEqual([1, 2], [1, 3])
         self.assertNotAllEqual([[1, 2], [3]], [[1, 2], [4]])
@@ -307,6 +319,120 @@ class AssertionsTest(TestCase):
             self.assertDictEqual([1, 2], [1, 2])
         with self.assertRaises(AssertionError):
             self.assertDictEqual(1, 1)
+
+    def test_dict_plain_values_follow_unittest(self):
+        # Plain values compare as in `unittest`: strict on string and
+        # container types, while `1 == True` and `1 == 1.0` hold in Python.
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": b"abc"}, {"a": "abc"})
+        with self.assertRaises(AssertionError):
+            self.assertDictEqual({"a": b"abc"}, {"a": "abc"})
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": (1, 2)}, {"a": [1, 2]})
+        self.assertEqual({"a": 1}, {"a": True})
+        self.assertEqual({"a": 1}, {"a": 1.0})
+        self.assertDictEqual({"a": "abc", "n": [1]}, {"a": "abc", "n": [1]})
+
+    def test_dict_plain_value_next_to_array_is_strict(self):
+        x = np.array([1, 2])
+        self.assertEqual({"x": x, "a": "abc"}, {"x": x, "a": "abc"})
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"x": x, "a": b"abc"}, {"x": x, "a": "abc"})
+        # Arrays keep the shape check, numpy scalars included.
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": np.array([1])}, {"a": np.array([[1]])})
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": np.int64(1)}, {"a": [1]})
+
+    def test_dict_strictness_is_top_level_only(self):
+        # Deliberate: a container that holds an array is compared
+        # structurally as a whole, so its plain members compare loosely.
+        x = np.array([1, 2])
+        self.assertEqual({"a": [x, b"abc"]}, {"a": (x, "abc")})
+        self.assertEqual(
+            {"a": {"x": x, "s": b"abc"}}, {"a": {"x": x, "s": "abc"}}
+        )
+        with self.assertRaises(AssertionError):
+            self.assertEqual({"a": [x, b"abc"]}, {"a": [x, "abd"]})
+
+    def test_dict_mixed_type_keys(self):
+        # Keys that cannot be ordered must not matter, alone or nested.
+        mixed = {1: 1, "a": 2}
+        x = np.array([1, 2])
+        self.assertEqual(mixed, dict(mixed))
+        self.assertDictEqual(mixed, dict(mixed))
+        self.assertEqual({1: x, "a": 2}, {1: x, "a": 2})
+        self.assertEqual({"k": mixed, "x": x}, {"k": dict(mixed), "x": x})
+        self.assertEqual({"k": {1: x, "a": 2}}, {"k": {1: x, "a": 2}})
+        with self.assertRaises(AssertionError):
+            self.assertEqual(mixed, {1: 1, "a": 3})
+        with self.assertRaises(AssertionError):
+            self.assertEqual({1: x, "a": 2}, {1: x, "a": 3})
+
+    def test_dict_failure_names_the_key(self):
+        x = np.array([1, 2])
+        with self.assertRaisesRegex(AssertionError, r"differ at \['a'\]"):
+            self.assertEqual({"x": x, "a": 1}, {"x": x, "a": 2})
+        with self.assertRaisesRegex(AssertionError, r"differ at \['x'\]"):
+            self.assertEqual({"x": x, "a": 1}, {"x": x + 1, "a": 1})
+        with self.assertRaisesRegex(AssertionError, "context"):
+            self.assertEqual({"x": x, "a": 1}, {"x": x, "a": 2}, msg="context")
+        with self.assertRaisesRegex(
+            AssertionError, r"Dict keys differ: \['x', 'a'\] vs \['x', 'b'\]"
+        ):
+            self.assertEqual({"x": x, "a": 1}, {"x": x, "b": 1})
+
+    def test_assert_not_all_equal_nan_and_inf(self):
+        # NaN and NaT in the same position count as equal, as they do for
+        # `assertAllEqual`.
+        self.assertAllEqual([np.nan, 1.0], [np.nan, 1.0])
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual([np.nan, 1.0], [np.nan, 1.0])
+        nat = np.array(["NaT", "2020-01-01"], dtype="datetime64[D]")
+        self.assertAllEqual(nat, nat.copy())
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual(nat, nat.copy())
+        self.assertNotAllEqual([np.inf], [-np.inf])
+        self.assertNotAllEqual([np.nan, 1.0], [1.0, np.nan])
+
+    def test_jagged_structured_dtype_rows(self):
+        dtype = np.dtype([("a", "i4")])
+
+        def rows(last):
+            return [
+                np.array([(1,)], dtype=dtype),
+                np.array([(2,), (last,)], dtype=dtype),
+            ]
+
+        self.assertAllEqual(rows(3), rows(3))
+        self.assertNotAllEqual(rows(3), rows(4))
+        with self.assertRaises(AssertionError):
+            self.assertAllEqual(rows(3), rows(4))
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual(rows(3), rows(3))
+
+    def test_assert_not_all_equal_compares_jagged_rows_once(self):
+        # Unequal jagged rows are settled by one flat comparison, and numpy
+        # never builds a failure message that would be thrown away.
+        with (
+            mock.patch("numpy.array_equal", wraps=np.array_equal) as equal,
+            mock.patch(
+                "numpy.testing.assert_array_equal",
+                wraps=np.testing.assert_array_equal,
+            ) as assert_equal,
+        ):
+            self.assertNotAllEqual([[1], [2, 3]], [[1], [4, 5]])
+        self.assertEqual(equal.call_count, 1)
+        assert_equal.assert_not_called()
+        with self.assertRaises(AssertionError):
+            self.assertNotAllEqual([[1], [2, 3]], [[1], [2, 3]])
+
+    def test_assert_all_close_ignores_tpu_tolerances(self):
+        # Keras helpers pass `tpu_atol` / `tpu_rtol`; they are accepted and
+        # have no effect.
+        self.assertAllClose([1.0], [1.0], tpu_atol=1e-6, tpu_rtol=1e-6)
+        with self.assertRaises(AssertionError):
+            self.assertAllClose([1.0], [1.1], tpu_atol=1.0, tpu_rtol=1.0)
 
 
 class GrainSourceFromTensorSlicesTest(TestCase):

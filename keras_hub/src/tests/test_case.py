@@ -135,6 +135,38 @@ def _is_1d_row(row):
     )
 
 
+def _jagged_fast_path(x1, x2, compare_dense, raise_errors):
+    """Compare jagged numeric rows with one flat comparison.
+
+    Returns `True` if the rows are equal. If they differ, returns `False`
+    when not raising, and `None` when raising so the caller walks the rows
+    and reports where they differ. Also returns `None` when the fast path
+    does not apply.
+    """
+    if not (
+        isinstance(x1, (list, tuple)) and isinstance(x2, (list, tuple)) and x1
+    ):
+        return None
+    if not (all(_is_1d_row(r) for r in x1) and all(_is_1d_row(r) for r in x2)):
+        return None
+    if not all(len(r1) == len(r2) for r1, r2 in zip(x1, x2)):
+        return None
+    try:
+        c1 = np.concatenate(x1)
+        c2 = np.concatenate(x2)
+    except (ValueError, TypeError, RuntimeError):
+        # Backend tensors on an accelerator or with grad cannot be
+        # viewed as arrays.
+        return None
+    if c1.dtype.kind not in "biufc" or c2.dtype.kind not in "biufc":
+        return None
+    if c1.ndim != 1 or c2.ndim != 1:
+        return None
+    if compare_dense(c1, c2, None, None, raise_errors=False):
+        return True
+    return None if raise_errors else False
+
+
 def _format_failure(err_msg, msg, path):
     where = f" at {path}" if path else ""
     detail = f"\n{msg}" if msg else ""
@@ -159,6 +191,10 @@ def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
         tf is not None
         and isinstance(x1, (tf.Tensor, tf.RaggedTensor))
         and isinstance(x2, (tf.Tensor, tf.RaggedTensor))
+        # Strings are exempt from the ragged-vs-dense check because string
+        # tensors are converted to nested Python lists and compared by value,
+        # so a ragged and a dense string tensor with the same values are equal.
+        and x1.dtype != tf.string
     ):
         is_ragged_1 = isinstance(x1, tf.RaggedTensor)
         is_ragged_2 = isinstance(x2, tf.RaggedTensor)
@@ -222,42 +258,12 @@ def _compare_structures(x1, x2, compare_dense, msg, path, raise_errors=True):
     if len(x1) != len(x2):
         return _raise(f"Lengths differ: {len(x1)} vs {len(x2)}")
 
-    # Fast path for jagged lists: compares lengths and attempts a flat
-    # np.concatenate per side. Mismatches fall through to the per-row walk so
+    # Fast path for jagged lists: one comparison of the concatenated rows.
+    # When raising, a mismatch still goes through the per-row walk below so
     # the reported path stays exact.
-    if isinstance(x1, (list, tuple)) and isinstance(x2, (list, tuple)) and x1:
-        if all(_is_1d_row(r) for r in x1) and all(_is_1d_row(r) for r in x2):
-            if all(len(r1) == len(r2) for r1, r2 in zip(x1, x2)):
-                try:
-                    concat1 = np.concatenate(x1)
-                    concat2 = np.concatenate(x2)
-                    if concat1.dtype.kind in (
-                        "S",
-                        "U",
-                    ) or concat2.dtype.kind in ("S", "U"):
-                        raise TypeError
-                    if (
-                        concat1.ndim == 1
-                        and concat2.ndim == 1
-                        and concat1.dtype.kind != "O"
-                        and concat2.dtype.kind != "O"
-                    ):
-                        try:
-                            res = compare_dense(
-                                concat1,
-                                concat2,
-                                msg,
-                                path,
-                                raise_errors=True,
-                            )
-                            if res:
-                                return True
-                        except AssertionError:
-                            pass
-                except (ValueError, TypeError, RuntimeError):
-                    # Backend tensors on an accelerator or with grad cannot be
-                    # viewed as arrays.
-                    pass
+    fast_result = _jagged_fast_path(x1, x2, compare_dense, raise_errors)
+    if fast_result is not None:
+        return fast_result
 
     for i, (e1, e2) in enumerate(zip(x1, x2)):
         if not _compare_structures(
@@ -277,6 +283,16 @@ def _dense_allclose_fn(atol, rtol):
                     f"Shapes differ: {x1.shape} vs {x2.shape}", msg, path
                 )
             )
+        if not raise_errors:
+            # Boolean verdict only, so numpy builds no failure message.
+            if atol is None and rtol is None:
+                if x1.dtype.kind in "UV" or x2.dtype.kind in "UV":
+                    # numpy cannot test strings or structured arrays for NaN.
+                    return np.array_equal(x1, x2)
+                return np.array_equal(x1, x2, equal_nan=True)
+            # Only numeric rows from the jagged fast path get here.
+            return np.allclose(x1, x2, atol=atol, rtol=rtol, equal_nan=True)
+
         try:
             if atol is None and rtol is None:
                 np.testing.assert_array_equal(x1, x2, err_msg="")
@@ -288,8 +304,6 @@ def _dense_allclose_fn(atol, rtol):
                     x1, x2, atol=atol, rtol=rtol, err_msg=""
                 )
         except AssertionError as e:
-            if not raise_errors:
-                return False
             raise AssertionError(
                 f"{_format_failure('Values differ', msg, path)}\n{str(e)}"
             )
@@ -419,6 +433,25 @@ def assert_grain_safe_types(x):
     tree.map_structure(check, x)
 
 
+def _contains_array_or_tensor(x):
+    """Whether `x`, or anything nested in it, is an array or a tensor.
+
+    Walks dicts, lists and tuples by hand. `keras.tree.flatten` sorts dict
+    keys on some backends and raises on keys that cannot be ordered.
+    """
+    if isinstance(x, dict):
+        return any(_contains_array_or_tensor(v) for v in x.values())
+    if isinstance(x, (list, tuple)):
+        return any(_contains_array_or_tensor(v) for v in x)
+    if hasattr(x, "__array__") and not isinstance(
+        x, (str, bytes, np.str_, np.bytes_)
+    ):
+        return True
+    if tf is not None and isinstance(x, (tf.RaggedTensor, tf.SparseTensor)):
+        return True
+    return False
+
+
 class TestCase(KerasTestCase):
     """Base test case class for KerasHub."""
 
@@ -426,7 +459,18 @@ class TestCase(KerasTestCase):
         super().setUp()
         keras.utils.set_random_seed(_TEST_SEED)
 
-    def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
+    def assertAllClose(
+        self,
+        x1,
+        x2,
+        atol=1e-6,
+        rtol=1e-6,
+        msg=None,
+        tpu_atol=None,
+        tpu_rtol=None,
+    ):
+        # tpu_atol and tpu_rtol are accepted for signature compatibility
+        # with Keras helpers but are ignored.
         if x1.__class__.__name__ == "_MetricDict":
             x1 = dict(x1)
         if x2.__class__.__name__ == "_MetricDict":
@@ -436,7 +480,37 @@ class TestCase(KerasTestCase):
     def assertDictEqual(self, x1, x2, msg=None):
         self.assertIsInstance(x1, dict, msg)
         self.assertIsInstance(x2, dict, msg)
-        _compare_structures(x1, x2, _dense_allclose_fn(None, None), msg, "")
+        # Values holding an array or tensor need the structural walk. Every
+        # other value is a plain Python value and is compared strictly, as
+        # `unittest` does. The split is per top-level key only: a container
+        # that holds an array is compared structurally as a whole.
+        structural_keys = {
+            k
+            for k in x1.keys() | x2.keys()
+            if any(k in x and _contains_array_or_tensor(x[k]) for x in (x1, x2))
+        }
+        if not structural_keys:
+            super().assertDictEqual(x1, x2, msg=msg)
+            return
+        if x1.keys() != x2.keys():
+            raise AssertionError(
+                _format_failure(
+                    f"Dict keys differ: {list(x1.keys())} vs {list(x2.keys())}",
+                    msg,
+                    "",
+                )
+            )
+        compare_dense = _dense_allclose_fn(None, None)
+        for k in x1:
+            path = f"[{k!r}]"
+            if k in structural_keys:
+                _compare_structures(x1[k], x2[k], compare_dense, msg, path)
+                continue
+            try:
+                self.assertEqual(x1[k], x2[k])
+            except AssertionError as e:
+                failure = _format_failure("Values differ", msg, path)
+                raise AssertionError(f"{failure}\n{e}") from None
 
     def assertEqual(self, x1, x2, msg=None):
         if isinstance(x1, dict) and isinstance(x2, dict):
