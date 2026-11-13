@@ -163,6 +163,3 @@ class ModernBertMaskedLM(MaskedLM):
             dtype=dtype,
             **kwargs,
         )
-
-        # Re-assign after `super().__init__()` so torch tracks the bias.
-        self.mlm_head_decoder_bias = self.mlm_head_decoder_bias

@@ -7,7 +7,9 @@ import sys
 import keras
 import numpy as np
 import pytest
+from absl.testing import parameterized
 
+import keras_hub
 from keras_hub.src.models.modern_bert import modern_bert_masked_lm_preprocessor
 from keras_hub.src.models.modern_bert.modern_bert_backbone import (
     ModernBertBackbone,
@@ -37,6 +39,9 @@ bias = model.mlm_head_decoder_bias
 bias.assign(np.linspace(-1.0, 1.0, bias.shape[0]).astype("float32"))
 model.save_task_weights(path)
 """
+
+# Seconds before a hung `SAVE_TASK_WEIGHTS_SCRIPT` subprocess is killed.
+SAVE_TASK_WEIGHTS_TIMEOUT = 300
 
 
 class ModernBertMaskedLMTest(TestCase):
@@ -195,18 +200,31 @@ class ModernBertMaskedLMTest(TestCase):
         restored.load_task_weights(path)
         self.assertAllClose(restored.predict(x), model.predict(x))
 
-    def test_task_weights_load_across_backends(self):
+    @parameterized.named_parameters(
+        ("saved_on_jax", "jax"),
+        ("saved_on_tensorflow", "tensorflow"),
+        ("saved_on_torch", "torch"),
+    )
+    @pytest.mark.large
+    def test_task_weights_load_across_backends(self, saving_backend):
         """Task weights saved under another backend must load on this one.
 
         Regression test for keras-team/keras-hub#3210. Presets saved on jax
         failed to load on torch, which same-backend round trips cannot catch.
         """
-        other_backend = "jax" if keras.config.backend() == "torch" else "torch"
-        if importlib.util.find_spec(other_backend) is None:
-            self.skipTest(f"Requires the {other_backend} backend.")
+        if saving_backend == keras.config.backend():
+            self.skipTest("Requires a saving backend other than the current.")
+        if importlib.util.find_spec(saving_backend) is None:
+            self.skipTest(f"Requires the {saving_backend} backend.")
 
         config = self.backbone.get_config()
         path = os.path.join(self.get_temp_dir(), "task.weights.h5")
+        # Make the subprocess import the source tree under test rather than
+        # any installed release of `keras_hub`.
+        repo_root = os.path.dirname(os.path.dirname(keras_hub.__file__))
+        python_path = os.pathsep.join(
+            filter(None, [repo_root, os.environ.get("PYTHONPATH")])
+        )
         subprocess.run(
             [
                 sys.executable,
@@ -215,8 +233,13 @@ class ModernBertMaskedLMTest(TestCase):
                 json.dumps(config),
                 path,
             ],
-            env={**os.environ, "KERAS_BACKEND": other_backend},
+            env={
+                **os.environ,
+                "KERAS_BACKEND": saving_backend,
+                "PYTHONPATH": python_path,
+            },
             check=True,
+            timeout=SAVE_TASK_WEIGHTS_TIMEOUT,
         )
 
         model = ModernBertMaskedLM(
