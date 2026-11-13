@@ -1,4 +1,5 @@
 import os
+import posixpath
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
@@ -200,10 +201,12 @@ class Tokenizer(PreprocessingLayer):
         return self.tokenize(inputs, *args, **kwargs)
 
     def load_preset_assets(self, preset):
+        if not self.file_assets:
+            return
         asset_path = None
         for asset in self.file_assets:
             subdir = self.config_file.split(".")[0]
-            preset_path = os.path.join(ASSET_DIR, subdir, asset)
+            preset_path = posixpath.join(ASSET_DIR, subdir, asset)
             asset_path = get_file(preset, preset_path)
         tokenizer_config_file = os.path.dirname(asset_path)
         self.load_assets(tokenizer_config_file)
