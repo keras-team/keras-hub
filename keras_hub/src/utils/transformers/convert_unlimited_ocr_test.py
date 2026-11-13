@@ -36,6 +36,7 @@ REAL_CONFIG = {
         "n_routed_experts": 64,
         "n_shared_experts": 2,
         "num_attention_heads": 10,
+        "num_key_value_heads": 10,
         "num_experts_per_tok": 6,
         "num_hidden_layers": 12,
         "vocab_size": 129280,
@@ -85,7 +86,7 @@ def _write_json(dir_path, name, data):
         json.dump(data, f)
 
 
-def _build_tiny_hf_model(transformers):
+def _build_tiny_hf_model(transformers, num_key_value_heads=4):
     """Builds a tiny random native model.
 
     The config exercises every mechanism of the model. The SAM position and
@@ -124,7 +125,7 @@ def _build_tiny_hf_model(transformers):
             "intermediate_size": 48,
             "num_hidden_layers": 2,
             "num_attention_heads": 4,
-            "num_key_value_heads": 4,
+            "num_key_value_heads": num_key_value_heads,
             "moe_intermediate_size": 16,
             "n_routed_experts": 4,
             "n_shared_experts": 2,
@@ -157,13 +158,15 @@ class TestUnlimitedOCRConverter(TestCase):
                 "vocabulary_size": 129280,
                 "num_layers": 12,
                 "num_query_heads": 10,
+                "num_key_value_heads": 10,
                 "hidden_dim": 1280,
                 "intermediate_dim": 6848,
                 "moe_intermediate_dim": 896,
                 "num_shared_experts": 2,
                 "num_experts": 64,
                 "top_k": 6,
-                "num_dense_layers": 1,
+                "mlp_layer_types": ["dense"] + ["sparse"] * 11,
+                "layer_types": None,
                 "routed_scaling_factor": 1.0,
                 "rope_max_wavelength": 10000.0,
                 "layer_norm_epsilon": 1e-6,
@@ -192,11 +195,18 @@ class TestUnlimitedOCRConverter(TestCase):
                 "intermediate_size": 48,
                 "num_hidden_layers": 3,
                 "num_attention_heads": 4,
+                "num_key_value_heads": 2,
                 "moe_intermediate_size": 16,
                 "n_routed_experts": 4,
                 "n_shared_experts": 2,
                 "num_experts_per_tok": 2,
-                "mlp_layer_types": ["dense", "dense", "sparse"],
+                # The dense layer is not a leading run.
+                "mlp_layer_types": ["sparse", "dense", "sparse"],
+                "layer_types": [
+                    "full_attention",
+                    "reference_sliding_attention",
+                    "reference_sliding_attention",
+                ],
                 "rms_norm_eps": 1e-5,
                 "rope_parameters": {"rope_theta": 20000.0},
                 "sliding_window": 4,
@@ -227,7 +237,18 @@ class TestUnlimitedOCRConverter(TestCase):
         config = convert_unlimited_ocr.convert_backbone_config(
             transformers_config
         )
-        self.assertEqual(config["num_dense_layers"], 2)
+        self.assertEqual(
+            config["mlp_layer_types"], ["sparse", "dense", "sparse"]
+        )
+        self.assertEqual(
+            config["layer_types"],
+            [
+                "full_attention",
+                "reference_sliding_attention",
+                "reference_sliding_attention",
+            ],
+        )
+        self.assertEqual(config["num_key_value_heads"], 2)
         self.assertEqual(config["rope_max_wavelength"], 20000.0)
         self.assertEqual(config["layer_norm_epsilon"], 1e-5)
         self.assertEqual(config["sliding_window"], 4)
@@ -261,6 +282,20 @@ class TestUnlimitedOCRConverter(TestCase):
         self.assertEqual(converter.downsample_ratio, 4)
         # A 1024 pixel view gives 16x16 features, 16 newlines and 1 separator.
         self.assertEqual(converter.get_num_image_tokens(0, 0), 273)
+
+    def test_load_image_converter_config_uses_the_longer_side(self):
+        preprocessor_config = {
+            **REAL_PREPROCESSOR_CONFIG,
+            "size": {"height": 768, "width": 1024},
+        }
+        with tempfile.TemporaryDirectory() as preset_dir:
+            _write_json(
+                preset_dir, "preprocessor_config.json", preprocessor_config
+            )
+            config = convert_unlimited_ocr.load_image_converter_config(
+                preset_dir, REAL_CONFIG
+            )
+        self.assertEqual(config["global_size"], 1024)
 
     def test_convert_tokenizer(self):
         from tokenizers import pre_tokenizers
@@ -312,11 +347,10 @@ class TestUnlimitedOCRConverter(TestCase):
             )
         self.assertIsInstance(backbone, UnlimitedOCRBackbone)
 
-    @pytest.mark.large
-    def test_converted_backbone_matches_hf(self):
+    def _assert_backbone_matches_hf(self, num_key_value_heads):
         torch = pytest.importorskip("torch")
         transformers = pytest.importorskip("transformers")
-        hf_model = _build_tiny_hf_model(transformers)
+        hf_model = _build_tiny_hf_model(transformers, num_key_value_heads)
 
         with tempfile.TemporaryDirectory() as preset_dir:
             hf_model.save_pretrained(preset_dir)
@@ -378,11 +412,10 @@ class TestUnlimitedOCRConverter(TestCase):
         valid = padding_mask.astype(bool)
         self.assertAllClose(keras_out[valid], hf_out[valid], atol=1e-4)
 
-    @pytest.mark.large
-    def test_converted_decode_matches_hf(self):
+    def _assert_decode_matches_hf(self, num_key_value_heads):
         torch = pytest.importorskip("torch")
         transformers = pytest.importorskip("transformers")
-        hf_model = _build_tiny_hf_model(transformers)
+        hf_model = _build_tiny_hf_model(transformers, num_key_value_heads)
         with tempfile.TemporaryDirectory() as preset_dir:
             hf_model.save_pretrained(preset_dir)
             keras_backbone = UnlimitedOCRBackbone.from_preset(
@@ -452,3 +485,19 @@ class TestUnlimitedOCRConverter(TestCase):
             )
             keras_logits.append(ops.convert_to_numpy(logits)[0, 0])
         self.assertAllClose(np.stack(keras_logits), hf_logits, atol=1e-4)
+
+    @pytest.mark.large
+    def test_converted_backbone_matches_hf(self):
+        self._assert_backbone_matches_hf(num_key_value_heads=4)
+
+    @pytest.mark.large
+    def test_converted_backbone_with_grouped_heads_matches_hf(self):
+        self._assert_backbone_matches_hf(num_key_value_heads=2)
+
+    @pytest.mark.large
+    def test_converted_decode_matches_hf(self):
+        self._assert_decode_matches_hf(num_key_value_heads=4)
+
+    @pytest.mark.large
+    def test_converted_decode_with_grouped_heads_matches_hf(self):
+        self._assert_decode_matches_hf(num_key_value_heads=2)

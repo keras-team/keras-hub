@@ -16,6 +16,9 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_causal_lm_preprocessor imp
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_image_converter import (
     UnlimitedOCRImageConverter,
 )
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
+    UnlimitedOCRExperts,
+)
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     OCR_MARKER_TOKENS,
 )
@@ -138,11 +141,39 @@ class UnlimitedOCRCausalLMTest(TestCase):
         self.assertFalse(output.startswith(prompt))
 
     def test_generate_matches_full_forward(self):
+        self._assert_generate_matches_full_forward(
+            UnlimitedOCRCausalLM(**self.init_kwargs)
+        )
+
+    def test_generate_matches_full_forward_when_the_prompt_ends_in_an_image(
+        self,
+    ):
+        # The first decode step feeds the last prompt token as plain text.
+        # The first generated token must still come from the prefill pass,
+        # which merges the image features into that token.
+        self._assert_generate_matches_full_forward(
+            UnlimitedOCRCausalLM(**self.init_kwargs), prompt="airplane<image>"
+        )
+
+    def test_generate_with_grouped_key_value_heads(self):
+        # The cache holds one key and value head for the 2 query heads.
+        backbone = UnlimitedOCRBackbone(
+            **{**self.backbone_kwargs, "num_key_value_heads": 1}
+        )
+        causal_lm = UnlimitedOCRCausalLM(
+            backbone=backbone, preprocessor=self.preprocessor
+        )
+        _, cache = causal_lm._build_cache(ops.ones((2, 5), dtype="int32"))
+        self.assertEqual(tuple(cache.shape), (2, 2, 2, 5, 1, 8))
+        self._assert_generate_matches_full_forward(causal_lm)
+
+    def _assert_generate_matches_full_forward(
+        self, causal_lm, prompt="<image>airplane"
+    ):
         # With a window longer than the sequence, the R-SWA equals full
         # causal attention. A greedy generation with the cache must then
         # pick the argmax of the full forward pass at each position. This
         # checks the image merge, the cache and the positions.
-        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
         causal_lm.compile(sampler="greedy")
         # Large logits keep the argmax stable across the two code paths.
         # The model must not generate the image token. A full forward pass
@@ -153,7 +184,7 @@ class UnlimitedOCRCausalLMTest(TestCase):
         embedding.assign(values.astype("float32"))
         image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
         inputs = self.preprocessor.generate_preprocess(
-            {"prompts": ["<image>airplane"], "images": [image]}
+            {"prompts": [prompt], "images": [image]}
         )
         padding_mask = ops.convert_to_numpy(inputs["padding_mask"])
         prompt_length = int(np.sum(padding_mask))
@@ -169,6 +200,45 @@ class UnlimitedOCRCausalLMTest(TestCase):
         self.assertAllEqual(
             predictions[0, generated], token_ids[0, generated + 1]
         )
+
+    def test_ragged_generate_keeps_image_cache_of_longer_row(self):
+        # The short row sets the first decode index. The decode loop then
+        # feeds the image placeholders of the long row as plain text. The
+        # cache must keep the image features that the prefill wrote.
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        causal_lm.compile(sampler="greedy")
+        embedding = causal_lm.backbone.token_embedding.reverse_embeddings
+        values = np.random.normal(scale=3.0, size=embedding.shape)
+        values[:, self.preprocessor.tokenizer.image_token_id] = 0.0
+        embedding.assign(values.astype("float32"))
+        image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
+        inputs = self.preprocessor.generate_preprocess(
+            {
+                "prompts": ["airplane", "airplane at <image>airport"],
+                "images": [image],
+            }
+        )
+        prompt_lengths = ops.convert_to_numpy(inputs["padding_mask"]).sum(
+            axis=-1
+        )
+        placeholder = ops.convert_to_numpy(inputs["token_ids"])[1]
+        placeholder = np.flatnonzero(
+            placeholder == self.preprocessor.tokenizer.image_token_id
+        )
+        # The long row has placeholders in the re-fed region.
+        self.assertGreater(placeholder.max(), prompt_lengths.min() - 1)
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(inputs, stop_token_ids=None)
+        token_ids = ops.convert_to_numpy(outputs["token_ids"])
+        full_inputs = dict(inputs)
+        full_inputs["token_ids"] = ops.convert_to_tensor(token_ids)
+        full_inputs["padding_mask"] = ops.ones_like(inputs["padding_mask"])
+        predictions = ops.convert_to_numpy(causal_lm(full_inputs)).argmax(-1)
+        for row, length in enumerate(prompt_lengths):
+            positions = np.arange(length - 1, token_ids.shape[1] - 1)
+            self.assertAllEqual(
+                predictions[row, positions], token_ids[row, positions + 1]
+            )
 
     def test_ragged_generate_matches_reference_window_mask(self):
         # The window (3) is shorter than the decode length. The prompts have
@@ -255,6 +325,25 @@ class UnlimitedOCRCausalLMTest(TestCase):
         causal_lm.fit(split_ds)
         causal_lm.preprocessor = preprocessor
 
+    def test_decode_steps_gather_the_selected_experts(self):
+        # The compiled decode step must see a static length of 1. Then the
+        # experts layer gathers the selected experts. The prefill pass runs
+        # all experts.
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        experts_call = UnlimitedOCRExperts.call
+        gathered = []
+
+        def wrapper(layer, hidden_states, routing_weights, top_indices=None):
+            gathered.append(top_indices is not None)
+            return experts_call(
+                layer, hidden_states, routing_weights, top_indices
+            )
+
+        with patch.object(UnlimitedOCRExperts, "call", wrapper):
+            causal_lm.generate("airplane at airport")
+        self.assertIn(True, gathered)
+        self.assertIn(False, gathered)
+
     def test_decode_steps_get_the_prompt_length(self):
         # The prefill pass has no prompt length. Every decode step gets the
         # number of prompt tokens of each row for the R-SWA mask.
@@ -284,18 +373,19 @@ class UnlimitedOCRCausalLMTest(TestCase):
 
     def test_early_stopping(self):
         causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
-        call_with_cache = causal_lm.call_with_cache
+        embedding = causal_lm.backbone.token_embedding
+        embedding_call = embedding.call
 
-        def wrapper(*args, **kwargs):
+        def wrapper(inputs, reverse=False):
             """Modify output logits to always favor end_token_id"""
-            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return logits, hidden_states, cache
+            outputs = embedding_call(inputs, reverse=reverse)
+            if reverse:
+                index = self.preprocessor.tokenizer.end_token_id
+                favored = ops.one_hot(index, self.vocabulary_size)
+                outputs = outputs + ops.cast(favored, outputs.dtype) * 1.0e9
+            return outputs
 
-        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
+        with patch.object(embedding, "call", wraps=wrapper):
             prompt = ["airplane at airport", "airplane"]
             output = causal_lm.generate(prompt)
             # We should immediately abort and output the prompt.

@@ -137,7 +137,9 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py
 
         Args:
-            attention_map (tensor): Attention map.
+            attention_map (tensor): Attention map. When `None`, the layer
+                returns the relative positional terms alone, as an additive
+                bias.
             queries (tensor): Queries in the attention layer with shape
                 `(batch, query_height * query_width, channels)`.
             query_size (tuple[int, int]): Spatial sequence size of queries with
@@ -146,7 +148,8 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
                 `(key_height, key_width)`.
 
         Returns:
-            tensor: attention map with added relative positional embeddings.
+            tensor: attention map with added relative positional embeddings,
+                or the bias when `attention_map` is `None`.
         """
         query_height, query_width = query_size[0], query_size[1]
         key_height, key_width = key_size[0], key_size[1]
@@ -161,6 +164,12 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
         )
         rel_heights = ops.einsum("bhwc,hkc->bhwk", rel_queries, rel_heights)
         rel_widths = ops.einsum("bhwc,wkc->bhwk", rel_queries, rel_widths)
+        if attention_map is None:
+            bias = rel_heights[..., :, None] + rel_widths[..., None, :]
+            return ops.reshape(
+                bias,
+                (batch, query_height * query_width, key_height * key_width),
+            )
         attention_map = ops.reshape(
             attention_map,
             (batch, query_height, query_width, key_height, key_width),
@@ -257,12 +266,8 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
         length = height * width
         bias = None
         if self.use_rel_pos:
-            # The layer adds its terms to the map. Zeros give the bare bias.
             bias = self.add_decomposed_relative_pe(
-                ops.zeros(
-                    (ops.shape(queries)[0], length, length),
-                    dtype=queries.dtype,
-                ),
+                None,
                 queries=queries,
                 query_size=(height, width),
                 key_size=(height, width),

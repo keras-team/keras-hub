@@ -5,13 +5,8 @@ import keras
 import numpy as np
 from keras import ops
 
-from keras_hub.src.models.qwen_moe.qwen_moe_decoder import QwenMoeExperts
 from keras_hub.src.models.qwen_moe.qwen_moe_decoder import QwenMoeMLP
 from keras_hub.src.utils.keras_utils import clone_initializer
-
-
-def _kernel_initializer(stddev=0.02):
-    return keras.initializers.RandomNormal(stddev=stddev)
 
 
 def _cubic_kernel(x):
@@ -148,12 +143,14 @@ class UnlimitedOCRCLIPEmbedding(keras.layers.Layer):
         self.class_embedding = self.add_weight(
             name="class_embedding",
             shape=(self.hidden_dim,),
-            initializer=_kernel_initializer(self.hidden_dim**-0.5),
+            initializer=keras.initializers.RandomNormal(
+                stddev=self.hidden_dim**-0.5
+            ),
         )
         self.position_embedding = self.add_weight(
             name="position_embedding",
             shape=(self.grid_size**2 + 1, self.hidden_dim),
-            initializer=_kernel_initializer(),
+            initializer=keras.initializers.RandomNormal(stddev=0.02),
         )
         self.built = True
 
@@ -190,6 +187,122 @@ class UnlimitedOCRCLIPEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {"hidden_dim": self.hidden_dim, "grid_size": self.grid_size}
+        )
+        return config
+
+
+class UnlimitedOCRExperts(keras.layers.Layer):
+    """Routed experts that run one expert at a time.
+
+    The layer holds the feedforward kernels of all routed experts. It loops
+    over the experts and adds the weighted output of each expert to a running
+    sum. The peak memory holds the activations of one expert, not of all
+    experts. The compute covers every expert for every token. With
+    `top_indices`, the layer gathers and runs only the selected experts. Each
+    expert is a gated feedforward block with the `silu` activation.
+
+    Args:
+        num_experts: int. The number of routed experts.
+        hidden_dim: int. The size of the hidden state.
+        intermediate_dim: int. The intermediate size of one expert.
+        kernel_initializer: string or `keras.initializers` initializer. The
+            initializer of the kernels. Defaults to `"glorot_uniform"`.
+    """
+
+    def __init__(
+        self,
+        num_experts,
+        hidden_dim,
+        intermediate_dim,
+        kernel_initializer="glorot_uniform",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.num_experts = num_experts
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+
+    def build(self, hidden_states_shape=None, routing_weights_shape=None):
+        # The last axis of `gate_up_kernel` holds the gate and then the up
+        # projection.
+        self.gate_up_kernel = self.add_weight(
+            name="gate_up_kernel",
+            shape=(
+                self.num_experts,
+                self.hidden_dim,
+                2 * self.intermediate_dim,
+            ),
+            initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.variable_dtype,
+        )
+        self.down_kernel = self.add_weight(
+            name="down_kernel",
+            shape=(self.num_experts, self.intermediate_dim, self.hidden_dim),
+            initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.variable_dtype,
+        )
+        self.built = True
+
+    def call(self, hidden_states, routing_weights, top_indices=None):
+        """Compute the weighted sum of the expert outputs.
+
+        Args:
+            hidden_states: float tensor of shape `(tokens, hidden_dim)`.
+            routing_weights: float tensor of shape `(tokens, num_experts)`.
+                The weight is `0` for a token that does not select the
+                expert.
+            top_indices: int tensor of shape `(tokens, top_k)`, or `None`.
+                The experts that each token selects. When set, the layer
+                gathers only these kernels. Use it for a few tokens, as in
+                one decode step. Else the layer runs every expert.
+
+        Returns:
+            A float tensor of shape `(tokens, hidden_dim)`.
+        """
+        gate_up_kernel = ops.cast(self.gate_up_kernel, hidden_states.dtype)
+        down_kernel = ops.cast(self.down_kernel, hidden_states.dtype)
+
+        if top_indices is not None:
+            selected_gate_up = ops.take(gate_up_kernel, top_indices, axis=0)
+            selected_down = ops.take(down_kernel, top_indices, axis=0)
+            gate_up = ops.einsum(
+                "th,tkhf->tkf", hidden_states, selected_gate_up
+            )
+            gate, up = ops.split(gate_up, 2, axis=-1)
+            expert_out = ops.einsum(
+                "tki,tkih->tkh", up * ops.silu(gate), selected_down
+            )
+            weights = ops.take_along_axis(routing_weights, top_indices, axis=1)
+            return ops.sum(expert_out * weights[..., None], axis=1)
+
+        # A Python loop unrolls at trace time. `ops.fori_loop` fails on
+        # TensorFlow, because the XLA gradient of `tf.while_loop` needs a
+        # static bound on the iterations.
+        output = ops.zeros_like(hidden_states)
+        for index in range(self.num_experts):
+            gate_up = ops.matmul(hidden_states, gate_up_kernel[index])
+            gate, up = ops.split(gate_up, 2, axis=-1)
+            expert_out = ops.matmul(up * ops.silu(gate), down_kernel[index])
+            output = output + expert_out * routing_weights[:, index : index + 1]
+        return output
+
+    def compute_output_spec(
+        self, hidden_states, routing_weights, top_indices=None
+    ):
+        return keras.KerasTensor(hidden_states.shape, dtype=self.compute_dtype)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_experts": self.num_experts,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+            }
         )
         return config
 
@@ -236,7 +349,7 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
         self.num_experts = num_experts
         self.top_k = top_k
         self.routed_scaling_factor = routed_scaling_factor
-        self.kernel_initializer = kernel_initializer
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
         # The router runs in float32 for every compute dtype
@@ -250,7 +363,7 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
             autocast=False,
         )
 
-        self.expert_bank = QwenMoeExperts(
+        self.experts = UnlimitedOCRExperts(
             num_experts=self.num_experts,
             hidden_dim=self.hidden_dim,
             intermediate_dim=self.moe_intermediate_dim,
@@ -258,7 +371,7 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
             name="experts",
             dtype=self.dtype_policy,
         )
-        self.expert_bank.build(decoder_sequence_shape)
+        self.experts.build(decoder_sequence_shape)
 
         # The shared experts add to the output with no gate
         # (`modeling_unlimited_ocr.py:1194-1197`).
@@ -288,13 +401,15 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
         top_p = top_p * self.routed_scaling_factor
 
         one_hot = ops.cast(ops.one_hot(top_i, self.num_experts), top_p.dtype)
-        routing_full = ops.sum(one_hot * top_p[..., None], axis=1)
-        routing_full = ops.cast(
-            ops.transpose(routing_full, (1, 0)), flat_states.dtype
-        )
+        routing_weights = ops.sum(one_hot * top_p[..., None], axis=1)
+        routing_weights = ops.cast(routing_weights, flat_states.dtype)
 
-        expert_out = self.expert_bank(flat_states)
-        routed_out = ops.einsum("eth,et->th", expert_out, routing_full)
+        # One decode step has one token for each row. The layer then gathers
+        # the `top_k` experts of each token and skips the other experts.
+        decode_step = hidden_states.shape[1] == 1
+        routed_out = self.experts(
+            flat_states, routing_weights, top_i if decode_step else None
+        )
         out = routed_out + self.shared_expert_dense(flat_states)
         out = ops.cast(out, self.compute_dtype)
         return ops.reshape(out, (batch_size, seq_len, self.hidden_dim))
@@ -310,7 +425,7 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
                 "top_k": self.top_k,
                 "routed_scaling_factor": self.routed_scaling_factor,
                 "kernel_initializer": keras.initializers.serialize(
-                    keras.initializers.get(self.kernel_initializer)
+                    self.kernel_initializer
                 ),
             }
         )
@@ -510,7 +625,10 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         global_side = math.isqrt(global_features.shape[1])
         local_side = math.isqrt(local_features.shape[1])
         max_images = ops.shape(patches_grid)[1]
-        max_tiles = ops.floor_divide(ops.shape(local_features)[0], batch_size)
+        # An empty batch has no tiles. The divisor stays above zero.
+        max_tiles = ops.floor_divide(
+            ops.shape(local_features)[0], ops.maximum(batch_size, 1)
+        )
 
         # One extra image with no tiles keeps every gather valid when a
         # sample has no image. No placeholder selects it.

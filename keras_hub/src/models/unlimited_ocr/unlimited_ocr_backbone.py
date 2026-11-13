@@ -18,10 +18,6 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
 )
 
 
-def _kernel_initializer(stddev=0.02):
-    return keras.initializers.RandomNormal(stddev=stddev)
-
-
 def _apply_dtype(vision_encoder, dtype):
     """Returns `vision_encoder` with the dtype policy of the backbone."""
     policy = keras.dtype_policies.get(dtype)
@@ -79,7 +75,7 @@ class UnlimitedOCRBackbone(Backbone):
         num_query_heads: int. The number of attention heads.
         hidden_dim: int. The size of the hidden state.
         intermediate_dim: int. The intermediate size of the dense MLP in the
-            first `num_dense_layers` layers.
+            layers of type `"dense"`.
         moe_intermediate_dim: int. The intermediate size of one routed
             expert.
         num_shared_experts: int. The number of shared experts in every sparse
@@ -90,8 +86,21 @@ class UnlimitedOCRBackbone(Backbone):
             instance. If `dtype` is set and differs from the dtype of the
             vision encoder, the backbone rebuilds an unbuilt vision encoder
             with `dtype`. The backbone raises an error for a built one.
-        num_dense_layers: int. The number of leading layers with a dense MLP.
-            The other layers use a mixture of experts. Defaults to `1`.
+        mlp_layer_types: list of strings or `None`. The MLP type of each
+            layer, either `"dense"` or `"sparse"`. A `"sparse"` layer uses a
+            mixture of experts. The list has `num_layers` entries. If `None`,
+            the first layer is `"dense"` and the other layers are
+            `"sparse"`. Defaults to `None`.
+        layer_types: list of strings or `None`. The attention type of each
+            layer, either `"reference_sliding_attention"` or
+            `"full_attention"`. A `"full_attention"` layer always uses full
+            causal attention. A `"reference_sliding_attention"` layer uses
+            the R-SWA during cached decoding. The list has `num_layers`
+            entries. If `None`, every layer is
+            `"reference_sliding_attention"`. Defaults to `None`.
+        num_key_value_heads: int or `None`. The number of key and value
+            heads. It must divide `num_query_heads`. If `None`, it equals
+            `num_query_heads`. Defaults to `None`.
         routed_scaling_factor: float. The factor that scales the routing
             weights. Defaults to `1.0`.
         rope_max_wavelength: int. The maximum wavelength of the rotary
@@ -171,7 +180,9 @@ class UnlimitedOCRBackbone(Backbone):
         num_experts,
         top_k,
         vision_encoder,
-        num_dense_layers=1,
+        mlp_layer_types=None,
+        layer_types=None,
+        num_key_value_heads=None,
         routed_scaling_factor=1.0,
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-6,
@@ -182,12 +193,37 @@ class UnlimitedOCRBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        mlp_types = mlp_layer_types
+        if mlp_types is None:
+            mlp_types = ["dense"] + ["sparse"] * (num_layers - 1)
+        if len(mlp_types) != num_layers or not set(mlp_types) <= {
+            "dense",
+            "sparse",
+        }:
+            raise ValueError(
+                "`mlp_layer_types` must have one `'dense'` or `'sparse'` "
+                f"entry for each of the {num_layers} layers. "
+                f"Received: mlp_layer_types={mlp_layer_types}"
+            )
+        attention_types = layer_types
+        if attention_types is None:
+            attention_types = ["reference_sliding_attention"] * num_layers
+        if len(attention_types) != num_layers or not set(attention_types) <= {
+            "reference_sliding_attention",
+            "full_attention",
+        }:
+            raise ValueError(
+                "`layer_types` must have one `'reference_sliding_attention'` "
+                f"or `'full_attention'` entry for each of the {num_layers} "
+                f"layers. Received: layer_types={layer_types}"
+            )
+
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=False,
-            embeddings_initializer=_kernel_initializer(stddev=0.01),
+            embeddings_initializer=keras.initializers.RandomNormal(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
@@ -196,16 +232,21 @@ class UnlimitedOCRBackbone(Backbone):
             layer = UnlimitedOCRTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
+                num_key_value_heads=num_key_value_heads,
                 moe_intermediate_dim=moe_intermediate_dim,
                 num_shared_experts=num_shared_experts,
                 num_experts=num_experts,
                 top_k=top_k,
-                sparse=i >= num_dense_layers,
+                sparse=mlp_types[i] == "sparse",
                 routed_scaling_factor=routed_scaling_factor,
                 rope_max_wavelength=rope_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
-                sliding_window=sliding_window,
-                kernel_initializer=_kernel_initializer(stddev=0.02),
+                sliding_window=(
+                    sliding_window
+                    if attention_types[i] == "reference_sliding_attention"
+                    else None
+                ),
+                kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -221,7 +262,7 @@ class UnlimitedOCRBackbone(Backbone):
         self.vision_encoder = vision_encoder
         self.multimodal_projector = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=_kernel_initializer(),
+            kernel_initializer=keras.initializers.RandomNormal(stddev=0.02),
             dtype=dtype,
             name="multimodal_projector",
         )
@@ -288,13 +329,19 @@ class UnlimitedOCRBackbone(Backbone):
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
+        self.num_key_value_heads = (
+            num_query_heads
+            if num_key_value_heads is None
+            else num_key_value_heads
+        )
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.moe_intermediate_dim = moe_intermediate_dim
         self.num_shared_experts = num_shared_experts
         self.num_experts = num_experts
         self.top_k = top_k
-        self.num_dense_layers = num_dense_layers
+        self.mlp_layer_types = mlp_layer_types
+        self.layer_types = layer_types
         self.routed_scaling_factor = routed_scaling_factor
         self.rope_max_wavelength = rope_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -316,13 +363,15 @@ class UnlimitedOCRBackbone(Backbone):
                 "vocabulary_size": self.vocabulary_size,
                 "num_layers": self.num_layers,
                 "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "moe_intermediate_dim": self.moe_intermediate_dim,
                 "num_shared_experts": self.num_shared_experts,
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
-                "num_dense_layers": self.num_dense_layers,
+                "mlp_layer_types": self.mlp_layer_types,
+                "layer_types": self.layer_types,
                 "routed_scaling_factor": self.routed_scaling_factor,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,

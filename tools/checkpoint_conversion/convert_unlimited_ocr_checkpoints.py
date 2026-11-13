@@ -19,6 +19,7 @@ import os
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+import keras
 import numpy as np
 import torch
 from absl import app
@@ -344,6 +345,12 @@ def test_generation(label, keras_model, keras_inputs, case, result):
     # the KerasHub text, so both texts print in the same form.
     new_text = strip_tokens(new_text, result["stripped_tokens"])
     print(f"[{label}] KH generated: {new_text!r}")
+    np.testing.assert_equal(
+        new_text,
+        result["text"],
+        err_msg=f"[{label}] the generated text differs from HF",
+    )
+    print(f"[{label}] ✓ generated text matches HF")
 
 
 def run_check(failures, name, check, *args):
@@ -477,7 +484,10 @@ def main(_):
     )
 
     # Save with the dtype of the released checkpoint.
+    # Reset the Keras name counter. Otherwise the saved layers get a `_1`
+    # suffix.
     del keras_model
+    keras.backend.clear_session()
     gc.collect()
     keras_model = keras_hub.models.UnlimitedOCRCausalLM.from_preset(
         f"hf://{hf_preset}", dtype="bfloat16"

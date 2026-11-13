@@ -79,16 +79,17 @@ def _get_vision_configs(transformers_config):
     }
 
 
-def _get_num_dense_layers(text_config):
+def _get_mlp_layer_types(text_config):
+    # The native class writes `mlp_layer_types`. The original checkpoint
+    # writes `first_k_dense_replace`, the number of leading dense layers.
     mlp_layer_types = text_config.get("mlp_layer_types")
     if mlp_layer_types is not None:
-        num_dense_layers = 0
-        for layer_type in mlp_layer_types:
-            if layer_type != "dense":
-                break
-            num_dense_layers += 1
-        return num_dense_layers
-    return text_config.get("first_k_dense_replace", 1)
+        return list(mlp_layer_types)
+    first_k_dense_replace = text_config["first_k_dense_replace"]
+    return [
+        "dense" if i < first_k_dense_replace else "sparse"
+        for i in range(text_config["num_hidden_layers"])
+    ]
 
 
 def _get_rope_theta(text_config):
@@ -119,6 +120,7 @@ def convert_backbone_config(transformers_config):
         "vocabulary_size": text_config["vocab_size"],
         "num_layers": text_config["num_hidden_layers"],
         "num_query_heads": text_config["num_attention_heads"],
+        "num_key_value_heads": text_config["num_key_value_heads"],
         "hidden_dim": text_config["hidden_size"],
         "intermediate_dim": text_config["intermediate_size"],
         "moe_intermediate_dim": text_config["moe_intermediate_size"],
@@ -126,7 +128,10 @@ def convert_backbone_config(transformers_config):
         "num_experts": text_config["n_routed_experts"],
         "top_k": text_config["num_experts_per_tok"],
         "vision_encoder": vision_encoder,
-        "num_dense_layers": _get_num_dense_layers(text_config),
+        "mlp_layer_types": _get_mlp_layer_types(text_config),
+        # The original checkpoint has no `layer_types`. Every layer then uses
+        # the R-SWA, as in the native class.
+        "layer_types": text_config.get("layer_types"),
         "routed_scaling_factor": text_config.get("routed_scaling_factor", 1.0),
         "rope_max_wavelength": _get_rope_theta(text_config),
         "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-6),
@@ -140,8 +145,10 @@ def convert_backbone_config(transformers_config):
 
 def load_image_converter_config(preset, transformers_config):
     preprocessor_config = load_json(preset, "preprocessor_config.json")
+    size = preprocessor_config["size"]
     config = {
-        "global_size": preprocessor_config["size"]["height"],
+        # The native processor sizes the global view with the longer side.
+        "global_size": max(size["height"], size["width"]),
         "tile_size": preprocessor_config["tile_size"],
         "min_tiles": preprocessor_config["min_patches"],
         "max_tiles": preprocessor_config["max_patches"],
@@ -279,12 +286,8 @@ def convert_weights(backbone, loader, transformers_config):
             )
             down_proj = loader.get_tensor(f"{expert_prefix}.down_proj.weight")
             down_experts.append(np.transpose(to_float32(down_proj)))
-        mlp.expert_bank._expert_feedforward_gate_dense.assign(
-            np.stack(gate_up_experts, axis=0)
-        )
-        mlp.expert_bank._expert_feedforward_output_dense.assign(
-            np.stack(down_experts, axis=0)
-        )
+        mlp.experts.gate_up_kernel.assign(np.stack(gate_up_experts, axis=0))
+        mlp.experts.down_kernel.assign(np.stack(down_experts, axis=0))
         del gate_up_experts, down_experts
 
         # The shared experts have no gate weight in the checkpoint.
