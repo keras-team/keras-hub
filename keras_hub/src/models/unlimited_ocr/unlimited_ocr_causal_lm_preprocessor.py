@@ -381,10 +381,16 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         )
 
     def _static_num_images(self, images):
-        """Returns the number of images when the static shape gives it."""
+        """Returns the number of images when the static shape gives it.
+
+        The method returns `None` for an unsupported rank.
+        `_flatten_images_tf` then raises the error.
+        """
         if images is None:
             return 0
         images = tf.convert_to_tensor(images)
+        if images.shape.rank not in (3, 4, 5):
+            return None
         leading = {3: [], 4: [images.shape[0]], 5: images.shape[:2]}
         leading = leading[images.shape.rank]
         if None in leading:
@@ -402,6 +408,11 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
             self.build(None)
         if not isinstance(prompts, tf.Tensor):
             prompts = tf.constant(prompts, dtype=tf.string)
+        if images is not None:
+            images = tf.convert_to_tensor(images)
+            # An empty list becomes a rank 1 tensor of shape `(0,)`.
+            if images.shape.rank == 1 and images.shape[0] == 0:
+                images = None
         static_images = self._static_num_images(images)
         if images is None:
             pixel_values, pixel_values_local, patches_grid = (

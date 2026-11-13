@@ -85,6 +85,23 @@ class AddRelativePositionalEmbeddingTest(TestCase):
             output[:, ::23, ::23], expected, atol=1e-3, rtol=1e-4
         )
 
+    def test_bias_equals_the_terms_added_to_a_zero_map(self):
+        layer = AddRelativePositionalEmbedding(input_size=(16, 16), key_dim=4)
+        rng = np.random.RandomState(0)
+        height, width = 10, 7
+        layer.rel_pos_h.assign(rng.normal(size=(31, 4)).astype("float32"))
+        layer.rel_pos_w.assign(rng.normal(size=(31, 4)).astype("float32"))
+        queries = rng.normal(size=(2, height * width, 4)).astype("float32")
+        kwargs = {
+            "queries": queries,
+            "query_size": (height, width),
+            "key_size": (height, width),
+        }
+        zeros = np.zeros((2, height * width, height * width), "float32")
+        self.assertAllClose(
+            layer(None, **kwargs), layer(zeros, **kwargs), atol=1e-6
+        )
+
 
 class WindowedTransformerEncoderTest(TestCase):
     def setUp(self):

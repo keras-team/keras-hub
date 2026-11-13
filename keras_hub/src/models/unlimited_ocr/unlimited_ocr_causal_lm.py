@@ -94,8 +94,10 @@ class UnlimitedOCRCausalLM(CausalLM):
                 Required when `image_features` is set.
             prefill_length: int tensor of shape `(batch_size,)`, or `None`.
                 The number of prompt tokens of each row. When set, the
-                attention layers use the R-SWA mask. The prefill pass of
-                the cache uses `None`.
+                attention layers use the R-SWA mask. The layers also keep
+                the cache entries of a row while `cache_update_index` is
+                below its value, so one token per call is required. The
+                prefill pass of the cache uses `None`.
 
         Returns:
             A `(logits, hidden_states, cache)` tuple.
@@ -106,6 +108,15 @@ class UnlimitedOCRCausalLM(CausalLM):
             x = self.backbone.image_text_embedding_merger(
                 token_ids, x, global_features, local_features, patches_grid
             )
+        # The prefill pass wrote the keys and values of the prompt tokens.
+        # The decode loop feeds those tokens again as plain text. The cache
+        # must keep the prefill entries, which include the image features.
+        cache_write_mask = None
+        if prefill_length is not None:
+            cache_write_mask = ops.greater_equal(
+                ops.cast(cache_update_index, "int32"),
+                ops.cast(prefill_length, "int32"),
+            )
         # Each decoder layer has a cache. The layers update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
@@ -115,6 +126,7 @@ class UnlimitedOCRCausalLM(CausalLM):
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
                 prefill_length=prefill_length,
+                cache_write_mask=cache_write_mask,
             )
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
@@ -131,7 +143,7 @@ class UnlimitedOCRCausalLM(CausalLM):
             self.backbone.num_layers,
             2,
             max_length,
-            self.backbone.num_query_heads,
+            self.backbone.num_key_value_heads,
             self.backbone.head_dim,
         ]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
@@ -178,6 +190,23 @@ class UnlimitedOCRCausalLM(CausalLM):
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user token.
         index = ops.min(row_lengths)
+        first_index = index
+
+        # The first decode step feeds the last prompt token as plain text.
+        # The step has no image features, so an image token at this position
+        # gets the wrong output. The prefill pass has the right output.
+        batch_size = ops.shape(token_ids)[0]
+        prefill_hidden = ops.squeeze(
+            ops.slice(
+                hidden_states,
+                [0, first_index - 1, 0],
+                [batch_size, 1, ops.shape(hidden_states)[-1]],
+            ),
+            axis=1,
+        )
+        prefill_logits = self.backbone.token_embedding(
+            prefill_hidden, reverse=True
+        )
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
@@ -190,9 +219,12 @@ class UnlimitedOCRCausalLM(CausalLM):
                 cache_update_index,
                 prefill_length=row_lengths,
             )
+            logits = ops.squeeze(logits, axis=1)
+            hidden_states = ops.squeeze(hidden_states, axis=1)
+            is_first_step = ops.equal(index, first_index)
             return (
-                ops.squeeze(logits, axis=1),
-                ops.squeeze(hidden_states, axis=1),
+                ops.where(is_first_step, prefill_logits, logits),
+                ops.where(is_first_step, prefill_hidden, hidden_states),
                 cache,
             )
 

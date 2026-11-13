@@ -6,6 +6,9 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
     UnlimitedOCRCLIPEmbedding,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
+    UnlimitedOCRExperts,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
     UnlimitedOCRImageFeatureExtractor,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
@@ -78,6 +81,84 @@ class UnlimitedOCRSparseMoeBlockTest(TestCase):
         ]
         output = ops.convert_to_numpy(block(x))
         self.assertAllClose(output[:, :, :4], expected, atol=1e-3, rtol=1e-4)
+
+    def test_one_token_input_matches_the_longer_input(self):
+        # A decode step has one token. The block gathers the selected
+        # experts for it. The output must equal the output of the same
+        # token in a longer sequence, where the block runs every expert.
+        block = UnlimitedOCRSparseMoeBlock(**self.init_kwargs)
+        rng = np.random.RandomState(1)
+        x = rng.normal(size=(2, 5, 16)).astype("float32")
+        block(x)
+        for weight in block.weights:
+            weight.assign(rng.normal(size=weight.shape).astype("float32"))
+        full = ops.convert_to_numpy(block(x))
+        for position in range(5):
+            step = ops.convert_to_numpy(block(x[:, position : position + 1]))
+            self.assertAllClose(
+                step[:, 0], full[:, position], atol=1e-4, rtol=1e-4
+            )
+
+
+class UnlimitedOCRExpertsTest(TestCase):
+    def setUp(self):
+        self.init_kwargs = {
+            "num_experts": 4,
+            "hidden_dim": 16,
+            "intermediate_dim": 8,
+        }
+        rng = np.random.RandomState(0)
+        self.tokens = rng.normal(size=(6, 16)).astype("float32")
+        gate_up_kernel = 0.2 * rng.normal(size=(4, 16, 16))
+        down_kernel = 0.2 * rng.normal(size=(4, 8, 16))
+        self.gate_up_kernel = gate_up_kernel.astype("float32")
+        self.down_kernel = down_kernel.astype("float32")
+        top_k_weights = rng.uniform(size=(6, 2)).astype("float32")
+        # Experts 1 and 3 get no token.
+        top_k_index = np.array([[0, 2], [2, 0]] * 3)
+        self.top_k_index = top_k_index
+        self.routing_weights = np.zeros((6, 4), dtype="float32")
+        np.put_along_axis(
+            self.routing_weights, top_k_index, top_k_weights, axis=1
+        )
+
+    def test_layer_basics(self):
+        self.run_layer_test(
+            cls=UnlimitedOCRExperts,
+            init_kwargs=self.init_kwargs,
+            input_data={
+                "hidden_states": self.tokens,
+                "routing_weights": self.routing_weights,
+            },
+            expected_output_shape=(6, 16),
+            # The gate and up kernels (1) and the down kernels (1).
+            expected_num_trainable_weights=2,
+        )
+
+    def test_experts_output(self):
+        layer = UnlimitedOCRExperts(**self.init_kwargs)
+        layer(self.tokens, self.routing_weights)
+        layer.gate_up_kernel.assign(self.gate_up_kernel)
+        layer.down_kernel.assign(self.down_kernel)
+        # Values from `UnlimitedOcrTextExperts` in `transformers` 5.22.2. It
+        # ran on the same input, kernels and routing. Every third token and
+        # the first four features are kept.
+        expected = [
+            [-0.2481, 0.2337, 0.2128, -0.0836],
+            [0.0909, 0.0835, -0.1409, -0.1406],
+            [-0.0224, 0.2145, -0.1357, -0.1556],
+        ]
+        output = ops.convert_to_numpy(layer(self.tokens, self.routing_weights))
+        self.assertAllClose(output[::2, :4], expected, atol=1e-3, rtol=1e-4)
+
+    def test_top_indices_match_the_loop_over_all_experts(self):
+        layer = UnlimitedOCRExperts(**self.init_kwargs)
+        layer(self.tokens, self.routing_weights)
+        layer.gate_up_kernel.assign(self.gate_up_kernel)
+        layer.down_kernel.assign(self.down_kernel)
+        dense = layer(self.tokens, self.routing_weights)
+        gathered = layer(self.tokens, self.routing_weights, self.top_k_index)
+        self.assertAllClose(gathered, dense, atol=1e-5, rtol=1e-5)
 
 
 class UnlimitedOCRResizeTest(TestCase):
@@ -279,6 +360,20 @@ class UnlimitedOCRMergerTest(TestCase):
             np.zeros((2, 0, 2), "int32"),
         )
         self.assertAllClose(output, embeddings)
+
+    def test_merger_with_an_empty_batch(self):
+        d = self.hidden_dim
+        layer = UnlimitedOCRImageTextEmbeddingMerger(
+            hidden_dim=d, image_token_id=self.image_token_id
+        )
+        output = layer(
+            np.zeros((0, 5), "int32"),
+            np.zeros((0, 5, d), "float32"),
+            np.zeros((0, 4, d), "float32"),
+            np.zeros((0, 4, d), "float32"),
+            np.zeros((0, 0, 2), "int32"),
+        )
+        self.assertEqual(tuple(output.shape), (0, 5, d))
 
 
 class UnlimitedOCRImageFeatureExtractorTest(TestCase):

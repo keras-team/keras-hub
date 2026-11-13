@@ -33,6 +33,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
     Args:
         intermediate_dim: int. The intermediate size of the dense MLP.
         num_query_heads: int. The number of attention heads.
+        num_key_value_heads: int or `None`. The number of key and value
+            heads. If `None`, it equals `num_query_heads`. Defaults to
+            `None`.
         moe_intermediate_dim: int. The intermediate size of one routed
             expert.
         num_shared_experts: int. The number of shared experts.
@@ -46,8 +49,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             embedding. Defaults to `10000`.
         layer_norm_epsilon: float. The epsilon of the RMS norm layers.
             Defaults to `1e-6`.
-        sliding_window: int. The decode window of the R-SWA. Defaults to
-            `128`.
+        sliding_window: int or `None`. The decode window of the R-SWA. If
+            `None`, the block uses full causal attention, even with a cache
+            and `prefill_length`. Defaults to `128`.
         kernel_initializer: string or `keras.initializers` initializer. The
             initializer of the kernels. Defaults to `"glorot_uniform"`.
     """
@@ -65,12 +69,14 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-6,
         sliding_window=128,
+        num_key_value_heads=None,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
         self.moe_intermediate_dim = moe_intermediate_dim
         self.num_shared_experts = num_shared_experts
         self.num_experts = num_experts
@@ -88,6 +94,7 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
 
         self._self_attention_layer = UnlimitedOCRAttention(
             num_query_heads=self.num_query_heads,
+            num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             dtype=self.dtype_policy,
@@ -140,6 +147,7 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
         self_attention_cache=None,
         self_attention_cache_update_index=None,
         prefill_length=None,
+        cache_write_mask=None,
     ):
         """Run the decoder block.
 
@@ -154,6 +162,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             prefill_length: Optional int tensor of shape `(batch,)`. The
                 number of prefill tokens of each row. The R-SWA mask applies
                 only when the layer has a cache and this value is set.
+            cache_write_mask: Optional boolean tensor of shape `(batch,)`.
+                A row with `False` keeps its cached keys and values at the
+                updated positions.
 
         Returns:
             The block output. When `self_attention_cache` is set, the block
@@ -174,6 +185,7 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
+            cache_write_mask=cache_write_mask,
         )
         if self_attention_cache is not None:
             x, self_attention_cache = x
@@ -222,7 +234,11 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             else causal_mask
         )
 
-        if prefill_length is not None and self_attention_cache is not None:
+        if (
+            prefill_length is not None
+            and self_attention_cache is not None
+            and self.sliding_window is not None
+        ):
             # R-SWA mask: a query sees every prefill token and the last
             # `sliding_window` positions (modeling_unlimited_ocr.py:1705).
             query_positions = ops.arange(
@@ -248,6 +264,7 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             {
                 "intermediate_dim": self.intermediate_dim,
                 "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
                 "moe_intermediate_dim": self.moe_intermediate_dim,
                 "num_shared_experts": self.num_shared_experts,
                 "num_experts": self.num_experts,
