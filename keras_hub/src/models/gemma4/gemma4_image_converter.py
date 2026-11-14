@@ -8,13 +8,40 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
 class Gemma4AspectRatioResizing(keras.layers.Layer):
+    """Resize images to the Gemma4 patch grid while keeping aspect ratio.
+
+    The target size is the largest multiple of
+    `patch_size * pooling_kernel_size` per side whose area does not exceed
+    `max_soft_tokens * pooling_kernel_size**2` patches. With
+    `two_pass_uint8_resize=True`, inputs that are already at the target size
+    are returned unchanged.
+
+    Args:
+        patch_size: int. Side of one vision patch in pixels.
+        max_soft_tokens: int. Soft tokens per image after pooling.
+        pooling_kernel_size: int. Side of the pooling window in patches.
+        two_pass_uint8_resize: bool. If `True`, emulate the separable uint8
+            bicubic resize of PIL / torchvision used by the HF processor:
+            resize width first, round to the uint8 grid, then resize height
+            and round again. The intermediate round is what keeps the result
+            within one or two grey levels of the HF pixels. Defaults to
+            `False`, which is a single float bicubic resize; the Gemma4 text
+            and vision tower converter keeps it off.
+    """
+
     def __init__(
-        self, patch_size, max_soft_tokens, pooling_kernel_size, **kwargs
+        self,
+        patch_size,
+        max_soft_tokens,
+        pooling_kernel_size,
+        two_pass_uint8_resize=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.patch_size = patch_size
         self.max_soft_tokens = max_soft_tokens
         self.pooling_kernel_size = pooling_kernel_size
+        self.two_pass_uint8_resize = two_pass_uint8_resize
         self.height = 1  # Dummy value to satisfy ImageConverter checks
         self.width = 1  # Dummy value to satisfy ImageConverter checks
         self.image_size = None  # Disable resizing in base class call
@@ -50,13 +77,45 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
             target_height = tf.maximum(target_height, side_mult)
             target_width = tf.maximum(target_width, side_mult)
             float_inputs = tf.cast(inputs, "float32")
-            resized = tf.image.resize(
-                float_inputs,
-                size=(target_height, target_width),
-                method=tf.image.ResizeMethod.BICUBIC,
-                antialias=True,
-            )
-            clipped = tf.clip_by_value(resized, 0.0, 255.0)
+            if self.two_pass_uint8_resize:
+                a = tf.clip_by_value(
+                    tf.image.resize(
+                        float_inputs,
+                        size=(height, target_width),
+                        method=tf.image.ResizeMethod.BICUBIC,
+                        antialias=True,
+                    ),
+                    0.0,
+                    255.0,
+                )
+                a = tf.round(a)
+                b = tf.clip_by_value(
+                    tf.image.resize(
+                        a,
+                        size=(target_height, target_width),
+                        method=tf.image.ResizeMethod.BICUBIC,
+                        antialias=True,
+                    ),
+                    0.0,
+                    255.0,
+                )
+                clipped = tf.round(b)
+                clipped = tf.cond(
+                    tf.logical_and(
+                        tf.equal(height, target_height),
+                        tf.equal(width, target_width),
+                    ),
+                    lambda: float_inputs,
+                    lambda: clipped,
+                )
+            else:
+                resized = tf.image.resize(
+                    float_inputs,
+                    size=(target_height, target_width),
+                    method=tf.image.ResizeMethod.BICUBIC,
+                    antialias=True,
+                )
+                clipped = tf.clip_by_value(resized, 0.0, 255.0)
             return clipped
         else:
             # Eager mode: use backend-agnostic ops (works with concrete
@@ -82,23 +141,54 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
             target_height = ops.maximum(target_height, side_mult)
             target_width = ops.maximum(target_width, side_mult)
             float_inputs = ops.cast(inputs, "float32")
-            # Resize using bicubic interpolation with antialias=True.
-            #
-            # HF's AutoProcessor uses PIL Image.resize(..., Image.BICUBIC),
-            # which is a Catmull-Rom spline evaluated in C without antialias.
-            # `ops.image.resize` uses the backend's GPU-friendly bicubic
-            # kernel, which differs near sharp edges (max|Δ| ≈ 22/255 with
-            # antialias=True vs ≈ 35/255 without). A perfect match is not
-            # achievable without falling back to PIL, which would break
-            # tf.function and GPU execution.
-            resized = ops.image.resize(
-                float_inputs,
-                size=(int(target_height), int(target_width)),
-                interpolation="bicubic",
-                antialias=True,
-            )
-            clipped = ops.clip(resized, 0.0, 255.0)
+            if self.two_pass_uint8_resize:
+                a = ops.clip(
+                    ops.image.resize(
+                        float_inputs,
+                        size=(int(height), int(target_width)),
+                        interpolation="bicubic",
+                        antialias=True,
+                    ),
+                    0.0,
+                    255.0,
+                )
+                a = ops.round(a)
+                b = ops.clip(
+                    ops.image.resize(
+                        a,
+                        size=(int(target_height), int(target_width)),
+                        interpolation="bicubic",
+                        antialias=True,
+                    ),
+                    0.0,
+                    255.0,
+                )
+                clipped = ops.round(b)
+                if int(height) == int(target_height) and int(width) == int(
+                    target_width
+                ):
+                    clipped = float_inputs
+            else:
+                resized = ops.image.resize(
+                    float_inputs,
+                    size=(int(target_height), int(target_width)),
+                    interpolation="bicubic",
+                    antialias=True,
+                )
+                clipped = ops.clip(resized, 0.0, 255.0)
             return clipped
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "patch_size": self.patch_size,
+                "max_soft_tokens": self.max_soft_tokens,
+                "pooling_kernel_size": self.pooling_kernel_size,
+                "two_pass_uint8_resize": self.two_pass_uint8_resize,
+            }
+        )
+        return config
 
 
 @keras_hub_export("keras_hub.layers.Gemma4ImageConverter")
