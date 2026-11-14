@@ -391,7 +391,6 @@ class Gemma4UnifiedTextDecoderBlock(keras.layers.Layer):
         vision_mask,
         cache,
         cache_update_index,
-        block_sequence_ids=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             inputs=x, padding_mask=padding_mask, attention_mask=None
@@ -425,38 +424,29 @@ class Gemma4UnifiedTextDecoderBlock(keras.layers.Layer):
                 cache_update_index=cache_update_index,
             )
 
-        # Vision bidirectional attention for local (sliding-window) layers only.
-        if (
-            vision_mask is not None
-            and cache is None
-            and self.use_vision_bidirectional_attention
-            and not self.is_global_attention
-        ):
-            bidirectional_image_mask = (
-                self._compute_image_bidirectional_attention_mask(vision_mask)
+        # Vision bidirectional attention in every layer, global included: HF
+        # `Gemma4UnifiedModel.forward` passes `block_sequence_ids` to both the
+        # full- and sliding-attention mask builders.
+        if vision_mask is not None and self.use_vision_bidirectional_attention:
+            overlay = self._compute_image_bidirectional_attention_mask(
+                vision_mask
             )
-            causal_mask = ops.logical_or(causal_mask, bidirectional_image_mask)
-
-        # Blockwise masking for sliding-window layers: same-block tokens
-        # attend bidirectionally (HF blockwise_overlay).
-        if (
-            block_sequence_ids is not None
-            and cache is None
-            and self.use_sliding_window_attention
-            and not self.is_global_attention
-        ):
-            # same_block_mask[b, q, kv] = (ids[q] == ids[kv]) & (ids[q] >= 0)
-            query_block_ids = ops.expand_dims(
-                block_sequence_ids, -1
-            )  # (B, seq, 1)
-            key_block_ids = ops.expand_dims(
-                block_sequence_ids, 1
-            )  # (B, 1, seq)
-            same_block_mask = ops.logical_and(
-                ops.equal(query_block_ids, key_block_ids),
-                ops.greater_equal(query_block_ids, 0),
-            )
-            causal_mask = ops.logical_or(causal_mask, same_block_mask)
+            if cache is not None:
+                # Generate prefill (query spans the whole cache) keeps the
+                # overlay; decode and `verify_next` windows (query shorter
+                # than the cache) stay causal. Tensor ops only: under a
+                # `tf.function` trace with a dynamic sequence or cache
+                # dimension these lengths are symbolic scalars and a Python
+                # `==` raises.
+                overlay = ops.pad(
+                    overlay,
+                    [(0, 0), (0, 0), (0, input_length - output_length)],
+                    constant_values=0,
+                )
+                overlay = ops.logical_and(
+                    overlay, ops.equal(output_length, input_length)
+                )
+            causal_mask = ops.logical_or(causal_mask, overlay)
 
         # Respect the padding mask.
         if decoder_mask is not None:
@@ -475,7 +465,6 @@ class Gemma4UnifiedTextDecoderBlock(keras.layers.Layer):
         per_layer_input=None,
         shared_kv=None,
         positions=None,
-        block_sequence_ids=None,
     ):
         # Clamp float16 to avoid overflow.
         is_float16 = keras.backend.standardize_dtype(x.dtype) == "float16"
@@ -491,7 +480,6 @@ class Gemma4UnifiedTextDecoderBlock(keras.layers.Layer):
             vision_mask,
             cache,
             cache_update_index,
-            block_sequence_ids,
         )
         if cache is not None:
             attention, new_cache = self.attention(

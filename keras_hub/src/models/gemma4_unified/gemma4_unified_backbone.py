@@ -544,32 +544,6 @@ class Gemma4UnifiedBackbone(Backbone):
         _hpl = hidden_size_per_layer_input
         shared_kv_tensors = {}
 
-        # Per-token group IDs for bidirectional vision masking.
-        block_sequence_ids = None
-        if vision_encoder is not None:
-            is_vision = ops.cast(vision_mask_input, "bool")
-
-            # Detect start of each new vision block.
-            is_vision_int = ops.cast(is_vision, "int32")
-            padded_vision = ops.pad(
-                is_vision_int, [(0, 0), (1, 0)], constant_values=0
-            )
-            previous_vision = padded_vision[:, :-1]
-            new_block_starts = ops.cast(
-                ops.logical_and(
-                    is_vision,
-                    ops.logical_not(ops.cast(previous_vision, "bool")),
-                ),
-                "int32",
-            )
-            block_group_ids = ops.cumsum(new_block_starts, axis=-1) - 1
-
-            block_sequence_ids = ops.where(
-                is_vision,
-                block_group_ids,
-                ops.full_like(block_group_ids, -1),
-            )
-
         for i, transformer_layer in enumerate(self.transformer_layers):
             if per_layer_proj_flat is not None:
                 # per_layer_input = (norm(proj_i) + emb_i) * 2^-0.5
@@ -597,7 +571,6 @@ class Gemma4UnifiedBackbone(Backbone):
                 per_layer_input=per_layer_input_i,
                 shared_kv=shared_kv,
                 positions=position_ids_input,
-                block_sequence_ids=block_sequence_ids,
             )
 
             shared_kv_tensors[i] = new_cache

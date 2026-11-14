@@ -319,8 +319,41 @@ def _precompute_hf_outputs(
                 [mm_pad, hf_inputs["mm_token_type_ids"]], dim=1
             )
 
+    # Workaround for transformers bug: manually precompute video_out and pass
+    # mm_encoder_outputs
+    num_frames_per_video = hf_inputs.pop("num_frames_per_video", None)
+    mm_encoder_outputs = None
+    pixel_values_videos = hf_inputs.get("pixel_values_videos")
+    video_position_ids = hf_inputs.get("video_position_ids")
+    if num_frames_per_video is not None:
+        num_frames_per_video = torch.LongTensor(num_frames_per_video).to(device)
+        with torch.no_grad():
+            video_out = hf_model.model.get_video_features(
+                pixel_values_videos,
+                video_position_ids,
+                num_frames_per_video=num_frames_per_video,
+                return_dict=True,
+            )
+        mm_encoder_outputs = {"video": video_out}
+        # HF rejects `pixel_values_videos` alongside `mm_encoder_outputs`
+        # (forward and generate alike); it only reads them when it computes
+        # the video features itself.
+        hf_inputs.pop("pixel_values_videos", None)
+        hf_inputs.pop("video_position_ids", None)
+
+    # Drop list-valued keys (or tuple-valued keys) to avoid model crashes
+    hf_inputs = {
+        k: v for k, v in hf_inputs.items() if not isinstance(v, (list, tuple))
+    }
+
+    # Precomputed video features ride along as an optional kwarg.
+    extra = (
+        {}
+        if mm_encoder_outputs is None
+        else {"mm_encoder_outputs": mm_encoder_outputs}
+    )
     with torch.no_grad():
-        hf_outputs = hf_model(**hf_inputs, output_hidden_states=False)
+        hf_outputs = hf_model(**hf_inputs, output_hidden_states=False, **extra)
 
     hf_logits = hf_outputs.logits.detach().cpu().float().numpy()
     hf_input_ids = hf_inputs["input_ids"].detach().cpu().numpy()
@@ -342,6 +375,8 @@ def _precompute_hf_outputs(
             generated_ids = hf_model.generate(
                 **hf_inputs,
                 max_new_tokens=64,
+                do_sample=False,
+                **extra,
             )
         prompt_length = hf_inputs["input_ids"].shape[1]
         hf_generated_text = hf_tokenizer.decode(
@@ -368,16 +403,16 @@ def _precompute_hf_outputs(
         ret["mm_token_type_ids"] = (
             hf_inputs["mm_token_type_ids"].detach().cpu().numpy()
         )
-    if raw_video is not None and "pixel_values_videos" in hf_inputs:
-        pv = hf_inputs["pixel_values_videos"]
+    if raw_video is not None and pixel_values_videos is not None:
+        pv = pixel_values_videos
         ret["num_video_frames"] = int(pv.shape[1])
         # Flatten (num_videos, num_frames, ...) → (num_videos*num_frames, ...)
         # to match KH backbone input shape (batch, num_clips, patches, dim).
         ret["pixel_values_videos"] = (
             pv.flatten(0, 1).detach().cpu().float().numpy()
         )
-    if raw_video is not None and "video_position_ids" in hf_inputs:
-        vp = hf_inputs["video_position_ids"]
+    if raw_video is not None and video_position_ids is not None:
+        vp = video_position_ids
         ret["video_position_ids"] = vp.flatten(0, 1).detach().cpu().numpy()
     return ret
 

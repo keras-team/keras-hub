@@ -21,13 +21,13 @@ from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm import (
 from keras_hub.src.models.gemma4_unified.gemma4_unified_causal_lm_preprocessor import (  # noqa: E501
     Gemma4UnifiedCausalLMPreprocessor,
 )
-from keras_hub.src.models.gemma4_unified.gemma4_unified_image_converter import (
-    Gemma4UnifiedImageConverter,
-)
 from keras_hub.src.models.gemma4_unified.gemma4_unified_vision_embedder import (
     Gemma4UnifiedVisionEmbedder,
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
+from keras_hub.src.tests.mocks.mock_gemma4_unified_fixtures import (
+    raw_image_preprocessor_kwargs,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -39,7 +39,7 @@ class Gemma4UnifiedCausalLMTest(TestCase, parameterized.TestCase):
         self.text_preprocessor = Gemma4UnifiedCausalLMPreprocessor(
             image_converter=None,
             tokenizer=self.tokenizer,
-            sequence_length=20,
+            sequence_length=64,
             max_images_per_prompt=0,
             num_vision_tokens_per_image=0,
         )
@@ -76,27 +76,20 @@ class Gemma4UnifiedCausalLMTest(TestCase, parameterized.TestCase):
         self.text_input_data = self.text_preprocessor(*self.text_train_data)[0]
 
         # === Multimodal model (Vision + Audio + Text) ===
-        self.image_converter = Gemma4UnifiedImageConverter(
-            image_size=(16, 16),
-            patch_size=4,
-        )
         self.mock_audio_converter = Gemma4UnifiedAudioConverter(
             audio_samples_per_token=8,
             sampling_rate=100,
         )
         self.preprocessor = Gemma4UnifiedCausalLMPreprocessor(
-            image_converter=self.image_converter,
             audio_converter=self.mock_audio_converter,
             tokenizer=self.tokenizer,
-            sequence_length=20,
-            max_images_per_prompt=2,
-            num_vision_tokens_per_image=4,
             audio_input_feat_size=8,
+            **raw_image_preprocessor_kwargs(),
         )
 
         vision_embedder = Gemma4UnifiedVisionEmbedder(
             hidden_dim=8,
-            model_patch_size=4,
+            model_patch_size=12,
             mm_posemb_size=4,
             num_soft_tokens=4,
         )
@@ -120,19 +113,18 @@ class Gemma4UnifiedCausalLMTest(TestCase, parameterized.TestCase):
             {
                 "prompts": tf.constant(
                     [
-                        "the quick brown fox <|image> <|audio|>",
+                        "the quick brown fox <|image|> <|audio|>",
                         "the quick brown fox <|audio|>",
                     ]
                 ),
                 "responses": tf.constant(
                     ["the earth is round", "the earth is round"]
                 ),
-                "pixel_values": tf.constant(
-                    np.ones([2, 2, 16, 3 * 4 * 4], dtype="float32")
+                "images": tf.constant(
+                    np.ones([2, 2, 16, 16, 3], dtype="float32")
                 ),
-                "pixel_position_ids": tf.constant(
-                    np.ones([2, 2, 16, 2], dtype="int32")
-                ),
+                # Raw audio through the converter under tf.data hits
+                # #3172; keep mel precomputed.
                 "audio_mel": tf.constant(
                     np.ones((2, 1, 50, 8), dtype="float32")
                 ),
@@ -158,7 +150,7 @@ class Gemma4UnifiedCausalLMTest(TestCase, parameterized.TestCase):
             cls=Gemma4UnifiedCausalLM,
             init_kwargs=init_kwargs,
             train_data=train_data,
-            expected_output_shape=(2, 20, self.tokenizer.vocabulary_size()),
+            expected_output_shape=(2, 64, self.tokenizer.vocabulary_size()),
         )
 
     def test_text_early_stopping(self):

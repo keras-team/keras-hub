@@ -163,6 +163,7 @@ class Gemma4UnifiedImageConverter(ImageConverter):
             patch_size=self.patch_size,
             max_soft_tokens=self.max_soft_tokens,
             pooling_kernel_size=self.pooling_kernel_size,
+            two_pass_uint8_resize=True,
         )
 
     @preprocessing_function

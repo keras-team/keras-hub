@@ -25,6 +25,14 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
         defaults.update(kwargs)
         return Gemma4UnifiedVisionEmbedder(**defaults)
 
+    def _seed_weights(self, embedder, rng):
+        embedder.set_weights(
+            [
+                rng.standard_normal(w.shape).astype("float32") * 0.1
+                for w in embedder.weights
+            ]
+        )
+
     def test_output_shape(self):
         """Embedder produces (batch, n_images, num_soft_tokens, hidden_dim)."""
         embedder = self._make_embedder()
@@ -58,13 +66,7 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
         embedder({"pixel_values": pv, "pixel_position_ids": pos})
 
         # Set deterministic weights
-        rng = np.random.default_rng(0)
-        embedder.set_weights(
-            [
-                rng.standard_normal(w.shape).astype("float32") * 0.1
-                for w in embedder.weights
-            ]
-        )
+        self._seed_weights(embedder, np.random.default_rng(0))
 
         output = embedder({"pixel_values": pv, "pixel_position_ids": pos})
         out_np = ops.convert_to_numpy(output)
@@ -124,6 +126,45 @@ class Gemma4UnifiedVisionEmbedderTest(TestCase):
         """Property should return num_soft_tokens."""
         embedder = self._make_embedder()
         self.assertEqual(embedder.num_vision_tokens_per_image, 16)
+
+    def test_layer_norm_epsilon_matches_torch_default(self):
+        # HF's `patch_ln1`/`patch_ln2`/`pos_norm` are `nn.LayerNorm(dim)` with
+        # PyTorch's default eps 1e-5; only the RMSNorm reads `rms_norm_eps`.
+        # On a near-flat patch row (std ~ 0.005, var ~ 2.5e-5) the choice of
+        # eps changes 1/sqrt(var + eps) by ~16%, which is what sank the
+        # 640x426 parity case (`patch_ln2` off by 6.47 on the 12B).
+        embedder = self._make_embedder()
+        input_dim = 48 * 48 * 3
+        rng = np.random.default_rng(0)
+        pv = (1.0 + 0.005 * rng.standard_normal((1, 1, 1, input_dim))).astype(
+            "float32"
+        )
+        pos = np.zeros((1, 1, 1, 2), dtype="int32")
+        embedder({"pixel_values": pv, "pixel_position_ids": pos})
+        self._seed_weights(embedder, rng)
+        output = ops.convert_to_numpy(
+            embedder({"pixel_values": pv, "pixel_position_ids": pos})
+        )
+
+        def layer_norm(x, name):
+            gamma, beta = embedder.get_layer(name).get_weights()
+            mean = x.mean(-1, keepdims=True)
+            var = x.var(-1, keepdims=True)
+            return (x - mean) / np.sqrt(var + 1e-5) * gamma + beta
+
+        x = pv.astype("float64")[0, 0]
+        x = layer_norm(x, "patch_ln1")
+        kernel, bias = embedder.get_layer("patch_dense").get_weights()
+        x = layer_norm(x @ kernel + bias, "patch_ln2")
+        x = x + embedder.get_layer("pos_embedding_x").get_weights()[0][0]
+        x = x + embedder.get_layer("pos_embedding_y").get_weights()[0][0]
+        x = layer_norm(x, "pos_norm")
+        eps = embedder.layer_norm_epsilon
+        x = x / np.sqrt((x**2).mean(-1, keepdims=True) + eps)
+        x = x @ embedder.get_layer("embedding_projection").get_weights()[0]
+        # 1e-3 covers float32/TF32 drift through three LayerNorms (as in
+        # `test_exact_output`); the eps 1e-6 mutant moves values by O(0.1-1).
+        self.assertAllClose(output[0, 0], x, atol=1e-3)
 
     def test_get_config_round_trip(self):
         """get_config / from_config should produce identical model."""

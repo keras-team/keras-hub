@@ -51,6 +51,32 @@ def _get_num_vision_tokens(
     return (n_h * n_w) // (pooling_kernel_size**2)
 
 
+def _backend_tensors_to_numpy(x):
+    """Move backend tensors (e.g. CUDA `torch.Tensor`s) nested in `x` to NumPy.
+
+    `keras.layers.Layer.__call__` rejects a nested argument that mixes
+    backend tensors with non-tensors (string prompts), and the
+    `preprocessing_function` decorator calls `np.array` on lists before the
+    body runs, which fails for CUDA tensors. Symbolic `tf.Tensor`s (inside
+    `tf.data`, where every leaf is a tensor) and `tf.RaggedTensor`s are
+    returned untouched. On the TensorFlow backend an eager `tf.Tensor` is
+    the backend tensor, so it is converted like a `torch.Tensor`; string
+    tensors become lists, the form `preprocessing_function` canonicalises.
+    """
+    if tf is not None and isinstance(x, tf.RaggedTensor):
+        return x
+    if tf is not None and isinstance(x, tf.Tensor) and not hasattr(x, "numpy"):
+        return x
+    if isinstance(x, dict):
+        return {k: _backend_tensors_to_numpy(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return type(x)(_backend_tensors_to_numpy(v) for v in x)
+    if keras.ops.is_tensor(x):
+        x = keras.ops.convert_to_numpy(x)
+        return x.tolist() if x.dtype == object else x
+    return x
+
+
 @keras_hub_export("keras_hub.models.Gemma4UnifiedCausalLMPreprocessor")
 class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
     """Gemma4 Unified Causal LM preprocessor.
@@ -59,10 +85,12 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
     `keras_hub.models.Gemma4UnifiedCausalLM`. It can be configured in three
     text-only, text + image/video, and text + audio, based on whether
     `image_converter`, `video_converter`, or `audio_converter` are provided.
-    It returns outputs in a `(x, y, sample_weight)` format, where the `y` label
-    is the next token id in the `x` sequence. `sample_weight` is 0 for "prompt"
-    tokens and 1 for "response" tokens, so that the loss is computed only on
-    the "response" tokens.
+    When `responses` is present it returns `(x, y, sample_weight)`, where the
+    `y` label is the next token id in the `x` sequence and `sample_weight` is
+    0 for "prompt" tokens and 1 for "response" tokens, so that the loss is
+    computed only on the "response" tokens. Without `responses` it returns
+    `x` alone, or passes an explicitly supplied `y` (and with it
+    `sample_weight`) through unchanged.
 
     For image inputs, this layer replaces each `<|image|>` placeholder in the
     prompt with `num_vision_tokens_per_image` soft tokens wrapped in
@@ -761,6 +789,45 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
                 self.num_vision_tokens_per_image,
             )
 
+        parts_per_prompt = tf.strings.split(prompts, self.image_placeholder)
+        if hasattr(parts_per_prompt, "row_lengths"):
+            num_placeholders = tf.cast(
+                parts_per_prompt.row_lengths() - 1, tf.int32
+            )
+        else:
+            num_placeholders = tf.cast(
+                tf.shape(parts_per_prompt)[0] - 1, tf.int32
+            )
+            num_placeholders = tf.expand_dims(num_placeholders, 0)
+
+        if pixel_position_ids is None:
+            num_images_provided = tf.zeros_like(num_placeholders)
+        else:
+            num_images_provided = tf.reduce_sum(
+                tf.cast(tokens_per_image > 0, tf.int32), axis=-1
+            )
+
+        if hasattr(num_placeholders, "numpy") and hasattr(
+            num_images_provided, "numpy"
+        ):
+            np_placeholders = num_placeholders.numpy()
+            np_images = num_images_provided.numpy()
+            if np.any(np_images < np_placeholders):
+                # Find first violation for error message
+                idx = np.where(np_images < np_placeholders)[0][0]
+                raise ValueError(
+                    f"Expected at least {np_placeholders[idx]} images "
+                    f"for the placeholders in prompt {idx}, "
+                    f"but only received {np_images[idx]} valid images."
+                )
+
+        assert_op = tf.debugging.Assert(
+            tf.reduce_all(num_images_provided >= num_placeholders),
+            ["Not enough images for the <|image|> placeholders."],
+        )
+        with tf.control_dependencies([assert_op]):
+            prompts = tf.identity(prompts)
+
         def _replace_images(args):
             prompt, counts = args
             parts = tf.strings.split(prompt, self.image_placeholder)
@@ -869,6 +936,16 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             prompts_list[b] = vid_re.sub(rep, prompts_list[b], count=1)
         return tf.constant(prompts_list, dtype=tf.string)
 
+    def __call__(self, *args, **kwargs):
+        # Coerce before `Layer.__call__` builds its `CallSpec`, which raises
+        # on a dict mixing backend tensors with string prompts. The helper
+        # maps tuples element-wise, so the `(x, y)` form is covered too.
+        if args:
+            args = (_backend_tensors_to_numpy(args[0]),) + args[1:]
+        if "x" in kwargs:
+            kwargs["x"] = _backend_tensors_to_numpy(kwargs["x"])
+        return super().__call__(*args, **kwargs)
+
     @preprocessing_function
     def call(
         self,
@@ -880,18 +957,22 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
         sequence_length = sequence_length or self.sequence_length
 
         # === Input extraction and validation ===
-        prompts, responses = x["prompts"], x["responses"]
-        tf.debugging.assert_shapes([(prompts, ("N",)), (responses, ("N",))])
+        prompts = x["prompts"]
+        responses = x.get("responses", None)
+        if responses is not None:
+            tf.debugging.assert_shapes([(prompts, ("N",)), (responses, ("N",))])
 
         batched = True
         if isinstance(prompts, str):
             batched = False
             prompts = [prompts]
-            responses = [responses]
+            if responses is not None:
+                responses = [responses]
         if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
             batched = False
             prompts = tf.expand_dims(prompts, axis=0)
-            responses = tf.expand_dims(responses, axis=0)
+            if responses is not None:
+                responses = tf.expand_dims(responses, axis=0)
 
         pixel_values = x.get("pixel_values", None)
         pixel_position_ids = x.get("pixel_position_ids", None)
@@ -974,10 +1055,14 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Tokenise the inputs.
         prompts = self.tokenizer(prompts)
-        responses = self.tokenizer(responses)
+        if responses is not None:
+            responses = self.tokenizer(responses)
+            segments = (prompts, responses)
+        else:
+            segments = (prompts,)
 
         token_ids, segment_ids = self.packer(
-            (prompts, responses),
+            segments,
             sequence_length=sequence_length + 1,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
@@ -1062,16 +1147,21 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
                 "padding_mask": padding_mask[..., :-1],
                 "position_ids": pos_ids,
             }
-            y = token_ids[..., 1:]
-            sample_weight = response_mask[..., 1:]
+            if responses is not None:
+                y = token_ids[..., 1:]
+                sample_weight = response_mask[..., 1:]
+                if not batched:
+                    y = tf.squeeze(y, axis=0)
+                    sample_weight = tf.squeeze(sample_weight, axis=0)
 
             if not batched:
                 x["token_ids"] = tf.squeeze(x["token_ids"], axis=0)
                 x["padding_mask"] = tf.squeeze(x["padding_mask"], axis=0)
-                y = tf.squeeze(y, axis=0)
-                sample_weight = tf.squeeze(sample_weight, axis=0)
 
-            return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+            if y is not None:
+                return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+            else:
+                return x
 
         batch_size = tf.shape(prompts)[0]
 
@@ -1111,7 +1201,7 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
 
         # Audio variables are now pre-computed and clipped above if needed.
 
-        return self._format_output(
+        outputs = self._format_output(
             pixel_values=pixel_values,
             pixel_position_ids=pixel_position_ids,
             token_ids=token_ids,
@@ -1122,19 +1212,37 @@ class Gemma4UnifiedCausalLMPreprocessor(CausalLMPreprocessor):
             audio_mel_mask=audio_mel_mask,
             audio_indices=audio_indices,
             audio_mask=audio_mask,
-            return_labels=True,
+            return_labels=(responses is not None),
             text_only_input=False,
             batched=batched,
             expected_vision_tokens=expected_vision_tokens,
         )
+        if responses is None and y is not None:
+            return keras.utils.pack_x_y_sample_weight(outputs, y, sample_weight)
+        return outputs
+
+    def generate_preprocess(self, x, sequence_length=None):
+        """Convert strings to integer token input for generation.
+
+        Similar to calling the layer for training, this method takes in strings
+        or tensor strings, tokenizes and packs the input, and computes a padding
+        mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the layer for training, this method does not compute
+        labels and will never append a `tokenizer.end_token_id` to the end of
+        the sequence (as generation is expected to continue at the end of the
+        inputted prompt).
+        """
+        return self._generate_preprocess(
+            _backend_tensors_to_numpy(x), sequence_length=sequence_length
+        )
 
     @preprocessing_function
-    def generate_preprocess(
+    def _generate_preprocess(
         self,
         x,
         sequence_length=None,
     ):
-        """Convert strings to integer token input for generation."""
         if not self.built:
             self.build(None)
 

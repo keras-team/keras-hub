@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -12,6 +13,9 @@ from keras_hub.src.models.gemma4_unified.gemma4_unified_video_converter import (
     Gemma4UnifiedVideoConverter,
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
+from keras_hub.src.tests.mocks.mock_gemma4_unified_fixtures import (
+    raw_image_preprocessor_kwargs,
+)
 from keras_hub.src.tests.test_case import TestCase
 
 
@@ -251,6 +255,110 @@ class Gemma4UnifiedCausalLMPreprocessorTest(TestCase):
         )
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
+
+    def test_text_only_predict(self):
+        # F4 Regression: No responses key should not raise KeyError
+        x = {"prompts": ["hello world"]}
+        out = self.text_preprocessor(x)
+        self.assertIn("token_ids", out)
+
+    def test_backend_tensor_images(self):
+        # F5 regression: a list of backend tensors next to string prompts
+        # must not trip Keras' "cannot mix tensors and non-tensors" guard
+        # in `Layer.__call__`, and must reach `generate_preprocess` even
+        # though its decorator calls `np.array` on lists first. On torch
+        # with CUDA the tensors live on the GPU; on TensorFlow an eager
+        # `tf.Tensor` is the backend tensor.
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(
+            tokenizer=self.tokenizer, **raw_image_preprocessor_kwargs()
+        )
+        prompts = ["<|image|> a", "<|image|> b"]
+        images = [keras.ops.zeros((16, 16, 3)), keras.ops.zeros((16, 16, 3))]
+        x = {"prompts": prompts, "images": images}
+        out = preprocessor(x)
+        self.assertEqual(out["pixel_values"].shape[0], 2)
+        out = preprocessor.generate_preprocess(x)
+        self.assertIn("vision_mask", out)
+        if keras.config.backend() == "tensorflow":
+            # Every leaf eager, the form `next(iter(dataset))` yields: string
+            # tensors must be coerced together with the images or the dict
+            # becomes a tensor / non-tensor mix.
+            x = {
+                "prompts": tf.constant(prompts),
+                "images": tf.zeros([2, 16, 16, 3]),
+            }
+            out = preprocessor(x)
+            self.assertEqual(out["pixel_values"].shape[0], 2)
+
+    def test_eager_scalar_string_tensors(self):
+        # TF backend: eager string tensors are handed over as Python values,
+        # so a rank-0 prompt still takes the unbatched path in `call` and
+        # comes back with rank-1 token ids. Keeping the 0-d object array
+        # instead raises inside `call`.
+        if keras.config.backend() != "tensorflow":
+            self.skipTest("Eager `tf.Tensor`s are backend tensors on TF only.")
+        x = {
+            "prompts": tf.constant("hello world"),
+            "responses": tf.constant("a b"),
+        }
+        out = self.text_preprocessor(x)
+        self.assertIsInstance(out, tuple)
+        self.assertEqual(len(out), 3)
+        self.assertEqual(
+            tuple(out[0]["token_ids"].shape),
+            (self.text_preprocessor.sequence_length,),
+        )
+
+    def test_explicit_labels_pass_through_without_responses(self):
+        # Without `responses` an explicitly supplied `(x, y, sample_weight)`
+        # is returned unchanged rather than silently dropped.
+        y_in = np.array([[7, 8, 9, 10]], dtype="int32")
+        sw_in = np.array([[0, 1, 1, 0]], dtype="int32")
+        x_in = {"prompts": ["hello world"]}
+        out = self.text_preprocessor((x_in, y_in, sw_in))
+        self.assertIsInstance(out, tuple)
+        x, y, sw = out
+        self.assertIn("token_ids", x)
+        self.assertAllEqual(y, y_in)
+        self.assertAllEqual(sw, sw_in)
+
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(**self.init_kwargs)
+        x_in = {
+            "prompts": ["the quick brown fox <|image|>"],
+            "pixel_values": np.ones((1, 2, 1, 48), dtype="float32"),
+            "pixel_position_ids": np.ones((1, 2, 1, 2), dtype="int32"),
+        }
+        self.assertIsInstance(preprocessor(x_in), dict)
+        out = preprocessor((x_in, y_in, sw_in))
+        self.assertIsInstance(out, tuple)
+        x, y, sw = out
+        self.assertIn("vision_mask", x)
+        self.assertAllEqual(y, y_in)
+        self.assertAllEqual(sw, sw_in)
+
+    def test_generate_preprocess_positional_sequence_length(self):
+        # Same signature as `CausalLMPreprocessor.generate_preprocess`.
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(
+            **self.init_text_kwargs
+        )
+        positional = preprocessor.generate_preprocess("the quick brown fox", 12)
+        keyword = preprocessor.generate_preprocess(
+            "the quick brown fox", sequence_length=12
+        )
+        self.assertEqual(positional["token_ids"].shape[-1], 12)
+        self.assertAllEqual(positional["token_ids"], keyword["token_ids"])
+
+    def test_flat_ragged_list_validation(self):
+        # F6 Regression: flat ragged list with wrong prompt counts
+        # should raise ValueError
+        img = np.zeros([16, 16, 3])
+        x = {
+            "prompts": ["<|image|> a <|image|>", "b"],
+            "images": [img, img],
+        }
+        preprocessor = Gemma4UnifiedCausalLMPreprocessor(**self.init_kwargs)
+        with self.assertRaisesRegex(ValueError, "Expected at least 2 images"):
+            preprocessor(x)
 
     def test_invalid_shape(self):
         with self.assertRaises(ValueError):

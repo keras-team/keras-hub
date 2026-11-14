@@ -4,6 +4,10 @@ from keras import ops
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.gemma4.gemma4_layers import Gemma4VNorm
 
+# HF builds `patch_ln1`, `patch_ln2` and `pos_norm` as `nn.LayerNorm(dim)`
+# with PyTorch's fixed default eps; only the RMSNorm reads `rms_norm_eps`.
+_LAYER_NORM_EPSILON = 1e-5
+
 
 @keras_hub_export("keras_hub.models.Gemma4UnifiedVisionEmbedder")
 class Gemma4UnifiedVisionEmbedder(keras.Model):
@@ -27,8 +31,9 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
             merging. Stored for configuration only; the actual merge
             happens in the image converter.
         patch_size: int. Teacher patch size in pixels. Defaults to `16`.
-        layer_norm_epsilon: float. Epsilon for LayerNorm layers.
-            Defaults to `1e-6`.
+        layer_norm_epsilon: float. Epsilon for the pre-projection RMSNorm
+            (HF `rms_norm_eps`). The three LayerNorms use PyTorch's fixed
+            default `1e-5`, as in HF. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. Compute dtype.
 
     Example:
@@ -79,7 +84,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
 
         # --- Patch projection: LN₁ → Dense → LN₂ ---
         patch_ln1 = keras.layers.LayerNormalization(
-            epsilon=layer_norm_epsilon,
+            epsilon=_LAYER_NORM_EPSILON,
             dtype=dtype,
             name="patch_ln1",
         )
@@ -90,7 +95,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
             name="patch_dense",
         )
         patch_ln2 = keras.layers.LayerNormalization(
-            epsilon=layer_norm_epsilon,
+            epsilon=_LAYER_NORM_EPSILON,
             dtype=dtype,
             name="patch_ln2",
         )
@@ -132,7 +137,7 @@ class Gemma4UnifiedVisionEmbedder(keras.Model):
 
         # --- Post-position norm ---
         pos_norm = keras.layers.LayerNormalization(
-            epsilon=layer_norm_epsilon,
+            epsilon=_LAYER_NORM_EPSILON,
             dtype=dtype,
             name="pos_norm",
         )
