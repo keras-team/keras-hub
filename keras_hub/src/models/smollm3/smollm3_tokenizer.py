@@ -1,5 +1,8 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.smollm3.smollm3_backbone import SmolLM3Backbone
+from keras_hub.src.tokenizers.byte_pair_tokenizer import (
+    SPLIT_PATTERN_TOKENIZERS,
+)
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -29,6 +32,8 @@ class SmolLM3Tokenizer(BytePairTokenizer):
     """
 
     backbone_cls = SmolLM3Backbone
+    # SmolLM3 uses the pre-tokenizer regex of the Llama 3 `tokenizer.json`.
+    _python_split_pattern = SPLIT_PATTERN_TOKENIZERS
 
     def __init__(
         self,

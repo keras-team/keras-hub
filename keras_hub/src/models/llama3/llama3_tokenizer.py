@@ -1,5 +1,8 @@
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.llama3.llama3_backbone import Llama3Backbone
+from keras_hub.src.tokenizers.byte_pair_tokenizer import (
+    SPLIT_PATTERN_TOKENIZERS,
+)
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -11,6 +14,8 @@ from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 )
 class Llama3Tokenizer(BytePairTokenizer):
     backbone_cls = Llama3Backbone
+    # The pre-tokenizer regex of the Llama 3 `tokenizer.json`.
+    _python_split_pattern = SPLIT_PATTERN_TOKENIZERS
 
     def __init__(
         self,

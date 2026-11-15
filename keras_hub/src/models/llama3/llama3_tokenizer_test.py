@@ -38,6 +38,27 @@ class Llama3TokenizerTest(TestCase):
             ],
         )
 
+    def test_pre_tokenization(self):
+        # Llama 3 splits text with a regex before byte-pair encoding, which
+        # groups digits in runs of up to three. Merges must not cross those
+        # boundaries.
+        vocab = dict(self.vocab)
+        for token in ["2", "0", "4", "20", "24", "202"]:
+            vocab[token] = len(vocab)
+        merges = self.merges + ["2 0", "2 4", "20 2"]
+        tokenizer = Llama3Tokenizer(
+            vocabulary=vocab, merges=merges, dtype="string"
+        )
+        self.assertAllEqual(tokenizer("2024"), ["202", "4"])
+        self.assertAllEqual(tokenizer(" 2024"), ["Ġ", "202", "4"])
+        tokenizer = Llama3Tokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            add_prefix_space=True,
+            dtype="string",
+        )
+        self.assertAllEqual(tokenizer("2024"), ["Ġ", "202", "4"])
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             Llama3Tokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
