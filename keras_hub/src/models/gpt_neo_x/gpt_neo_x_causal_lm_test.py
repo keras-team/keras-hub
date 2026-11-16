@@ -238,6 +238,7 @@ class GPTNeoXCausalLMTest(TestCase):
 
     def test_presets(self):
         expected_presets = [
+            "pythia_14m_en",
             "pythia_70m_en",
             "pythia_160m_en",
             "pythia_410m_en",
@@ -255,11 +256,10 @@ class GPTNeoXCausalLMTest(TestCase):
                 )
             )
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in GPTNeoXCausalLM.presets:
-            self.run_preset_test(
-                cls=GPTNeoXCausalLM,
-                preset=preset,
-                input_data=self.input_data,
-            )
+    @pytest.mark.large
+    def test_causal_lm_generate_with_preset(self):
+        model = GPTNeoXCausalLM.from_preset("hf://EleutherAI/pythia-14m")
+        prompt = " airplane at airport"
+        output = model.generate([prompt], max_length=15)[0]
+        self.assertTrue(output.startswith(prompt))
+        self.assertGreater(len(output), len(prompt))

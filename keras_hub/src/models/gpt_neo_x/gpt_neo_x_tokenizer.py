@@ -17,9 +17,11 @@ try:
 except ImportError:
     tf_text = None
 
-# A private use character marking a split point in the TensorFlow path. It is
-# removed from the text, so it is assumed not to appear in any input.
+# A private use character marking a split point in the TensorFlow path. Real
+# occurrences of it in the text are escaped as U+E001 U+E002 before the split
+# (and U+E001 itself as U+E001 U+E001), then restored.
 _SPLIT_MARKER = "\ue000"
+_ESCAPE_PAIR = "\ue001[\ue001\ue002]"
 # Unicode whitespace, as a regex class body. This is what `\s` means in the
 # GPT-2 pre-tokenizer; RE2's `\s` is ASCII only and leaves out the vertical
 # tab.
@@ -66,6 +68,10 @@ class GPTNeoXTokenizer(BytePairTokenizer):
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a GPTNeoX preset.
 
+    Text is NFC normalized. Runs of spaces map to the dedicated whitespace
+    tokens when the vocabulary has them. Padding uses the `<|padding|>` token
+    if present in the vocabulary.
+
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
 
@@ -93,6 +99,9 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         self._add_special_token("<|endoftext|>", "end_token")
         self._add_special_token("<|endoftext|>", "start_token")
         self.pad_token_id = 0
+        self._has_explicit_unsplittable_tokens = (
+            kwargs.get("unsplittable_tokens") is not None
+        )
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
@@ -106,7 +115,8 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         # have a dedicated "<|padding|>" token. Padding with id 0 there would
         # make every padded position look like an end token, and
         # `generate()` would stop before producing anything.
-        self.pad_token_id = vocabulary.get("<|padding|>", 0)
+        if "<|padding|>" in vocabulary:
+            self._add_special_token("<|padding|>", "pad_token")
         # These vocabularies also have one token per run of 2 to 24 spaces,
         # which is matched in the text before byte-pair encoding. This is the
         # regex for them, longest first.
@@ -119,6 +129,7 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         if (
             "<|padding|>" in vocabulary
             and "<|padding|>" not in self.unsplittable_tokens
+            and not self._has_explicit_unsplittable_tokens
         ):
             self.unsplittable_tokens = [
                 *self.unsplittable_tokens,
@@ -173,6 +184,10 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             # As in the Python workflow, every piece of text that does not
             # start with a space gets one.
             text = tf.strings.regex_replace(text, "^([^ ])", r" \1")
+
+        text = tf.strings.regex_replace(text, "\ue001", "\ue001\ue001")
+        text = tf.strings.regex_replace(text, "\ue000", "\ue001\ue002")
+
         # GPT-2 matches whitespace with `\s+(?!\S)|\s+`: a run of whitespace
         # followed by text gives up its last character. RE2 has no
         # lookahead, so mark that split point first.
@@ -184,6 +199,21 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         words = tf_text.regex_split(
             text, f"{_SPLIT_PATTERN}|{_SPLIT_MARKER}", _SPLIT_PATTERN
         )
+
+        # Undo the escape in one left-to-right pass. Two global replaces
+        # would read "\ue001\ue001\ue002" from the right and turn an escaped
+        # U+E001 followed by a real U+E002 into U+E001 U+E000.
+        escaped = tf_text.regex_split(
+            words.flat_values, _ESCAPE_PAIR, _ESCAPE_PAIR
+        )
+        unescaped = escaped.flat_values
+        unescaped = tf.where(unescaped == "\ue001\ue001", "\ue001", unescaped)
+        unescaped = tf.where(unescaped == "\ue001\ue002", "\ue000", unescaped)
+        restored = tf.strings.reduce_join(
+            escaped.with_flat_values(unescaped), axis=1
+        )
+        words = words.with_flat_values(restored)
+
         words = _fill_rows(words, flat_pieces, is_whole)
         return pieces.with_flat_values(words).merge_dims(1, 2)
 

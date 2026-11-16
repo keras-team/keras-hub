@@ -29,6 +29,18 @@ class GPTNeoXBackbone(Backbone):
     third party and subject to a separate license, available
     [here](https://github.com/EleutherAI/gpt-neox/).
 
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained GPT-NeoX decoder
+    model = keras_hub.models.GPTNeoXBackbone.from_preset("pythia_70m_en")
+    output = model(input_data)
+    ```
+
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
@@ -39,9 +51,11 @@ class GPTNeoXBackbone(Backbone):
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
         tie_word_embeddings: bool. If `True`, the output layer will share
-            weights with the embedding layer.
+            weights with the embedding layer. Defaults to `True`.
         activation: string or function. The activation function to use for the
-            intermediate layers of the transformer.
+            intermediate layers of the transformer. Defaults to an approximate
+            GELU activation
+            (`keras_hub.src.utils.keras_utils.gelu_approximate`).
         layer_norm_epsilon: float. a value added to the denominator for
             numerical stability.
         rotary_max_wavelength: int. The maximum angular wavelength of the

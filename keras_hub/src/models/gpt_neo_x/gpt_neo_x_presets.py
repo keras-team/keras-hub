@@ -1,6 +1,16 @@
 """GPT-NeoX model preset configurations."""
 
 backbone_presets = {
+    "pythia_14m_en": {
+        "metadata": {
+            "description": (
+                "6-layer GPT-NeoX model with 14 million parameters."
+            ),
+            "params": 14067712,
+            "path": "gpt_neo_x",
+        },
+        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_14m_en/1",
+    },
     "pythia_70m_en": {
         "metadata": {
             "description": (

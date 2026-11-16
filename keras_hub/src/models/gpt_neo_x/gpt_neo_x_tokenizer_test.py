@@ -30,7 +30,7 @@ class GPTNeoXTokenizerTest(TestCase):
         # A vocabulary shaped like the Pythia one: a padding token, tokens
         # for runs of spaces, and newline and other whitespace with merges.
         extra = ["<|padding|>", "  ", "   ", "Ċ", "ĊĊ", "Ã", "©"]
-        extra += ["ċ", "Ġċ", "Â", "ħ", "ĠÂ"]
+        extra += ["ċ", "Ġċ", "Â", "ħ", "ĠÂ", "î", "Ģ", "ģ", "Ĥ", "c"]
         self.pythia_vocab = {
             **self.vocab,
             **{token: len(self.vocab) + i for i, token in enumerate(extra)},
@@ -135,6 +135,25 @@ class GPTNeoXTokenizerTest(TestCase):
         # Each piece of text gets the prefix, also after a whitespace run.
         self.assert_tokens(tokenizer, "at  at", ["Ġat", "  ", "Ġat"])
         self.assert_tokens(tokenizer, " at", ["Ġat"])
+
+    def test_ue000_and_ue001(self):
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        self.assert_tokens(tokenizer, "a\ue000b", ["a", "î", "Ģ", "Ģ", "b"])
+        text = "a\ue000b\ue001c"
+        self.assert_tokens(
+            tokenizer, text, ["a", "î", "Ģ", "Ģ", "b", "î", "Ģ", "ģ", "c"]
+        )
+        output = tokenizer.detokenize(tokenizer(text))
+        if hasattr(output, "numpy"):
+            output = output.numpy().decode("utf-8")
+        self.assertEqual(output, text)
+        # An escaped U+E001 directly followed by U+E002 must not be read as
+        # U+E001 then an escaped U+E000.
+        self.assert_tokens(
+            tokenizer,
+            "a\ue001\ue002b",
+            ["a", "î", "Ģ", "ģ", "î", "Ģ", "Ĥ", "b"],
+        )
 
     def test_rank_2_input_raises(self):
         tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)

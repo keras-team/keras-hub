@@ -30,6 +30,7 @@ device = torch.device("cpu")
 torch.set_default_device(device)
 
 PRESET_MAP = {
+    "pythia_14m_en": "EleutherAI/pythia-14m",
     "pythia_70m_en": "EleutherAI/pythia-70m",
     "pythia_160m_en": "EleutherAI/pythia-160m",
     "pythia_410m_en": "EleutherAI/pythia-410m",
@@ -40,7 +41,31 @@ PRESET_MAP = {
     "gpt_neox_20b_en": "EleutherAI/gpt-neox-20b",
 }
 
-PROMPT = "What is Keras?"
+ATOL_MAP = {
+    "pythia_14m_en": 0.06,
+    "pythia_70m_en": 0.06,
+    # Set from the max absolute logit difference printed by this script
+    # for the checkpoint, with at least 3x headroom. None means not
+    # measured yet, and the check refuses to run.
+    "pythia_160m_en": None,
+    "pythia_410m_en": None,
+    "pythia_1.4b_en": None,
+    "pythia_2.8b_en": None,
+    "pythia_6.9b_en": None,
+    "pythia_12b_en": None,
+    "gpt_neox_20b_en": None,
+}
+
+PROMPTS = [
+    "What is Keras?",
+    "The quick brown fox jumps over the lazy dog. In 1997, Deep Blue beat "
+    "Garry Kasparov, and the history of machine intelligence changed. Since "
+    "then, models have grown from millions to hundreds of billions of "
+    "parameters, trained on",
+    "def fibonacci(n):\n    if n < 2:\n        return n\n\n    return "
+    "fibonacci(n - 1) + fibonacci(n - 2)\n\n\nclass Solver:\n    def "
+    "__init__(self):\n        self.cache = {}\n",
+]
 # New tokens generated in the generation smoke test, on both sides.
 GENERATE_NEW_TOKENS = 8
 
@@ -61,25 +86,30 @@ flags.DEFINE_string(
 # ---------------------------------------------------------------
 def precompute_hf_outputs(hf_model, hf_tokenizer):
     """Precompute all HF outputs needed for validation."""
-    # `GPTNeoXCausalLMPreprocessor` prepends the start token and HF's
-    # tokenizer does not, so the reference prompt starts with the same
-    # token to compare like with like.
-    hf_inputs = hf_tokenizer(
-        hf_tokenizer.eos_token + PROMPT, return_tensors="pt"
-    ).to(device)
-    with torch.no_grad():
-        hf_out = hf_model(**hf_inputs)
-        hf_gen = hf_model.generate(
-            **hf_inputs,
-            max_new_tokens=GENERATE_NEW_TOKENS,
-            do_sample=False,
-            pad_token_id=hf_tokenizer.eos_token_id,
+    results = []
+    for prompt in PROMPTS:
+        hf_inputs = hf_tokenizer(prompt, return_tensors="pt").to(device)
+        with torch.no_grad():
+            hf_out = hf_model(**hf_inputs)
+            hf_gen = hf_model.generate(
+                **hf_inputs,
+                max_new_tokens=GENERATE_NEW_TOKENS,
+                do_sample=False,
+                pad_token_id=hf_tokenizer.eos_token_id,
+            )
+        results.append(
+            {
+                "input_ids": hf_inputs["input_ids"]
+                .cpu()
+                .numpy()
+                .astype(np.int32),
+                "logits": hf_out.logits.detach().cpu().float().numpy(),
+                "generated": hf_tokenizer.decode(
+                    hf_gen[0], skip_special_tokens=True
+                ),
+            }
         )
-    return {
-        "input_ids": hf_inputs["input_ids"].cpu().numpy().astype(np.int32),
-        "logits": hf_out.logits.detach().cpu().float().numpy(),
-        "generated": hf_tokenizer.decode(hf_gen[0], skip_special_tokens=True),
-    }
+    return results
 
 
 # ---------------------------------------------------------------
@@ -105,53 +135,74 @@ def test_parameter_count(keras_backbone, hf_param_count):
 # ---------------------------------------------------------------
 # 3. Validate tokenization and logits
 # ---------------------------------------------------------------
-def validate_output(keras_model, hf_results):
+def validate_output(keras_model, hf_results_list, preset):
     """Validate token ids and logits, end to end through KerasHub."""
     print("\n" + "=" * 50)
     print("TOKEN ID AND LOGIT VALIDATION")
     print("=" * 50)
 
-    hf_ids = hf_results["input_ids"]
+    valid_lens = []
+    for prompt, hf_results in zip(PROMPTS, hf_results_list):
+        hf_ids = hf_results["input_ids"]
 
-    # --- Token ID parity ---
-    keras_preprocessed = keras_model.preprocessor.generate_preprocess([PROMPT])
-    keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
-    keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
-    valid_len = int(np.sum(keras_mask[0]))
+        # --- Token ID parity ---
+        keras_preprocessed = keras_model.preprocessor.generate_preprocess(
+            [prompt]
+        )
+        keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
+        keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
+        valid_len = int(np.sum(keras_mask[0]))
+        valid_lens.append(valid_len)
 
-    print(f"\n  HF token ids:       {hf_ids[0].tolist()}")
-    print(f"  KerasHub token ids: {keras_ids[0, :valid_len].tolist()}")
-    np.testing.assert_array_equal(keras_ids[0, :valid_len], hf_ids[0])
-    print("  ✓ Token IDs match.")
+        print(f"\n  Prompt: {prompt[:30]}...")
+        print(f"  HF token ids:       {hf_ids[0].tolist()}")
+        print(f"  KerasHub token ids: {keras_ids[0, :valid_len].tolist()}")
+        np.testing.assert_array_equal(keras_ids[0, :valid_len], hf_ids[0])
+        print("  ✓ Token IDs match.")
 
-    # --- Logit comparison (task call, KerasHub's own ids) ---
-    keras_logits = ops.convert_to_numpy(keras_model(keras_preprocessed)).astype(
-        np.float32
-    )[:, :valid_len]
-    hf_logits = hf_results["logits"]
-    abs_diff = np.abs(keras_logits - hf_logits)
-    print(f"\n  Logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
-    np.testing.assert_allclose(keras_logits, hf_logits, atol=1e-3, rtol=1e-3)
-    print("  ✓ Logits match within atol=1e-3, rtol=1e-3.")
-    return valid_len
+        # --- Logit comparison (task call, KerasHub's own ids) ---
+        keras_logits = ops.convert_to_numpy(
+            keras_model(keras_preprocessed)
+        ).astype(np.float32)[:, :valid_len]
+        hf_logits = hf_results["logits"]
+        abs_diff = np.abs(keras_logits - hf_logits)
+        print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
+        print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
+
+        atol = ATOL_MAP.get(preset)
+        if atol is None:
+            raise ValueError(
+                f"ATOL_MAP has no measured tolerance for {preset}. Run "
+                "this script, read the max absolute logit diff above, "
+                "and set ATOL_MAP with at least 3x headroom."
+            )
+        np.testing.assert_allclose(keras_logits, hf_logits, atol=atol)
+        print(f"  ✓ Logits match within atol={atol}.")
+    return valid_lens
 
 
 # ---------------------------------------------------------------
 # 4. Generation Smoke Test
 # ---------------------------------------------------------------
-def generation_smoke(keras_model, hf_results, prompt_len):
+def generation_smoke(keras_model, hf_results_list, prompt_lens):
     print("\n" + "=" * 50)
     print("GENERATION SMOKE TEST")
     print("=" * 50)
 
-    # The task samples with top-k by default; HF's output above is greedy.
     keras_model.compile(sampler="greedy")
-    keras_output = keras_model.generate(
-        [PROMPT], max_length=prompt_len + GENERATE_NEW_TOKENS
-    )
-    print(f"\nHF:       {hf_results['generated']}")
-    print(f"KerasHub: {keras_output[0]}")
+    for prompt, hf_results, prompt_len in zip(
+        PROMPTS, hf_results_list, prompt_lens
+    ):
+        keras_output = keras_model.generate(
+            [prompt], max_length=prompt_len + GENERATE_NEW_TOKENS
+        )[0]
+        print(f"\nPrompt: {prompt[:30]}...")
+        print(f"HF:       {hf_results['generated']}")
+        print(f"KerasHub: {keras_output}")
+        assert keras_output == hf_results["generated"], (
+            "Generated text does not match HF"
+        )
+        print("  ✓ Generation matches.")
 
 
 # ---------------------------------------------------------------
@@ -212,8 +263,8 @@ def main(_):
 
     # --- Phase 4: Validate against precomputed HF outputs ---
     test_parameter_count(keras_model.backbone, hf_params)
-    prompt_len = validate_output(keras_model, hf_results)
-    generation_smoke(keras_model, hf_results, prompt_len)
+    prompt_lens = validate_output(keras_model, hf_results, preset)
+    generation_smoke(keras_model, hf_results, prompt_lens)
 
     # --- Phase 5: Save preset ---
     del keras_model

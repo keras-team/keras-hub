@@ -17,11 +17,11 @@ from keras_hub.src.utils.transformers.convert_gpt_neox import (
 
 
 class ConvertGPTNeoXTest(TestCase):
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_convert_tiny_preset(self):
-        model = GPTNeoXCausalLM.from_preset("hf://EleutherAI/pythia-70m")
+        model = GPTNeoXCausalLM.from_preset("hf://EleutherAI/pythia-14m")
         prompt_ids = [1276, 310, 634, 7583, 6882, 2092, 32]
-        new_ids = [187, 187, 42, 457, 78, 417, 2119, 604, 309, 457]
+        new_ids = [187, 187, 42, 452, 247, 2257, 273, 794, 15, 309]
         n = len(prompt_ids)
         total = n + len(new_ids)
 
@@ -44,12 +44,12 @@ class ConvertGPTNeoXTest(TestCase):
     @pytest.mark.large
     def test_class_detection(self):
         model = CausalLM.from_preset(
-            "hf://EleutherAI/pythia-70m",
+            "hf://EleutherAI/pythia-14m",
             load_weights=False,
         )
         self.assertIsInstance(model, GPTNeoXCausalLM)
         model = Backbone.from_preset(
-            "hf://EleutherAI/pythia-70m",
+            "hf://EleutherAI/pythia-14m",
             load_weights=False,
         )
         self.assertIsInstance(model, GPTNeoXBackbone)
@@ -57,6 +57,74 @@ class ConvertGPTNeoXTest(TestCase):
         self.assertEqual(model.get_config()["activation"], "gelu")
         self.assertEqual(model.rotary_percentage, 0.25)
         self.assertEqual(model.rotary_max_wavelength, 10000)
+
+    def test_config_without_hidden_act(self):
+        with self.assertRaises(KeyError):
+            convert_backbone_config(
+                {
+                    "vocab_size": 10,
+                    "num_hidden_layers": 1,
+                    "num_attention_heads": 1,
+                    "hidden_size": 1,
+                    "intermediate_size": 1,
+                    "max_position_embeddings": 1,
+                    "layer_norm_eps": 1.0,
+                    "tie_word_embeddings": False,
+                }
+            )
+
+    def test_config_without_tie_word_embeddings(self):
+        with self.assertRaises(KeyError):
+            convert_backbone_config(
+                {
+                    "hidden_act": "gelu_fast",
+                    "vocab_size": 10,
+                    "num_hidden_layers": 1,
+                    "num_attention_heads": 1,
+                    "hidden_size": 1,
+                    "intermediate_size": 1,
+                    "max_position_embeddings": 1,
+                    "layer_norm_eps": 1.0,
+                }
+            )
+
+    def test_config_with_false_parallel_residual(self):
+        with self.assertRaises(ValueError):
+            convert_backbone_config(
+                {
+                    "use_parallel_residual": False,
+                    "hidden_act": "gelu",
+                    "vocab_size": 10,
+                    "num_hidden_layers": 1,
+                    "num_attention_heads": 1,
+                    "hidden_size": 1,
+                    "intermediate_size": 1,
+                    "max_position_embeddings": 1,
+                    "layer_norm_eps": 1.0,
+                    "tie_word_embeddings": False,
+                }
+            )
+
+    def test_config_with_rope_parameters(self):
+        config = convert_backbone_config(
+            {
+                "hidden_act": "gelu_fast",
+                "vocab_size": 10,
+                "num_hidden_layers": 1,
+                "num_attention_heads": 1,
+                "hidden_size": 1,
+                "intermediate_size": 1,
+                "max_position_embeddings": 1,
+                "layer_norm_eps": 1.0,
+                "tie_word_embeddings": False,
+                "rope_parameters": {
+                    "partial_rotary_factor": 0.5,
+                    "rope_theta": 20000,
+                },
+            }
+        )
+        self.assertEqual(config["rotary_percentage"], 0.5)
+        self.assertEqual(config["rotary_max_wavelength"], 20000)
 
     def test_unsupported_hidden_act(self):
         with self.assertRaises(ValueError):

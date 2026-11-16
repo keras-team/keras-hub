@@ -8,7 +8,12 @@ backbone_cls = GPTNeoXBackbone
 
 
 def convert_backbone_config(transformers_config):
-    hidden_act = transformers_config.get("hidden_act", "gelu")
+    if not transformers_config.get("use_parallel_residual", True):
+        raise ValueError(
+            "GPT-NeoX checkpoints with use_parallel_residual=False "
+            "are not supported."
+        )
+    hidden_act = transformers_config["hidden_act"]
     if hidden_act == "gelu":
         activation = "gelu"
     elif hidden_act in ("gelu_new", "gelu_fast", "gelu_pytorch_tanh"):
@@ -18,15 +23,13 @@ def convert_backbone_config(transformers_config):
 
     rotary_pct = transformers_config.get("rotary_pct")
     if rotary_pct is None:
-        rotary_pct = transformers_config.get("rope_parameters", {}).get(
-            "partial_rotary_factor", 0.25
-        )
+        rope_params = transformers_config.get("rope_parameters", {})
+        rotary_pct = rope_params["partial_rotary_factor"]
 
     rotary_emb_base = transformers_config.get("rotary_emb_base")
     if rotary_emb_base is None:
-        rotary_emb_base = transformers_config.get("rope_parameters", {}).get(
-            "rope_theta", 10000
-        )
+        rope_params = transformers_config.get("rope_parameters", {})
+        rotary_emb_base = rope_params["rope_theta"]
 
     return {
         "vocabulary_size": transformers_config["vocab_size"],
@@ -34,10 +37,14 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
-        "dropout": transformers_config.get("hidden_dropout", 0.0),
-        "tie_word_embeddings": transformers_config.get(
-            "tie_word_embeddings", False
+        # Pythia configs spell this `hidden_dropout`, gpt-neox-20b spells it
+        # `hidden_dropout_prob`, and most Pythia checkpoints carry neither,
+        # so keep the `GPTNeoXConfig` default of 0.0 when both are absent.
+        "dropout": transformers_config.get(
+            "hidden_dropout",
+            transformers_config.get("hidden_dropout_prob", 0.0),
         ),
+        "tie_word_embeddings": transformers_config["tie_word_embeddings"],
         "activation": activation,
         "rotary_percentage": rotary_pct,
         "rotary_max_wavelength": rotary_emb_base,
@@ -155,3 +162,7 @@ def convert_tokenizer(cls, preset, **kwargs):
         vocab[token["content"]] = token["id"]
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)
+
+
+def load_preprocessor_config(preset, transformers_config):
+    return {"add_start_token": False}
