@@ -57,6 +57,10 @@ class Qwen3_5InterleaveEmbeddings(keras.layers.Layer):
         # Flatten the text embedding to (batch * seq_len, hidden_dim).
         flat_text = ops.reshape(text_embeddings, (-1, self.hidden_dim))
 
+        # Vision encoders may run in float32; strict-dtype backends require
+        # the scatter updates to match the text embedding dtype.
+        image_embeddings = ops.cast(image_embeddings, flat_text.dtype)
+
         # Cast vision indices to int32 and reshape to (N, 1) for scatter_update.
         vision_indices = ops.cast(vision_indices, "int32")
         vision_indices = ops.expand_dims(vision_indices, axis=-1)

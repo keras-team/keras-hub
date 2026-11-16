@@ -11,9 +11,7 @@ from keras_hub.src.models.embedding_gemma2.embedding_gemma2_encoder_block import
 from keras_hub.src.models.embedding_gemma2.embedding_gemma2_encoder_block import (  # noqa: E501
     compute_embedding_gemma2_attention_masks,
 )
-from keras_hub.src.models.gemma4.gemma4_layers import (
-    Gemma4InterleaveEmbeddings,  # noqa: E501
-)
+from keras_hub.src.models.gemma4.gemma4_layers import Gemma4InterleaveEmbeddings  # noqa: E501
 from keras_hub.src.models.gemma4.gemma4_layers import RMSNormalization
 
 
