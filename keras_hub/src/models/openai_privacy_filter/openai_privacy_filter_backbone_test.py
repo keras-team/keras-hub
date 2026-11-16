@@ -306,7 +306,11 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         x = ops.convert_to_tensor(x_np.astype("float32"))
         before = [ops.convert_to_numpy(router(x)) for router in routers]
 
-        with self.assertWarnsRegex(UserWarning, "left unquantized"):
+        # Stable Keras forwards the layer's `NotImplementedError` text as the
+        # warning; nightly emits one aggregated `QuantizationReport` warning
+        # instead. Both are `UserWarning`s, and the assertions below pin that
+        # the router was actually skipped.
+        with self.assertWarns(UserWarning):
             model.quantize("int8")
 
         for router, scores in zip(routers, before):
