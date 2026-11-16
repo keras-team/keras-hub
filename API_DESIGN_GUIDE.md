@@ -41,6 +41,7 @@ try:
 except ImportError:
     rouge_score = None
 
+
 class Rouge(keras.metrics.Metric):
     def __init__(self):
         if rouge_score is None:
