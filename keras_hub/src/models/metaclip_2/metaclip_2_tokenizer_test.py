@@ -44,6 +44,28 @@ class MetaCLIP2TokenizerTest(TestCase):
         )
         self.assertEqual(tokenizer.special_token_ids, [0, 1, 2, 3])
 
+    def test_detokenize_special_tokens(self):
+        # `xlm_roberta_test_vocab.spm` has no `"<s>"` and `"</s>"` pieces, so
+        # use a proto with the same layout as the presets.
+        # Generated using create_xlm_roberta_real_layout_test_proto.py
+        proto = os.path.join(
+            self.get_test_data_dir(), "xlm_roberta_real_layout_test_vocab.spm"
+        )
+        tokenizer = MetaCLIP2Tokenizer(**{**self.init_kwargs, "proto": proto})
+        input_data = [
+            [
+                tokenizer.start_token_id,
+                *[4, 9, 5, 7],
+                tokenizer.unk_token_id,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        # The start, end and pad tokens are stripped from the output.
+        self.assertAllEqual(output, ["the quick brown fox ⁇ "])
+
 
 class MetaCLIP2TokenizerTFTest(MetaCLIP2TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""

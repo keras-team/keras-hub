@@ -174,29 +174,22 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
 
     @preprocessing_function
     def _detokenize_tf(self, inputs):
-        # Shift the tokens IDs left by one.
-        tokens = tf.subtract(inputs, 1)
-
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`,
-        # respectively.
-        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
-        # proto does not contain `pad_token_id`. This mapping of the pad token
-        # is done automatically by the above subtraction.
-        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
-        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
-        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
-
-        # Filter out special tokens for cleaner output
-        tokens = tf.ragged.boolean_mask(
-            tokens,
+        # Filter out special tokens for cleaner output. The filter is computed
+        # on the original IDs, before they are shifted below.
+        keep = tf.logical_and(
+            tf.not_equal(inputs, self.pad_token_id),
             tf.logical_and(
-                tf.not_equal(tokens, self.pad_token_id - 1),
-                tf.logical_and(
-                    tf.not_equal(tokens, self.start_token_id - 1),
-                    tf.not_equal(tokens, self.end_token_id - 1),
-                ),
+                tf.not_equal(inputs, self.start_token_id),
+                tf.not_equal(inputs, self.end_token_id),
             ),
         )
+
+        # Correct `unk_token_id` (3 -> 0), and shift all other tokens IDs left
+        # by one.
+        tokens = tf.where(
+            tf.equal(inputs, self.unk_token_id), 0, tf.subtract(inputs, 1)
+        )
+        tokens = tf.ragged.boolean_mask(tokens, keep)
 
         return super()._detokenize_tf(tokens)
 
@@ -205,24 +198,13 @@ class MetaCLIP2Tokenizer(SentencePieceTokenizer):
         inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
 
         def process(ids):
-            new_ids = []
-            for id in ids:
-                id -= 1
-                if id == self.unk_token_id - 1:
-                    new_ids.append(0)
-                elif id == self.end_token_id - 1:
-                    new_ids.append(2)
-                elif id == self.start_token_id - 1:
-                    new_ids.append(1)
-                else:
-                    new_ids.append(id)
-            # Filter out special tokens for cleaner output
+            # Filter out special tokens for cleaner output. This is done on
+            # the original IDs, before they are shifted.
+            drop = (self.start_token_id, self.pad_token_id, self.end_token_id)
             return [
-                id
-                for id in new_ids
-                if id != self.pad_token_id - 1
-                and id != self.start_token_id - 1
-                and id != self.end_token_id - 1
+                0 if id == self.unk_token_id else id - 1
+                for id in ids
+                if id not in drop
             ]
 
         processed_inputs = [process(ids) for ids in inputs]

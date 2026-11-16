@@ -6,6 +6,7 @@ kagglehub!=1.0.1
 kagglesdk
 tokenizers
 sentencepiece
+protobuf
 # Tooling deps.
 pre-commit
 astor

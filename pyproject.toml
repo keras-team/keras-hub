@@ -36,6 +36,7 @@ dependencies = [
     "kagglehub!=1.0.1",
     "kagglesdk",
     "sentencepiece",
+    "protobuf",
     "tokenizers",
     "tensorflow-text>=2.20.1;platform_system != 'Windows'",
 ]

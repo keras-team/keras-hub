@@ -135,22 +135,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             return self.mask_token_id
         return super().token_to_id(token)
 
-    def _build_detokenize_proto(self, proto):
-        proto = super()._build_detokenize_proto(proto)
-        try:
-            from sentencepiece import sentencepiece_model_pb2
-        except ImportError:
-            return proto
-
-        model_proto = sentencepiece_model_pb2.ModelProto()
-        model_proto.ParseFromString(proto)
-        if any(piece.piece == self.mask_token for piece in model_proto.pieces):
-            return proto
+    def _extra_detokenize_pieces(self):
         # When the mask token is not in the proto, it is appended to the
         # vocabulary (see `set_proto()`). Append a matching piece so that
         # `mask_token_id` is detokenized to `"[MASK]"`.
-        piece_types = sentencepiece_model_pb2.ModelProto.SentencePiece
-        piece = model_proto.pieces.add()
-        piece.piece = self.mask_token
-        piece.type = piece_types.USER_DEFINED
-        return model_proto.SerializeToString()
+        return [self.mask_token]

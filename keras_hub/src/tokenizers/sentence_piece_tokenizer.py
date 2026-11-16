@@ -140,12 +140,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             add_bos=self.add_bos,
             add_eos=self.add_eos,
         )
-        detokenize_proto = getattr(self, "_detokenize_proto", None)
-        if detokenize_proto is None or detokenize_proto is proto:
+        if self._detokenize_proto is None:
             self._sentence_piece_detokenizer = self._sentence_piece
         else:
             self._sentence_piece_detokenizer = tf_text.SentencepieceTokenizer(
-                model=detokenize_proto,
+                model=self._detokenize_proto,
             )
 
     def _set_proto_spm(self, proto):
@@ -181,15 +180,25 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         `tf.data` pipeline, this is only built when first needed.
         """
         self._maybe_initialized_spm()
-        if getattr(self, "_sentence_piece_spm_detokenizer", None) is None:
-            detokenize_proto = getattr(self, "_detokenize_proto", None)
-            if detokenize_proto is None or detokenize_proto is self.proto:
+        if self._sentence_piece_spm_detokenizer is None:
+            if self._detokenize_proto is None:
                 detokenizer = self._sentence_piece_spm
             else:
                 detokenizer = spm.SentencePieceProcessor()
-                detokenizer.LoadFromSerializedProto(detokenize_proto)
+                detokenizer.LoadFromSerializedProto(self._detokenize_proto)
             self._sentence_piece_spm_detokenizer = detokenizer
         return self._sentence_piece_spm_detokenizer
+
+    def _extra_detokenize_pieces(self):
+        """Returns extra pieces that `detokenize()` should decode verbatim.
+
+        Subclasses can override this to list tokens that have an id in the
+        tokenizer, but might not have a piece in the SentencePiece proto, like
+        the DeBERTaV3 `"[MASK]"` token. Each token that is not in the proto is
+        appended, in order, to the proto used to detokenize. See
+        `_build_detokenize_proto()`.
+        """
+        return []
 
     def _build_detokenize_proto(self, proto):
         """Build the proto used to detokenize, given the tokenizer's proto.
@@ -202,28 +211,58 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         The original proto is still used for tokenization, so special tokens
         appearing in input text are not parsed as special tokens.
 
-        Returns `proto` itself if no piece needs to change.
+        The pieces returned by `_extra_detokenize_pieces()` are also made
+        `USER_DEFINED`, and appended to the copy if the proto does not have
+        them.
+
+        Returns `None` if no piece needs to change.
         """
         special_tokens = {token for token in self.special_tokens if token}
-        if spm is None or not special_tokens:
-            return proto
+        extra_pieces = self._extra_detokenize_pieces()
+        if spm is None or not (special_tokens or extra_pieces):
+            return None
 
         from sentencepiece import sentencepiece_model_pb2
 
         model_proto = sentencepiece_model_pb2.ModelProto()
         model_proto.ParseFromString(proto)
         piece_types = sentencepiece_model_pb2.ModelProto.SentencePiece
+        verbatim_pieces = special_tokens.union(extra_pieces)
+        pieces = set()
         changed = False
         for piece in model_proto.pieces:
+            pieces.add(piece.piece)
             if (
                 piece.type == piece_types.CONTROL
-                and piece.piece in special_tokens
+                and piece.piece in verbatim_pieces
             ):
                 piece.type = piece_types.USER_DEFINED
                 changed = True
+        for token in extra_pieces:
+            if token not in pieces:
+                piece = model_proto.pieces.add()
+                piece.piece = token
+                piece.type = piece_types.USER_DEFINED
+                changed = True
         if not changed:
-            return proto
+            return None
         return model_proto.SerializeToString()
+
+    def _detokenize_piece_id(self, piece):
+        """Returns the id of `piece` in the proto used to detokenize.
+
+        This is the id of the piece in the tokenizer's proto, if it has one.
+        Otherwise the piece was appended after the vocabulary, in the order
+        returned by `_extra_detokenize_pieces()`.
+        """
+        if piece in self._token_to_id_map:
+            return self._token_to_id_map[piece]
+        appended = [
+            token
+            for token in self._extra_detokenize_pieces()
+            if token not in self._token_to_id_map
+        ]
+        return self._vocabulary_size + appended.index(piece)
 
     def set_proto(self, proto):
         if proto is None:
