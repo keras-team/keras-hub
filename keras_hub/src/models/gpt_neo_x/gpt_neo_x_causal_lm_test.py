@@ -259,7 +259,10 @@ class GPTNeoXCausalLMTest(TestCase):
     @pytest.mark.large
     def test_causal_lm_generate_with_preset(self):
         model = GPTNeoXCausalLM.from_preset("hf://EleutherAI/pythia-14m")
-        prompt = " airplane at airport"
-        output = model.generate([prompt], max_length=15)[0]
-        self.assertTrue(output.startswith(prompt))
-        self.assertGreater(len(output), len(prompt))
+        model.compile(sampler="greedy")
+        prompt = "def fibonacci(n):"
+        # Hugging Face float32 greedy continuation for the same prompt, 10
+        # new tokens; the smallest top-2 logit margin on the way is 0.37.
+        # The full string is compared, trailing spaces included.
+        expected = "def fibonacci(n):\n    def __init__(self):\n        "
+        self.assertEqual(model.generate(prompt, max_length=17), expected)

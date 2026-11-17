@@ -165,4 +165,7 @@ def convert_tokenizer(cls, preset, **kwargs):
 
 
 def load_preprocessor_config(preset, transformers_config):
+    # The Hugging Face tokenizer for these checkpoints does not prepend a
+    # start token (`add_bos_token` is False; only pythia-14m spells it out
+    # in tokenizer_config.json).
     return {"add_start_token": False}

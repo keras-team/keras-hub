@@ -17,11 +17,14 @@ try:
 except ImportError:
     tf_text = None
 
-# A private use character marking a split point in the TensorFlow path. Real
-# occurrences of it in the text are escaped as U+E001 U+E002 before the split
-# (and U+E001 itself as U+E001 U+E001), then restored.
+# A private use character marking a split point in the TensorFlow path.
+# Real occurrences of it are escaped before the split as U+E001 U+E002, and
+# U+E001 itself as U+E001 U+E003, then restored. In the escaped text every
+# U+E001 starts one of those pairs and the second character says which real
+# character it stands for, so the restore is two plain replaces. U+E000 to
+# U+E003 carry this meaning only inside the split; real occurrences of all
+# four round-trip.
 _SPLIT_MARKER = "\ue000"
-_ESCAPE_PAIR = "\ue001[\ue001\ue002]"
 # Unicode whitespace, as a regex class body. This is what `\s` means in the
 # GPT-2 pre-tokenizer; RE2's `\s` is ASCII only and leaves out the vertical
 # tab.
@@ -70,7 +73,8 @@ class GPTNeoXTokenizer(BytePairTokenizer):
 
     Text is NFC normalized. Runs of spaces map to the dedicated whitespace
     tokens when the vocabulary has them. Padding uses the `<|padding|>` token
-    if present in the vocabulary.
+    if present in the vocabulary, and that token is then also kept whole in
+    text; passing `unsplittable_tokens` explicitly turns the latter off.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -98,7 +102,6 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         # GPTNeoX uses the same start as end token, i.e., "<|endoftext|>".
         self._add_special_token("<|endoftext|>", "end_token")
         self._add_special_token("<|endoftext|>", "start_token")
-        self.pad_token_id = 0
         self._has_explicit_unsplittable_tokens = (
             kwargs.get("unsplittable_tokens") is not None
         )
@@ -109,6 +112,21 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         )
 
     def set_vocabulary_and_merges(self, vocabulary, merges):
+        # `pad_token` follows the current vocabulary. Drop the registration a
+        # previous vocabulary left behind before the base class checks that
+        # every registered special token is in the new one.
+        attrs = getattr(self, "_special_token_attrs", [])
+        if "pad_token" in attrs:
+            attrs.remove("pad_token")
+        self.pad_token = None
+        self.pad_token_id = 0
+        # So does the "<|padding|>" entry added to `unsplittable_tokens`.
+        if not self._has_explicit_unsplittable_tokens:
+            self.unsplittable_tokens = [
+                token
+                for token in self.unsplittable_tokens
+                if token != "<|padding|>"
+            ]
         super().set_vocabulary_and_merges(vocabulary, merges)
         vocabulary = self.vocabulary or {}
         # GPT-NeoX and Pythia vocabularies put "<|endoftext|>" at id 0 and
@@ -135,6 +153,14 @@ class GPTNeoXTokenizer(BytePairTokenizer):
                 *self.unsplittable_tokens,
                 "<|padding|>",
             ]
+
+    def get_config(self):
+        config = super().get_config()
+        if not self._has_explicit_unsplittable_tokens:
+            # Not passed by the caller: let `from_config` derive it again, so
+            # "<|padding|>" is added once the vocabulary is known.
+            config["unsplittable_tokens"] = None
+        return config
 
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
         self._keep_padding_token_whole(vocabulary)
@@ -172,12 +198,13 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         """
         whole = [re.escape(token) for token in self.unsplittable_tokens]
         whole = "|".join(filter(None, [*whole, self._whitespace_run_pattern]))
-        # The marker never survives a split, so it stands in for "no match".
-        pieces = tf_text.regex_split(inputs, whole or _SPLIT_MARKER, whole)
+        if whole:
+            pieces = tf_text.regex_split(inputs, whole, whole)
+            is_whole = tf.strings.regex_full_match(pieces.flat_values, whole)
+        else:
+            pieces = tf.RaggedTensor.from_tensor(inputs[:, tf.newaxis])
+            is_whole = tf.zeros(tf.shape(inputs), dtype="bool")
         flat_pieces = pieces.flat_values
-        is_whole = tf.strings.regex_full_match(
-            flat_pieces, whole or _SPLIT_MARKER
-        )
 
         text = tf.where(is_whole, "", flat_pieces)
         if self.add_prefix_space:
@@ -185,7 +212,7 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             # start with a space gets one.
             text = tf.strings.regex_replace(text, "^([^ ])", r" \1")
 
-        text = tf.strings.regex_replace(text, "\ue001", "\ue001\ue001")
+        text = tf.strings.regex_replace(text, "\ue001", "\ue001\ue003")
         text = tf.strings.regex_replace(text, "\ue000", "\ue001\ue002")
 
         # GPT-2 matches whitespace with `\s+(?!\S)|\s+`: a run of whitespace
@@ -200,19 +227,17 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             text, f"{_SPLIT_PATTERN}|{_SPLIT_MARKER}", _SPLIT_PATTERN
         )
 
-        # Undo the escape in one left-to-right pass. Two global replaces
-        # would read "\ue001\ue001\ue002" from the right and turn an escaped
-        # U+E001 followed by a real U+E002 into U+E001 U+E000.
-        escaped = tf_text.regex_split(
-            words.flat_values, _ESCAPE_PAIR, _ESCAPE_PAIR
+        # Undo the escape, U+E001 U+E002 first: after it, the only U+E001
+        # left are the ones that start U+E001 U+E003. The reverse order would
+        # read an escaped U+E001 followed by a real U+E002 as U+E000.
+        flat_words = words.flat_values
+        flat_words = tf.strings.regex_replace(
+            flat_words, "\ue001\ue002", "\ue000"
         )
-        unescaped = escaped.flat_values
-        unescaped = tf.where(unescaped == "\ue001\ue001", "\ue001", unescaped)
-        unescaped = tf.where(unescaped == "\ue001\ue002", "\ue000", unescaped)
-        restored = tf.strings.reduce_join(
-            escaped.with_flat_values(unescaped), axis=1
+        flat_words = tf.strings.regex_replace(
+            flat_words, "\ue001\ue003", "\ue001"
         )
-        words = words.with_flat_values(restored)
+        words = words.with_flat_values(flat_words)
 
         words = _fill_rows(words, flat_pieces, is_whole)
         return pieces.with_flat_values(words).merge_dims(1, 2)
@@ -246,9 +271,11 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         )
         # The cache joins the tokens of a word with spaces, so a whitespace
         # run token cannot go through it. Those words are already one token.
-        is_run = tf.strings.regex_full_match(
-            flat_words, self._whitespace_run_pattern or _SPLIT_MARKER
-        )
+        is_run = tf.fill(tf.shape(flat_words), False)
+        if self._whitespace_run_pattern:
+            is_run = tf.strings.regex_full_match(
+                flat_words, self._whitespace_run_pattern
+            )
         tokens = tf.strings.split(
             tf.where(is_run, "", tokenized_words), sep=" "
         )

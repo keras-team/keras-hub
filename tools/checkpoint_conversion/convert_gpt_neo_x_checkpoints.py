@@ -1,7 +1,7 @@
 """Convert GPT-NeoX and Pythia HuggingFace checkpoints to KerasHub presets.
 
 Usage:
-    python tools/checkpoint_conversion/convert_gpt_neox_checkpoints.py \
+    python tools/checkpoint_conversion/convert_gpt_neo_x_checkpoints.py \
         --preset pythia_70m_en
 """
 
@@ -41,16 +41,32 @@ PRESET_MAP = {
     "gpt_neox_20b_en": "EleutherAI/gpt-neox-20b",
 }
 
+# Max absolute logit difference accepted between KerasHub and HF, both in
+# float32 on the three prompts below. The 1e-3 used by other conversion
+# scripts is out of reach here: HF in float32 already differs from its own
+# float64 run by about 1e-2 on the small checkpoints, so each entry sits
+# just above the maximum this script measured for the preset. Measured on
+# keras-team-n2-512-mem (CPU, float32, torch backend). The script does not
+# run HF in float64; the second column comes from a separate HF float32 vs
+# float64 forward pass on the same three prompts, on the same machine.
+#
+#   preset           max |keras - hf32|   HF float32 vs float64
+#   pythia_14m_en    0.0115               0.0105
+#   pythia_70m_en    0.0196               0.0108
+#   pythia_160m_en   0.0056               0.0037
+#   pythia_410m_en   0.0034               0.0020
+#   pythia_1.4b_en   0.0020               0.0010
+#   pythia_2.8b_en   0.00054              not measured (script run only)
+#
+# None means not measured yet: pass --atol to convert those presets, read
+# the maximum the script prints, and add the entry.
 ATOL_MAP = {
-    "pythia_14m_en": 0.06,
-    "pythia_70m_en": 0.06,
-    # Set from the max absolute logit difference printed by this script
-    # for the checkpoint, with at least 3x headroom. None means not
-    # measured yet, and the check refuses to run.
-    "pythia_160m_en": None,
-    "pythia_410m_en": None,
-    "pythia_1.4b_en": None,
-    "pythia_2.8b_en": None,
+    "pythia_14m_en": 0.02,
+    "pythia_70m_en": 0.03,
+    "pythia_160m_en": 0.01,
+    "pythia_410m_en": 0.005,
+    "pythia_1.4b_en": 0.003,
+    "pythia_2.8b_en": 0.001,
     "pythia_6.9b_en": None,
     "pythia_12b_en": None,
     "gpt_neox_20b_en": None,
@@ -72,6 +88,12 @@ GENERATE_NEW_TOKENS = 8
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f"Must be one of {','.join(PRESET_MAP.keys())}"
+)
+flags.DEFINE_float(
+    "atol",
+    None,
+    "Max absolute logit difference to accept. Overrides ATOL_MAP, and is "
+    "required for presets whose entry is None.",
 )
 flags.DEFINE_string(
     "upload_uri",
@@ -142,6 +164,8 @@ def validate_output(keras_model, hf_results_list, preset):
     print("=" * 50)
 
     valid_lens = []
+    logit_pairs = []
+    max_diffs = []
     for prompt, hf_results in zip(PROMPTS, hf_results_list):
         hf_ids = hf_results["input_ids"]
 
@@ -168,16 +192,21 @@ def validate_output(keras_model, hf_results_list, preset):
         abs_diff = np.abs(keras_logits - hf_logits)
         print(f"  Logit mean absolute diff: {abs_diff.mean():.6f}")
         print(f"  Logit max absolute diff:  {abs_diff.max():.6f}")
+        logit_pairs.append((keras_logits, hf_logits))
+        max_diffs.append(abs_diff.max())
 
-        atol = ATOL_MAP.get(preset)
-        if atol is None:
-            raise ValueError(
-                f"ATOL_MAP has no measured tolerance for {preset}. Run "
-                "this script, read the max absolute logit diff above, "
-                "and set ATOL_MAP with at least 3x headroom."
-            )
+    max_diff = max(max_diffs)
+    print(f"\n  Max absolute logit diff over all prompts: {max_diff:.6f}")
+    atol = FLAGS.atol if FLAGS.atol is not None else ATOL_MAP.get(preset)
+    if atol is None:
+        raise ValueError(
+            f"ATOL_MAP has no measured tolerance for {preset}. The max "
+            f"absolute logit diff over all prompts is {max_diff:.4f}; set "
+            "ATOL_MAP just above it, or pass --atol."
+        )
+    for keras_logits, hf_logits in logit_pairs:
         np.testing.assert_allclose(keras_logits, hf_logits, atol=atol)
-        print(f"  ✓ Logits match within atol={atol}.")
+    print(f"  ✓ Logits match within atol={atol} on every prompt.")
     return valid_lens
 
 

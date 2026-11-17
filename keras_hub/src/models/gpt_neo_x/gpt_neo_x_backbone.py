@@ -22,24 +22,13 @@ class GPTNeoXBackbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     GPT-NeoX model with any number of layers, heads, and embedding
-    dimensions.
+    dimensions. To load preset architectures and weights, use the
+    `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
     [here](https://github.com/EleutherAI/gpt-neox/).
-
-    Examples:
-    ```python
-    input_data = {
-        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
-        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
-    }
-
-    # Pretrained GPT-NeoX decoder
-    model = keras_hub.models.GPTNeoXBackbone.from_preset("pythia_70m_en")
-    output = model(input_data)
-    ```
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -53,9 +42,8 @@ class GPTNeoXBackbone(Backbone):
         tie_word_embeddings: bool. If `True`, the output layer will share
             weights with the embedding layer. Defaults to `True`.
         activation: string or function. The activation function to use for the
-            intermediate layers of the transformer. Defaults to an approximate
-            GELU activation
-            (`keras_hub.src.utils.keras_utils.gelu_approximate`).
+            intermediate layers of the transformer. Defaults to the tanh
+            approximation of GELU.
         layer_norm_epsilon: float. a value added to the denominator for
             numerical stability.
         rotary_max_wavelength: int. The maximum angular wavelength of the
@@ -70,6 +58,29 @@ class GPTNeoXBackbone(Backbone):
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained GPT-NeoX decoder.
+    model = keras_hub.models.GPTNeoXBackbone.from_preset("pythia_70m_en")
+    model(input_data)
+
+    # Randomly initialized GPT-NeoX decoder with custom config.
+    model = keras_hub.models.GPTNeoXBackbone(
+        vocabulary_size=50304,
+        num_layers=6,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        max_sequence_length=2048,
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(

@@ -23,7 +23,7 @@ from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gemma4_assistant
 from keras_hub.src.utils.transformers import convert_gpt2
-from keras_hub.src.utils.transformers import convert_gpt_neox
+from keras_hub.src.utils.transformers import convert_gpt_neo_x
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
@@ -99,7 +99,7 @@ class TransformersPresetLoader(PresetLoader):
         elif model_type == "gpt_oss":
             self.converter = convert_gpt_oss
         elif model_type == "gpt_neox":
-            self.converter = convert_gpt_neox
+            self.converter = convert_gpt_neo_x
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3

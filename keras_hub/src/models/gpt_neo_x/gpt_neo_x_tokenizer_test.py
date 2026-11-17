@@ -30,7 +30,8 @@ class GPTNeoXTokenizerTest(TestCase):
         # A vocabulary shaped like the Pythia one: a padding token, tokens
         # for runs of spaces, and newline and other whitespace with merges.
         extra = ["<|padding|>", "  ", "   ", "Ċ", "ĊĊ", "Ã", "©"]
-        extra += ["ċ", "Ġċ", "Â", "ħ", "ĠÂ", "î", "Ģ", "ģ", "Ĥ", "c"]
+        extra += ["ċ", "Ġċ", "Â", "ħ", "ĠÂ", "î", "Ģ", "ģ", "Ĥ", "c", "ĥ"]
+        extra += ["<", "|", "d", "g", ">"]
         self.pythia_vocab = {
             **self.vocab,
             **{token: len(self.vocab) + i for i, token in enumerate(extra)},
@@ -40,6 +41,22 @@ class GPTNeoXTokenizerTest(TestCase):
             "merges": self.merges + ["Ċ Ċ", "Ġ ċ", "Ġ Â"],
             "_allow_python_workflow": self._allow_python_workflow,
         }
+        # The same vocabulary without the run-of-spaces tokens.
+        self.no_runs_kwargs = {
+            **self.pythia_kwargs,
+            "vocabulary": {
+                token: id
+                for token, id in self.pythia_vocab.items()
+                if token.strip(" ") or len(token) < 2
+            },
+        }
+        # The strings of `test_ue000_and_ue001` and their byte-level tokens.
+        self.ue_texts = ["a\ue000b", "a\ue000b\ue001c", "a\ue001\ue002b"]
+        self.ue_tokens = [
+            ["a", "î", "Ģ", "Ģ", "b"],
+            ["a", "î", "Ģ", "Ģ", "b", "î", "Ģ", "ģ", "c"],
+            ["a", "î", "Ģ", "ģ", "î", "Ģ", "Ĥ", "b"],
+        ]
 
     def assert_tokens(self, tokenizer, text, tokens):
         ids = [self.pythia_vocab[token] for token in tokens]
@@ -67,14 +84,67 @@ class GPTNeoXTokenizerTest(TestCase):
     def test_pad_token_id(self):
         tokenizer = GPTNeoXTokenizer(**self.init_kwargs)
         self.assertEqual(tokenizer.pad_token_id, 0)
+        self.assertIsNone(tokenizer.pad_token)
         # Pythia vocabularies have a dedicated padding token.
         tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
         self.assertEqual(
             tokenizer.pad_token_id, self.pythia_vocab["<|padding|>"]
         )
+        self.assertEqual(tokenizer.pad_token, "<|padding|>")
+        self.assertIn(tokenizer.pad_token_id, tokenizer.special_token_ids)
         tokenizer = GPTNeoXTokenizer(sequence_length=3, **self.pythia_kwargs)
         self.assert_tokens(
             tokenizer, " at", ["Ġat", "<|padding|>", "<|padding|>"]
+        )
+
+    def test_vocabulary_swap(self):
+        # The padding token follows the current vocabulary.
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        tokenizer.set_vocabulary_and_merges(self.vocab, self.merges)
+        self.assertEqual(tokenizer.pad_token_id, 0)
+        self.assertIsNone(tokenizer.pad_token)
+        self.assertNotIn("<|padding|>", tokenizer.special_tokens)
+        # So does the derived unsplittable token: the text now splits the
+        # way it does for a tokenizer built on this vocabulary.
+        self.assertNotIn("<|padding|>", tokenizer.unsplittable_tokens)
+        fresh = GPTNeoXTokenizer(**self.init_kwargs)
+        self.assertAllEqual(tokenizer("a<|padding|>b"), fresh("a<|padding|>b"))
+        tokenizer.set_vocabulary_and_merges(
+            self.pythia_vocab, self.pythia_kwargs["merges"]
+        )
+        self.assertEqual(
+            tokenizer.pad_token_id, self.pythia_vocab["<|padding|>"]
+        )
+        self.assertEqual(tokenizer._special_token_attrs.count("pad_token"), 1)
+        self.assertIn("<|padding|>", tokenizer.unsplittable_tokens)
+
+    def test_explicit_unsplittable_tokens(self):
+        tokenizer = GPTNeoXTokenizer(
+            unsplittable_tokens=[], **self.pythia_kwargs
+        )
+        # "<|padding|>" is ordinary text: "<|", "padding" and "|>!" are the
+        # GPT-2 words, and none of their byte pairs is merged.
+        self.assert_tokens(
+            tokenizer,
+            " at<|padding|>!",
+            ["Ġat", "<", "|", "p", "a", "d", "d", "i", "n", "g", "|", ">", "!"],
+        )
+        self.assertEqual(tokenizer.get_config()["unsplittable_tokens"], [])
+
+    def test_config_round_trip_without_vocabulary(self):
+        tokenizer = GPTNeoXTokenizer()
+        config = tokenizer.get_config()
+        self.assertIsNone(config["unsplittable_tokens"])
+        # A clone made before the vocabulary is known keeps "<|padding|>"
+        # whole once it gets a vocabulary that has it.
+        clone = GPTNeoXTokenizer.from_config(
+            {**config, "_allow_python_workflow": self._allow_python_workflow}
+        )
+        clone.set_vocabulary_and_merges(
+            self.pythia_vocab, self.pythia_kwargs["merges"]
+        )
+        self.assert_tokens(
+            clone, " at<|padding|>!", ["Ġat", "<|padding|>", "!"]
         )
 
     def test_whitespace_runs(self):
@@ -154,6 +224,43 @@ class GPTNeoXTokenizerTest(TestCase):
             "a\ue001\ue002b",
             ["a", "î", "Ģ", "ģ", "î", "Ģ", "Ĥ", "b"],
         )
+        # U+E002 and U+E003 are the other escape characters; they and the
+        # characters they stand next to also come through unchanged.
+        self.assert_tokens(tokenizer, "a\ue002b", ["a", "î", "Ģ", "Ĥ", "b"])
+        self.assert_tokens(tokenizer, "a\ue003b", ["a", "î", "Ģ", "ĥ", "b"])
+        self.assert_tokens(
+            tokenizer,
+            "a\ue001\ue003b",
+            ["a", "î", "Ģ", "ģ", "î", "Ģ", "ĥ", "b"],
+        )
+        self.assert_tokens(
+            tokenizer,
+            "a\ue000\ue003b",
+            ["a", "î", "Ģ", "Ģ", "î", "Ģ", "ĥ", "b"],
+        )
+
+    def test_ue000_and_ue001_batch_and_string(self):
+        ids = [[self.pythia_vocab[t] for t in row] for row in self.ue_tokens]
+        tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
+        self.assertAllEqual(tokenizer(self.ue_texts), ids)
+        tokenizer = GPTNeoXTokenizer(dtype="string", **self.pythia_kwargs)
+        self.assertAllEqual(tokenizer(self.ue_texts), self.ue_tokens)
+
+    def test_ue000_and_ue001_without_run_tokens(self):
+        ids = [[self.pythia_vocab[t] for t in row] for row in self.ue_tokens]
+        # With no run tokens and no unsplittable tokens there is nothing to
+        # match before the byte-pair split, and U+E000 must still be text.
+        no_unsplittable_kwargs = {
+            **self.no_runs_kwargs,
+            "unsplittable_tokens": [],
+        }
+        for kwargs in (self.no_runs_kwargs, no_unsplittable_kwargs):
+            tokenizer = GPTNeoXTokenizer(**kwargs)
+            for text, expected in zip(self.ue_texts, ids):
+                self.assertAllEqual(tokenizer(text), expected)
+            self.assertAllEqual(tokenizer(self.ue_texts), ids)
+            tokenizer = GPTNeoXTokenizer(dtype="string", **kwargs)
+            self.assertAllEqual(tokenizer(self.ue_texts), self.ue_tokens)
 
     def test_rank_2_input_raises(self):
         tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
