@@ -1,27 +1,37 @@
+# Exact pins: the versions CI last passed with. Dependabot proposes the
+# bumps; the nightly workflow ignores the pins and installs the latest.
 # Library deps.
-dm-tree
-regex
-rich
-kagglehub!=1.0.1
-kagglesdk
-tokenizers
-sentencepiece
+dm-tree==0.1.10
+regex==2026.11.15
+rich==15.0.0
+kagglehub==1.0.3
+kagglesdk==0.1.38
+tokenizers==0.23.3
+sentencepiece==0.2.3
 # Tooling deps.
-pre-commit
-astor
-packaging
-ruff
-pytest
-pytest-cov
-pytest-xdist
-pytest-split
-build
-namex
+pre-commit==4.7.0
+astor==0.8.1
+packaging==26.3
+ruff==0.17.5
+pytest==9.2.0
+pytest-cov==7.1.0
+pytest-xdist==3.8.0
+pytest-split==0.11.0
+build==1.6.1
+namex==0.1.0
 # Optional deps.
-grain
-rouge-score
-tensorflow-datasets
-safetensors
-pillow
-openvino
-transformers
+grain==0.2.19
+rouge-score==0.1.2
+tensorflow-datasets==4.9.10
+safetensors==0.8.0
+pillow==13.0.0
+openvino==2026.4.1
+transformers==5.23.0
+# Transitive deps.
+numpy==2.4.6
+huggingface-hub==2.4.0
+protobuf==7.36.2
+absl-py==2.5.1
+ml-dtypes==0.6.0
+optree==0.20.0
+keras==3.15.1

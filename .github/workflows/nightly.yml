@@ -13,6 +13,7 @@ jobs:
     uses: ./.github/workflows/cpu_tests.yml # zizmor: ignore[self-repository]
     with:
       timeout: 240
+      use_latest_deps: true
   nightly:
     name: Build Wheel file and upload
     needs: [cpu_tests]

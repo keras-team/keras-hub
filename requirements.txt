@@ -1,18 +1,18 @@
 # Tensorflow.
-tensorflow-cpu;sys_platform != 'darwin'
-tensorflow;sys_platform == 'darwin'
-tensorflow-text>=2.20.1;platform_system != 'Windows'
+tensorflow-cpu==2.21.0;sys_platform != 'darwin'
+tensorflow==2.21.0;sys_platform == 'darwin'
+tensorflow-text==2.21.1;platform_system != 'Windows'
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
-litert-torch
-torch>=2.6.0
-torchvision>=0.16.0
+litert-torch==0.10.0
+torch==2.14.1
+torchvision==0.29.2
 
 # Jax.
-jax[cpu]
+jax[cpu]==0.10.2
 
 # LiteRT (for the model.export(format="litert") tests).
-ai-edge-litert
+ai-edge-litert==2.3.0
 
 -r requirements-common.txt

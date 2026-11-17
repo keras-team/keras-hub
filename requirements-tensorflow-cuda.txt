@@ -1,19 +1,19 @@
 # Tensorflow with cuda support.
-# Pinned because newer `tensorflow[and-cuda]` releases fail to load their CUDA
-# libraries on the L4 GPU CI runner, and the job fails with "No GPUs
-# discovered". Only this file needs the pin: the other requirements files
-# install `tensorflow-cpu`. Remove it once a newer TF release detects the GPU
-# on the runner.
-tensorflow[and-cuda]==2.20.0
+# Before it was pinned, this line failed on the L4 GPU CI runner with "No GPUs
+# discovered": the CUDA libraries did not load. If a bump brings that back, go
+# back to `tensorflow[and-cuda]==2.20.0` with `tensorflow-text==2.20.1`, the
+# last pair known to pass there. Only this file is affected: the other
+# requirements files install `tensorflow-cpu`.
+tensorflow[and-cuda]==2.21.0
 # `tensorflow-text` must match the TF minor version.
-tensorflow-text~=2.20.1
+tensorflow-text==2.21.1
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.0
-torchvision>=0.16.0
+torch==2.15.0+cpu
+torchvision==0.29.2+cpu
 
 # Jax cpu-only version.
-jax[cpu]
+jax[cpu]==0.10.2
 
 -r requirements-common.txt
