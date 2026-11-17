@@ -1,8 +1,10 @@
 import keras
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_hub.src.metrics.bleu import Bleu
+from keras_hub.src.metrics.bleu import _tokenize_13a
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_tokenizer import ByteTokenizer
 
@@ -67,6 +69,122 @@ class BleuTest(TestCase):
 
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val, 0.609, delta=1e-3)
+
+    def test_default_tokenizer(self):
+        # Expected outputs match SacreBLEU's `tokenizer_13a` (and the previous
+        # `tf.strings.regex_replace` implementation of it).
+        cases = {
+            "He eats a sweet apple.": [
+                "He",
+                "eats",
+                "a",
+                "sweet",
+                "apple",
+                ".",
+            ],
+            "Prices rose 3.5% to $1,200.50 in 2024-25, then fell.": [
+                "Prices",
+                "rose",
+                "3.5",
+                "%",
+                "to",
+                "$",
+                "1,200.50",
+                "in",
+                "2024",
+                "-",
+                "25",
+                ",",
+                "then",
+                "fell",
+                ".",
+            ],
+            "a-b 9-5 (x) [y] {z} <tag> &amp; &quot;q&quot;": [
+                "a-b",
+                "9",
+                "-",
+                "5",
+                "(",
+                "x",
+                ")",
+                "[",
+                "y",
+                "]",
+                "{",
+                "z",
+                "}",
+                "<",
+                "tag",
+                ">",
+                "&",
+                '"',
+                "q",
+                '"',
+            ],
+            "line1\nline2 hyphen-\nated": ["line1", "line2", "hyphenated"],
+            "<skipped>text   many    spaces\t tabs": [
+                "text",
+                "many",
+                "spaces",
+                "tabs",
+            ],
+            "end with comma,": ["end", "with", "comma", ","],
+            "Ünïcödé çhars: naïve café!": [
+                "Ünïcödé",
+                "çhars",
+                ":",
+                "naïve",
+                "café",
+                "!",
+            ],
+            "": [],
+            "...": [".", ".", "."],
+        }
+        for text, expected in cases.items():
+            self.assertEqual(_tokenize_13a(text), expected, msg=repr(text))
+
+    def test_numpy_input(self):
+        bleu = Bleu()
+        y_true = np.array(
+            [
+                ["He eats a sweet apple."],
+                ["Silicon Valley is one of my favourite shows!"],
+            ]
+        )
+        y_pred = np.array(
+            [
+                "He He He eats sweet apple which is a fruit.",
+                "I love Silicon Valley, it's one of my favourite shows.",
+            ]
+        )
+
+        bleu_val = bleu(y_true, y_pred)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
+
+    def test_ragged_references(self):
+        # Different samples can have a different number of references, as a
+        # nested Python list or as a `tf.RaggedTensor`.
+        y_true = [
+            [
+                "He eats a sweet apple.",
+                "He eats a sweet apple which is a fruit.",
+            ],
+            ["Silicon Valley is one of my favourite shows!"],
+        ]
+        y_pred = [
+            "He He He eats sweet apple which is a fruit.",
+            "I love Silicon Valley, it's one of my favourite shows.",
+        ]
+        bleu_val = Bleu()(y_true, y_pred)
+        self.assertAlmostEqual(bleu_val, 0.493, delta=1e-3)
+        bleu_val = Bleu()(tf.ragged.constant(y_true), tf.constant(y_pred))
+        self.assertAlmostEqual(bleu_val, 0.493, delta=1e-3)
+
+    def test_python_callable_tokenizer(self):
+        bleu = Bleu(tokenizer=lambda text: text.lower().split())
+        y_true = [["He eats a sweet apple."]]
+        y_pred = ["he eats a sweet apple."]
+        self.assertAlmostEqual(bleu(y_true, y_pred), 1.0, delta=1e-6)
 
     def test_different_order(self):
         bleu = Bleu(max_order=5)

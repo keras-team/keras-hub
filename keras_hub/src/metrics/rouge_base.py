@@ -1,15 +1,7 @@
 import keras
-from keras import ops
 
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
-from keras_hub.src.utils.tensor_utils import convert_to_numpy
+from keras_hub.src.metrics.metric_utils import validate_and_fix_rank
 from keras_hub.src.utils.tensor_utils import is_float_dtype
-from keras_hub.src.utils.tensor_utils import tensor_to_list
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 try:
     from rouge_score import rouge_scorer
@@ -49,7 +41,6 @@ class RougeBase(keras.metrics.Metric):
         name="rouge",
         **kwargs,
     ):
-        assert_tf_installed(self.__class__.__name__)
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if rouge_scorer is None:
@@ -111,53 +102,27 @@ class RougeBase(keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # Three possible shapes for y_true and y_pred: Python string,
-        # [batch_size] and [batch_size, 1]. In the latter two cases, we have
-        # strings in the tensor/list.
-
-        def validate_and_fix_rank(inputs, tensor_name):
-            if not isinstance(inputs, tf.Tensor):
-                inputs = tf.convert_to_tensor(inputs)
-
-            if inputs.shape.rank == 0:
-                return inputs[tf.newaxis]
-            elif inputs.shape.rank == 1:
-                return inputs
-            elif inputs.shape.rank == 2:
-                if inputs.shape[1] != 1:
-                    raise ValueError(
-                        f"{tensor_name} must be of shape `[batch_size, 1]`. "
-                        f"Found shape: {inputs.shape}"
-                    )
-                else:
-                    return tf.squeeze(inputs, axis=1)
-            else:
-                raise ValueError(
-                    f"{tensor_name} must be of rank 0 (scalar input), 1 or 2. "
-                    f"Found rank: {inputs.shape.rank}"
-                )
-
+        # [batch_size] and [batch_size, 1]. All are canonicalized to a Python
+        # list of `batch_size` strings.
         y_true = validate_and_fix_rank(y_true, "y_true")
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
 
-        batch_size = tf.shape(y_true)[0]
+        if len(y_true) != len(y_pred):
+            raise ValueError(
+                "`y_true` and `y_pred` must have the same batch size. "
+                f"Received: len(y_true)={len(y_true)}, "
+                f"len(y_pred)={len(y_pred)}"
+            )
 
-        def calculate_rouge_score(reference, hypothesis):
-            reference = tensor_to_list(reference)
-            hypothesis = tensor_to_list(hypothesis)
+        for reference, hypothesis in zip(y_true, y_pred):
             score = self._rouge_scorer.score(reference, hypothesis)[
                 self.variant
             ]
-            return score.precision, score.recall, score.fmeasure
+            self._rouge_precision.assign_add(score.precision)
+            self._rouge_recall.assign_add(score.recall)
+            self._rouge_f1_score.assign_add(score.fmeasure)
 
-        for batch_idx in range(batch_size):
-            score = calculate_rouge_score(y_true[batch_idx], y_pred[batch_idx])
-            self._rouge_precision.assign_add(score[0])
-            self._rouge_recall.assign_add(score[1])
-            self._rouge_f1_score.assign_add(score[2])
-
-        self._number_of_samples.assign_add(
-            ops.cast(convert_to_numpy(batch_size), dtype=self.dtype)
-        )
+        self._number_of_samples.assign_add(len(y_true))
 
     def result(self):
         if self._number_of_samples == 0:

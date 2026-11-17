@@ -1,19 +1,14 @@
 import collections
 import math
+import re
 
 import keras
 from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.utils.tensor_utils import assert_tf_installed
+from keras_hub.src.metrics.metric_utils import to_nested_list
+from keras_hub.src.metrics.metric_utils import validate_and_fix_rank
 from keras_hub.src.utils.tensor_utils import is_float_dtype
-from keras_hub.src.utils.tensor_utils import tensor_to_list
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
-
 
 REPLACE_SUBSTRINGS = [
     ("<skipped>", ""),
@@ -28,18 +23,27 @@ REPLACE_SUBSTRINGS = [
 
 REGEX_PATTERNS = [
     # language-dependent part (assuming Western languages)
-    (r"([\{-\~\[-\` -\&\(-\+\:-\@\/])", r" \1 "),
+    (re.compile(r"([\{-\~\[-\` -\&\(-\+\:-\@\/])"), r" \1 "),
     # tokenize period and comma unless preceded by a digit
-    (r"([^0-9])([\.,])", r"\1 \2 "),
+    (re.compile(r"([^0-9])([\.,])"), r"\1 \2 "),
     # tokenize period and comma unless followed by a digit
-    (r"([\.,])([^0-9])", r" \1 \2"),
+    (re.compile(r"([\.,])([^0-9])"), r" \1 \2"),
     # tokenize dash when preceded by a digit
-    (r"([0-9])(-)", r"\1 \2 "),
+    (re.compile(r"([0-9])(-)"), r"\1 \2 "),
     # If last character is "." or ",", add space.
-    (r"[\.,]$", r" \0 \1"),
+    (re.compile(r"[\.,]$"), r" \g<0> "),
     # one space only between words
-    (r"\s+", r" "),
+    (re.compile(r"\s+"), r" "),
 ]
+
+
+def _tokenize_13a(text):
+    """Tokenize a single string like SacreBLEU's `tokenizer_13a`."""
+    for substring, replacement in REPLACE_SUBSTRINGS:
+        text = text.replace(substring, replacement)
+    for pattern, replacement in REGEX_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text.split()
 
 
 @keras_hub_export("keras_hub.metrics.Bleu")
@@ -69,11 +73,11 @@ class Bleu(keras.metrics.Metric):
     references.
 
     Args:
-        tokenizer: callable. A function that takes a string `tf.RaggedTensor`
-            (of any shape), and tokenizes the strings in the tensor. If the
-            tokenizer is not specified, the default tokenizer is used. The
-            default tokenizer replicates the behaviour of SacreBLEU's
-            `"tokenizer_13a"` tokenizer
+        tokenizer: callable. A function that takes a single Python string
+            and returns its tokens as a list, array or tensor. It is called
+            once per string. If the tokenizer is not specified, the default
+            tokenizer is used. The default tokenizer replicates the behaviour
+            of SacreBLEU's `"tokenizer_13a"` tokenizer
             (https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
@@ -102,7 +106,6 @@ class Bleu(keras.metrics.Metric):
         name="bleu",
         **kwargs,
     ):
-        assert_tf_installed(self.__class__.__name__)
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_float_dtype(dtype):
@@ -146,24 +149,27 @@ class Bleu(keras.metrics.Metric):
             name="bleu",
         )
 
-    def _tokenizer(self, inputs):
-        """
-        Tokenizes the input strings. By default, replicates the behaviour of
-        SacreBLEU's default tokenizer, namely, `tokenizer_13a`.
-        """
-        if self.tokenizer:
-            return self.tokenizer(inputs)
+    def _tokenize_string(self, text):
+        """Tokenize a single string to a Python list of tokens.
 
-        for pattern, replacement in REPLACE_SUBSTRINGS + REGEX_PATTERNS:
-            inputs = tf.strings.regex_replace(
-                input=inputs,
-                pattern=pattern,
-                rewrite=replacement,
-                replace_global=True,
-                name=None,
-            )
-        inputs = tf.strings.split(inputs)
-        return inputs
+        By default, replicates the behaviour of SacreBLEU's default tokenizer,
+        namely, `tokenizer_13a`.
+        """
+        if self.tokenizer is None:
+            return _tokenize_13a(text)
+        tokens = self.tokenizer(text)
+        # A custom tokenizer may return a list, a NumPy array, a backend
+        # tensor or a TensorFlow tensor; n-gram counting needs a flat list.
+        tokens = to_nested_list(tokens)
+        if not isinstance(tokens, list):
+            tokens = [tokens]
+        return tokens
+
+    def _tokenizer(self, inputs):
+        """Tokenize a (possibly nested) list of strings, string by string."""
+        if isinstance(inputs, list):
+            return [self._tokenizer(x) for x in inputs]
+        return self._tokenize_string(inputs)
 
     def _get_ngrams(self, segment, max_order):
         """Extracts all n-grams up to a given maximum order from an input.
@@ -279,11 +285,6 @@ class Bleu(keras.metrics.Metric):
         )
 
     def _calculate_bleu_score(self, references, translation):
-        if isinstance(references, (tf.Tensor, tf.RaggedTensor)):
-            references = tensor_to_list(references)
-        if isinstance(translation, (tf.Tensor, tf.RaggedTensor)):
-            translation = tensor_to_list(translation)
-
         matches = self._matches.numpy()
         possible_matches = self._possible_matches.numpy()
         translation_length = self._translation_length.numpy()
@@ -314,30 +315,10 @@ class Bleu(keras.metrics.Metric):
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        def validate_and_fix_rank(inputs, tensor_name, base_rank=0):
-            if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-                inputs = tf.convert_to_tensor(inputs)
-
-            if inputs.shape.rank == base_rank:
-                return inputs[tf.newaxis]
-            elif inputs.shape.rank == base_rank + 1:
-                return inputs
-            elif inputs.shape.rank == base_rank + 2:
-                if tf.shape(inputs)[-1] != 1:
-                    raise ValueError(
-                        f"{tensor_name} is of rank {inputs.shape.rank}. The "
-                        f"last dimension must be of size 1."
-                    )
-                return tf.squeeze(inputs, axis=-1)
-            else:
-                raise ValueError(
-                    f"{tensor_name} must be of rank {base_rank}, "
-                    f"{base_rank + 1}, or {base_rank + 2}. "
-                    f"Found rank: {inputs.shape.rank}"
-                )
-
-        y_true = validate_and_fix_rank(y_true, "y_true", 1)
-        y_pred = validate_and_fix_rank(y_pred, "y_pred", 0)
+        # Canonicalize to Python lists: `y_true` becomes a list of lists of
+        # reference strings, `y_pred` a list of translation strings.
+        y_true = validate_and_fix_rank(y_true, "y_true", base_rank=1)
+        y_pred = validate_and_fix_rank(y_pred, "y_pred", base_rank=0)
 
         # Tokenize the inputs.
         y_true = self._tokenizer(y_true)
