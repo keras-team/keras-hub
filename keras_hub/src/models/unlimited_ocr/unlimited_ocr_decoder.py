@@ -45,6 +45,12 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             experts. If `False`, the feedforward block is a dense MLP.
         routed_scaling_factor: float. The factor that scales the routing
             weights. Defaults to `1.0`.
+        topk_method: string. Either `"greedy"` or `"group_limited_greedy"`.
+            Defaults to `"greedy"`.
+        num_expert_groups: int. The number of expert groups for
+            `"group_limited_greedy"`. Defaults to `1`.
+        num_topk_groups: int. The number of groups that each token keeps for
+            `"group_limited_greedy"`. Defaults to `1`.
         rope_max_wavelength: int. The maximum wavelength of the rotary
             embedding. Defaults to `10000`.
         layer_norm_epsilon: float. The epsilon of the RMS norm layers.
@@ -66,6 +72,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
         top_k,
         sparse=True,
         routed_scaling_factor=1.0,
+        topk_method="greedy",
+        num_expert_groups=1,
+        num_topk_groups=1,
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-6,
         sliding_window=128,
@@ -83,6 +92,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
         self.top_k = top_k
         self.sparse = sparse
         self.routed_scaling_factor = routed_scaling_factor
+        self.topk_method = topk_method
+        self.num_expert_groups = num_expert_groups
+        self.num_topk_groups = num_topk_groups
         self.rope_max_wavelength = rope_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
         self.sliding_window = sliding_window
@@ -117,6 +129,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
                 num_experts=self.num_experts,
                 top_k=self.top_k,
                 routed_scaling_factor=self.routed_scaling_factor,
+                topk_method=self.topk_method,
+                num_expert_groups=self.num_expert_groups,
+                num_topk_groups=self.num_topk_groups,
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 dtype=self.dtype_policy,
                 name="mlp",
@@ -271,6 +286,9 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
                 "top_k": self.top_k,
                 "sparse": self.sparse,
                 "routed_scaling_factor": self.routed_scaling_factor,
+                "topk_method": self.topk_method,
+                "num_expert_groups": self.num_expert_groups,
+                "num_topk_groups": self.num_topk_groups,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "sliding_window": self.sliding_window,

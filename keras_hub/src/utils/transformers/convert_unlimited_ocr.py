@@ -127,9 +127,12 @@ def convert_backbone_config(transformers_config):
         # The original checkpoint has no `layer_types`. Every layer then uses
         # the R-SWA, as in the native class.
         "layer_types": text_config.get("layer_types"),
-        # The original checkpoint config omits the next three keys. The defaults
-        # match the model code.
+        # The original remote checkpoint omits `routed_scaling_factor`,
+        # `rope_parameters` and `rms_norm_eps`.
         "routed_scaling_factor": text_config.get("routed_scaling_factor", 1.0),
+        "topk_method": text_config["topk_method"],
+        "num_expert_groups": text_config["n_group"],
+        "num_topk_groups": text_config["topk_group"],
         "rope_max_wavelength": text_config.get("rope_parameters", {}).get(
             "rope_theta", _DEFAULT_ROPE_THETA
         ),

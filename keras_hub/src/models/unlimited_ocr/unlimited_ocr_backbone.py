@@ -103,6 +103,15 @@ class UnlimitedOCRBackbone(Backbone):
             `num_query_heads`. Defaults to `None`.
         routed_scaling_factor: float. The factor that scales the routing
             weights. Defaults to `1.0`.
+        topk_method: string. Either `"greedy"` or `"group_limited_greedy"`.
+            `"group_limited_greedy"` picks the experts only from the
+            `num_topk_groups` groups with the highest group score. Defaults to
+            `"greedy"`.
+        num_expert_groups: int. The number of expert groups for
+            `"group_limited_greedy"`. `num_experts` must be divisible by it.
+            Defaults to `1`.
+        num_topk_groups: int. The number of groups that each token keeps for
+            `"group_limited_greedy"`. Defaults to `1`.
         rope_max_wavelength: int. The maximum wavelength of the rotary
             embedding. Defaults to `10000`.
         layer_norm_epsilon: float. The epsilon of the RMS norm layers.
@@ -184,6 +193,9 @@ class UnlimitedOCRBackbone(Backbone):
         layer_types=None,
         num_key_value_heads=None,
         routed_scaling_factor=1.0,
+        topk_method="greedy",
+        num_expert_groups=1,
+        num_topk_groups=1,
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-6,
         sliding_window=128,
@@ -239,6 +251,9 @@ class UnlimitedOCRBackbone(Backbone):
                 top_k=top_k,
                 sparse=mlp_types[i] == "sparse",
                 routed_scaling_factor=routed_scaling_factor,
+                topk_method=topk_method,
+                num_expert_groups=num_expert_groups,
+                num_topk_groups=num_topk_groups,
                 rope_max_wavelength=rope_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
                 sliding_window=(
@@ -343,6 +358,9 @@ class UnlimitedOCRBackbone(Backbone):
         self.mlp_layer_types = mlp_layer_types
         self.layer_types = layer_types
         self.routed_scaling_factor = routed_scaling_factor
+        self.topk_method = topk_method
+        self.num_expert_groups = num_expert_groups
+        self.num_topk_groups = num_topk_groups
         self.rope_max_wavelength = rope_max_wavelength
         self.layer_norm_epsilon = layer_norm_epsilon
         self.sliding_window = sliding_window
@@ -373,6 +391,9 @@ class UnlimitedOCRBackbone(Backbone):
                 "mlp_layer_types": self.mlp_layer_types,
                 "layer_types": self.layer_types,
                 "routed_scaling_factor": self.routed_scaling_factor,
+                "topk_method": self.topk_method,
+                "num_expert_groups": self.num_expert_groups,
+                "num_topk_groups": self.num_topk_groups,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "sliding_window": self.sliding_window,

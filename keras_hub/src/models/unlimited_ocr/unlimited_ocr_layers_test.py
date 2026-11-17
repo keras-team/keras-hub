@@ -82,6 +82,62 @@ class UnlimitedOCRSparseMoeBlockTest(TestCase):
         output = ops.convert_to_numpy(block(x))
         self.assertAllClose(output[:, :, :4], expected, atol=1e-3, rtol=1e-4)
 
+    def test_group_limited_greedy_routing(self):
+        init_kwargs = {
+            **self.init_kwargs,
+            "num_experts": 8,
+            "top_k": 2,
+            "topk_method": "group_limited_greedy",
+            "num_expert_groups": 4,
+            "num_topk_groups": 1,
+        }
+        block = UnlimitedOCRSparseMoeBlock(**init_kwargs)
+        rng = np.random.RandomState(2)
+        x = rng.normal(size=(2, 6, 16)).astype("float32")
+        block(x)
+        for weight in block.weights:
+            weight.assign(rng.normal(size=weight.shape).astype("float32"))
+        # Values from `UnlimitedOcrTextMoe` in `transformers` 5.22.2. It ran
+        # with `topk_method="group_limited_greedy"` on the same input and
+        # weights. The first four features are kept.
+        expected = [
+            [
+                [-41.9902, 73.4918, -29.1066, 17.4473],
+                [-2.4783, 65.1893, 13.9536, 15.6958],
+                [92.4003, -203.0190, 71.1574, -105.3761],
+                [-1.1046, 22.5325, 40.0432, 6.3617],
+                [98.6388, -140.6958, 134.8698, -150.8628],
+                [-2.7233, -10.3957, 53.0728, 23.5275],
+            ],
+            [
+                [-88.7326, -28.9219, 104.5848, 5.9854],
+                [-22.5478, 39.4027, -6.3636, 68.7357],
+                [-63.6477, -22.1312, -31.9116, -59.5232],
+                [84.2800, -173.6494, 31.3739, -143.1374],
+                [30.2601, 65.0683, 171.4944, -19.0507],
+                [-16.4466, -27.1621, -16.8237, 5.2051],
+            ],
+        ]
+        output = ops.convert_to_numpy(block(x))
+        self.assertAllClose(output[:, :, :4], expected, atol=1e-3, rtol=1e-4)
+
+    def test_invalid_group_arguments(self):
+        with self.assertRaises(ValueError):
+            UnlimitedOCRSparseMoeBlock(**self.init_kwargs, topk_method="x")
+        with self.assertRaises(ValueError):
+            UnlimitedOCRSparseMoeBlock(
+                **self.init_kwargs,
+                topk_method="group_limited_greedy",
+                num_expert_groups=3,
+            )
+        with self.assertRaises(ValueError):
+            UnlimitedOCRSparseMoeBlock(
+                **self.init_kwargs,
+                topk_method="group_limited_greedy",
+                num_expert_groups=2,
+                num_topk_groups=3,
+            )
+
     def test_one_token_input_matches_the_longer_input(self):
         # A decode step has one token. The block gathers the selected
         # experts for it. The output must equal the output of the same
