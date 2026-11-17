@@ -542,23 +542,6 @@ def check_config_class(config):
     return cls
 
 
-def jax_memory_cleanup(layer):
-    # For jax, delete all previous allocated memory to avoid temporarily
-    # duplicating variable allocations. torch and tensorflow have stateful
-    # variable types and do not need this fix.
-    # Skip deletion for sharded arrays to avoid breaking references in
-    # distributed setups.
-    if keras.config.backend() == "jax":
-        for weight in layer.weights:
-            if weight._value is not None:
-                # Do not delete sharded arrays, as they may be referenced in
-                # JAX's distributed computation graph and deletion can cause
-                # errors.
-                sharding = getattr(weight._value, "sharding", None)
-                if sharding is None:
-                    weight._value.delete()
-
-
 def set_dtype_in_config(config, dtype=None):
     if dtype is None:
         return config
@@ -710,7 +693,6 @@ class KerasPresetLoader(PresetLoader):
         config["config"] = {**config["config"], **backbone_kwargs}
         backbone = self._load_serialized_object(config, **kwargs)
         if load_weights:
-            jax_memory_cleanup(backbone)
             self._load_backbone_weights(backbone)
         return backbone
 
@@ -761,11 +743,8 @@ class KerasPresetLoader(PresetLoader):
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
             if has_task_weights and load_task_weights:
-                jax_memory_cleanup(task)
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
-            else:
-                jax_memory_cleanup(task.backbone)
             self._load_backbone_weights(task.backbone)
         return task
 
