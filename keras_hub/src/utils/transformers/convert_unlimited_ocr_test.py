@@ -33,12 +33,15 @@ REAL_CONFIG = {
         "hidden_size": 1280,
         "intermediate_size": 6848,
         "moe_intermediate_size": 896,
+        "n_group": 1,
         "n_routed_experts": 64,
         "n_shared_experts": 2,
         "num_attention_heads": 10,
         "num_key_value_heads": 10,
         "num_experts_per_tok": 6,
         "num_hidden_layers": 12,
+        "topk_group": 1,
+        "topk_method": "greedy",
         "vocab_size": 129280,
         "sliding_window_size": 128,
     },
@@ -168,6 +171,9 @@ class TestUnlimitedOCRConverter(TestCase):
                 "mlp_layer_types": ["dense"] + ["sparse"] * 11,
                 "layer_types": None,
                 "routed_scaling_factor": 1.0,
+                "topk_method": "greedy",
+                "num_expert_groups": 1,
+                "num_topk_groups": 1,
                 "rope_max_wavelength": 10000.0,
                 "layer_norm_epsilon": 1e-6,
                 "sliding_window": 128,
@@ -200,6 +206,9 @@ class TestUnlimitedOCRConverter(TestCase):
                 "n_routed_experts": 4,
                 "n_shared_experts": 2,
                 "num_experts_per_tok": 2,
+                "topk_method": "group_limited_greedy",
+                "n_group": 2,
+                "topk_group": 1,
                 # The dense layer is not a leading run.
                 "mlp_layer_types": ["sparse", "dense", "sparse"],
                 "layer_types": [
@@ -252,6 +261,9 @@ class TestUnlimitedOCRConverter(TestCase):
         self.assertEqual(config["rope_max_wavelength"], 20000.0)
         self.assertEqual(config["layer_norm_epsilon"], 1e-5)
         self.assertEqual(config["sliding_window"], 4)
+        self.assertEqual(config["topk_method"], "group_limited_greedy")
+        self.assertEqual(config["num_expert_groups"], 2)
+        self.assertEqual(config["num_topk_groups"], 1)
         self.assertEqual(config["image_token_id"], 7)
         self.assertEqual(config["global_image_size"], 128)
         vision_encoder = config["vision_encoder"]

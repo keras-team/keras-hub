@@ -260,30 +260,38 @@ class UnlimitedOCRExperts(keras.layers.Layer):
         Returns:
             A float tensor of shape `(tokens, hidden_dim)`.
         """
-        gate_up_kernel = ops.cast(self.gate_up_kernel, hidden_states.dtype)
-        down_kernel = ops.cast(self.down_kernel, hidden_states.dtype)
-
         if top_indices is not None:
-            selected_gate_up = ops.take(gate_up_kernel, top_indices, axis=0)
-            selected_down = ops.take(down_kernel, top_indices, axis=0)
-            gate_up = ops.einsum(
-                "th,tkhf->tkf", hidden_states, selected_gate_up
-            )
-            gate, up = ops.split(gate_up, 2, axis=-1)
-            expert_out = ops.einsum(
-                "tki,tkih->tkh", up * ops.silu(gate), selected_down
-            )
+            # One slot at a time keeps the gathered kernels to
+            # `(tokens, hidden_dim, 2 * intermediate_dim)`, not `top_k` times
+            # that size.
             weights = ops.take_along_axis(routing_weights, top_indices, axis=1)
-            return ops.sum(expert_out * weights[..., None], axis=1)
+            output = ops.zeros_like(hidden_states)
+            for slot in range(top_indices.shape[1]):
+                slot_indices = top_indices[:, slot]
+                selected_gate_up = ops.take(
+                    self.gate_up_kernel, slot_indices, axis=0
+                )
+                selected_down = ops.take(self.down_kernel, slot_indices, axis=0)
+                gate_up = ops.einsum(
+                    "th,thf->tf", hidden_states, selected_gate_up
+                )
+                gate, up = ops.split(gate_up, 2, axis=-1)
+                expert_out = ops.einsum(
+                    "ti,tih->th", up * ops.silu(gate), selected_down
+                )
+                output = output + expert_out * weights[:, slot : slot + 1]
+            return output
 
         # A Python loop unrolls at trace time. `ops.fori_loop` fails on
         # TensorFlow, because the XLA gradient of `tf.while_loop` needs a
         # static bound on the iterations.
         output = ops.zeros_like(hidden_states)
         for index in range(self.num_experts):
-            gate_up = ops.matmul(hidden_states, gate_up_kernel[index])
+            gate_up = ops.matmul(hidden_states, self.gate_up_kernel[index])
             gate, up = ops.split(gate_up, 2, axis=-1)
-            expert_out = ops.matmul(up * ops.silu(gate), down_kernel[index])
+            expert_out = ops.matmul(
+                up * ops.silu(gate), self.down_kernel[index]
+            )
             output = output + expert_out * routing_weights[:, index : index + 1]
         return output
 
@@ -327,6 +335,17 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
         top_k: int. The number of routed experts for each token.
         routed_scaling_factor: float. The factor that scales the routing
             weights. Defaults to `1.0`.
+        topk_method: string. Either `"greedy"` or `"group_limited_greedy"`.
+            `"greedy"` picks the `top_k` experts from all experts.
+            `"group_limited_greedy"` first picks the `num_topk_groups` expert
+            groups with the highest group score, then picks the `top_k`
+            experts from these groups. Defaults to `"greedy"`.
+        num_expert_groups: int. The number of expert groups. The layer uses
+            it only for `"group_limited_greedy"`. `num_experts` must be
+            divisible by it. Defaults to `1`.
+        num_topk_groups: int. The number of groups that the layer keeps for
+            each token. The layer uses it only for `"group_limited_greedy"`.
+            Defaults to `1`.
         kernel_initializer: string or `keras.initializers` initializer. The
             initializer of the kernels. Defaults to `"glorot_uniform"`.
     """
@@ -339,16 +358,38 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
         num_experts,
         top_k,
         routed_scaling_factor=1.0,
+        topk_method="greedy",
+        num_expert_groups=1,
+        num_topk_groups=1,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
+        if topk_method not in ("greedy", "group_limited_greedy"):
+            raise ValueError(
+                '`topk_method` must be `"greedy"` or '
+                f'`"group_limited_greedy"`. Received: {topk_method}'
+            )
+        if topk_method == "group_limited_greedy":
+            if num_experts % num_expert_groups != 0:
+                raise ValueError(
+                    "`num_experts` must be divisible by `num_expert_groups`. "
+                    f"Received: {num_experts} and {num_expert_groups}"
+                )
+            if not 1 <= num_topk_groups <= num_expert_groups:
+                raise ValueError(
+                    "`num_topk_groups` must be between 1 and "
+                    f"`num_expert_groups`. Received: {num_topk_groups}"
+                )
         self.hidden_dim = hidden_dim
         self.moe_intermediate_dim = moe_intermediate_dim
         self.num_shared_experts = num_shared_experts
         self.num_experts = num_experts
         self.top_k = top_k
         self.routed_scaling_factor = routed_scaling_factor
+        self.topk_method = topk_method
+        self.num_expert_groups = num_expert_groups
+        self.num_topk_groups = num_topk_groups
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
     def build(self, decoder_sequence_shape):
@@ -397,6 +438,24 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
             ops.cast(self.router_kernel, "float32"),
         )
         router_probs = ops.softmax(router_logits, axis=-1)
+        if self.topk_method == "group_limited_greedy":
+            # Keep only the experts of the `num_topk_groups` groups with the
+            # highest group score. The score of a group is its highest
+            # expert probability. Other experts get a probability of `0`.
+            group_size = self.num_experts // self.num_expert_groups
+            group_scores = ops.max(
+                ops.reshape(
+                    router_probs, (-1, self.num_expert_groups, group_size)
+                ),
+                axis=-1,
+            )
+            _, group_i = ops.top_k(group_scores, k=self.num_topk_groups)
+            group_mask = ops.sum(
+                ops.one_hot(group_i, self.num_expert_groups), axis=1
+            )
+            router_probs = router_probs * ops.repeat(
+                ops.cast(group_mask, router_probs.dtype), group_size, axis=-1
+            )
         top_p, top_i = ops.top_k(router_probs, k=self.top_k)
         top_p = top_p * self.routed_scaling_factor
 
@@ -424,6 +483,9 @@ class UnlimitedOCRSparseMoeBlock(keras.layers.Layer):
                 "num_experts": self.num_experts,
                 "top_k": self.top_k,
                 "routed_scaling_factor": self.routed_scaling_factor,
+                "topk_method": self.topk_method,
+                "num_expert_groups": self.num_expert_groups,
+                "num_topk_groups": self.num_topk_groups,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
