@@ -9,6 +9,7 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
 from keras_hub.src.samplers.diffusion_sampler import DiffusionSampler
 from keras_hub.src.samplers.serialization import get as get_sampler
+from keras_hub.src.utils.keras_utils import set_backend_generate_function
 from keras_hub.src.utils.tensor_utils import tf
 
 
@@ -109,6 +110,9 @@ class BlockDiffusionLM(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
+        set_backend_generate_function(
+            self, static_argnames=("max_length", "stop_token_ids")
+        )
         if self.generate_function is not None:
             return self.generate_function
 

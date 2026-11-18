@@ -7,6 +7,7 @@ from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
+from keras_hub.src.utils.keras_utils import set_backend_generate_function
 
 try:
     import tensorflow as tf
@@ -122,6 +123,7 @@ class TextToImage(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
+        set_backend_generate_function(self)
         if self.generate_function is not None:
             return self.generate_function
 
