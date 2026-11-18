@@ -6,7 +6,6 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
@@ -169,7 +168,6 @@ class TransformersPresetLoader(PresetLoader):
             keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            jax_memory_cleanup(backbone)
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
