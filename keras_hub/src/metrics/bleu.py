@@ -284,10 +284,10 @@ class Bleu(keras.metrics.Metric):
         if isinstance(translation, (tf.Tensor, tf.RaggedTensor)):
             translation = tensor_to_list(translation)
 
-        matches = self._matches.numpy()
-        possible_matches = self._possible_matches.numpy()
-        translation_length = self._translation_length.numpy()
-        reference_length = self._reference_length.numpy()
+        matches = self._matches.numpy().copy()
+        possible_matches = self._possible_matches.numpy().copy()
+        translation_length = self._translation_length.numpy().copy()
+        reference_length = self._reference_length.numpy().copy()
 
         (
             bleu_score,
