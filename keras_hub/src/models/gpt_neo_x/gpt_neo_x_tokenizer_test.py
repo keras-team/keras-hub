@@ -76,6 +76,27 @@ class GPTNeoXTokenizerTest(TestCase):
                 " airplane airport",
             ],
         )
+        tokens = [
+            [
+                "Ġair",
+                "plane",
+                "   ",
+                "a",
+                "t",
+                "  ",
+                "air",
+                "port",
+                "<|padding|>",
+            ],
+            ["Ġat", "Ċ", "Ċ", "a", "t"],
+        ]
+        ids = [[self.pythia_vocab[t] for t in row] for row in tokens]
+        self.run_preprocessing_layer_test(
+            cls=GPTNeoXTokenizer,
+            init_kwargs=self.pythia_kwargs,
+            input_data=[" airplane   at  airport<|padding|>", " at\n\nat"],
+            expected_output=ids,
+        )
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
@@ -117,6 +138,13 @@ class GPTNeoXTokenizerTest(TestCase):
         )
         self.assertEqual(tokenizer._special_token_attrs.count("pad_token"), 1)
         self.assertIn("<|padding|>", tokenizer.unsplittable_tokens)
+        self.assert_tokens(
+            tokenizer, " at<|padding|>!", ["Ġat", "<|padding|>", "!"]
+        )
+        tokenizer.set_vocabulary_and_merges(
+            self.pythia_vocab, self.pythia_kwargs["merges"]
+        )
+        self.assertEqual(tokenizer._special_token_attrs.count("pad_token"), 1)
 
     def test_explicit_unsplittable_tokens(self):
         tokenizer = GPTNeoXTokenizer(
@@ -130,11 +158,23 @@ class GPTNeoXTokenizerTest(TestCase):
             ["Ġat", "<", "|", "p", "a", "d", "d", "i", "n", "g", "|", ">", "!"],
         )
         self.assertEqual(tokenizer.get_config()["unsplittable_tokens"], [])
+        explicit = ["<|endoftext|>", "<|padding|>"]
+        tokenizer = GPTNeoXTokenizer(
+            unsplittable_tokens=explicit, **self.pythia_kwargs
+        )
+        self.assert_tokens(
+            tokenizer, " at<|padding|>!", ["Ġat", "<|padding|>", "!"]
+        )
+        self.assertEqual(
+            tokenizer.get_config()["unsplittable_tokens"], explicit
+        )
 
     def test_config_round_trip_without_vocabulary(self):
         tokenizer = GPTNeoXTokenizer()
         config = tokenizer.get_config()
         self.assertIsNone(config["unsplittable_tokens"])
+        pythia_config = GPTNeoXTokenizer(**self.pythia_kwargs).get_config()
+        self.assertIsNone(pythia_config["unsplittable_tokens"])
         # A clone made before the vocabulary is known keeps "<|padding|>"
         # whole once it gets a vocabulary that has it.
         clone = GPTNeoXTokenizer.from_config(
@@ -261,6 +301,12 @@ class GPTNeoXTokenizerTest(TestCase):
             self.assertAllEqual(tokenizer(self.ue_texts), ids)
             tokenizer = GPTNeoXTokenizer(dtype="string", **kwargs)
             self.assertAllEqual(tokenizer(self.ue_texts), self.ue_tokens)
+        self.run_preprocessing_layer_test(
+            cls=GPTNeoXTokenizer,
+            init_kwargs=no_unsplittable_kwargs,
+            input_data=self.ue_texts,
+            expected_output=ids,
+        )
 
     def test_rank_2_input_raises(self):
         tokenizer = GPTNeoXTokenizer(**self.pythia_kwargs)
