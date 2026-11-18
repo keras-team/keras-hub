@@ -61,6 +61,7 @@ class Gemma4AspectRatioResizing(keras.layers.Layer):
         else:
             # Eager mode: use backend-agnostic ops (works with concrete
             # numpy/torch/jax arrays).
+            inputs = ops.convert_to_tensor(inputs)
             height = ops.shape(inputs)[1]
             width = ops.shape(inputs)[2]
             total_px = height * width
