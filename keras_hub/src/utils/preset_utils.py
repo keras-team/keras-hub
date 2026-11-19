@@ -4,6 +4,7 @@ import glob
 import inspect
 import json
 import os
+import posixpath
 import re
 
 import keras
@@ -280,7 +281,7 @@ def tf_copy_gfile_to_cache(preset, path):
     if not os.access(base_dir, os.W_OK):
         base_dir = os.path.join("/tmp", ".keras")
 
-    url = os.path.join(preset, path)
+    url = posixpath.join(preset, path)
     model_dir = preset.replace("://", "_").replace("-", "_").replace("/", "_")
     target_dir = os.path.abspath(os.path.join(base_dir, "models", model_dir))
     local_path = os.path.abspath(os.path.join(target_dir, path))

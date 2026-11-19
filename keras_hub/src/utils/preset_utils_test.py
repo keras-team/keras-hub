@@ -1,4 +1,5 @@
 import json
+import ntpath
 import os
 from unittest import mock
 
@@ -18,6 +19,7 @@ from keras_hub.src.tokenizers.tokenizer import Tokenizer
 from keras_hub.src.utils.keras_utils import sharded_weights_available
 from keras_hub.src.utils.preset_utils import CONFIG_FILE
 from keras_hub.src.utils.preset_utils import get_file
+from keras_hub.src.utils.preset_utils import tf_copy_gfile_to_cache
 from keras_hub.src.utils.preset_utils import upload_preset
 
 try:
@@ -278,3 +280,22 @@ class PresetUtilsTest(TestCase):
     def test_custom_config_file(self):
         tokenizer = Tokenizer(config_file="clip_l_tokenizer.json")
         self.assertEqual(tokenizer.config_file, "clip_l_tokenizer.json")
+
+    def test_tf_copy_gfile_to_cache_uses_posix_url(self):
+        fake_tf = mock.MagicMock()
+        with (
+            mock.patch.dict("sys.modules", {"tensorflow": fake_tf}),
+            mock.patch.dict("os.environ", {"KERAS_HOME": "C:\\keras"}),
+            mock.patch("os.access", return_value=True),
+            mock.patch("os.makedirs"),
+            mock.patch("os.path", ntpath),
+            mock.patch("ntpath.exists", return_value=False),
+        ):
+            tf_copy_gfile_to_cache(
+                "gs://bucket/model", "assets/tokenizer/vocabulary.txt"
+            )
+
+        copy_url = fake_tf.io.gfile.copy.call_args[0][0]
+        self.assertEqual(
+            copy_url, "gs://bucket/model/assets/tokenizer/vocabulary.txt"
+        )
