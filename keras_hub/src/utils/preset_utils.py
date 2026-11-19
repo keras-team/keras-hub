@@ -58,6 +58,10 @@ TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
 
+# Allowed form for user/preset supplied config file names,
+# e.g. "tokenizer.json".
+_SAFE_CONFIG_FILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*\.json")
+
 # Weight file names.
 MODEL_WEIGHTS_FILE = "model.weights.h5"
 TASK_WEIGHTS_FILE = "task.weights.h5"
@@ -316,6 +320,33 @@ def check_file_exists(preset, path):
     return True
 
 
+def validate_config_file(config_file):
+    """Check that `config_file` is a plain JSON filename.
+
+    Only bare filenames like `tokenizer.json` are allowed: letters, digits,
+    `_` and `-`, ending in `.json`, with no directories.
+
+    Args:
+        config_file: The config file name to validate.
+
+    Returns:
+        The validated `config_file`.
+
+    Raises:
+        ValueError: If `config_file` is not a plain JSON filename.
+    """
+    if not (
+        isinstance(config_file, str)
+        and _SAFE_CONFIG_FILE_RE.fullmatch(config_file)
+    ):
+        raise ValueError(
+            "`config_file` must be a plain JSON filename matching "
+            "`[A-Za-z0-9][A-Za-z0-9_-]*\\.json` (for example, "
+            f"`'tokenizer.json'`). Received: config_file={config_file!r}"
+        )
+    return config_file
+
+
 def _validate_backbone(preset):
     config_path = os.path.join(preset, CONFIG_FILE)
     if not os.path.exists(config_path):
@@ -511,23 +542,6 @@ def check_config_class(config):
     return cls
 
 
-def jax_memory_cleanup(layer):
-    # For jax, delete all previous allocated memory to avoid temporarily
-    # duplicating variable allocations. torch and tensorflow have stateful
-    # variable types and do not need this fix.
-    # Skip deletion for sharded arrays to avoid breaking references in
-    # distributed setups.
-    if keras.config.backend() == "jax":
-        for weight in layer.weights:
-            if weight._value is not None:
-                # Do not delete sharded arrays, as they may be referenced in
-                # JAX's distributed computation graph and deletion can cause
-                # errors.
-                sharding = getattr(weight._value, "sharding", None)
-                if sharding is None:
-                    weight._value.delete()
-
-
 def set_dtype_in_config(config, dtype=None):
     if dtype is None:
         return config
@@ -679,7 +693,6 @@ class KerasPresetLoader(PresetLoader):
         config["config"] = {**config["config"], **backbone_kwargs}
         backbone = self._load_serialized_object(config, **kwargs)
         if load_weights:
-            jax_memory_cleanup(backbone)
             self._load_backbone_weights(backbone)
         return backbone
 
@@ -730,11 +743,8 @@ class KerasPresetLoader(PresetLoader):
         if load_weights:
             has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
             if has_task_weights and load_task_weights:
-                jax_memory_cleanup(task)
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
-            else:
-                jax_memory_cleanup(task.backbone)
             self._load_backbone_weights(task.backbone)
         return task
 
@@ -881,7 +891,7 @@ class KerasPresetSaver:
     def save_tokenizer(self, tokenizer):
         config_file = TOKENIZER_CONFIG_FILE
         if hasattr(tokenizer, "config_file"):
-            config_file = tokenizer.config_file
+            config_file = validate_config_file(tokenizer.config_file)
         self._save_serialized_object(tokenizer, config_file)
         # Save assets.
         subdir = config_file.split(".")[0]
@@ -922,7 +932,7 @@ class KerasPresetSaver:
     def save_preprocessor(self, preprocessor):
         config_file = PREPROCESSOR_CONFIG_FILE
         if hasattr(preprocessor, "config_file"):
-            config_file = preprocessor.config_file
+            config_file = validate_config_file(preprocessor.config_file)
         self._save_serialized_object(preprocessor, config_file)
         for layer in preprocessor._flatten_layers(include_self=False):
             if hasattr(layer, "save_to_preset"):

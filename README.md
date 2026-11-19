@@ -50,6 +50,7 @@ Choose a backend:
 
 ```python
 import os
+
 os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow" or "torch"!
 ```
 
@@ -132,6 +133,7 @@ Or in Colab, with:
 
 ```python
 import os
+
 os.environ["KERAS_BACKEND"] = "jax"
 
 import keras_hub

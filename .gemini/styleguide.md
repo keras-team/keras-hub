@@ -684,18 +684,20 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
-    
+
     # Transformer layers
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"transformer_layer_{i}")
         hf_prefix = f"model.layers.{i}"
-        
+
         # Attention weights
         loader.port_weight(
             keras_variable=layer.attention.query_dense.kernel,
             hf_weight_key=f"{hf_prefix}.self_attn.q_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
-                np.reshape(hf_tensor, (keras_shape[0], keras_shape[2], keras_shape[1])),
+                np.reshape(
+                    hf_tensor, (keras_shape[0], keras_shape[2], keras_shape[1])
+                ),
                 axes=(0, 2, 1),
             ),
         )
@@ -716,7 +718,9 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.models.my_model.my_model_text_classifier import MyModelTextClassifier
+from keras_hub.src.models.my_model.my_model_text_classifier import (
+    MyModelTextClassifier,
+)
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase
 
@@ -738,7 +742,7 @@ class TestMyModelConverter(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model, MyModelTextClassifier)
-        
+
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
             load_weights=False,

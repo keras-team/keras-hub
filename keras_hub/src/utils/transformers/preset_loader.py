@@ -6,7 +6,6 @@ from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.models.token_classifier import TokenClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
@@ -37,6 +36,7 @@ from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_openai_privacy_filter
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
+from keras_hub.src.utils.transformers import convert_qwen2_vl
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
@@ -119,6 +119,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_vit
         elif model_type == "qwen2":
             self.converter = convert_qwen
+        elif model_type == "qwen2_vl":
+            self.converter = convert_qwen2_vl
         elif model_type == "mixtral":
             self.converter = convert_mixtral
         elif model_type == "qwen2_moe":
@@ -169,7 +171,6 @@ class TransformersPresetLoader(PresetLoader):
             keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            jax_memory_cleanup(backbone)
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
