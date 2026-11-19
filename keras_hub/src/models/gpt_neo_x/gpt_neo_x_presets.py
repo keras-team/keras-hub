@@ -9,7 +9,7 @@ backbone_presets = {
             "params": 14067712,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_14m_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_14m_en/1",
     },
     "pythia_70m_en": {
         "metadata": {
@@ -19,7 +19,7 @@ backbone_presets = {
             "params": 70426624,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_70m_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_70m_en/1",
     },
     "pythia_160m_en": {
         "metadata": {
@@ -29,7 +29,7 @@ backbone_presets = {
             "params": 162322944,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_160m_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_160m_en/1",
     },
     "pythia_410m_en": {
         "metadata": {
@@ -39,7 +39,7 @@ backbone_presets = {
             "params": 405334016,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_410m_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_410m_en/1",
     },
     "pythia_1.4b_en": {
         "metadata": {
@@ -49,7 +49,7 @@ backbone_presets = {
             "params": 1414647808,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_1.4b_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_1.4b_en/1",
     },
     "pythia_2.8b_en": {
         "metadata": {
@@ -59,7 +59,7 @@ backbone_presets = {
             "params": 2775208960,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_2.8b_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_2.8b_en/1",
     },
     "pythia_6.9b_en": {
         "metadata": {
@@ -69,7 +69,7 @@ backbone_presets = {
             "params": 6857302016,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_6.9b_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_6.9b_en/1",
     },
     "pythia_12b_en": {
         "metadata": {
@@ -79,7 +79,7 @@ backbone_presets = {
             "params": 11846072320,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/pythia_12b_en/1",
+        "kaggle_handle": "kaggle://keras/pythia/keras/pythia_12b_en/1",
     },
     "gpt_neox_20b_en": {
         "metadata": {
@@ -89,6 +89,6 @@ backbone_presets = {
             "params": 20554567680,
             "path": "gpt_neo_x",
         },
-        "kaggle_handle": "kaggle://keras/gpt_neox/keras/gpt_neox_20b_en/1",
+        "kaggle_handle": "kaggle://keras/gpt-neox/keras/gpt_neox_20b_en/1",
     },
 }

@@ -250,9 +250,12 @@ class GPTNeoXCausalLMTest(TestCase):
         ]
         for preset in expected_presets:
             self.assertIn(preset, GPTNeoXCausalLM.presets)
+            model_page = (
+                "pythia" if preset.startswith("pythia_") else "gpt-neox"
+            )
             self.assertTrue(
                 GPTNeoXCausalLM.presets[preset]["kaggle_handle"].startswith(
-                    f"kaggle://keras/gpt_neox/keras/{preset}/"
+                    f"kaggle://keras/{model_page}/keras/{preset}/"
                 )
             )
 
