@@ -1,0 +1,193 @@
+import keras
+import numpy as np
+import pytest
+
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_backbone import (
+    Qwen2_5VLBackbone,
+)
+from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_vision_encoder import (
+    Qwen2_5VLVisionEncoder,
+)
+from keras_hub.src.tests.test_case import TestCase
+
+
+class Qwen2_5VLBackboneTest(TestCase):
+    def setUp(self):
+        self.init_kwargs = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 128,
+            "intermediate_dim": 256,
+        }
+        self.input_data = {
+            "token_ids": np.array([[1, 2, 3, 4, 5]]),
+            "padding_mask": np.array([[1, 1, 1, 1, 1]]),
+        }
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=Qwen2_5VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape=(1, 5, 128),
+        )
+
+    def test_num_parameters(self):
+        model = Qwen2_5VLBackbone(**self.init_kwargs)
+        # Pinned so architecture changes have to be intentional.
+        self.assertEqual(model.count_params(), 552064)
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=Qwen2_5VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in Qwen2_5VLBackbone.presets:
+            self.run_preset_test(
+                cls=Qwen2_5VLBackbone,
+                preset=preset,
+                input_data=self.input_data,
+            )
+
+
+class Qwen2_5VLMultimodalBackboneTest(TestCase):
+    """Tests for the backbone with a vision encoder attached."""
+
+    def setUp(self):
+        self.vision_encoder = Qwen2_5VLVisionEncoder(
+            patch_size=14,
+            temporal_patch_size=2,
+            in_channels=3,
+            embed_dim=64,
+            out_dim=128,
+            depth=2,
+            num_heads=4,
+            intermediate_dim=256,
+            spatial_merge_size=2,
+        )
+        self.init_kwargs = {
+            "vocabulary_size": 1000,
+            "num_layers": 2,
+            "num_query_heads": 8,
+            "num_key_value_heads": 4,
+            "hidden_dim": 128,
+            "intermediate_dim": 256,
+            # head_dim = 128/8 = 16 → sections must sum to 8.
+            "mrope_section": [2, 3, 3],
+            "vision_encoder": self.vision_encoder,
+        }
+        self.input_data = {
+            "token_ids": np.array([[1, 2, 3, 4, 5]]),
+            "padding_mask": np.array([[1, 1, 1, 1, 1]]),
+        }
+
+    def _vision_inputs(self, seq_len=5):
+        """2 merged vision tokens from grid [2, 2, 2] at positions 1, 2."""
+        grid_thw = np.array([[[2, 2, 2]]], dtype="int32")
+        pixel_values = np.random.rand(1, 8, 2, 14, 14, 3).astype("float32")
+        vision_indices = np.array([[1, 2]], dtype="int32")
+        # Sequential positions (equivalent to 1-D RoPE).
+        position_ids = np.broadcast_to(
+            np.arange(seq_len)[None, None, :], (1, 3, seq_len)
+        ).astype("int32")
+        token_ids = np.full((1, seq_len), 5, dtype="int32")
+        token_ids[0, :3] = [1, 999, 999]
+        return {
+            "token_ids": token_ids,
+            "padding_mask": np.ones((1, seq_len), dtype="int32"),
+            "pixel_values": pixel_values,
+            "image_grid_thw": grid_thw,
+            "vision_indices": vision_indices,
+            "position_ids": position_ids,
+        }
+
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=Qwen2_5VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self._vision_inputs(),
+            expected_output_shape=(1, 5, 128),
+            variable_length_data=[
+                self._vision_inputs(seq_len) for seq_len in (3, 4)
+            ],
+            run_mixed_precision_check=False,
+            run_quantization_check=False,
+        )
+
+    def test_mixed_bfloat16_forward(self):
+        """Vision interleave must work under a mixed-bfloat16 policy."""
+        previous = keras.mixed_precision.global_policy()
+        keras.mixed_precision.set_global_policy("mixed_bfloat16")
+        try:
+            backbone = Qwen2_5VLBackbone(**self.init_kwargs)
+            output = backbone(self._vision_inputs())
+            self.assertDTypeEqual(output, "bfloat16")
+        finally:
+            keras.mixed_precision.set_global_policy(previous)
+
+    @pytest.mark.large
+    def test_saved_model(self):
+        self.run_model_saving_test(
+            cls=Qwen2_5VLBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self._vision_inputs(),
+        )
+
+    def test_multimodal_backbone_builds(self):
+        model = Qwen2_5VLBackbone(**self.init_kwargs)
+        self.assertGreater(model.count_params(), 0)
+        self.assertIsNotNone(model.vision_encoder)
+        self.assertTrue(hasattr(model, "interleave_embeddings"))
+
+    def test_multimodal_backbone_forward(self):
+        backbone = Qwen2_5VLBackbone(**self.init_kwargs)
+        output = backbone(self._vision_inputs())
+        self.assertEqual(tuple(output.shape), (1, 5, 128))
+
+    def test_backbone_text_only_injection(self):
+        """Multimodal backbone accepts text-only inputs via __call__."""
+        backbone = Qwen2_5VLBackbone(**self.init_kwargs)
+        output = backbone(self.input_data)
+        self.assertEqual(tuple(output.shape), (1, 5, 128))
+
+    def test_backbone_mrope_positions(self):
+        """M-RoPE position ids alter outputs vs. plain sequential RoPE."""
+        backbone = Qwen2_5VLBackbone(**self.init_kwargs)
+        inputs = self._vision_inputs()
+        out_flat = backbone(inputs)
+
+        # The two vision tokens occupy frames t=1 and t=2 (grid t=2),
+        # with h=w=1; text continues from 1 + max(1, 1) = 2.
+        pos_mrope = np.array(
+            [
+                [
+                    [0, 1, 2, 2, 3],
+                    [0, 1, 1, 2, 3],
+                    [0, 1, 1, 2, 3],
+                ]
+            ],
+            dtype="int32",
+        )
+        out_mrope = backbone({**inputs, "position_ids": pos_mrope})
+        self.assertNotAllClose(out_flat, out_mrope)
+
+    def test_backbone_mrope_sequential_equals_1d(self):
+        """Fixed expected output: sequential M-RoPE ids == 1-D RoPE path.
+
+        With all three position channels set to the sequence index, the
+        recomposition produces identical frequencies to plain 1-D RoPE, so
+        the outputs must match exactly.
+        """
+        backbone = Qwen2_5VLBackbone(**self.init_kwargs)
+        inputs = self._vision_inputs()  # sequential (1,3,seq) position_ids
+        out_mrope = backbone(inputs)
+        inputs_1d = {k: v for k, v in inputs.items() if k != "position_ids"}
+        out_1d = backbone(inputs_1d)
+        self.assertAllClose(out_mrope, out_1d, atol=0.0, rtol=0.0)

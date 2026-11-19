@@ -30,6 +30,46 @@ except ImportError:
     tf = None
 
 
+def _flatten_media(node, leaf_ndim):
+    """Recursively flatten arbitrarily nested media to leaf arrays.
+
+    Media values may arrive as plain arrays, lists of arrays (with
+    matching or differing shapes), batched tensors, or nested lists
+    (e.g. media grouped per prompt through `generate()`). A leaf is an
+    array of ``leaf_ndim`` or fewer dims — ``(H, W, C)``/``(H, W)`` for
+    images, ``(T, H, W, C)`` for videos. Deeper arrays are split along
+    axis 0; ragged nodes are flattened element-wise.
+    """
+    if not isinstance(node, (list, tuple)):
+        try:
+            arr = np.asarray(node)
+        except (ValueError, TypeError):
+            arr = None
+        if arr is None or arr.dtype == object:
+            return [node]
+        if arr.ndim <= leaf_ndim:
+            return [arr]
+        return [
+            leaf
+            for i in range(arr.shape[0])
+            for leaf in _flatten_media(arr[i], leaf_ndim)
+        ]
+    try:
+        arr = np.asarray(node)
+    except (ValueError, TypeError):
+        arr = None
+    if arr is not None and arr.dtype != object:
+        if arr.ndim > leaf_ndim:
+            return _flatten_media(arr, leaf_ndim)
+        if arr.ndim <= leaf_ndim and any(
+            isinstance(elem, (list, tuple)) for elem in node
+        ):
+            # A single leaf expressed as nested lists (e.g. a
+            # `RaggedTensor.to_list()` row), not a list of elements.
+            return [arr]
+    return [leaf for elem in node for leaf in _flatten_media(elem, leaf_ndim)]
+
+
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
 class Qwen2VLCausalLMPreprocessor(
     QwenVLSpecialTokenMixin, CausalLMPreprocessor
@@ -87,6 +127,14 @@ class Qwen2VLCausalLMPreprocessor(
             **kwargs,
         )
         self.image_converter = image_converter
+        if video_converter is None and image_converter is not None:
+            # HF routes videos through a dedicated video processor with its
+            # own size bounds. Auto-wrap a given image converter so the
+            # image-converter-only + videos configuration still applies
+            # video bounds rather than image bounds.
+            video_converter = self.video_converter_cls(
+                image_converter=image_converter
+            )
         self.video_converter = video_converter
 
         # Token strings — these are static.
@@ -258,7 +306,27 @@ class Qwen2VLCausalLMPreprocessor(
             np.concatenate([img_indices, vid_indices]).astype("int32")
         )
 
-    def _compute_position_ids(self, token_ids, image_grid_thw, video_grid_thw):
+    def _temporal_position(self, frame, is_video, media_index, sgt):
+        """Temporal position component for a vision token.
+
+        Qwen2-VL uses the raw frame index for all media. Subclasses may
+        override to apply time-aware scaling — e.g. Qwen2.5-VL multiplies
+        the frame index by ``tokens_per_second * second_per_grid_ts``.
+
+        Args:
+            frame: int. Temporal patch index of the token.
+            is_video: bool. Whether the token belongs to a video span.
+            media_index: int. Index of the media item in its grid.
+            sgt: ``second_per_grid_ts`` list from ``_compute_position_ids``,
+                or ``None``.
+        Returns:
+            int temporal offset to add to the span's ``current_pos``.
+        """
+        return frame
+
+    def _compute_position_ids(
+        self, token_ids, image_grid_thw, video_grid_thw, second_per_grid_ts=None
+    ):
         """Build 3-channel M-RoPE position IDs matching HF's algorithm.
 
         For text tokens all 3 channels hold the same sequential position.
@@ -279,6 +347,9 @@ class Qwen2VLCausalLMPreprocessor(
             token_ids: int32 tensor ``(batch, seq_len)``.
             image_grid_thw: int32 tensor ``(num_images, 3)`` or ``None``.
             video_grid_thw: int32 tensor ``(num_videos, 3)`` or ``None``.
+            second_per_grid_ts: optional per-video temporal scale. Unused by
+                Qwen2-VL (fixed interval 1); consumed by subclasses via
+                ``_temporal_position``.
         Returns:
             int32 tensor ``(batch, 3, seq_len)``.
         """
@@ -326,11 +397,13 @@ class Qwen2VLCausalLMPreprocessor(
                         t_grid = int(image_grid_np[img_idx, 0])
                         h_grid = int(image_grid_np[img_idx, 1])
                         w_grid = int(image_grid_np[img_idx, 2])
+                        media_index = img_idx
                         img_idx += 1
                     else:
                         t_grid = int(video_grid_np[vid_idx, 0])
                         h_grid = int(video_grid_np[vid_idx, 1])
                         w_grid = int(video_grid_np[vid_idx, 2])
+                        media_index = vid_idx
                         vid_idx += 1
 
                     llm_grid_h = h_grid // merge_size
@@ -343,7 +416,12 @@ class Qwen2VLCausalLMPreprocessor(
                         frame = vi // frame_tokens
                         h_idx = (vi // llm_grid_w) % llm_grid_h
                         w_idx = vi % llm_grid_w
-                        t_pos[i + vi] = current_pos + frame
+                        t_pos[i + vi] = current_pos + self._temporal_position(
+                            frame,
+                            is_video,
+                            media_index,
+                            second_per_grid_ts,
+                        )
                         h_pos[i + vi] = current_pos + h_idx
                         w_pos[i + vi] = current_pos + w_idx
 
@@ -388,23 +466,13 @@ class Qwen2VLCausalLMPreprocessor(
             dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
             ``image_grid_thw`` ``(num_images, 3)``.
         """
-        # Normalize to a flat list of individual 3-D images. A list of
-        # differently-shaped images arrives as a `tf.RaggedTensor` after
-        # preprocessing input conversion.
+        # Normalize to a flat list of individual 3-D images. Media may
+        # arrive nested (e.g. per-prompt batching through `generate()`),
+        # as `tf.RaggedTensor`s, or as dense tensors; flatten
+        # recursively to leaf arrays.
         if tf is not None and isinstance(images, tf.RaggedTensor):
-            flat_images = [np.array(img.to_list()) for img in images]
-        elif isinstance(images, (list, tuple)):
-            flat_images = []
-            for img in images:
-                if hasattr(img, "shape") and len(img.shape) == 4:
-                    for i in range(img.shape[0]):
-                        flat_images.append(img[i])
-                else:
-                    flat_images.append(img)
-        elif hasattr(images, "shape") and len(images.shape) == 4:
-            flat_images = [images[i] for i in range(images.shape[0])]
-        else:
-            flat_images = [images]
+            images = images.to_list()
+        flat_images = _flatten_media(images, leaf_ndim=3)
 
         all_patches = []
         all_grid_thw = []
@@ -437,20 +505,10 @@ class Qwen2VLCausalLMPreprocessor(
             dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
             ``grid_thw`` ``(num_videos, 3)``.
         """
+        # Same flattening as images, with 4-D ``(T, H, W, C)`` leaves.
         if tf is not None and isinstance(videos, tf.RaggedTensor):
-            flat_videos = [np.array(vid.to_list()) for vid in videos]
-        elif isinstance(videos, (list, tuple)):
-            flat_videos = []
-            for vid in videos:
-                if hasattr(vid, "shape") and len(vid.shape) == 5:
-                    for i in range(vid.shape[0]):
-                        flat_videos.append(vid[i])
-                else:
-                    flat_videos.append(vid)
-        elif hasattr(videos, "shape") and len(videos.shape) == 5:
-            flat_videos = [videos[i] for i in range(videos.shape[0])]
-        else:
-            flat_videos = [videos]
+            videos = videos.to_list()
+        flat_videos = _flatten_media(videos, leaf_ndim=4)
 
         converter = self.video_converter or self.image_converter
         all_patches = []
@@ -577,7 +635,10 @@ class Qwen2VLCausalLMPreprocessor(
                 vision_out_videos["grid_thw"] if vision_out_videos else None
             )
             pos_ids = self._compute_position_ids(
-                x_out["token_ids"], img_grid, vid_grid
+                x_out["token_ids"],
+                img_grid,
+                vid_grid,
+                second_per_grid_ts=x.get("second_per_grid_ts"),
             )
             x_out["vision_indices"] = vision_indices
             x_out["position_ids"] = pos_ids
@@ -665,7 +726,12 @@ class Qwen2VLCausalLMPreprocessor(
 
         img_grid = vision_out_images["grid_thw"] if vision_out_images else None
         vid_grid = vision_out_videos["grid_thw"] if vision_out_videos else None
-        pos_ids = self._compute_position_ids(token_ids, img_grid, vid_grid)
+        pos_ids = self._compute_position_ids(
+            token_ids,
+            img_grid,
+            vid_grid,
+            second_per_grid_ts=x.get("second_per_grid_ts"),
+        )
 
         # 7. Build combined pixel_values / image_grid_thw for the encoder.
         pixel_values_list = []
