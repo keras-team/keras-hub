@@ -208,7 +208,22 @@ class UnlimitedOCRCausalLM(CausalLM):
             prefill_hidden, reverse=True
         )
 
+        # OpenVINO loop bodies read only loop variables. The sampler passes
+        # `cache` through the loop, so the cache carries these tensors. Each
+        # tensor has the batch size as its first axis.
+        first_index = ops.broadcast_to(first_index, (batch_size,))
+        cache = (
+            cache,
+            prefill_logits,
+            prefill_hidden,
+            row_lengths,
+            first_index,
+        )
+
         def next(prompt, cache, index):
+            cache, prefill_logits, prefill_hidden, row_lengths, first_index = (
+                cache
+            )
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
@@ -221,11 +236,17 @@ class UnlimitedOCRCausalLM(CausalLM):
             )
             logits = ops.squeeze(logits, axis=1)
             hidden_states = ops.squeeze(hidden_states, axis=1)
-            is_first_step = ops.equal(index, first_index)
+            is_first_step = ops.equal(index, first_index[0])
             return (
                 ops.where(is_first_step, prefill_logits, logits),
                 ops.where(is_first_step, prefill_hidden, hidden_states),
-                cache,
+                (
+                    cache,
+                    prefill_logits,
+                    prefill_hidden,
+                    row_lengths,
+                    first_index,
+                ),
             )
 
         token_ids = self.sampler(
