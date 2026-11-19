@@ -4,6 +4,9 @@ import keras
 import numpy as np
 
 import keras_hub
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
+    OCR_MARKER_TOKENS,
+)
 
 
 class NoTensorflow(unittest.TestCase):
@@ -204,3 +207,77 @@ class NoTensorflow(unittest.TestCase):
             keras_hub.layers.RandomDeletion(
                 rate=0.5, max_deletions=1, skip_fn=skip_fn
             )
+
+    def test_unlimited_ocr_generate_works(self):
+        merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
+        vocab += ["<｜▁pad▁｜>", "<image>"]
+        vocab += list(OCR_MARKER_TOKENS)
+        vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
+        tokenizer = keras_hub.models.UnlimitedOCRTokenizer(
+            vocabulary=vocab, merges=merges
+        )
+        converter = keras_hub.layers.UnlimitedOCRImageConverter(
+            global_size=64,
+            tile_size=40,
+            min_tiles=2,
+            max_tiles=6,
+            patch_size=8,
+            downsample_ratio=4,
+        )
+        preprocessor = keras_hub.models.UnlimitedOCRCausalLMPreprocessor(
+            tokenizer, image_converter=converter, sequence_length=40
+        )
+        image = np.ones((30, 30, 3), dtype="float32")
+        inputs = preprocessor.generate_preprocess(
+            {"prompts": ["<image>airplane at airport"], "images": [image]}
+        )
+        self.assertEqual(np.shape(inputs["token_ids"]), (1, 40))
+        self.assertEqual(np.shape(inputs["patches_grid"]), (1, 1, 2))
+        vision_encoder = keras_hub.models.UnlimitedOCRVisionEncoder(
+            sam_hidden_dim=16,
+            sam_num_layers=2,
+            sam_num_heads=2,
+            sam_mlp_dim=32,
+            sam_output_channels=8,
+            sam_patch_size=8,
+            sam_image_size=128,
+            sam_window_size=4,
+            sam_global_attn_indexes=(1,),
+            sam_downsample_channels=(12, 16),
+            clip_hidden_dim=16,
+            clip_num_layers=2,
+            clip_num_heads=2,
+            clip_intermediate_dim=32,
+            clip_image_size=48,
+            clip_patch_size=16,
+        )
+        backbone = keras_hub.models.UnlimitedOCRBackbone(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=2,
+            hidden_dim=16,
+            intermediate_dim=32,
+            moe_intermediate_dim=8,
+            num_shared_experts=2,
+            num_experts=4,
+            top_k=2,
+            vision_encoder=vision_encoder,
+            image_token_id=tokenizer.image_token_id,
+            global_image_size=64,
+            local_image_size=40,
+            sliding_window=128,
+        )
+        causal_lm = keras_hub.models.UnlimitedOCRCausalLM(
+            backbone=backbone, preprocessor=preprocessor
+        )
+        output = causal_lm.generate(
+            {"prompts": ["<image>airplane at airport"], "images": [image]}
+        )
+        self.assertIn("airplane at airport", output[0])

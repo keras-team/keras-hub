@@ -229,6 +229,8 @@ class UnlimitedOCRResizeTest(TestCase):
 
     def test_bicubic_resize_matches_keras_antialias_resize(self):
         # Keras resizes with the same kernel as PyTorch `antialias=True`.
+        if keras.config.backend() == "openvino":
+            self.skipTest("The bicubic resize of OpenVINO ignores `antialias`.")
         x = np.random.normal(size=(1, 16, 16, 3)).astype("float32")
         for size in ((10, 10), (5, 7), (16, 16)):
             expected = ops.image.resize(

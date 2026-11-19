@@ -25,8 +25,9 @@ def _bicubic_antialias_matrix(size_in, size_out):
     align_corners=False)` of PyTorch. A strided window scales the kernel
     when the axis shrinks. The weights of every output index sum to one.
     The sizes are static, so the weights are constants. The resize then runs
-    as a matrix product. TensorFlow uses this path, because its antialiased
-    resize op (`ScaleAndTranslate`) has no XLA kernel.
+    as a matrix product. TensorFlow and OpenVINO use this path. The
+    antialiased resize op of TensorFlow (`ScaleAndTranslate`) has no XLA
+    kernel. The bicubic resize of OpenVINO ignores `antialias`.
 
     Args:
         size_in: int. The input size of the axis.
@@ -56,8 +57,12 @@ def _resize_bicubic(x, size):
     """
     dtype = x.dtype
     x = ops.cast(x, "float32")
-    if keras.config.backend() == "tensorflow":
+    if keras.config.backend() in ("tensorflow", "openvino"):
         # The antialiased resize op of TensorFlow does not compile with XLA.
+        # The bicubic resize of OpenVINO ignores `antialias` and clamps the
+        # edge indices, so its result differs from PyTorch.
+        # TODO: Remove "openvino" here when keras-openvino honors `antialias`
+        # for bicubic.
         height_weights = ops.convert_to_tensor(
             _bicubic_antialias_matrix(x.shape[1], size[0]), dtype="float32"
         )
@@ -537,10 +542,10 @@ class UnlimitedOCRImageFeatureExtractor(keras.layers.Layer):
             features = self.vision_encoder(pixel_values)
             return self.multimodal_projector(features)
 
-        def skip():
+        def skip(batch=0):
             return ops.zeros(
                 (
-                    0,
+                    batch,
                     self._num_tokens(image_shape),
                     self.multimodal_projector.units,
                 ),
@@ -554,7 +559,10 @@ class UnlimitedOCRImageFeatureExtractor(keras.layers.Layer):
             return encode()
         # The batch size is unknown while TensorFlow traces a graph. A text
         # batch then reaches the encoder with no image, so check at run time.
-        return ops.cond(ops.shape(pixel_values)[0] > 0, encode, skip)
+        # OpenVINO merges the two branches with a broadcasting select. The
+        # skip branch takes the input batch size, so the shapes match.
+        batch = ops.shape(pixel_values)[0]
+        return ops.cond(batch > 0, encode, lambda: skip(batch))
 
     def _flatten(self, images):
         return ops.reshape(images, (-1, *images.shape[2:]))
