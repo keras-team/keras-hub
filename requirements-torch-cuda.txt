@@ -1,6 +1,6 @@
 # Tensorflow cpu-only version.
-tensorflow-cpu
-tensorflow-text>=2.20.1
+tensorflow-cpu==2.21.0
+tensorflow-text==2.21.1
 
 # Torch with cuda support.
 --extra-index-url https://download.pytorch.org/whl/cu126
@@ -8,6 +8,6 @@ torch==2.14.1+cu126
 torchvision==0.29.1+cu126
 
 # Jax cpu-only version.
-jax[cpu]
+jax[cpu]==0.10.2
 
 -r requirements-common.txt

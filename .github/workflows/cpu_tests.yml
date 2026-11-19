@@ -15,6 +15,10 @@ on:
         description: 'Timeout in minutes for each test job'
         type: number
         default: 120
+      use_latest_deps:
+        description: 'Ignore the == pins and install the latest releases'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -57,7 +61,15 @@ jobs:
       with:
         persist-credentials: false
     - name: Install dependencies
+      env:
+        USE_LATEST_DEPS: ${{ inputs.use_latest_deps }}
       run: |
+          if [ "$USE_LATEST_DEPS" = "true" ]; then
+            # Nightly only: drop every `==version` so pip resolves the latest
+            # releases. Markers after `;`, extras such as `jax[cpu]`, comments,
+            # `-r` and `--extra-index-url` lines are left as they are.
+            sed -i -E 's/^([A-Za-z0-9._-]+(\[[^]]+\])?)==[^;[:space:]]+/\1/' requirements.txt requirements-common.txt
+          fi
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
     - name: Install OpenVINO backend plugin

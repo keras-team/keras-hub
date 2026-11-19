@@ -16,13 +16,10 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
     cooldown:
       default-days: 7
     groups:
       python:
         patterns:
           - "*"
-    ignore:
-      # ignore all updates for JAX GPU due to cuda version issue
-      - dependency-name: "jax[cuda12_pip]"

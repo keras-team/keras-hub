@@ -1,16 +1,17 @@
 # Tensorflow cpu-only version.
-tensorflow-cpu
-tensorflow-text>=2.20.1
+tensorflow-cpu==2.21.0
+tensorflow-text==2.21.1
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.0
-torchvision>=0.16.0
+torch==2.15.0+cpu
+torchvision==0.29.2+cpu
 
 # Jax with cuda support.
-# Keep same version as Keras repo. Pinned below the latest release because
-# jax 0.10.2 fails to compile Gemma3n `generate` on GPU
-# (https://github.com/jax-ml/jax/issues/39157). Unpin once that is fixed.
+# Keep same version as Keras repo. Held at 0.10.1 because jax 0.10.2 fails to
+# compile Gemma3n `generate` on GPU
+# (https://github.com/jax-ml/jax/issues/39157). Newer jax releases need
+# Python 3.12; revisit when CI moves to 3.12.
 jax[cuda13]==0.10.1
 
 -r requirements-common.txt

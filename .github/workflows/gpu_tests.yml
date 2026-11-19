@@ -90,7 +90,6 @@ jobs:
           echo "pip install failed (attempt $attempt), retrying in 30s"
           sleep 30
         done
-        pip install huggingface_hub --progress-bar off
         pip install --no-deps -e "." --progress-bar off
 
     - name: Test with pytest
