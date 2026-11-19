@@ -205,6 +205,7 @@ class LlamaBackbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "dropout": self.dropout,
+                "tie_word_embeddings": self.tie_word_embeddings,
             }
         )
         return config
