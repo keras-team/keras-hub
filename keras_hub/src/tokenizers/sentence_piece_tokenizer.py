@@ -140,6 +140,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             add_bos=self.add_bos,
             add_eos=self.add_eos,
         )
+        if self._detokenize_proto is None:
+            self._sentence_piece_detokenizer = self._sentence_piece
+        else:
+            self._sentence_piece_detokenizer = tf_text.SentencepieceTokenizer(
+                model=self._detokenize_proto,
+            )
 
     def _set_proto_spm(self, proto):
         out_type = str if is_string_dtype(self.compute_dtype) else int
@@ -164,13 +170,110 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 alpha=1.0,
             )
 
+        # Built on first use, see `_get_spm_detokenizer()`.
+        self._sentence_piece_spm_detokenizer = None
+
+    def _get_spm_detokenizer(self):
+        """Returns the `SentencePieceProcessor` used to detokenize.
+
+        Unlike the TF detokenizer, which must be created outside of any
+        `tf.data` pipeline, this is only built when first needed.
+        """
+        self._maybe_initialized_spm()
+        if self._sentence_piece_spm_detokenizer is None:
+            if self._detokenize_proto is None:
+                detokenizer = self._sentence_piece_spm
+            else:
+                detokenizer = spm.SentencePieceProcessor()
+                detokenizer.LoadFromSerializedProto(self._detokenize_proto)
+            self._sentence_piece_spm_detokenizer = detokenizer
+        return self._sentence_piece_spm_detokenizer
+
+    def _extra_detokenize_pieces(self):
+        """Returns extra pieces that `detokenize()` should decode verbatim.
+
+        Subclasses can override this to list tokens that have an id in the
+        tokenizer, but might not have a piece in the SentencePiece proto, like
+        the DeBERTaV3 `"[MASK]"` token. Each token that is not in the proto is
+        appended, in order, to the proto used to detokenize. See
+        `_build_detokenize_proto()`.
+        """
+        return []
+
+    def _build_detokenize_proto(self, proto):
+        """Build the proto used to detokenize, given the tokenizer's proto.
+
+        SentencePiece marks special tokens like `"<s>"` or `"[CLS]"` as
+        `CONTROL` pieces, which it always decodes to an empty string. To keep
+        detokenization consistent with other KerasHub tokenizers, we decode
+        with a copy of the proto where the tokenizer's special tokens are
+        `USER_DEFINED` pieces instead, which SentencePiece decodes verbatim.
+        The original proto is still used for tokenization, so special tokens
+        appearing in input text are not parsed as special tokens.
+
+        The pieces returned by `_extra_detokenize_pieces()` are also made
+        `USER_DEFINED`, and appended to the copy if the proto does not have
+        them.
+
+        Returns `None` if no piece needs to change.
+        """
+        special_tokens = {token for token in self.special_tokens if token}
+        extra_pieces = self._extra_detokenize_pieces()
+        if spm is None or not (special_tokens or extra_pieces):
+            return None
+
+        from sentencepiece import sentencepiece_model_pb2
+
+        model_proto = sentencepiece_model_pb2.ModelProto()
+        model_proto.ParseFromString(proto)
+        piece_types = sentencepiece_model_pb2.ModelProto.SentencePiece
+        verbatim_pieces = special_tokens.union(extra_pieces)
+        pieces = set()
+        changed = False
+        for piece in model_proto.pieces:
+            pieces.add(piece.piece)
+            if (
+                piece.type == piece_types.CONTROL
+                and piece.piece in verbatim_pieces
+            ):
+                piece.type = piece_types.USER_DEFINED
+                changed = True
+        for token in extra_pieces:
+            if token not in pieces:
+                piece = model_proto.pieces.add()
+                piece.piece = token
+                piece.type = piece_types.USER_DEFINED
+                changed = True
+        if not changed:
+            return None
+        return model_proto.SerializeToString()
+
+    def _detokenize_piece_id(self, piece):
+        """Returns the id of `piece` in the proto used to detokenize.
+
+        This is the id of the piece in the tokenizer's proto, if it has one.
+        Otherwise the piece was appended after the vocabulary, in the order
+        returned by `_extra_detokenize_pieces()`.
+        """
+        if piece in self._token_to_id_map:
+            return self._token_to_id_map[piece]
+        appended = [
+            token
+            for token in self._extra_detokenize_pieces()
+            if token not in self._token_to_id_map
+        ]
+        return self._vocabulary_size + appended.index(piece)
+
     def set_proto(self, proto):
         if proto is None:
             self.proto = None
             # _sentence_piece
             self._sentence_piece = None
+            self._sentence_piece_detokenizer = None
             # _sentence_piece_spm
             self._sentence_piece_spm = None
+            self._sentence_piece_spm_detokenizer = None
+            self._detokenize_proto = None
             self._vocabulary = None
             self._vocabulary_size = None
             self._token_to_id_map = None
@@ -210,6 +313,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"filepath or a `bytes` sequence. "
                 f"Received unknown type: {type(proto)}"
             )
+
+        # Special tokens are detokenized with a separate proto. See
+        # `_build_detokenize_proto()`.
+        self._detokenize_proto = self._build_detokenize_proto(proto_bytes)
 
         # When using `SentencePieceTokenizer` with `tf.data`, it must be built
         # outside the `tf.data` pipeline. So we always call `_set_proto_tf`.
@@ -427,7 +534,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
         # tf-text sentencepiece does not handle int64.
         inputs = tf.cast(inputs, "int32")
-        outputs = self._sentence_piece.detokenize(inputs)
+        outputs = self._sentence_piece_detokenizer.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)
         return outputs
@@ -474,7 +581,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def _detokenize_spm(self, inputs):
         self._maybe_initialized_spm()
         inputs, batched = self._canonicalize_detokenize_spm_inputs(inputs)
-        outputs = self._sentence_piece_spm.Decode(inputs)
+        outputs = self._get_spm_detokenizer().Decode(inputs)
         if not batched:
             outputs = outputs[0]
         return outputs

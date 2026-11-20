@@ -24,6 +24,23 @@ class FNetTokenizerTest(TestCase):
             expected_output=[[5, 10, 6, 8], [5, 7, 9, 11]],
         )
 
+    def test_detokenize_special_tokens(self):
+        for allow_python_workflow in (True, False):
+            tokenizer = FNetTokenizer(
+                **self.init_kwargs,
+                _allow_python_workflow=allow_python_workflow,
+            )
+            input_data = [
+                [
+                    tokenizer.cls_token_id,
+                    *[5, 10, 6, 8],
+                    tokenizer.sep_token_id,
+                    tokenizer.pad_token_id,
+                ]
+            ]
+            output = tokenizer.detokenize(input_data)
+            self.assertAllEqual(output, ["[CLS] the quick brown fox[SEP]<pad>"])
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             FNetTokenizer(
