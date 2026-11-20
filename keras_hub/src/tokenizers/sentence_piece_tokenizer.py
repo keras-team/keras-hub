@@ -216,7 +216,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         try:
             self._set_proto_tf(proto_bytes)
         except ImportError:
-            pass
+            self._sentence_piece = None
 
         # Use native sentencepiece to extract vocabulary metadata.
         # This avoids TF ops (.numpy()), making this code safe in

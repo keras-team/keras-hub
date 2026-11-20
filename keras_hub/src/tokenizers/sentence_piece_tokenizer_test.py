@@ -173,6 +173,12 @@ class SentencePieceTokenizerTest(TestCase):
         output_data = tokenizer(["the quick brown fox."])
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
 
+    def test_attributes_match_revived_without_tensorflow(self):
+        with patch("keras_hub.src.utils.tensor_utils.tf", None):
+            tokenizer = SentencePieceTokenizer(proto=self.proto)
+            revived = SentencePieceTokenizer.from_config(tokenizer.get_config())
+        self.assertEqual(set(dir(tokenizer)), set(dir(revived)))
+
     def test_safe_mode_proto_file_disallowed(self):
         temp_dir = self.get_temp_dir()
         proto_path = os.path.join(temp_dir, "model.spm")

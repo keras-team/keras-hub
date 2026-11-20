@@ -327,9 +327,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self.set_vocabulary_and_merges(vocab_path, merges_path)
 
     def _set_vocabulary_and_merges_tf(self, vocabulary, merges):
-        assert_tf_libs_installed(self.__class__.__name__)
         self.vocabulary = vocabulary.copy()
         self.merges = merges
+        assert_tf_libs_installed(self.__class__.__name__)
         for merge in merges:
             if "#version:" in merge.lstrip():
                 continue

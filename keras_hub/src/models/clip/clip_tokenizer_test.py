@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 import tensorflow as tf
 
@@ -59,6 +61,12 @@ class CLIPTokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             CLIPTokenizer(vocabulary={"foo": 0, "bar": 1}, merges=["fo o"])
+
+    def test_python_workflow_without_tensorflow(self):
+        with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
+            tokenizer = CLIPTokenizer(vocabulary=self.vocab, merges=self.merges)
+            output = tokenizer(self.input_data)
+        self.assertAllEqual(output, [[4, 14], [4, 16]])
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):

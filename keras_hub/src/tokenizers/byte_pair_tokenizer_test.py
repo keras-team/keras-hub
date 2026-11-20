@@ -1,3 +1,5 @@
+from unittest import mock
+
 import keras
 import tensorflow as tf
 from keras.src.saving import serialization_lib
@@ -134,6 +136,16 @@ class BytePairTokenizerTest(TestCase):
             self.tokenizer.id_to_token(self.tokenizer.vocabulary_size())
         with self.assertRaises(ValueError):
             self.tokenizer.id_to_token(-1)
+
+    def test_tf_workflow_without_tensorflow_raises(self):
+        with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
+            tokenizer = BytePairTokenizer(
+                vocabulary=VOCAB_PATH,
+                merges=MERGE_PATH,
+                _allow_python_workflow=False,
+            )
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                tokenizer.tokenize("brown.")
 
     def test_whitespace_split(self):
         input_data = "\n\n\n  s"

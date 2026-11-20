@@ -97,6 +97,14 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
         )
         self.assertAllClose(output["decoder_token_ids"].shape, [1, 8])
 
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
+    def test_grain_pipeline_generate_preprocess(self):
+        preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
+        ds = grain.MapDataset.source([self.input_data[0]])
+        (output,) = list(ds.map(preprocessor.generate_preprocess))
+        assert_grain_safe_types(output)
+        self.assertEqual(output["decoder_token_ids"].shape, (1, 8))
+
     def test_generate_postprocess(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
         input_data = {
