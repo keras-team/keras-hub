@@ -76,6 +76,7 @@ class T5GemmaSeq2SeqLMTest(TestCase):
             ),
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
         # String inputs.
@@ -99,6 +100,7 @@ class T5GemmaSeq2SeqLMTest(TestCase):
             prompt_ids["decoder_padding_mask"][:, :3],
         )
 
+    @pytest.mark.requires_tf
     def test_early_stopping(self):
         causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
         call_decoder_with_cache = causal_lm.call_decoder_with_cache
@@ -136,6 +138,7 @@ class T5GemmaSeq2SeqLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(inputs["decoder_text"], output)
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         causal_lm = T5GemmaSeq2SeqLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.

@@ -11,6 +11,7 @@ from keras_hub.src.models.parseq.parseq_tokenizer import PARSeqTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class PARSeqCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = PARSeqTokenizer()

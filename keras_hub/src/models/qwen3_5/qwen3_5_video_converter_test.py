@@ -5,6 +5,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
     Qwen3_5VideoConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Qwen3_5VideoConverterTest(TestCase):
@@ -48,9 +49,8 @@ class Qwen3_5VideoConverterTest(TestCase):
         self.assertAllEqual(outputs["grid_thw"], [1, 2, 2])
 
     @pytest.mark.extra_large
+    @pytest.mark.requires_tf
     def test_tf_dataset_map(self):
-        import tensorflow as tf
-
         ds = tf.data.Dataset.from_tensor_slices(
             [ops.ones((4, 60, 60, 3), dtype="float32")]
         )

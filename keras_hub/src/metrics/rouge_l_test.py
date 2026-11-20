@@ -1,9 +1,11 @@
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.metrics.rouge_l import RougeL
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class RougeLTest(TestCase):
     def test_initialization(self):
         rouge = RougeL()

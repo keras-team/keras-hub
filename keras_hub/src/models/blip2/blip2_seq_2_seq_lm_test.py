@@ -148,6 +148,7 @@ class BLIP2Seq2SeqLMTest(TestCase):
                 rtol=tol,
             )
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         seq_2_seq_lm = BLIP2Seq2SeqLM(**self.init_kwargs)
         prompt = {
@@ -158,6 +159,7 @@ class BLIP2Seq2SeqLMTest(TestCase):
         seq_2_seq_lm.compile(sampler="top_k")
         seq_2_seq_lm.generate(prompt, max_length=8)
 
+    @pytest.mark.requires_tf
     def test_beam_search(self):
         seq_2_seq_lm = BLIP2Seq2SeqLM(**self.init_kwargs)
         seq_2_seq_lm.compile(sampler="beam")

@@ -1,6 +1,6 @@
 import grain
 import numpy as np
-import tensorflow as tf
+import pytest
 from keras import ops
 from keras import tree
 
@@ -24,8 +24,10 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import restore_outer_shape
 from keras_hub.src.utils.tensor_utils import target_gather
 from keras_hub.src.utils.tensor_utils import tensor_to_list
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class ConvertHelpers(TestCase):
     def test_basics(self):
         inputs = [1, 2, 3]
@@ -150,6 +152,7 @@ class GrainOutputsTest(TestCase):
         self.assertEqual(seen, [True])
         self.assertFalse(in_grain_data_pipeline())
 
+    @pytest.mark.requires_tf
     def test_convert_preprocessing_outputs_grain(self):
         inputs = {
             "dense": tf.constant([[1, 2], [3, 4]]),
@@ -172,6 +175,7 @@ class GrainOutputsTest(TestCase):
         self.assertEqual(outputs["python_list"], [1, 2])
         self.assertIsNone(outputs["none"])
 
+    @pytest.mark.requires_tf
     def test_convert_preprocessing_outputs_in_grain(self):
         # Outside grain: backend tensors.
         outputs = convert_preprocessing_outputs(tf.constant([1, 2, 3]))
@@ -210,6 +214,7 @@ class GrainOutputsTest(TestCase):
         self.assertEqual(outputs[2], [[1], [2, 3]])
         self.assertEqual(outputs[3], "hi")
 
+    @pytest.mark.requires_tf
     def test_preprocessing_function_in_grain(self):
         @preprocessing_function
         def fn(self, x):
@@ -240,6 +245,7 @@ class GrainOutputsTest(TestCase):
         self.assertAllEqual(outputs[1], [1])
         self.assertAllClose(outputs[2], [0.5])
 
+    @pytest.mark.requires_tf
     def test_grain_batching(self):
         # Grain batches by stacking numpy leaves; outputs must be stackable.
         @preprocessing_function
@@ -254,6 +260,7 @@ class GrainOutputsTest(TestCase):
         self.assertAllEqual(batch["ints"], [[1, 2], [3, 4]])
         self.assertEqual(batch["text"].tolist(), ["HELLO", "HELLO"])
 
+    @pytest.mark.requires_tf
     def test_grain_iter_dataset(self):
         @preprocessing_function
         def fn(self, x):
@@ -266,6 +273,7 @@ class GrainOutputsTest(TestCase):
             self.assertIsInstance(output, np.ndarray)
 
 
+@pytest.mark.requires_tf
 class TensorToListTest(TestCase):
     def test_ragged_input(self):
         input_data = tf.ragged.constant([[1, 2], [4, 5, 6]])
@@ -303,6 +311,7 @@ class TensorToListTest(TestCase):
         self.assertEqual(detokenize_output, ["hello"])
 
 
+@pytest.mark.requires_tf
 class ConvertToRaggedBatch(TestCase):
     def test_convert_1d_tensor(self):
         inputs = tf.constant([1, 2, 3])
@@ -329,7 +338,7 @@ class ConvertToRaggedBatch(TestCase):
         self.assertFalse(rectangular)
 
 
-class MaskedAnyEqualTest(tf.test.TestCase):
+class MaskedAnyEqualTest(TestCase):
     def test_basic_equality(self):
         inputs = ops.array([1, 2, 3, 5])
         values = [3, 5]
@@ -519,14 +528,6 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_string_inputs(np.array("a")),
             (["a"], False, None),
         )
-        self.assertEqual(
-            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
-            (["a", "b"], True, None),
-        )
-        self.assertEqual(
-            canonicalize_python_string_inputs(tf.constant("a")),
-            (["a"], False, None),
-        )
         # Decoding options for bytes.
         self.assertEqual(
             canonicalize_python_string_inputs(b"a\xffb", errors="ignore"),
@@ -537,18 +538,23 @@ class CanonicalizePythonInputsTest(TestCase):
         with self.assertRaises(ValueError):
             canonicalize_python_string_inputs([1, 2])
 
+    @pytest.mark.requires_tf
+    def test_string_inputs_tf(self):
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant("a")),
+            (["a"], False, None),
+        )
+
     def test_rank_2_string_inputs(self):
         # Rank >= 2 inputs are flattened, with the leading dimensions
         # returned so callers can regroup their results.
         self.assertEqual(
             canonicalize_python_string_inputs(np.array([["a"], ["b"]])),
             (["a", "b"], True, (2, 1)),
-        )
-        self.assertEqual(
-            canonicalize_python_string_inputs(
-                tf.constant([["a", "b"], ["c", "d"]])
-            ),
-            (["a", "b", "c", "d"], True, (2, 2)),
         )
         # Nested Python lists are routed through the same path.
         self.assertEqual(
@@ -560,6 +566,15 @@ class CanonicalizePythonInputsTest(TestCase):
                 np.array([[["a"], ["b"]], [["c"], ["d"]]])
             ),
             (["a", "b", "c", "d"], True, (2, 2, 1)),
+        )
+
+    @pytest.mark.requires_tf
+    def test_rank_2_string_inputs_tf(self):
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                tf.constant([["a", "b"], ["c", "d"]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2)),
         )
 
     def test_restore_outer_shape(self):
@@ -602,6 +617,13 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_token_inputs(ops.array([[1, 2], [3, 4]])),
             ([[1, 2], [3, 4]], True),
         )
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs("a")
+
+    @pytest.mark.requires_tf
+    def test_token_inputs_tf(self):
         self.assertEqual(
             canonicalize_python_token_inputs(tf.constant([1, 2])),
             ([[1, 2]], False),
@@ -610,10 +632,6 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_token_inputs(tf.ragged.constant([[1, 2], [3]])),
             ([[1, 2], [3]], True),
         )
-        with self.assertRaises(ValueError):
-            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
-        with self.assertRaises(ValueError):
-            canonicalize_python_token_inputs("a")
 
 
 class CasefoldUtf8Test(TestCase):

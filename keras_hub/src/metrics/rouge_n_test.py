@@ -1,12 +1,13 @@
 import keras
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.metrics.rouge_n import RougeN
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class RougeNTest(TestCase):
+    @pytest.mark.requires_tf
     def test_initialization(self):
         rouge = RougeN()
         result = rouge.result()
@@ -16,6 +17,7 @@ class RougeNTest(TestCase):
             {"precision": 0.0, "recall": 0.0, "f1_score": 0.0},
         )
 
+    @pytest.mark.requires_tf
     def test_string_input(self):
         rouge = RougeN(order=2, use_stemmer=False)
         y_true = "the tiny little cat was found under the big funny bed"
@@ -27,6 +29,7 @@ class RougeNTest(TestCase):
             {"precision": 0.4, "recall": 0.2, "f1_score": 0.266666},
         )
 
+    @pytest.mark.requires_tf
     def test_string_list_input(self):
         rouge = RougeN(order=2, use_stemmer=False)
         y_true = [
@@ -44,6 +47,7 @@ class RougeNTest(TestCase):
             {"precision": 0.575, "recall": 0.4, "f1_score": 0.466666},
         )
 
+    @pytest.mark.requires_tf
     def test_tensor_input(self):
         rouge = RougeN(order=2, use_stemmer=False)
         y_true = tf.constant(
@@ -88,6 +92,7 @@ class RougeNTest(TestCase):
         with self.assertRaises(ValueError):
             _ = RougeN(order=10)
 
+    @pytest.mark.requires_tf
     def test_different_order(self):
         rouge = RougeN(order=3, use_stemmer=False)
         y_true = [
@@ -105,6 +110,7 @@ class RougeNTest(TestCase):
             {"precision": 0.333333, "recall": 0.25, "f1_score": 0.285714},
         )
 
+    @pytest.mark.requires_tf
     def test_reset_state(self):
         rouge = RougeN()
         y_true = ["hey, this is great fun", "i love contributing to KerasHub"]
@@ -127,6 +133,7 @@ class RougeNTest(TestCase):
             {"precision": 0.0, "recall": 0.0, "f1_score": 0.0},
         )
 
+    @pytest.mark.requires_tf
     def test_update_state(self):
         rouge = RougeN()
         y_true_1 = [
@@ -155,6 +162,7 @@ class RougeNTest(TestCase):
             {"precision": 0.45, "recall": 0.35, "f1_score": 0.385185},
         )
 
+    @pytest.mark.requires_tf
     def test_get_config(self):
         rouge = RougeN(
             order=5,

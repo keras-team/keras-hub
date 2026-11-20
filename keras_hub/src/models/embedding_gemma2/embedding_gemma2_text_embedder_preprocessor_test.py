@@ -21,10 +21,11 @@ from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter impo
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
-class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
-    def setUp(self):
+class _EmbeddingGemma2ValidationMixin:
+    def _set_up_converters(self):
         self.tokenizer = MockGemma4Tokenizer(add_bos=False, add_eos=False)
 
         self.image_converter = EmbeddingGemma2ImageConverter(
@@ -48,34 +49,200 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             max_soft_tokens=1,
         )
 
-        self.preprocessor = EmbeddingGemma2TextEmbedderPreprocessor(
-            tokenizer=self.tokenizer,
-            image_converter=self.image_converter,
-            audio_converter=self.audio_converter,
-            video_converter=self.video_converter,
-            sequence_length=12,
-        )
-
-    def _both_paths(self, **kwargs):
-        """The python-path preprocessor and its TF-path twin.
-
-        `_allow_python_workflow=False` forces `_call_tf` in eager mode; it is
-        the switch a user has, unlike patching `_use_tf_workflow`.
-        """
+    def _make_preprocessor(self, **kwargs):
         init_kwargs = {
             "tokenizer": self.tokenizer,
             "image_converter": self.image_converter,
             "audio_converter": self.audio_converter,
             "video_converter": self.video_converter,
             "sequence_length": 12,
+            "_allow_python_workflow": self._allow_python_workflow,
             **kwargs,
         }
-        return (
-            EmbeddingGemma2TextEmbedderPreprocessor(**init_kwargs),
-            EmbeddingGemma2TextEmbedderPreprocessor(
-                _allow_python_workflow=False, **init_kwargs
-            ),
+        return EmbeddingGemma2TextEmbedderPreprocessor(**init_kwargs)
+
+    def _token_count(self, out, placeholder):
+        ids = ops.convert_to_numpy(out["token_ids"])
+        return int((ids == self.tokenizer.token_to_id(placeholder)).sum())
+
+    def test_images_and_videos_together_raise(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        vid = np.ones((2, 16, 16, 3), dtype="float32")
+        inputs = {
+            "texts": ["<|image|> and <|video|>"],
+            "images": [img],
+            "videos": [vid],
+        }
+        preprocessor = self._make_preprocessor()
+        with self.assertRaisesRegex(
+            ValueError, "`images` and `videos` in the same call"
+        ):
+            preprocessor(inputs)
+
+    def test_multiple_images_per_prompt_raise(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        two_images = np.ones((1, 2, 16, 16, 3), dtype="float32")
+        preprocessor = self._make_preprocessor()
+        with self.assertRaisesRegex(ValueError, "one image per prompt"):
+            preprocessor({"images": two_images})
+        with self.assertRaisesRegex(ValueError, "one image per prompt"):
+            preprocessor({"images": [[img, img]]})
+        # One image per prompt is still fine in both spellings.
+        self.preprocessor({"images": img})
+        self.preprocessor({"images": [img, img]})
+
+    def test_media_token_truncation_raises(self):
+        # 2 frames x 1 soft token + wrappers + 8 words do not fit in 12.
+        vid = np.ones((2, 16, 16, 3), dtype="float32")
+        long_text = "a b c d e f g h <|video|>"
+        preprocessor = self._make_preprocessor()
+        with self.assertRaisesRegex(
+            Exception,
+            "video soft tokens do not fit in `sequence_length=12`",
+        ):
+            preprocessor({"texts": [long_text], "videos": [vid]})
+        # The same input fits once the budget is raised.
+        out = preprocessor(
+            {"texts": [long_text], "videos": [vid]}, sequence_length=32
         )
+        self.assertEqual(self._token_count(out, "<|video|>"), 2)
+
+    def test_placeholder_media_mismatch_raises(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        aud = np.ones((400,), dtype="float32")
+        cases = [
+            # Two placeholders, one image.
+            (
+                {"texts": ["<|image|> and <|image|>"], "images": [img]},
+                "exactly 1 image",
+            ),
+            # Image with no placeholder.
+            ({"texts": ["hello"], "images": [img]}, "exactly 1 image"),
+            # Placeholder with no media.
+            ({"texts": ["<|image|> hello"]}, "image placeholder but no media"),
+            ({"texts": ["<|audio|> hello"]}, "audio placeholder but no media"),
+            # Two texts, one image.
+            (
+                {"texts": ["<|image|> a", "<|image|> b"], "images": [img]},
+                "Batch size of texts and image",
+            ),
+            # Two audio clips, one text.
+            (
+                {"texts": ["<|audio|>"], "audio": [aud, aud]},
+                "Batch size of texts and audio",
+            ),
+        ]
+        preprocessor = self._make_preprocessor()
+        for inputs, message in cases:
+            with self.assertRaisesRegex(Exception, message):
+                preprocessor(inputs)
+
+    def test_single_item_media_with_list_text(self):
+        # The docstring's single-item forms: a list with one text plus a bare
+        # rank-3 image or rank-1 waveform is one example, on both paths.
+        img = np.ones((16, 16, 3), dtype="float32")
+        aud = np.ones((400,), dtype="float32")
+        preprocessor = self._make_preprocessor()
+        bare = preprocessor({"texts": ["<|image|> a"], "images": img})
+        listed = preprocessor({"texts": ["<|image|> a"], "images": [img]})
+        for key in listed:
+            self.assertAllEqual(
+                ops.convert_to_numpy(bare[key]),
+                ops.convert_to_numpy(listed[key]),
+            )
+        bare = preprocessor({"texts": ["<|audio|> a"], "audio": aud})
+        listed = preprocessor({"texts": ["<|audio|> a"], "audio": [aud]})
+        for key in listed:
+            self.assertAllEqual(
+                ops.convert_to_numpy(bare[key]),
+                ops.convert_to_numpy(listed[key]),
+            )
+
+    def test_texts_none_builds_prompt_from_every_modality(self):
+        img = np.ones((16, 16, 3), dtype="float32")
+        aud = np.ones((400,), dtype="float32")
+        preprocessor = self._make_preprocessor()
+        out = preprocessor({"images": [img], "audio": [aud]})
+        # One image soft token and the audio soft tokens, as with the
+        # explicit prompt "<|image|> <|audio|>".
+        explicit = preprocessor(
+            {
+                "texts": ["<|image|> <|audio|>"],
+                "images": [img],
+                "audio": [aud],
+            }
+        )
+        self.assertAllEqual(
+            ops.convert_to_numpy(out["token_ids"]),
+            ops.convert_to_numpy(explicit["token_ids"]),
+        )
+        self.assertEqual(self._token_count(out, "<|image|>"), 1)
+        self.assertGreater(self._token_count(out, "<|audio|>"), 0)
+        # Inconsistent batch sizes across modalities are rejected.
+        with self.assertRaisesRegex(Exception, "inconsistently sized"):
+            preprocessor({"images": [img, img], "audio": [aud]})
+
+    def test_long_audio_keeps_hf_frame_count(self):
+        # A clip longer than the converter window keeps
+        # `(num_samples - 1) // stride` frames, like HF, not one more.
+        converter = self.audio_converter
+        clip = np.ones((converter.num_samples + 40,), dtype="float32")
+        expected_frames = (converter.num_samples - 1) // converter.stride
+        preprocessor = self._make_preprocessor()
+        out = preprocessor({"audio": [clip]})
+        mask = ops.convert_to_numpy(out["audio_mel_mask"])
+        self.assertEqual(int(mask.sum()), expected_frames)
+        self.assertEqual(
+            ops.convert_to_numpy(out["audio_mel"]).shape[2],
+            expected_frames,
+        )
+
+    def test_video_indices_are_frame_major_per_row(self):
+        # Clips whose frames give different soft-token counts: every row is
+        # laid out frame by frame with the same width, so the narrower clip
+        # never receives another clip's padding slots (keras-hub#3144 T9).
+        video_converter = EmbeddingGemma2VideoConverter(
+            image_size=(16, 16),
+            patch_size=8,
+            pooling_kernel_size=1,
+            max_frames=2,
+            max_soft_tokens=4,
+        )
+        wide = np.ones((2, 16, 16, 3), dtype="float32")  # 4 tokens / frame
+        narrow = np.ones((2, 32, 16, 3), dtype="float32")  # fewer / frame
+        preprocessor = self._make_preprocessor(
+            video_converter=video_converter, sequence_length=32
+        )
+        batch = preprocessor({"videos": [wide, narrow]})
+        alone = preprocessor({"videos": [narrow]})
+        batch_idx = ops.convert_to_numpy(batch["vision_indices"])
+        alone_idx = ops.convert_to_numpy(alone["vision_indices"])
+        tokens_per_frame = {
+            "wide": self._token_count(
+                preprocessor({"videos": [wide]}), "<|video|>"
+            )
+            // 2,
+            "narrow": self._token_count(alone, "<|video|>") // 2,
+        }
+        self.assertGreater(tokens_per_frame["wide"], tokens_per_frame["narrow"])
+        width = tokens_per_frame["wide"]
+        self.assertEqual(batch_idx.shape, (2, 2 * width))
+        # Row 1 (narrow): each frame block starts with its real
+        # positions and is zero-padded to `width`.
+        n = tokens_per_frame["narrow"]
+        for f in range(2):
+            block = batch_idx[1, f * width : (f + 1) * width]
+            self.assertAllEqual(block[:n], alone_idx[0, f * n : (f + 1) * n])
+            self.assertAllEqual(block[n:], np.zeros(width - n))
+
+
+class EmbeddingGemma2TextEmbedderPreprocessorTest(
+    _EmbeddingGemma2ValidationMixin, TestCase
+):
+    def setUp(self):
+        self._allow_python_workflow = True
+        self._set_up_converters()
+        self.preprocessor = self._make_preprocessor()
 
     def test_preprocessor_text_only(self):
         out = self.preprocessor(["the quick brown fox"])
@@ -312,12 +479,12 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         self.assertAllEqual(token_ids[0], exp_1)
         self.assertAllEqual(token_ids[1], exp_2)
 
+    @pytest.mark.requires_tf
     def test_call_with_tf_ragged_media(self):
         # Eager `tf.RaggedTensor` media must be accepted by the python path
         # and give the same result as plain python lists. One modality per
         # call: Keras rejects a nested argument that mixes a python list
         # (`texts`) with a tensor on the TensorFlow backend.
-        tf = pytest.importorskip("tensorflow")
         rng = np.random.RandomState(0)
         audio = [
             rng.uniform(-1, 1, (4000,)).astype("float32"),
@@ -344,8 +511,6 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         # The TF path runs inside `tf.data.Dataset.map`, where every tensor
         # is symbolic and the batch dim is unknown. Each modality must trace
         # there and produce exactly the eager result.
-        import tensorflow as tf
-
         rng = np.random.RandomState(0)
         cases = {
             "images": {
@@ -389,8 +554,6 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         # The placeholder and truncation checks are `tf.debugging` asserts
         # on the TF path; they must not be pruned when the preprocessor is
         # traced inside `tf.data.Dataset.map`.
-        import tensorflow as tf
-
         img = np.ones((2, 16, 16, 3), dtype="float32")
         cases = {
             "two placeholders": (
@@ -418,189 +581,6 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                 tf.errors.InvalidArgumentError, message, msg=name
             ):
                 next(iter(ds.map(self.preprocessor)))
-
-    def test_images_and_videos_together_raise(self):
-        img = np.ones((16, 16, 3), dtype="float32")
-        vid = np.ones((2, 16, 16, 3), dtype="float32")
-        inputs = {
-            "texts": ["<|image|> and <|video|>"],
-            "images": [img],
-            "videos": [vid],
-        }
-        # Both execution paths must reject the combination.
-        for preprocessor in self._both_paths():
-            with self.assertRaisesRegex(
-                ValueError, "`images` and `videos` in the same call"
-            ):
-                preprocessor(inputs)
-
-    def test_multiple_images_per_prompt_raise(self):
-        img = np.ones((16, 16, 3), dtype="float32")
-        two_images = np.ones((1, 2, 16, 16, 3), dtype="float32")
-        # The check runs before any converter call, so it can be exercised
-        # on both paths regardless of backend.
-        for preprocessor in self._both_paths():
-            with self.assertRaisesRegex(ValueError, "one image per prompt"):
-                preprocessor({"images": two_images})
-            with self.assertRaisesRegex(ValueError, "one image per prompt"):
-                preprocessor({"images": [[img, img]]})
-        # One image per prompt is still fine in both spellings.
-        self.preprocessor({"images": img})
-        self.preprocessor({"images": [img, img]})
-
-    # --- Round-4 review: input validation, truncation, prompts, layout ---
-
-    def _token_count(self, out, placeholder):
-        ids = ops.convert_to_numpy(out["token_ids"])
-        return int((ids == self.tokenizer.token_to_id(placeholder)).sum())
-
-    def test_media_token_truncation_raises(self):
-        # 2 frames x 1 soft token + wrappers + 8 words do not fit in 12.
-        vid = np.ones((2, 16, 16, 3), dtype="float32")
-        long_text = "a b c d e f g h <|video|>"
-        for preprocessor in self._both_paths():
-            with self.assertRaisesRegex(
-                Exception,
-                "video soft tokens do not fit in `sequence_length=12`",
-            ):
-                preprocessor({"texts": [long_text], "videos": [vid]})
-            # The same input fits once the budget is raised.
-            out = preprocessor(
-                {"texts": [long_text], "videos": [vid]}, sequence_length=32
-            )
-            self.assertEqual(self._token_count(out, "<|video|>"), 2)
-
-    def test_placeholder_media_mismatch_raises(self):
-        img = np.ones((16, 16, 3), dtype="float32")
-        aud = np.ones((400,), dtype="float32")
-        cases = [
-            # Two placeholders, one image.
-            (
-                {"texts": ["<|image|> and <|image|>"], "images": [img]},
-                "exactly 1 image",
-            ),
-            # Image with no placeholder.
-            ({"texts": ["hello"], "images": [img]}, "exactly 1 image"),
-            # Placeholder with no media.
-            ({"texts": ["<|image|> hello"]}, "image placeholder but no media"),
-            ({"texts": ["<|audio|> hello"]}, "audio placeholder but no media"),
-            # Two texts, one image.
-            (
-                {"texts": ["<|image|> a", "<|image|> b"], "images": [img]},
-                "Batch size of texts and image",
-            ),
-            # Two audio clips, one text.
-            (
-                {"texts": ["<|audio|>"], "audio": [aud, aud]},
-                "Batch size of texts and audio",
-            ),
-        ]
-        for preprocessor in self._both_paths():
-            for inputs, message in cases:
-                with self.assertRaisesRegex(Exception, message):
-                    preprocessor(inputs)
-
-    def test_single_item_media_with_list_text(self):
-        # The docstring's single-item forms: a list with one text plus a bare
-        # rank-3 image or rank-1 waveform is one example, on both paths.
-        img = np.ones((16, 16, 3), dtype="float32")
-        aud = np.ones((400,), dtype="float32")
-        for preprocessor in self._both_paths():
-            bare = preprocessor({"texts": ["<|image|> a"], "images": img})
-            listed = preprocessor({"texts": ["<|image|> a"], "images": [img]})
-            for key in listed:
-                self.assertAllEqual(
-                    ops.convert_to_numpy(bare[key]),
-                    ops.convert_to_numpy(listed[key]),
-                )
-            bare = preprocessor({"texts": ["<|audio|> a"], "audio": aud})
-            listed = preprocessor({"texts": ["<|audio|> a"], "audio": [aud]})
-            for key in listed:
-                self.assertAllEqual(
-                    ops.convert_to_numpy(bare[key]),
-                    ops.convert_to_numpy(listed[key]),
-                )
-
-    def test_texts_none_builds_prompt_from_every_modality(self):
-        img = np.ones((16, 16, 3), dtype="float32")
-        aud = np.ones((400,), dtype="float32")
-        for preprocessor in self._both_paths():
-            out = preprocessor({"images": [img], "audio": [aud]})
-            # One image soft token and the audio soft tokens, as with the
-            # explicit prompt "<|image|> <|audio|>".
-            explicit = preprocessor(
-                {
-                    "texts": ["<|image|> <|audio|>"],
-                    "images": [img],
-                    "audio": [aud],
-                }
-            )
-            self.assertAllEqual(
-                ops.convert_to_numpy(out["token_ids"]),
-                ops.convert_to_numpy(explicit["token_ids"]),
-            )
-            self.assertEqual(self._token_count(out, "<|image|>"), 1)
-            self.assertGreater(self._token_count(out, "<|audio|>"), 0)
-            # Inconsistent batch sizes across modalities are rejected.
-            with self.assertRaisesRegex(Exception, "inconsistently sized"):
-                preprocessor({"images": [img, img], "audio": [aud]})
-
-    def test_long_audio_keeps_hf_frame_count(self):
-        # A clip longer than the converter window keeps
-        # `(num_samples - 1) // stride` frames, like HF, not one more.
-        converter = self.audio_converter
-        clip = np.ones((converter.num_samples + 40,), dtype="float32")
-        expected_frames = (converter.num_samples - 1) // converter.stride
-        for preprocessor in self._both_paths():
-            out = preprocessor({"audio": [clip]})
-            mask = ops.convert_to_numpy(out["audio_mel_mask"])
-            self.assertEqual(int(mask.sum()), expected_frames)
-            self.assertEqual(
-                ops.convert_to_numpy(out["audio_mel"]).shape[2],
-                expected_frames,
-            )
-
-    def test_video_indices_are_frame_major_per_row(self):
-        # Clips whose frames give different soft-token counts: every row is
-        # laid out frame by frame with the same width, so the narrower clip
-        # never receives another clip's padding slots (keras-hub#3144 T9).
-        video_converter = EmbeddingGemma2VideoConverter(
-            image_size=(16, 16),
-            patch_size=8,
-            pooling_kernel_size=1,
-            max_frames=2,
-            max_soft_tokens=4,
-        )
-        wide = np.ones((2, 16, 16, 3), dtype="float32")  # 4 tokens / frame
-        narrow = np.ones((2, 32, 16, 3), dtype="float32")  # fewer / frame
-        for preprocessor in self._both_paths(
-            video_converter=video_converter, sequence_length=32
-        ):
-            batch = preprocessor({"videos": [wide, narrow]})
-            alone = preprocessor({"videos": [narrow]})
-            batch_idx = ops.convert_to_numpy(batch["vision_indices"])
-            alone_idx = ops.convert_to_numpy(alone["vision_indices"])
-            tokens_per_frame = {
-                "wide": self._token_count(
-                    preprocessor({"videos": [wide]}), "<|video|>"
-                )
-                // 2,
-                "narrow": self._token_count(alone, "<|video|>") // 2,
-            }
-            self.assertGreater(
-                tokens_per_frame["wide"], tokens_per_frame["narrow"]
-            )
-            width = tokens_per_frame["wide"]
-            self.assertEqual(batch_idx.shape, (2, 2 * width))
-            # Row 1 (narrow): each frame block starts with its real
-            # positions and is zero-padded to `width`.
-            n = tokens_per_frame["narrow"]
-            for f in range(2):
-                block = batch_idx[1, f * width : (f + 1) * width]
-                self.assertAllEqual(
-                    block[:n], alone_idx[0, f * n : (f + 1) * n]
-                )
-                self.assertAllEqual(block[n:], np.zeros(width - n))
 
     def test_preprocessor_batched_vs_per_image(self):
         import unittest.mock
@@ -683,3 +663,13 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             + " D"
         )
         self.assertEqual(aud_out[1], expected_aud)
+
+
+@pytest.mark.requires_tf
+class EmbeddingGemma2TextEmbedderPreprocessorTFTest(
+    _EmbeddingGemma2ValidationMixin, TestCase
+):
+    def setUp(self):
+        self._allow_python_workflow = False
+        self._set_up_converters()
+        self.preprocessor = self._make_preprocessor()

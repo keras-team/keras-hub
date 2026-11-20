@@ -1,7 +1,7 @@
 import grain
 import keras
 import numpy as np
-from absl.testing import parameterized
+import pytest
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
@@ -95,11 +95,7 @@ class Gemma3nAudioConverterTest(TestCase):
         input_features, _ = outputs
         self.assertEqual(input_features.shape, expected_features_shape)
 
-    @parameterized.named_parameters(
-        ("python", True),
-        ("tf", False),
-    )
-    def test_dither_determinism(self, allow_python_workflow):
+    def _check_dither_determinism(self, allow_python_workflow):
         kwargs = dict(self.init_kwargs)
         kwargs["dither"] = 1.0
         kwargs["seed"] = 42
@@ -147,6 +143,13 @@ class Gemma3nAudioConverterTest(TestCase):
             batched_features[0],
             batched_features[1][: batched_features[0].shape[0]],
         )
+
+    def test_dither_determinism_python(self):
+        self._check_dither_determinism(allow_python_workflow=True)
+
+    @pytest.mark.requires_tf
+    def test_dither_determinism_tf(self):
+        self._check_dither_determinism(allow_python_workflow=False)
 
     def test_dither_negative_seed(self):
         # `record_hash` for the all-zeros 2000-sample record is 3125184870,
@@ -196,6 +199,7 @@ class Gemma3nAudioConverterTest(TestCase):
         instance = Gemma3nAudioConverter(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
 
+    @pytest.mark.requires_tf
     def test_python_matches_tf(self):
         converter = Gemma3nAudioConverter(**self.init_kwargs)
         audio = self.input_data[0][:4000]

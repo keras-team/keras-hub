@@ -1,7 +1,6 @@
 import os
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_hub.src.models.albert.albert_tokenizer import AlbertTokenizer
@@ -15,6 +14,7 @@ from keras_hub.src.utils.preset_utils import TOKENIZER_ASSET_DIR
 from keras_hub.src.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_hub.src.utils.preset_utils import check_config_class
 from keras_hub.src.utils.preset_utils import load_json
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class SimpleTokenizer(Tokenizer):
@@ -60,6 +60,7 @@ class TokenizerTest(TestCase):
             # No loading on a non-keras model.
             Tokenizer.from_preset("hf://spacy/en_core_web_sm")
 
+    @pytest.mark.requires_tf
     def test_tokenize(self):
         input_data = ["the quick brown fox"]
         tokenizer = SimpleTokenizer()
@@ -68,6 +69,7 @@ class TokenizerTest(TestCase):
         self.assertAllEqual(tokenize_output, [["the", "quick", "brown", "fox"]])
         self.assertAllEqual(call_output, [["the", "quick", "brown", "fox"]])
 
+    @pytest.mark.requires_tf
     def test_detokenize(self):
         input_data = ["the", "quick", "brown", "fox"]
         tokenizer = SimpleTokenizer()

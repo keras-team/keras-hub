@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import keras
+import pytest
 from keras import ops
 
 from keras_hub.src.models.rwkv7.rwkv7_backbone import RWKV7Backbone
@@ -13,6 +14,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
+@pytest.mark.requires_tf
 class RWKV7CausalLMTest(TestCase):
     def setUp(self):
         """

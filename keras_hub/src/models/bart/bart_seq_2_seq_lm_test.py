@@ -61,6 +61,7 @@ class BartSeq2SeqLMTest(TestCase):
             expected_output_shape=(2, 10, self.vocabulary_size),
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         # String input.
         inputs = {
@@ -89,6 +90,7 @@ class BartSeq2SeqLMTest(TestCase):
             preprocessed_batch["decoder_padding_mask"][:, :5],
         )
 
+    @pytest.mark.requires_tf
     def test_early_stopping(self):
         seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
         call_decoder_with_cache = seq_2_seq_lm.call_decoder_with_cache
@@ -126,6 +128,7 @@ class BartSeq2SeqLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertAllEqual(inputs["decoder_text"], output)
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
@@ -138,6 +141,7 @@ class BartSeq2SeqLMTest(TestCase):
         seq_2_seq_lm.compile(sampler="greedy")
         self.assertIsNone(seq_2_seq_lm.generate_function)
 
+    @pytest.mark.requires_tf
     def test_beam_search(self):
         seq_2_seq_lm = BartSeq2SeqLM(
             backbone=self.backbone,

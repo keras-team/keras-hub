@@ -12,6 +12,7 @@ from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class SigLIPPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = SigLIPTokenizer(

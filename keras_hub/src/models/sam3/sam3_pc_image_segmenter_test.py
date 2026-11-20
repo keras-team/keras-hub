@@ -25,6 +25,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
 
 
+@pytest.mark.requires_tf
 class SAM3PromptableConceptImageSegmenterTest(TestCase):
     def setUp(self):
         self.batch_size = 2
@@ -182,11 +183,23 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 5e-3}},
         )
 
+
+class SAM3PromptableConceptImageSegmenterRequiresTFTest(TestCase):
     def test_preprocessor_requires_tensorflow(self):
         # The preprocessor's `call` is TensorFlow only, so it asserts at
         # construction rather than failing cryptically on first call.
+        image_converter = SAM3ImageConverter(image_size=(28, 28))
+        vocab = {
+            "<|endoftext|>": 0,
+            "<|startoftext|>": 1,
+            "!": 2,
+            "a": 3,
+            "b": 4,
+            "ab": 5,
+        }
+        tokenizer = SAM3Tokenizer(vocab, ["a b"])
         with mock.patch.object(tensor_utils, "tf", None):
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
                 SAM3PromptableConceptImageSegmenterPreprocessor(
-                    self.tokenizer, self.image_converter
+                    tokenizer, image_converter
                 )

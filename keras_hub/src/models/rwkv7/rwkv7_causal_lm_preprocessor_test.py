@@ -1,6 +1,8 @@
+import inspect
 from unittest import mock
 
 import numpy as np
+import pytest
 
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
     RWKV7CausalLMPreprocessor,
@@ -10,6 +12,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
 
 
+@pytest.mark.requires_tf
 class RWKV7CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = [
@@ -83,13 +86,17 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_tokens)
         self.assertEqual(x[0], "the python code")
 
+
+class RWKV7CausalLMPreprocessorRequiresTFTest(TestCase):
     def test_generate_preprocess_requires_tensorflow(self):
-        preprocessor = RWKV7CausalLMPreprocessor(**self.init_kwargs)
-        # Without TensorFlow, `preprocessing_function` returns the undecorated
-        # method, which is what `__wrapped__` gives us here.
-        generate_preprocess = type(preprocessor).generate_preprocess.__wrapped__
+        preprocessor = RWKV7CausalLMPreprocessor(
+            tokenizer=None, sequence_length=16
+        )
+        generate_preprocess = inspect.unwrap(
+            RWKV7CausalLMPreprocessor.generate_preprocess
+        )
         with mock.patch.object(tensor_utils, "tf", None):
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
                 generate_preprocess(
-                    preprocessor, self.input_data, sequence_length=4
+                    preprocessor, ["the python code"], sequence_length=4
                 )

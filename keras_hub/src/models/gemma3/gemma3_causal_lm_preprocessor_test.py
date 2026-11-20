@@ -14,6 +14,7 @@ from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class Gemma3CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # Easier to use a mock here, instead of trying to figure out why

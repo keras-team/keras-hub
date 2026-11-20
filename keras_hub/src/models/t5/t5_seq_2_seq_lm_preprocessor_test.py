@@ -59,6 +59,7 @@ class T5Seq2SeqLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["decoder_token_ids"], [0, 4, 6, 0, 0, 0, 0, 0])
         self.assertAllEqual(x["decoder_padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0])
 
+    @pytest.mark.requires_tf
     def test_generate_postprocess(self):
         input_data = {
             "decoder_token_ids": [0, 4, 6, 8, 10, 1, 0, 0],

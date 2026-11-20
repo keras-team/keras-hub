@@ -45,6 +45,7 @@ class XLMRobertaTokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class XLMRobertaTokenizerTFTest(XLMRobertaTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 
