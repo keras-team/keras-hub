@@ -501,7 +501,6 @@ class IsFloatDtypeTest(TestCase):
 
 
 class CanonicalizePythonInputsTest(TestCase):
-    @pytest.mark.requires_tf
     def test_string_inputs(self):
         self.assertEqual(
             canonicalize_python_string_inputs("a"), (["a"], False, None)
@@ -529,14 +528,6 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_string_inputs(np.array("a")),
             (["a"], False, None),
         )
-        self.assertEqual(
-            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
-            (["a", "b"], True, None),
-        )
-        self.assertEqual(
-            canonicalize_python_string_inputs(tf.constant("a")),
-            (["a"], False, None),
-        )
         # Decoding options for bytes.
         self.assertEqual(
             canonicalize_python_string_inputs(b"a\xffb", errors="ignore"),
@@ -548,18 +539,22 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_string_inputs([1, 2])
 
     @pytest.mark.requires_tf
+    def test_string_inputs_tf(self):
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant(["a", "b"])),
+            (["a", "b"], True, None),
+        )
+        self.assertEqual(
+            canonicalize_python_string_inputs(tf.constant("a")),
+            (["a"], False, None),
+        )
+
     def test_rank_2_string_inputs(self):
         # Rank >= 2 inputs are flattened, with the leading dimensions
         # returned so callers can regroup their results.
         self.assertEqual(
             canonicalize_python_string_inputs(np.array([["a"], ["b"]])),
             (["a", "b"], True, (2, 1)),
-        )
-        self.assertEqual(
-            canonicalize_python_string_inputs(
-                tf.constant([["a", "b"], ["c", "d"]])
-            ),
-            (["a", "b", "c", "d"], True, (2, 2)),
         )
         # Nested Python lists are routed through the same path.
         self.assertEqual(
@@ -571,6 +566,15 @@ class CanonicalizePythonInputsTest(TestCase):
                 np.array([[["a"], ["b"]], [["c"], ["d"]]])
             ),
             (["a", "b", "c", "d"], True, (2, 2, 1)),
+        )
+
+    @pytest.mark.requires_tf
+    def test_rank_2_string_inputs_tf(self):
+        self.assertEqual(
+            canonicalize_python_string_inputs(
+                tf.constant([["a", "b"], ["c", "d"]])
+            ),
+            (["a", "b", "c", "d"], True, (2, 2)),
         )
 
     def test_restore_outer_shape(self):
@@ -588,7 +592,6 @@ class CanonicalizePythonInputsTest(TestCase):
         self.assertEqual(restored.shape, (2, 2, 2))
         self.assertAllEqual(restored, np.arange(8).reshape(2, 2, 2))
 
-    @pytest.mark.requires_tf
     def test_token_inputs(self):
         self.assertEqual(canonicalize_python_token_inputs(1), ([[1]], False))
         self.assertEqual(
@@ -614,6 +617,13 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_token_inputs(ops.array([[1, 2], [3, 4]])),
             ([[1, 2], [3, 4]], True),
         )
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
+        with self.assertRaises(ValueError):
+            canonicalize_python_token_inputs("a")
+
+    @pytest.mark.requires_tf
+    def test_token_inputs_tf(self):
         self.assertEqual(
             canonicalize_python_token_inputs(tf.constant([1, 2])),
             ([[1, 2]], False),
@@ -622,10 +632,6 @@ class CanonicalizePythonInputsTest(TestCase):
             canonicalize_python_token_inputs(tf.ragged.constant([[1, 2], [3]])),
             ([[1, 2], [3]], True),
         )
-        with self.assertRaises(ValueError):
-            canonicalize_python_token_inputs(np.zeros((1, 1, 1)))
-        with self.assertRaises(ValueError):
-            canonicalize_python_token_inputs("a")
 
 
 class CasefoldUtf8Test(TestCase):

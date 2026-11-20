@@ -25,6 +25,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class SmolVLM2CausalLMPreprocessorTest(TestCase):
@@ -729,8 +730,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
     @pytest.mark.requires_tf
     def test_tf_data_map_with_images(self):
         """`fit()` on a `tf.data` pipeline that carries images (T42)."""
-        import tensorflow as tf
-
         preprocessor = self._image_preprocessor()
         images = np.random.randint(0, 256, size=(4, 20, 20, 3)).astype("uint8")
         ds = tf.data.Dataset.from_tensor_slices(
@@ -748,8 +747,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
     @pytest.mark.requires_tf
     def test_tf_data_map_text_only(self):
         """Text-only `tf.data` batches trace with the placeholder guard."""
-        import tensorflow as tf
-
         preprocessor = self._image_preprocessor()
         ds = tf.data.Dataset.from_tensor_slices([" airplane at airport"] * 4)
         ds = ds.batch(2).map(preprocessor)
@@ -760,8 +757,6 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
     @pytest.mark.requires_tf
     def test_tf_data_map_image_token_without_image_raises(self):
         """The placeholder guard also fires inside a `tf.data` trace."""
-        import tensorflow as tf
-
         preprocessor = self._image_preprocessor()
         ds = tf.data.Dataset.from_tensor_slices(["<image>describe"] * 2)
         ds = ds.batch(2).map(preprocessor)

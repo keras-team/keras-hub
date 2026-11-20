@@ -135,6 +135,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         self.assertEqual(config["add_end_token"], True)
 
     @pytest.mark.extra_large
+    @pytest.mark.requires_tf
     def test_all_presets(self):
         for preset in T5Gemma2Seq2SeqLMPreprocessor.presets:
             self.run_preset_test(

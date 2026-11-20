@@ -105,9 +105,11 @@ class RWKVTokenizerTest(TestCase):
         )
         self.assertEqual(tok.vocabulary_size(), 2)
 
+
+class RWKVTokenizerRequiresTFTest(TestCase):
     def test_requires_tensorflow(self):
         # `tokenize` is TensorFlow only, so the tokenizer asserts at
         # construction rather than failing cryptically on first call.
         with mock.patch.object(tensor_utils, "tf", None):
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
-                RWKVTokenizer(vocabulary=self.vocab)
+                RWKVTokenizer(vocabulary=["0 '\\n' 1"])

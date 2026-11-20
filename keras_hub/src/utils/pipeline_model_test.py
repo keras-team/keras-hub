@@ -89,7 +89,6 @@ class FunctionalPipeline(PipelineModel):
 
 
 class TestNoopPipelineModel(TestCase):
-    @pytest.mark.requires_tf
     def test_fit(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -98,12 +97,21 @@ class TestNoopPipelineModel(TestCase):
         model.compile(loss="mse")
         # With sample weight.
         model.fit(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
         # Without sample weight.
         model.fit(x=x, y=y, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     @pytest.mark.requires_tf
+    def test_fit_tf_data(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        sw = np.random.uniform(size=(8, 1))
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        # With sample weight.
+        model.fit(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
+        # Without sample weight.
+        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
+
     def test_evaluate(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -112,17 +120,32 @@ class TestNoopPipelineModel(TestCase):
         model.compile(loss="mse")
         # With sample weight.
         model.evaluate(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
         # Without sample weight.
         model.evaluate(x=x, y=y, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     @pytest.mark.requires_tf
+    def test_evaluate_tf_data(self):
+        x = np.random.uniform(size=(8, 5))
+        y = np.random.uniform(size=(8, 1))
+        sw = np.random.uniform(size=(8, 1))
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        # With sample weight.
+        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
+        # Without sample weight.
+        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
+
     def test_predict(self):
         x = np.random.uniform(size=(8, 5))
         model = NoopPipeline()
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
+
+    @pytest.mark.requires_tf
+    def test_predict_tf_data(self):
+        x = np.random.uniform(size=(8, 5))
+        model = NoopPipeline()
+        model.compile(loss="mse")
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_on_batch(self):
@@ -945,9 +968,23 @@ class TestTfDataFallback(TestCase):
             model.fit(x=tf.constant("test"))
 
 
-@pytest.mark.requires_tf
 class TestInputErrors(TestCase):
     def test_unbatched_input_raises(self):
+        model = NoopPipeline()
+        model.compile(loss="mse")
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x="test")
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x=np.zeros((1, 5)), y=np.array(0.0))
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(
+                x=np.zeros((1, 5)),
+                y=np.zeros((1, 1)),
+                sample_weight=0.0,
+            )
+
+    @pytest.mark.requires_tf
+    def test_unbatched_tf_tensor_input_raises(self):
         model = FeaturePipeline()
         with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
             model.fit(x=tf.constant("test"))
@@ -957,5 +994,3 @@ class TestInputErrors(TestCase):
             model.fit(
                 x=tf.constant(["test"]), y=tf.constant([0]), sample_weight=0.0
             )
-        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
-            model.fit(x="test")

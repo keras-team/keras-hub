@@ -224,9 +224,11 @@ The test suite also has to pass when TensorFlow is not installed. Mark a
 test, or a test class in which every test needs TensorFlow, with
 `@pytest.mark.requires_tf`. It is skipped when TensorFlow is missing and
 unchanged when it is installed. Test files must import without TensorFlow:
-use `from keras_hub.src.utils.tensor_utils import tf`, which is `None` when
-TensorFlow is missing, instead of `import tensorflow as tf`. If your change
-makes a marked test pass without TensorFlow, remove the marker.
+subclass `keras_hub.src.tests.test_case.TestCase` (not `tf.test.TestCase`),
+and use `from keras_hub.src.utils.tensor_utils import tf` (which is `None`
+when TensorFlow is missing) instead of `import tensorflow as tf` or
+`pytest.importorskip("tensorflow")`. If your change makes a marked test
+pass without TensorFlow, remove the marker.
 
 ## Generating public API and formatting the code
 

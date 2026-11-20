@@ -25,6 +25,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
 
 
+@pytest.mark.requires_tf
 class SAM3PromptableConceptImageSegmenterTest(TestCase):
     def setUp(self):
         self.batch_size = 2
@@ -120,7 +121,6 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
         }
         self.input_data = self.preprocessor(self.train_data)
 
-    @pytest.mark.requires_tf
     def test_sam3_pc_basics(self):
         pytest.skip(reason="TODO: enable after fit flow is figured out.")
         self.run_task_test(
@@ -139,7 +139,6 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             atol=1e-4,  # Numerical discrepancies when running on the JAX GPU.
         )
 
-    @pytest.mark.requires_tf
     def test_end_to_end_model_predict(self):
         model = SAM3PromptableConceptImageSegmenter(**self.init_kwargs)
         outputs = model.predict(self.train_data)
@@ -175,7 +174,6 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
         condition=keras.backend.backend() == "torch",
         reason="torchvision::nms is not registered in the torch.export op set.",
     )
-    @pytest.mark.requires_tf
     def test_litert_export(self):
         self.run_litert_export_test(
             cls=SAM3PromptableConceptImageSegmenter,
@@ -185,12 +183,23 @@ class SAM3PromptableConceptImageSegmenterTest(TestCase):
             output_thresholds={"*": {"max": 1e-2, "mean": 5e-3}},
         )
 
-    @pytest.mark.requires_tf
+
+class SAM3PromptableConceptImageSegmenterRequiresTFTest(TestCase):
     def test_preprocessor_requires_tensorflow(self):
         # The preprocessor's `call` is TensorFlow only, so it asserts at
         # construction rather than failing cryptically on first call.
+        image_converter = SAM3ImageConverter(image_size=(28, 28))
+        vocab = {
+            "<|endoftext|>": 0,
+            "<|startoftext|>": 1,
+            "!": 2,
+            "a": 3,
+            "b": 4,
+            "ab": 5,
+        }
+        tokenizer = SAM3Tokenizer(vocab, ["a b"])
         with mock.patch.object(tensor_utils, "tf", None):
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
                 SAM3PromptableConceptImageSegmenterPreprocessor(
-                    self.tokenizer, self.image_converter
+                    tokenizer, image_converter
                 )

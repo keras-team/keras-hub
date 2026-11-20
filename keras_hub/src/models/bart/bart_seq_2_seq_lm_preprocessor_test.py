@@ -100,12 +100,15 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         output = preprocessor.generate_preprocess([" airplane at airport"])
         self.assertAllClose(output, expected)
 
-    @pytest.mark.requires_tf
     def test_empty_decoder_text(self):
         preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         # Raw inputs (the TensorFlow-free path) and tensors are both handled.
         self.assertEqual(preprocessor._empty_decoder_text("a"), "")
         self.assertEqual(preprocessor._empty_decoder_text(["a", "b"]), ["", ""])
+
+    @pytest.mark.requires_tf
+    def test_empty_decoder_text_tf(self):
+        preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         self.assertAllEqual(
             preprocessor._empty_decoder_text(tf.constant(["a", "b"])),
             ["", ""],

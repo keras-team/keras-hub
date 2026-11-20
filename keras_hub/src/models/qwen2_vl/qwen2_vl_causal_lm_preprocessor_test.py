@@ -13,6 +13,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
     Qwen2VLVideoConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Qwen2VLCausalLMPreprocessorTest(TestCase):
@@ -374,8 +375,6 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
     @pytest.mark.requires_tf
     def test_tf_data_map_text_only_dict(self):
         """Media-free dict inputs trace through `tf.data.Dataset.map`."""
-        import tensorflow as tf
-
         preprocessor = Qwen2VLCausalLMPreprocessor(**self.init_kwargs)
         ds = tf.data.Dataset.from_tensor_slices(
             {"prompts": ["air", "airport"]}

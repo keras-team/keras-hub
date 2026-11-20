@@ -44,7 +44,6 @@ class BytePairTokenizerTest(TestCase):
             ],
         )
 
-    @pytest.mark.requires_tf
     def test_tokenize_list_input(self):
         input_data = ["brown.", "black."]
         call_output = self.tokenizer(input_data)
@@ -53,9 +52,11 @@ class BytePairTokenizerTest(TestCase):
         self.assertAllEqual(call_output, expected)
         self.assertAllEqual(tokenize_output, expected)
 
+    @pytest.mark.requires_tf
+    def test_tokenize_tensor_input(self):
         input_data = tf.convert_to_tensor(["brown.", "black."])
         encoded = self.tokenizer(input_data)
-        self.assertAllEqual(encoded, expected)
+        self.assertAllEqual(encoded, [[31876, 4], [14178, 4]])
 
     def test_tokenize_string_output(self):
         input_data = ["quick brown fox.", "slow black bear."]

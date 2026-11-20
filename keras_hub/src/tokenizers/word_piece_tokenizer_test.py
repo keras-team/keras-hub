@@ -7,15 +7,12 @@ from keras.src.saving import serialization_lib
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_hub.src.utils.tensor_utils import tf
+from keras_hub.src.utils.tensor_utils import tf_text
 
 try:
     import grain
 except ImportError:
     grain = None
-try:
-    import tensorflow_text as tf_text
-except ImportError:
-    tf_text = None
 
 
 class WordPieceTokenizerTest(TestCase):
@@ -341,13 +338,9 @@ class WordPieceTokenizerTest(TestCase):
             ):
                 tokenizer.set_vocabulary(vocab_path)
 
-    @pytest.mark.requires_tf
     def test_split_false_ragged_inputs(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = self.make_tokenizer(vocabulary=vocab_data, split=False)
-        # A batch of pre-split words.
-        input_data = tf.ragged.constant([["the", "quick"], ["Brown", "fox"]])
-        self.assertAllEqual(tokenizer(input_data), [[1, 2, 3], [0, 6]])
         self.assertAllEqual(
             tokenizer([["the", "quick"], ["Brown", "fox"]]), [[1, 2, 3], [0, 6]]
         )
@@ -357,6 +350,13 @@ class WordPieceTokenizerTest(TestCase):
             self.assertAllEqual(tokenizer("quick"), [2, 3])
 
     @pytest.mark.requires_tf
+    def test_split_false_ragged_inputs_tf(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data, split=False)
+        # A batch of pre-split words.
+        input_data = tf.ragged.constant([["the", "quick"], ["Brown", "fox"]])
+        self.assertAllEqual(tokenizer(input_data), [[1, 2, 3], [0, 6]])
+
     def test_bytes_and_tensor_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept numpy string arrays.")
@@ -367,13 +367,18 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(
             tokenizer(np.array(["the quick", "brown fox"])), expected
         )
+        self.assertAllEqual(tokenizer(b"the quick"), expected[0])
+
+    @pytest.mark.requires_tf
+    def test_bytes_and_tensor_inputs_tf(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        expected = [[1, 2, 3], [4, 5, 6]]
         self.assertAllEqual(
             tokenizer(tf.constant(["the quick", "brown fox"])), expected
         )
-        self.assertAllEqual(tokenizer(b"the quick"), expected[0])
         self.assertAllEqual(tokenizer(tf.constant("the quick")), expected[0])
 
-    @pytest.mark.requires_tf
     def test_detokenize_inputs(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = self.make_tokenizer(vocabulary=vocab_data)
@@ -381,9 +386,6 @@ class WordPieceTokenizerTest(TestCase):
         expected = ["the quick", "brown fox"]
         self.assertAllEqual(tokenizer.detokenize(ids), expected)
         self.assertAllEqual(tokenizer.detokenize(np.array(ids)), expected)
-        self.assertAllEqual(
-            tokenizer.detokenize(tf.constant(ids, "int32")), expected
-        )
         self.assertAllEqual(tokenizer.detokenize(ids[0]), expected[0])
         self.assertAllEqual(tokenizer.detokenize(np.array(ids[0])), expected[0])
         # Leading suffix tokens and bare suffix indicators are kept as is.
@@ -394,6 +396,16 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(tokenizer.detokenize([1, 2]), "the ##")
         self.assertAllEqual(tokenizer.detokenize([1, 4, 3]), "the a##bick")
         self.assertAllEqual(tokenizer.detokenize([]), "")
+
+    @pytest.mark.requires_tf
+    def test_detokenize_inputs_tf(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        ids = [[1, 2, 3], [4, 5, 6]]
+        self.assertAllEqual(
+            tokenizer.detokenize(tf.constant(ids, "int32")),
+            ["the quick", "brown fox"],
+        )
 
     def test_long_words_map_to_oov(self):
         vocab_data = ["[UNK]", "a", "##a"]
@@ -423,6 +435,7 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(batch, [[1, 2, 3, 0], [4, 5, 6, 0]])
         self.assertAllEqual(batch, tokenizer(input_data))
 
+    @pytest.mark.requires_tf
     @pytest.mark.skipif(tf_text is None, reason="tensorflow-text not installed")
     def test_python_path_matches_tf_path(self):
         if not self._allow_python_workflow:

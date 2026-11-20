@@ -119,11 +119,13 @@ class PreprocessingLayerTest(TestCase):
         self.assertIs(output["x"], x)
         self.assertIsNone(output["y"])
 
-    @pytest.mark.requires_tf
     def test_python_workflow_is_the_default(self):
         layer = LabelsLayer()
         self.assertTrue(layer._allow_python_workflow)
         self.assertFalse(layer._use_tf_workflow())
+
+    @pytest.mark.requires_tf
+    def test_disallow_python_workflow(self):
         layer = LabelsLayer(_allow_python_workflow=False)
         self.assertFalse(layer._allow_python_workflow)
         self.assertTrue(layer._use_tf_workflow())

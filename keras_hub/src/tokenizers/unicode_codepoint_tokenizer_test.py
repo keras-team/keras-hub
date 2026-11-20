@@ -6,15 +6,12 @@ from keras_hub.src.tokenizers.unicode_codepoint_tokenizer import (
     UnicodeCodepointTokenizer,
 )
 from keras_hub.src.utils.tensor_utils import tf
+from keras_hub.src.utils.tensor_utils import tf_text
 
 try:
     import grain
 except ImportError:
     grain = None
-try:
-    import tensorflow_text as tf_text
-except ImportError:
-    tf_text = None
 
 
 class UnicodeCodepointTokenizerTest(TestCase):
@@ -263,7 +260,6 @@ class UnicodeCodepointTokenizerTest(TestCase):
         tokens = [tokenizer.id_to_token(i) for i in input_ids]
         self.assertAllEqual(tokens, expected_tokens)
 
-    @pytest.mark.requires_tf
     def test_bytes_and_tensor_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept numpy string arrays.")
@@ -271,8 +267,13 @@ class UnicodeCodepointTokenizerTest(TestCase):
         expected = [[110, 105, 110, 106, 97], [9600, 9601]]
         self.assertAllEqual(tokenizer([b"ninja", "▀▁".encode()]), expected)
         self.assertAllEqual(tokenizer(np.array(["ninja", "▀▁"])), expected)
-        self.assertAllEqual(tokenizer(tf.constant(["ninja", "▀▁"])), expected)
         self.assertAllEqual(tokenizer(b"ninja"), expected[0])
+
+    @pytest.mark.requires_tf
+    def test_bytes_and_tensor_inputs_tf(self):
+        tokenizer = self.make_tokenizer()
+        expected = [[110, 105, 110, 106, 97], [9600, 9601]]
+        self.assertAllEqual(tokenizer(tf.constant(["ninja", "▀▁"])), expected)
         self.assertAllEqual(tokenizer(tf.constant("ninja")), expected[0])
 
     def test_tokenize_invalid_bytes(self):
@@ -286,7 +287,6 @@ class UnicodeCodepointTokenizerTest(TestCase):
             tokenizer(input_data), [[110, 105, 106, 97], [], [111, 107]]
         )
 
-    @pytest.mark.requires_tf
     def test_detokenize_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept int64 inputs.")
@@ -296,11 +296,16 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertAllEqual(
             tokenizer.detokenize(np.array(ids)), ["ninja", "▀▁"]
         )
+        self.assertAllEqual(tokenizer.detokenize(ids[0]), "ninja")
+        self.assertAllEqual(tokenizer.detokenize(np.array(ids[0])), "ninja")
+
+    @pytest.mark.requires_tf
+    def test_detokenize_inputs_tf(self):
+        tokenizer = self.make_tokenizer()
+        ids = [[110, 105, 110, 106, 97, 0, 0], [9600, 9601, 0, 0, 0, 0, 0]]
         self.assertAllEqual(
             tokenizer.detokenize(tf.constant(ids)), ["ninja", "▀▁"]
         )
-        self.assertAllEqual(tokenizer.detokenize(ids[0]), "ninja")
-        self.assertAllEqual(tokenizer.detokenize(np.array(ids[0])), "ninja")
 
     @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_outputs_numpy(self):
@@ -323,6 +328,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         )
         self.assertAllEqual(batch, tokenizer(input_data))
 
+    @pytest.mark.requires_tf
     @pytest.mark.skipif(tf_text is None, reason="tensorflow-text not installed")
     def test_python_path_matches_tf_path(self):
         if not self._allow_python_workflow:
