@@ -1,3 +1,5 @@
+import tempfile
+
 import pytest
 
 from keras_hub.src.models.backbone import Backbone
@@ -41,5 +43,35 @@ class TestTask(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model.preprocessor.tokenizer, XLMRobertaTokenizer)
+
+    @pytest.mark.large
+    def test_sequence_classification_head_requires_num_classes(self):
+        pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+
+        config = transformers.BertConfig(
+            vocab_size=100,
+            hidden_size=32,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            intermediate_size=37,
+            max_position_embeddings=64,
+            num_labels=3,
+            architectures=["BertForSequenceClassification"],
+        )
+        with tempfile.TemporaryDirectory() as preset_dir:
+            transformers.BertForSequenceClassification(config).save_pretrained(
+                preset_dir
+            )
+            # The BERT converter cannot port a classification head yet, so
+            # the fine-tuned head cannot be restored.
+            with self.assertRaisesRegex(ValueError, "Pass `num_classes`"):
+                TextClassifier.from_preset(preset_dir, preprocessor=None)
+            keras_model = TextClassifier.from_preset(
+                preset_dir, preprocessor=None, num_classes=3
+            )
+
+        self.assertIsInstance(keras_model, BertTextClassifier)
+        self.assertEqual(keras_model.num_classes, 3)
 
     # TODO: compare numerics with huggingface model.
