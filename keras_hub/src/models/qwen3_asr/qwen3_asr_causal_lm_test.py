@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -9,15 +10,19 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm import Qwen3ASRCausalLM
-from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
-    Qwen3ASRPreprocessor,
+from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm_preprocessor import (
+    Qwen3ASRCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Qwen3ASRCausalLMTest(TestCase):
     def setUp(self):
+        keras.utils.set_random_seed(0)
+
         # Minimal BPE vocab
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
@@ -31,10 +36,12 @@ class Qwen3ASRCausalLMTest(TestCase):
         self.vocab += [
             "<|audio_pad|>",
             "<|audio_info|>",
+            "<|im_start|>",
             "<|im_end|>",
             "<|endoftext|>",
             "<|audio_start|>",
             "<|audio_end|>",
+            "<asr_text>",
         ]
         self.vocab = sorted(set(self.vocab))  # Remove duplicates
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
@@ -49,11 +56,10 @@ class Qwen3ASRCausalLMTest(TestCase):
         self.audio_converter = Qwen3ASRAudioConverter(
             num_mels=128,
             sampling_rate=16000,
-            max_audio_length=1.05,
             n_window=50,
         )
 
-        self.preprocessor = Qwen3ASRPreprocessor(
+        self.preprocessor = Qwen3ASRCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             audio_converter=self.audio_converter,
             sequence_length=40,
@@ -96,11 +102,16 @@ class Qwen3ASRCausalLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
+        # Grain (`_call_python` NumPy STFT) and `tf.data` (`_call_tf` STFT)
+        # differ by ~1.3e-6, which TF32 matmuls on GPU amplify to ~2.5e-5.
+        tol = 1e-4 if running_on_gpu() else 1e-6
         self.run_task_test(
             cls=Qwen3ASRCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 40, self.vocabulary_size),
+            atol=tol,
+            rtol=tol,
         )
 
     @pytest.mark.large
@@ -121,9 +132,20 @@ class Qwen3ASRCausalLMTest(TestCase):
             "audio": audio_input,
         }
 
+        preprocessed_prompt = self.preprocessor.generate_preprocess(
+            {"prompts": [prompt], "audio": [audio_input]}
+        )
+        prompt_only = self.preprocessor.generate_postprocess(
+            {
+                "token_ids": preprocessed_prompt["token_ids"],
+                "padding_mask": preprocessed_prompt["padding_mask"],
+            }
+        )[0]
+
         output = causal_lm.generate(inputs)
         self.assertIsInstance(output, str)
         self.assertIn(prompt, output)
+        self.assertGreater(len(output), len(prompt_only))
 
         # Test batch generate
         batch_inputs = {
@@ -138,6 +160,11 @@ class Qwen3ASRCausalLMTest(TestCase):
         batch_output = causal_lm.generate(batch_inputs)
         self.assertEqual(len(batch_output), 2)
         self.assertIsInstance(batch_output[0], str)
+
+    def test_generate_without_preprocessor_raises(self):
+        causal_lm = Qwen3ASRCausalLM(backbone=self.backbone, preprocessor=None)
+        with self.assertRaises(ValueError):
+            causal_lm.generate(self.input_data)
 
     def test_generate_strip_prompt(self):
         causal_lm = Qwen3ASRCausalLM(**self.init_kwargs)
@@ -164,12 +191,9 @@ class Qwen3ASRCausalLMTest(TestCase):
                 "padding_mask": preprocessed_prompt["padding_mask"],
             }
         )
-        stop_token_ids = [
-            self.tokenizer.end_token_id,
-            self.tokenizer.end_token2_id,
-        ]
+        stop_token_id = self.tokenizer.end_token_id
 
-        for stop_token_id in stop_token_ids:
+        for stop_arg in ([stop_token_id], "auto"):
             causal_lm = Qwen3ASRCausalLM(**self.init_kwargs)
             call_with_cache = causal_lm.call_with_cache
 
@@ -183,7 +207,7 @@ class Qwen3ASRCausalLMTest(TestCase):
             with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
                 output = causal_lm.generate(
                     inputs,
-                    stop_token_ids=[stop_token_id],
+                    stop_token_ids=stop_arg,
                 )
 
             self.assertEqual(output, expected_output)
@@ -204,14 +228,34 @@ class Qwen3ASRCausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in Qwen3ASRCausalLM.presets:
-            self.run_preset_test(
-                cls=Qwen3ASRCausalLM,
-                preset=preset,
-                input_data=self.input_data,
-            )
+    @pytest.mark.large
+    def test_from_preset_round_trip(self):
+        preset_dir = self.get_temp_dir()
+        causal_lm = Qwen3ASRCausalLM(**self.init_kwargs)
+        causal_lm.save_to_preset(preset_dir)
+
+        restored = Qwen3ASRCausalLM.from_preset(preset_dir)
+        inputs = {
+            "prompts": " airplane",
+            "audio": np.zeros((16000,), dtype="float32"),
+        }
+        self.assertEqual(
+            restored.generate(inputs, max_length=20),
+            causal_lm.generate(inputs, max_length=20),
+        )
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_generate_tf_dataset(self):
+        causal_lm = Qwen3ASRCausalLM(**self.init_kwargs)
+        ds = tf.data.Dataset.from_tensor_slices(
+            {
+                "prompts": [" airplane", " airport"],
+                "audio": np.zeros((2, 16000), dtype="float32"),
+            }
+        ).batch(2)
+        outputs = causal_lm.generate(ds, max_length=25)
+        self.assertEqual(len(outputs), 2)
+        self.assertIsInstance(outputs[0], str)
 
     def test_generate_single_prompt_with_backend_tensor_audio(self):
         causal_lm = Qwen3ASRCausalLM(**self.init_kwargs)

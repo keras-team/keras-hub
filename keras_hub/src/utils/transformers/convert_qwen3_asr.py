@@ -7,6 +7,7 @@ backbone_cls = Qwen3ASRBackbone
 
 
 def load_audio_converter_config(preset, transformers_config):
+    """Load Qwen3ASRAudioConverter config from a HuggingFace preset."""
     processor_config = load_json(preset, "processor_config.json")
     feature_extractor = processor_config["feature_extractor"]
     return {
@@ -20,12 +21,30 @@ def load_audio_converter_config(preset, transformers_config):
 
 
 def convert_backbone_config(transformers_config):
+    """Convert HuggingFace Qwen3-ASR config to Qwen3ASRBackbone kwargs."""
     text_config = transformers_config["text_config"]
     audio_config = transformers_config["audio_config"]
 
-    rope_theta = text_config.get("rope_parameters", {}).get("rope_theta")
+    rope_theta = None
+    if (
+        "rope_parameters" in text_config
+        and text_config["rope_parameters"] is not None
+        and "rope_theta" in text_config["rope_parameters"]
+    ):
+        rope_theta = text_config["rope_parameters"]["rope_theta"]
     if rope_theta is None:
         rope_theta = text_config["rope_theta"]
+
+    tie_word_embeddings = (
+        transformers_config["tie_word_embeddings"]
+        if "tie_word_embeddings" in transformers_config
+        else text_config["tie_word_embeddings"]
+    )
+    dropout = (
+        text_config["attention_dropout"]
+        if "attention_dropout" in text_config
+        else 0.0
+    )
 
     config = {
         "vocabulary_size": text_config["vocab_size"],
@@ -36,11 +55,12 @@ def convert_backbone_config(transformers_config):
         "num_key_value_heads": text_config["num_key_value_heads"],
         "intermediate_dim": text_config["intermediate_size"],
         "layer_norm_epsilon": text_config["rms_norm_eps"],
+        "dropout": dropout,
         "rope_max_wavelength": rope_theta,
         "sliding_window_size": text_config["sliding_window"]
         if text_config["use_sliding_window"]
         else None,
-        "tie_word_embeddings": text_config["tie_word_embeddings"],
+        "tie_word_embeddings": tie_word_embeddings,
     }
 
     config.update(
@@ -67,6 +87,8 @@ def convert_backbone_config(transformers_config):
 
 
 def convert_weights(backbone, loader, transformers_config):
+    """Port HuggingFace Qwen3-ASR weights into a Qwen3ASRBackbone instance."""
+
     def text_hf_key(suffix):
         return f"model.language_model.{suffix}"
 
@@ -75,17 +97,6 @@ def convert_weights(backbone, loader, transformers_config):
 
     def proj_hf_key(suffix):
         return f"model.multi_modal_projector.{suffix}"
-
-    # Ensure backbone is built with correct shapes
-    if not backbone.built:
-        backbone.build(
-            {
-                "token_ids": (None, 1),
-                "padding_mask": (None, 1),
-                "audio_mel": (None, 100, backbone.audio_num_mel_bins),
-                "audio_mask": (None, 100),
-            }
-        )
 
     # Text Backbone
     loader.port_weight(
@@ -336,10 +347,12 @@ def convert_weights(backbone, loader, transformers_config):
 
 
 def convert_tokenizer(cls, preset, **kwargs):
+    """Convert HuggingFace Qwen3-ASR tokenizer assets to Qwen3ASRTokenizer."""
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
-    merges = [" ".join(item) for item in merges]
+    if merges and isinstance(merges[0], list):
+        merges = [" ".join(item) for item in merges]
 
     special_tokens = set()
     for token in tokenizer_config["added_tokens"]:
@@ -347,10 +360,6 @@ def convert_tokenizer(cls, preset, **kwargs):
             vocab[token["content"]] = token["id"]
             special_tokens.add(token["content"])
 
-    kwargs.update(
-        {
-            "unsplittable_tokens": list(special_tokens),
-        }
-    )
+    kwargs.setdefault("unsplittable_tokens", list(special_tokens))
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)

@@ -48,7 +48,9 @@ class Qwen3ASRScatterAudio(keras.layers.Layer):
             safe_cum_mask, (batch_size, seq_len, hidden_dim)
         )
 
-        # Gather potential updates along axis 1 (sequence length)
+        # Pad by 1 step so 0-length audio_embeds never crashes take_along_axis
+        # on PyTorch; max_index is computed before padding.
+        audio_embeds = ops.pad(audio_embeds, [[0, 0], [0, 1], [0, 0]])
         potential_updates = ops.take_along_axis(
             audio_embeds, safe_cum_mask, axis=1
         )
@@ -83,6 +85,13 @@ class Qwen3ASRBackbone(Backbone):
         hidden_dim: int. The size of the text decoder hidden dimension.
         intermediate_dim: int. The FFN intermediate dimension for the text
             decoder.
+        audio_num_layers: int. Number of audio encoder layers.
+        audio_num_attention_heads: int. Number of audio encoder attention heads.
+        audio_intermediate_dim: int. FFN intermediate dimension for the audio
+            encoder.
+        audio_d_model: int. Hidden dimension of the audio encoder.
+        audio_downsample_hidden_size: int. Hidden size of conv stem in the
+            audio encoder.
         rope_max_wavelength: int, optional. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to
             `1000000`.
@@ -95,20 +104,19 @@ class Qwen3ASRBackbone(Backbone):
             embeddings. Defaults to `True`.
         sliding_window_size: int, optional. Size of the sliding window for
             attention when enabled. Defaults to `32768`.
-        audio_num_mel_bins: int. Number of mel bins in the input spectrogram.
-        audio_num_layers: int. Number of audio encoder layers.
-        audio_num_attention_heads: int. Number of audio encoder attention heads.
-        audio_intermediate_dim: int. FFN intermediate dimension for the audio
-            encoder.
-        audio_d_model: int. Hidden dimension of the audio encoder.
-        audio_n_window: int. Half the chunk size for the audio encoder.
-        audio_n_window_infer: int. Inference window size for the audio encoder.
-        audio_downsample_hidden_size: int. Hidden size of conv stem in the
-            audio encoder.
-        audio_max_position_embeddings: int. Max position embeddings for the
-            audio encoder chunk.
-        audio_token_id: int. The token ID used as a placeholder for audio
-            features.
+        audio_num_mel_bins: int, optional. Number of mel bins in the input
+            spectrogram. Defaults to `128`.
+        audio_n_window: int, optional. Half the chunk size for the audio
+            encoder. Defaults to `50`.
+        audio_n_window_infer: int, optional. Inference window size for the audio
+            encoder. Defaults to `800`.
+        audio_max_position_embeddings: int, optional. Max position embeddings
+            for the audio encoder chunk. Defaults to `13`.
+        audio_token_id: int, optional. The token ID used as a placeholder for
+            audio features. Defaults to `151676`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`, optional. The
+            dtype to use for model computations and weights. Defaults to
+            `None`.
 
     Examples:
     ```python

@@ -9,18 +9,31 @@ from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
 from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
 )
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import _to_host
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import Qwen3ASRTokenizer
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import in_tf_function
-from keras_hub.src.utils.tensor_utils import preprocessing_function
+from keras_hub.src.utils.tensor_utils import tf
 
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
+
+def _is_1d_audio_list(x):
+    return (
+        isinstance(x, list)
+        and len(x) > 0
+        and isinstance(x[0], (int, float, np.integer, np.floating))
+    )
+
+
+def _decode_prompt(prompt):
+    if isinstance(prompt, np.ndarray) and prompt.ndim == 0:
+        prompt = prompt.item()
+    if isinstance(prompt, (bytes, np.bytes_)):
+        return prompt.decode("utf-8")
+    return prompt
 
 
 def _get_audio_chunk_token_length(n_window):
@@ -55,11 +68,15 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
     sequence.
 
     Args:
-        tokenizer: A Qwen3-ASR tokenizer.
-        audio_converter: Optional audio converter used to compute mel features.
-        sequence_length: Maximum length of packed token sequences.
-        add_start_token: Whether to prepend the tokenizer start token.
-        add_end_token: Whether to append the tokenizer end token.
+        tokenizer: A `Qwen3ASRTokenizer` instance.
+        audio_converter: A `Qwen3ASRAudioConverter` instance, optional. Audio
+            converter used to compute mel features. Defaults to `None`.
+        sequence_length: int, optional. Maximum length of packed token
+            sequences. Defaults to `1024`.
+        add_start_token: bool, optional. Whether to prepend the tokenizer start
+            token. Defaults to `False`.
+        add_end_token: bool, optional. Whether to append the tokenizer end
+            token. Defaults to `True`.
 
     Example:
         ```python
@@ -105,10 +122,10 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
     def build(self, input_shape):
         start_value = self.tokenizer.start_token_id
         if start_value is None:
-            start_value = 0
+            start_value = []
         end_value = self.tokenizer.end_token_id
         if end_value is None:
-            end_value = 0
+            end_value = []
         pad_value = self.tokenizer.pad_token_id
         if pad_value is None:
             pad_value = 0
@@ -119,6 +136,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
             pad_value=pad_value,
             sep_value=[],
             sequence_length=self.sequence_length,
+            truncate="waterfall",
         )
         self.built = True
 
@@ -126,35 +144,119 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         if add_end_token is None:
             add_end_token = self.add_end_token if "responses" in x else False
 
-        audios = x["audio"]
+        audios = x.get("audio")
         prompts = x["prompts"]
+        if self.audio_converter is not None and audios is None:
+            raise ValueError(
+                "`audio` must be provided when `audio_converter` is set."
+            )
 
         is_tf_tensor = tf is not None and isinstance(prompts, tf.Tensor)
         if is_tf_tensor:
+            audios = _to_host(audios)
             is_batched = prompts.shape.rank > 0
             if not is_batched:
                 prompts = tf.expand_dims(prompts, 0)
                 if isinstance(audios, (tf.Tensor, tf.RaggedTensor)):
                     audios = tf.expand_dims(audios, 0)
+                elif _is_1d_audio_list(audios):
+                    audios = [audios]
+                elif isinstance(audios, np.ndarray):
+                    if audios.ndim == 1:
+                        audios = [audios]
+                elif audios is not None and keras.ops.is_tensor(audios):
+                    audios_np = convert_to_numpy(audios)
+                    if audios_np.ndim == 2 and audios_np.shape[0] == 1:
+                        audios = [audios_np[0]]
+                    else:
+                        audios = [audios_np]
+                elif audios is not None and not isinstance(
+                    audios, (list, tuple)
+                ):
+                    audios = [audios]
+            elif audios is not None:
+                if _is_1d_audio_list(audios) or (
+                    isinstance(audios, np.ndarray) and audios.ndim == 1
+                ):
+                    audios = [audios]
         else:
+            if isinstance(prompts, (bytes, np.bytes_)) or (
+                isinstance(prompts, np.ndarray) and prompts.ndim == 0
+            ):
+                prompts = _decode_prompt(prompts)
             is_batched = not isinstance(prompts, str)
             if not is_batched:
                 prompts = [prompts]
-                if isinstance(audios, np.ndarray):
-                    if len(audios.shape) == 1:
+                if audios is not None:
+                    audios = _to_host(audios)
+                    if keras.ops.is_tensor(audios) or isinstance(
+                        audios, np.ndarray
+                    ):
+                        audios_np = convert_to_numpy(audios)
+                        if audios_np.ndim == 1:
+                            audios = [audios_np]
+                        elif audios_np.ndim == 2 and audios_np.shape[0] == 1:
+                            audios = [audios_np[0]]
+                        else:
+                            audios = list(audios_np)
+                    elif _is_1d_audio_list(audios):
                         audios = [audios]
-                elif isinstance(audios, list):
-                    if len(audios) > 0 and isinstance(audios[0], (int, float)):
+                    elif isinstance(audios, (list, tuple)):
+                        audios = [
+                            convert_to_numpy(_to_host(a))
+                            if keras.ops.is_tensor(a)
+                            else a
+                            for a in audios
+                        ]
+                    else:
                         audios = [audios]
-                else:
-                    audios = [audios]
+            else:
+                prompts = [_decode_prompt(p) for p in prompts]
+                if audios is not None:
+                    audios = _to_host(audios)
+                    if keras.ops.is_tensor(audios) or isinstance(
+                        audios, np.ndarray
+                    ):
+                        audios_np = convert_to_numpy(audios)
+                        audios = (
+                            [audios_np]
+                            if audios_np.ndim == 1
+                            else list(audios_np)
+                        )
+                    elif _is_1d_audio_list(audios):
+                        audios = [audios]
+                    else:
+                        audios = [
+                            convert_to_numpy(_to_host(a))
+                            if keras.ops.is_tensor(a)
+                            else a
+                            for a in audios
+                        ]
 
         if self.audio_converter:
+            if is_tf_tensor and not isinstance(
+                audios, (tf.Tensor, tf.RaggedTensor)
+            ):
+                if len(prompts) != len(audios):
+                    raise ValueError(
+                        f"Number of prompts ({len(prompts)}) must match "
+                        f"number of audio clips ({len(audios)})."
+                    )
+                raw_lengths = tf.constant(
+                    [len(a) for a in audios], dtype=tf.int32
+                )
+            elif not is_tf_tensor and len(prompts) != len(audios):
+                raise ValueError(
+                    f"Number of prompts ({len(prompts)}) must match "
+                    f"number of audio clips ({len(audios)})."
+                )
+
             audio_mel = self.audio_converter(audios)
             if is_tf_tensor:
+                audio_mel = _to_host(audio_mel)
                 if isinstance(audios, tf.RaggedTensor):
                     raw_lengths = audios.row_lengths()
-                else:
+                elif isinstance(audios, tf.Tensor):
                     raw_lengths = tf.fill(
                         (tf.shape(audios)[0],), tf.shape(audios)[1]
                     )
@@ -222,6 +324,14 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
                 prompt, a_str, num_tokens = args
                 segments = tf.strings.split(prompt, sep="<audio>")
                 num_segments = tf.shape(segments)[0]
+                check_placeholders = tf.debugging.assert_less_equal(
+                    num_segments,
+                    2,
+                    message=(
+                        "Each prompt may contain at most one `<audio>` "
+                        "placeholder."
+                    ),
+                )
 
                 def replace_fn():
                     num_seg = tf.shape(segments)[0]
@@ -240,7 +350,8 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
                         lambda: prompt,
                     )
 
-                return tf.cond(num_segments > 1, replace_fn, prepend_fn)
+                with tf.control_dependencies([check_placeholders]):
+                    return tf.cond(num_segments > 1, replace_fn, prepend_fn)
 
             formatted_prompts = tf.map_fn(
                 process_sample,
@@ -250,13 +361,19 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         else:
             formatted_prompts = []
             for prompt, num_tokens in zip(prompts, num_audio_tokens):
+                placeholder_count = prompt.count("<audio>")
+                if placeholder_count > 1:
+                    raise ValueError(
+                        "Each prompt may contain at most one `<audio>` "
+                        f"placeholder, got {placeholder_count}."
+                    )
                 if num_tokens > 0:
                     audio_str = (
                         self.audio_bos_token
                         + self.audio_pad_token * num_tokens
                         + self.audio_eos_token
                     )
-                    if "<audio>" in prompt:
+                    if placeholder_count == 1:
                         formatted_prompt = prompt.replace("<audio>", audio_str)
                     else:
                         formatted_prompt = audio_str + prompt
@@ -270,8 +387,11 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
             responses = x["responses"]
             if is_tf_tensor and not is_batched:
                 responses = tf.expand_dims(responses, 0)
-            elif not is_batched and isinstance(responses, str):
-                responses = [responses]
+            elif not is_tf_tensor:
+                if not is_batched:
+                    responses = [_decode_prompt(responses)]
+                else:
+                    responses = [_decode_prompt(r) for r in responses]
             tokenized_responses = self.tokenizer(responses)
             segments = (tokenized_prompts, tokenized_responses)
         else:
@@ -284,20 +404,79 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
             add_end_value=add_end_token,
         )
 
+        if self.audio_converter is not None:
+            audio_pad_id = self.tokenizer.token_to_id(self.audio_pad_token)
+            model_token_ids = (
+                token_ids[:, :-1] if "responses" in x else token_ids
+            )
+            if in_tf_function():
+                actual_audio_tokens = tf.reduce_sum(
+                    tf.cast(
+                        tf.equal(_to_host(model_token_ids), audio_pad_id),
+                        tf.int32,
+                    ),
+                    axis=-1,
+                )
+                check = tf.debugging.assert_equal(
+                    actual_audio_tokens,
+                    tf.cast(num_audio_tokens, tf.int32),
+                    message=(
+                        "Audio placeholder tokens `<|audio_pad|>` were "
+                        "truncated by `sequence_length`. Increase "
+                        "`sequence_length` so the full prompt and all audio "
+                        "tokens fit."
+                    ),
+                )
+                with tf.control_dependencies([check]):
+                    token_ids = tf.identity(_to_host(token_ids))
+            else:
+                actual_audio_tokens = np.sum(
+                    convert_to_numpy(model_token_ids) == audio_pad_id,
+                    axis=-1,
+                )
+                expected_audio_tokens = convert_to_numpy(num_audio_tokens)
+                if not np.array_equal(
+                    actual_audio_tokens, expected_audio_tokens
+                ):
+                    raise ValueError(
+                        "Audio placeholder tokens `<|audio_pad|>` were "
+                        "truncated by `sequence_length` (expected "
+                        f"{expected_audio_tokens.tolist()}, got "
+                        f"{actual_audio_tokens.tolist()}). Increase "
+                        "`sequence_length` so the full prompt and all audio "
+                        "tokens fit."
+                    )
+
         padding_mask = token_ids != self.tokenizer.pad_token_id
         response_mask = segment_ids == 1
 
         if not is_batched:
-            reshape = tf.reshape if is_tf_tensor else keras.ops.reshape
-            token_ids = reshape(token_ids, (sequence_length,))
-            padding_mask = reshape(padding_mask, (sequence_length,))
-            response_mask = reshape(response_mask, (sequence_length,))
-            if audio_mel is not None:
-                audio_mel = reshape(
-                    audio_mel,
-                    (audio_mel.shape[-2], audio_mel.shape[-1]),
+            if is_tf_tensor:
+                token_ids = tf.reshape(_to_host(token_ids), (sequence_length,))
+                padding_mask = tf.reshape(
+                    _to_host(padding_mask), (sequence_length,)
                 )
-                audio_mask = reshape(audio_mask, (audio_mask.shape[-1],))
+                response_mask = tf.reshape(
+                    _to_host(response_mask), (sequence_length,)
+                )
+                if audio_mel is not None:
+                    audio_mel = tf.squeeze(audio_mel, axis=0)
+                    audio_mask = tf.squeeze(audio_mask, axis=0)
+            else:
+                token_ids = keras.ops.reshape(token_ids, (sequence_length,))
+                padding_mask = keras.ops.reshape(
+                    padding_mask, (sequence_length,)
+                )
+                response_mask = keras.ops.reshape(
+                    response_mask, (sequence_length,)
+                )
+                if audio_mel is not None:
+                    audio_mel = (
+                        np.squeeze(audio_mel, axis=0)
+                        if isinstance(audio_mel, np.ndarray)
+                        else keras.ops.squeeze(audio_mel, axis=0)
+                    )
+                    audio_mask = np.squeeze(audio_mask, axis=0)
 
         output = {
             "token_ids": token_ids,
@@ -305,9 +484,7 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         }
         if audio_mel is not None:
             output["audio_mel"] = audio_mel
-            output["audio_mask"] = convert_preprocessing_outputs_python(
-                audio_mask
-            )
+            output["audio_mask"] = audio_mask
 
         return convert_preprocessing_outputs_python((output, response_mask))
 
@@ -334,57 +511,11 @@ class Qwen3ASRCausalLMPreprocessor(CausalLMPreprocessor):
         else:
             return features
 
-    @preprocessing_function
-    def _call_tf(
-        self,
-        x,
-        y=None,
-        sample_weight=None,
-        sequence_length=None,
-    ):
-        return self._call_python(
-            x,
-            y=y,
-            sample_weight=sample_weight,
-            sequence_length=sequence_length,
-        )
-
-    def call(self, x, y=None, sample_weight=None, sequence_length=None):
-        if not self._allow_python_workflow or in_tf_function():
-            return self._call_tf(
-                x,
-                y=y,
-                sample_weight=sample_weight,
-                sequence_length=sequence_length,
-            )
-        else:
-            return self._call_python(
-                x,
-                y=y,
-                sample_weight=sample_weight,
-                sequence_length=sequence_length,
-            )
-
     def _generate_preprocess_python(self, x, sequence_length=None):
+        if not self.built:
+            self.build(None)
         sequence_length = sequence_length or self.sequence_length
         features, _ = self._process_audio_and_text(
             x, sequence_length, add_end_token=False
         )
         return features
-
-    @preprocessing_function
-    def _generate_preprocess_tf(self, x, sequence_length=None):
-        return self._generate_preprocess_python(
-            x, sequence_length=sequence_length
-        )
-
-    def generate_preprocess(self, x, sequence_length=None):
-        if not self.built:
-            self.build(None)
-        if not self._allow_python_workflow or in_tf_function():
-            return self._generate_preprocess_tf(x, sequence_length)
-        else:
-            return self._generate_preprocess_python(x, sequence_length)
-
-
-Qwen3ASRPreprocessor = Qwen3ASRCausalLMPreprocessor

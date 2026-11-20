@@ -8,9 +8,9 @@ from keras_hub.src.utils.keras_utils import clone_initializer
 def compute_sinusoidal_positional_embedding(
     length, channels, max_timescale=10000
 ):
-    if channels % 2 != 0:
-        raise ValueError("channels needs to be even")
-    log_timescale_increment = np.log(max_timescale) / (channels // 2 - 1)
+    if channels < 2 or channels % 2 != 0:
+        raise ValueError("channels must be an even integer >= 2")
+    log_timescale_increment = np.log(max_timescale) / max(channels // 2 - 1, 1)
     inv_timescales = np.exp(
         -log_timescale_increment * np.arange(channels // 2, dtype=np.float32)
     )
@@ -120,7 +120,7 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, mask=None, training=None):
-        x = inputs
+        x = ops.cast(inputs, self.compute_dtype)
         residual = x
         x = self._self_attention_layer_norm(x)
 
@@ -150,14 +150,15 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
             ops.matmul(query, ops.transpose(key, (0, 1, 3, 2))) * scale
         )
 
+        attn_weights = ops.cast(attn_weights, "float32")
         if mask is not None:
-            # mask shape: (B, L)
-            mask = ops.cast(mask, query.dtype)
-            # Reshape mask for attention: (B, 1, 1, L)
-            attention_mask = ops.reshape(mask, (batch_size, 1, 1, seq_len))
-            attn_weights = attn_weights + (1.0 - attention_mask) * -1e9
+            # Reshape boolean mask for attention: (B, 1, 1, L)
+            attention_mask = ops.reshape(
+                ops.cast(mask, "bool"), (batch_size, 1, 1, seq_len)
+            )
+            attn_weights = ops.where(attention_mask, attn_weights, -1e9)
 
-        attn_weights = ops.softmax(attn_weights, axis=-1)
+        attn_weights = ops.cast(ops.softmax(attn_weights, axis=-1), value.dtype)
         attn_output = ops.matmul(attn_weights, value)
         attn_output = ops.transpose(attn_output, (0, 2, 1, 3))
         attn_output = ops.reshape(
@@ -173,7 +174,14 @@ class Qwen3AudioEncoderTransformerLayer(keras.layers.Layer):
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         x = self._feedforward_dropout(x, training=training)
-        x = x + residual
+        if keras.backend.standardize_dtype(x.dtype) == "float16":
+            # Cast to float32 before residual add and clamp to fp16 range to
+            # avoid overflow.
+            x = ops.cast(x, "float32") + ops.cast(residual, "float32")
+            x = ops.clip(x, -65504.0, 65504.0)
+            x = ops.cast(x, "float16")
+        else:
+            x = x + residual
         return x
 
     def get_config(self):
@@ -212,6 +220,23 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        if n_window <= 0:
+            raise ValueError(f"`n_window` must be positive, got {n_window}.")
+        if n_window_infer < 2 * n_window:
+            raise ValueError(
+                "`n_window_infer` must be at least `2 * n_window`, got "
+                f"n_window_infer={n_window_infer}, n_window={n_window}."
+            )
+        self.chunk_len = n_window * 2
+        time_steps = self.chunk_len
+        for _ in range(3):
+            time_steps = (time_steps + 2 - 3) // 2 + 1
+        if time_steps > max_position_embeddings:
+            raise ValueError(
+                f"Post-CNN chunk length ({time_steps}) exceeds "
+                f"`max_position_embeddings` ({max_position_embeddings})."
+            )
+        self.chunk_output_len = time_steps
         self.num_mel_bins = num_mel_bins
         self.num_layers = num_layers
         self.num_attention_heads = num_attention_heads
@@ -225,8 +250,6 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         self.pos_emb_const = compute_sinusoidal_positional_embedding(
             self.max_position_embeddings, self.d_model
         ).astype("float32")
-
-        self.chunk_len = n_window * 2
 
         self.conv2d1 = keras.layers.Conv2D(
             self.downsample_hidden_size,
@@ -311,8 +334,14 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
 
     def call(self, input_features, input_features_mask):
         # input_features: (B, T, F)
-        x = input_features
-        batch_size = ops.shape(x)[0]
+        batch_size = ops.shape(input_features)[0]
+        if input_features.shape[1] == 0:
+            return ops.zeros(
+                (batch_size, 0, self.d_model), dtype=self.compute_dtype
+            )
+        x = input_features * ops.cast(
+            ops.expand_dims(input_features_mask, -1), input_features.dtype
+        )
         T = ops.shape(x)[1]
 
         pad_len = (self.chunk_len - (T % self.chunk_len)) % self.chunk_len
@@ -437,7 +466,7 @@ class Qwen3ASRAudioEncoder(keras.layers.Layer):
         T = input_features.shape[1]
         if T is not None:
             num_chunks = (T + self.chunk_len - 1) // self.chunk_len
-            output_len = num_chunks * self.max_position_embeddings
+            output_len = num_chunks * self.chunk_output_len
         else:
             output_len = None
         return keras.KerasTensor(
@@ -469,7 +498,7 @@ class Qwen3ASRMultiModalProjector(keras.layers.Layer):
         super().__init__(**kwargs)
         self.d_model = d_model
         self.output_dim = output_dim
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
 
         self.linear_1 = keras.layers.Dense(
             self.d_model, dtype=self.dtype_policy, name="linear_1"
@@ -504,7 +533,7 @@ class Qwen3ASRMultiModalProjector(keras.layers.Layer):
             {
                 "d_model": self.d_model,
                 "output_dim": self.output_dim,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
             }
         )
         return config

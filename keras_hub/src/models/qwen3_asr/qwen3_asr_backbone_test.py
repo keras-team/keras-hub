@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
 from keras_hub.src.tests.test_case import TestCase
@@ -101,3 +102,43 @@ class Qwen3ASRBackboneTest(TestCase):
         backbone = Qwen3ASRBackbone(**self.init_kwargs)
         output = backbone(inputs)
         self.assertEqual(output.shape, (self.batch_size, seq_len, 32))
+
+    def test_float16_masked_no_nan(self):
+        rng = np.random.RandomState(0)
+        backbone = Qwen3ASRBackbone(**self.init_kwargs, dtype="float16")
+        feats = rng.randn(2, 100, self.num_mel_bins).astype("float16")
+        mask = np.ones((2, 100), dtype="int32")
+        mask[0, 50:] = 0
+        token_ids = np.ones((2, 20), dtype="int32")
+        token_ids[0, 1:8] = self.audio_token_id
+        token_ids[1, 1:14] = self.audio_token_id
+        padding_mask = np.ones((2, 20), dtype="int32")
+        backbone_out = ops.convert_to_numpy(
+            backbone(
+                {
+                    "token_ids": token_ids,
+                    "padding_mask": padding_mask,
+                    "audio_mel": feats,
+                    "audio_mask": mask,
+                }
+            )
+        )
+        self.assertTrue(np.all(np.isfinite(backbone_out)))
+
+    def test_zero_length_audio_mel(self):
+        backbone = Qwen3ASRBackbone(**self.init_kwargs)
+        token_ids = np.ones((self.batch_size, 10), dtype="int32")
+        padding_mask = np.ones((self.batch_size, 10), dtype="int32")
+        audio_mel = np.zeros(
+            (self.batch_size, 0, self.num_mel_bins), dtype="float32"
+        )
+        audio_mask = np.zeros((self.batch_size, 0), dtype="int32")
+        output = backbone(
+            {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "audio_mel": audio_mel,
+                "audio_mask": audio_mask,
+            }
+        )
+        self.assertEqual(output.shape, (self.batch_size, 10, 32))

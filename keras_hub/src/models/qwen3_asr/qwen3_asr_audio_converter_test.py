@@ -1,4 +1,5 @@
 import grain
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -7,7 +8,6 @@ from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
     Qwen3ASRAudioConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
-from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.tensor_utils import tf
 
 
@@ -24,6 +24,10 @@ class Qwen3ASRAudioConverterTest(TestCase):
             run_training_check=False,
             run_precision_checks=False,
         )
+        converter = Qwen3ASRAudioConverter(num_mels=4, min_length=8000)
+        self.assertNotIn("max_audio_length", converter.get_config())
+        with self.assertRaises(TypeError):
+            Qwen3ASRAudioConverter(max_audio_length=1)
 
     def test_converter_call(self):
         # 1 second of audio at 16000Hz
@@ -56,6 +60,33 @@ class Qwen3ASRAudioConverterTest(TestCase):
 
         self.assertEqual(output.shape, (2, 100, 128))
 
+    def test_per_clip_mel_padding(self):
+        converter = Qwen3ASRAudioConverter(min_length=8000, n_window=50)
+        rng = np.random.default_rng(7)
+        short_clip = rng.uniform(-1.0, 1.0, size=(9600,)).astype("float32")
+        long_clip = rng.uniform(-1.0, 1.0, size=(16000,)).astype("float32")
+
+        solo_short = converter._call_python(short_clip)
+        batched = converter._call_python([short_clip, long_clip])
+        self.assertAllClose(batched[0, :60], solo_short, atol=1e-6, rtol=1e-6)
+        self.assertAllClose(
+            batched[0, 60:], np.zeros((40, 128), dtype="float32"), atol=0.0
+        )
+
+        if tf is not None:
+            tf_solo = ops.convert_to_numpy(converter._call_tf(short_clip))
+            tf_batched = ops.convert_to_numpy(
+                converter._call_tf([short_clip, long_clip])
+            )
+            self.assertAllClose(
+                tf_batched[0, :60], tf_solo, atol=1e-6, rtol=1e-6
+            )
+            self.assertAllClose(
+                tf_batched[0, 60:],
+                np.zeros((40, 128), dtype="float32"),
+                atol=0.0,
+            )
+
     def test_min_length_padding(self):
         converter = Qwen3ASRAudioConverter(min_length=8000)
         audio = np.ones((4000,), dtype="float32")
@@ -84,10 +115,24 @@ class Qwen3ASRAudioConverterTest(TestCase):
 
         self.assertEqual(output.shape, (2, 50, 128))
 
-    def test_feature_extractor_basics(self):
-        if tf is None:
-            self.skipTest("TensorFlow is not installed")
+    def test_rank_gt_2_and_odd_fft_bins(self):
+        converter = Qwen3ASRAudioConverter(min_length=8000)
+        with self.assertRaises(ValueError):
+            converter(np.zeros((1, 2, 8000), dtype="float32"))
+        with self.assertRaises(ValueError):
+            converter.compute_output_spec(keras.KerasTensor((1, 2, 8000)))
 
+        odd_converter = Qwen3ASRAudioConverter(
+            num_fft_bins=401, min_length=8000
+        )
+        spec = odd_converter.compute_output_spec(
+            keras.KerasTensor((None, 8000))
+        )
+        actual = odd_converter(np.zeros((1, 8000), dtype="float32"))
+        self.assertEqual(spec.shape, (None, actual.shape[1], 128))
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed")
+    def test_feature_extractor_basics(self):
         audio = tf.constant(
             np.stack(
                 [
@@ -111,10 +156,8 @@ class Qwen3ASRAudioConverterTest(TestCase):
 
         self.assertEqual(output.shape, (2, 3100, 128))
 
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed")
     def test_python_matches_tf(self):
-        if tf is None:
-            pytest.skip("TensorFlow is not installed")
-
         converter = Qwen3ASRAudioConverter(min_length=8000, n_window=50)
         rng = np.random.default_rng(42)
         audio = [
@@ -124,11 +167,10 @@ class Qwen3ASRAudioConverterTest(TestCase):
 
         python_output = converter._call_python(audio)
         tf_output = converter._call_tf(audio)
-        atol = 1e-3 if running_on_gpu() else 1e-4
         self.assertAllClose(
             ops.convert_to_numpy(tf_output),
             python_output,
-            atol=atol,
+            atol=1e-4,
         )
 
     def test_grain_outputs_numpy(self):
@@ -156,3 +198,12 @@ class Qwen3ASRAudioConverterTest(TestCase):
             grain.MapDataset.source([batched_audio]).map(converter)
         )
         self.assertAllClose(batched_output, batch)
+
+        mixed_samples = [
+            rng.uniform(-1.0, 1.0, size=(9600,)).astype("float32"),
+            rng.uniform(-1.0, 1.0, size=(9600,)).astype("float32"),
+        ]
+        (mixed_batch,) = list(
+            grain.MapDataset.source(mixed_samples).map(converter).batch(2)
+        )
+        self.assertAllClose(mixed_batch, converter(mixed_samples))

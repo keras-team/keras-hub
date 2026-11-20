@@ -1,17 +1,20 @@
+import numpy as np
 from keras import ops
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm import CausalLM
 from keras_hub.src.models.qwen3_asr.qwen3_asr_backbone import Qwen3ASRBackbone
-from keras_hub.src.models.qwen3_asr.qwen3_asr_preprocessor import (
-    Qwen3ASRPreprocessor,
+from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm_preprocessor import (
+    Qwen3ASRCausalLMPreprocessor,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm_preprocessor import (
+    _decode_prompt,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_causal_lm_preprocessor import (
+    _is_1d_audio_list,
 )
 from keras_hub.src.utils.tensor_utils import any_equal
+from keras_hub.src.utils.tensor_utils import tf
 
 
 @keras_hub_export("keras_hub.models.Qwen3ASRCausalLM")
@@ -56,7 +59,7 @@ class Qwen3ASRCausalLM(CausalLM):
     """
 
     backbone_cls = Qwen3ASRBackbone
-    preprocessor_cls = Qwen3ASRPreprocessor
+    preprocessor_cls = Qwen3ASRCausalLMPreprocessor
 
     def __init__(
         self,
@@ -97,8 +100,25 @@ class Qwen3ASRCausalLM(CausalLM):
         )
 
     def _normalize_generate_inputs(self, inputs):
-        if tf and isinstance(inputs, tf.data.Dataset):
-            return inputs.as_numpy_iterator(), False
+        if tf is not None and isinstance(inputs, tf.data.Dataset):
+
+            def _decode_dataset_items():
+                for item in inputs.as_numpy_iterator():
+                    if isinstance(item, dict) and "prompts" in item:
+                        item = item.copy()
+                        prompts = item["prompts"]
+                        if isinstance(prompts, (bytes, np.bytes_)) or (
+                            isinstance(prompts, np.ndarray)
+                            and prompts.ndim == 0
+                        ):
+                            item["prompts"] = _decode_prompt(prompts)
+                        elif isinstance(prompts, (list, tuple, np.ndarray)):
+                            item["prompts"] = [
+                                _decode_prompt(p) for p in prompts
+                            ]
+                    yield item
+
+            return _decode_dataset_items(), False
 
         if self.preprocessor is None:
             return [inputs], False
@@ -116,10 +136,17 @@ class Qwen3ASRCausalLM(CausalLM):
             )
 
         def normalize(x):
+            x = _decode_prompt(x)
             if isinstance(x, str):
                 return [x], True
-            if tf and isinstance(x, tf.Tensor) and x.shape.rank == 0:
+            if (
+                tf is not None
+                and isinstance(x, tf.Tensor)
+                and x.shape.rank == 0
+            ):
                 return x[tf.newaxis], True
+            if isinstance(x, (list, tuple)):
+                return [_decode_prompt(item) for item in x], False
             return x, False
 
         inputs = inputs.copy()
@@ -127,9 +154,8 @@ class Qwen3ASRCausalLM(CausalLM):
 
         if input_is_scalar and "audio" in inputs:
             x = inputs["audio"]
-            if isinstance(x, list):
-                if len(x) > 0 and isinstance(x[0], (int, float)):
-                    inputs["audio"] = [x]
+            if _is_1d_audio_list(x):
+                inputs["audio"] = [x]
             elif hasattr(x, "shape") and len(x.shape) == 1:
                 inputs["audio"] = ops.expand_dims(x, axis=0)
 
@@ -186,25 +212,6 @@ class Qwen3ASRCausalLM(CausalLM):
         )
         return hidden_states, cache
 
-    def generate(
-        self,
-        inputs,
-        max_length=None,
-        stop_token_ids="auto",
-        strip_prompt=False,
-    ):
-        if stop_token_ids == "auto":
-            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-            if hasattr(self.preprocessor.tokenizer, "end_token2_id"):
-                stop_token_ids.append(self.preprocessor.tokenizer.end_token2_id)
-
-        return super().generate(
-            inputs,
-            max_length=max_length,
-            stop_token_ids=stop_token_ids,
-            strip_prompt=strip_prompt,
-        )
-
     def generate_step(self, inputs, stop_token_ids=None):
         token_ids, padding_mask = (
             inputs["token_ids"],
@@ -214,14 +221,6 @@ class Qwen3ASRCausalLM(CausalLM):
             inputs["audio_mel"],
             inputs["audio_mask"],
         )
-
-        # Clear padding tokens to prevent the sampler from stopping immediately.
-        # This is necessary because for Qwen, the pad token is often the same
-        # as a stop token.
-        # We use a token ID that is unlikely to be a stop token.
-        # We will restore the original padding after the sampler runs.
-        original_token_ids = token_ids
-        token_ids = ops.where(padding_mask, token_ids, 0)
 
         # Run audio encoder once
         audio_embeds = self.backbone.audio_encoder(audio_mel, audio_mask)
@@ -274,13 +273,6 @@ class Qwen3ASRCausalLM(CausalLM):
             new_padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
             new_padding_mask = ops.ones_like(token_ids, dtype="bool")
-
-        # Restore original padding tokens where the new padding mask is False.
-        # This ensures that detokenize(skip_special_tokens=True) works
-        # correctly.
-        token_ids = ops.where(
-            new_padding_mask, token_ids, ops.cast(original_token_ids, "int32")
-        )
 
         return {
             "token_ids": token_ids,
