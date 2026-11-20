@@ -71,3 +71,19 @@ class GPTNeoXCausalLMPreprocessorTest(TestCase):
         preprocessor = GPTNeoXCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
+
+    def test_generate_postprocess_strips_padding_token(self):
+        # With a Pythia-style vocabulary "<|padding|>" is a special token,
+        # so it is stripped like "<|endoftext|>".
+        pad_id = len(self.vocab)
+        tokenizer = GPTNeoXTokenizer(
+            vocabulary={**self.vocab, "<|padding|>": pad_id},
+            merges=self.merges,
+        )
+        preprocessor = GPTNeoXCausalLMPreprocessor(tokenizer=tokenizer)
+        input_data = {
+            "token_ids": [self.vocab["a"], pad_id, self.vocab["b"]],
+            "padding_mask": [1, 1, 1],
+        }
+        x = preprocessor.generate_postprocess(input_data)
+        self.assertAllEqual(x, "ab")
