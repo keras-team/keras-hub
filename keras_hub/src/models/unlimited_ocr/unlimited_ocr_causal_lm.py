@@ -66,6 +66,20 @@ class UnlimitedOCRCausalLM(CausalLM):
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
+    def _normalize_generate_inputs(self, inputs):
+        """Normalize the inputs of `generate()`.
+
+        The base method sets the scalar flag from the last key of a dict. The
+        key `"images"` can come after `"prompts"`. This method sets the flag
+        from `"prompts"` only.
+        """
+        has_prompts = isinstance(inputs, dict) and "prompts" in inputs
+        if self.preprocessor is None or not has_prompts:
+            return super()._normalize_generate_inputs(inputs)
+        normalize = super()._normalize_generate_inputs
+        (prompts,), input_is_scalar = normalize(inputs["prompts"])
+        return [{**inputs, "prompts": prompts}], input_is_scalar
+
     def call_with_cache(
         self,
         token_ids,
