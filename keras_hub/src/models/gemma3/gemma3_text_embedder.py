@@ -176,25 +176,3 @@ class Gemma3TextEmbedder(TextEmbedder):
             }
         )
         return config
-
-    def similarity(self, query_embeddings, document_embeddings):
-        """Compute similarity between query and document embeddings.
-
-        Computes the dot product between query and document embeddings.
-        When embeddings are L2 normalized (the default), this is
-        equivalent to cosine similarity. Returns a similarity matrix
-        of shape `(num_queries, num_documents)`.
-
-        Args:
-            query_embeddings: An array or tensor of shape
-                `(num_queries, embedding_dim)`.
-            document_embeddings: An array or tensor of shape
-                `(num_documents, embedding_dim)`.
-
-        Returns:
-            A tensor of shape `(num_queries, num_documents)` containing
-            similarity scores.
-        """
-        query_tensor = ops.convert_to_tensor(query_embeddings)
-        document_tensor = ops.convert_to_tensor(document_embeddings)
-        return ops.matmul(query_tensor, ops.transpose(document_tensor))
