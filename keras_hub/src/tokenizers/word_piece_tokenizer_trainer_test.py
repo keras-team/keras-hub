@@ -1,13 +1,15 @@
 import os
 
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary,
 )
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class WordPieceTokenizerTrainerTest(TestCase):
     def test_dataset_input(self):
         test_text = ["baa maa caa saa aaa"]

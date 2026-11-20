@@ -1,13 +1,13 @@
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.models.gemma4.gemma4_video_converter import (
     Gemma4VideoConverter,
 )
+from keras_hub.src.tests.test_case import TestCase
 
 
-class Gemma4VideoConverterTest(tf.test.TestCase):
+class Gemma4VideoConverterTest(TestCase):
     def test_video_converter_range(self):
         converter = Gemma4VideoConverter(
             patch_size=4,
@@ -86,7 +86,3 @@ class Gemma4VideoConverterTest(tf.test.TestCase):
             ops.shape(outputs[0]["pixel_position_ids"]),
             (1, 2, 9, 2),
         )
-
-
-if __name__ == "__main__":
-    tf.test.main()

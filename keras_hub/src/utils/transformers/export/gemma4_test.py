@@ -12,6 +12,7 @@ Tests cover:
 import os
 
 import numpy as np
+import pytest
 import torch
 from keras import ops
 from transformers import AutoModelForCausalLM
@@ -310,6 +311,7 @@ class TestGemma4WeightsMap(TestCase):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.requires_tf
 class TestGemma4Export(TestCase):
     def test_text_only_export_to_hf(self):
         """Export a text-only Gemma4 backbone and verify HF model loads."""

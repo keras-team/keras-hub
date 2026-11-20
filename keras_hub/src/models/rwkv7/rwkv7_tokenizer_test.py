@@ -1,10 +1,13 @@
 from unittest import mock
 
+import pytest
+
 from keras_hub.src.models.rwkv7.rwkv7_tokenizer import RWKVTokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
 
 
+@pytest.mark.requires_tf
 class RWKVTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = [

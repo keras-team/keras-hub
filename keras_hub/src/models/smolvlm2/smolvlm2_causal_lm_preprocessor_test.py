@@ -4,6 +4,7 @@ import re
 from unittest import mock
 
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.smolvlm2.smolvlm2_causal_lm_preprocessor import (
@@ -725,6 +726,7 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
         with self.assertRaisesRegex(ValueError, "no images/videos"):
             preprocessor.generate_preprocess("Here is a token: <video>")
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_with_images(self):
         """`fit()` on a `tf.data` pipeline that carries images (T42)."""
         import tensorflow as tf
@@ -743,6 +745,7 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
             self.assertEqual(tuple(x["pixel_values"].shape), (2, 32, 32, 3))
             self.assertEqual(tuple(x["vision_indices"].shape), (2, 4))
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_text_only(self):
         """Text-only `tf.data` batches trace with the placeholder guard."""
         import tensorflow as tf
@@ -754,6 +757,7 @@ class SmolVLM2CausalLMPreprocessorTest(TestCase):
             self.assertEqual(tuple(x["pixel_values"].shape), (0, 32, 32, 3))
             self.assertEqual(tuple(x["vision_indices"].shape), (2, 0))
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_image_token_without_image_raises(self):
         """The placeholder guard also fires inside a `tf.data` trace."""
         import tensorflow as tf

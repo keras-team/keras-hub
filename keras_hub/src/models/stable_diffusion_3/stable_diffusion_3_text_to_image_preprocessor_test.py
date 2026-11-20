@@ -53,6 +53,7 @@ class StableDiffusion3TextToImagePreprocessorTest(TestCase):
             ),
         )
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess(self):
         preprocessor = StableDiffusion3TextToImagePreprocessor(
             **self.init_kwargs

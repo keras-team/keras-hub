@@ -371,6 +371,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
                 }
             )
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_text_only_dict(self):
         """Media-free dict inputs trace through `tf.data.Dataset.map`."""
         import tensorflow as tf

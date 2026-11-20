@@ -49,6 +49,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             "num_vision_tokens_per_image": 5,
         }
 
+    @pytest.mark.requires_tf
     def test_text_preprocessor_basics(self):
         input_data = {
             "prompts": ["the quick brown fox"],
@@ -68,6 +69,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             ),
         )
 
+    @pytest.mark.requires_tf
     def test_preprocessor_basics(self):
         input_data = {
             "prompts": ["the quick brown fox <start_of_image>"],
@@ -109,6 +111,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(output[1], expected_output[1])
         self.assertAllEqual(output[2], expected_output[2])
 
+    @pytest.mark.requires_tf
     def test_text_no_start_end_token(self):
         input_data = {
             "prompts": ["the quick brown fox"] * 4,
@@ -126,6 +129,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(y, [[14, 10, 12, 15, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(sw, [[0, 0, 0, 1, 0, 0, 0, 0]] * 4)
 
+    @pytest.mark.requires_tf
     def test_text_generate_preprocess(self):
         input_data = "the quick brown fox"
         preprocessor = Gemma3CausalLMPreprocessor(**self.init_text_kwargs)
@@ -133,6 +137,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    @pytest.mark.requires_tf
     def test_text_generate_preprocess_no_start_token(self):
         input_data = "the quick brown fox"
         preprocessor = Gemma3CausalLMPreprocessor(
@@ -142,6 +147,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <start_of_image>",
@@ -158,6 +164,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["vision_mask"], [0] * 7 + [1] * 5 + [0] * 8)
         self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_no_start_token(self):
         input_data = {
             "prompts": "the quick brown fox <start_of_image>",
@@ -176,6 +183,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
         self.assertAllEqual(x["images"].shape, [2, 4, 4, 3])
 
+    @pytest.mark.requires_tf
     def test_text_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 9, 14, 10, 12, 0, 0, 0],
@@ -185,6 +193,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
 
+    @pytest.mark.requires_tf
     def test_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 9, 14, 10, 12, 16, 4]
@@ -197,6 +206,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox \n\n <start_of_image>")
 
+    @pytest.mark.requires_tf
     def test_invalid_shape(self):
         with self.assertRaises(ValueError):
             input_data = {
@@ -211,6 +221,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             }
             self.text_preprocessor(input_data)
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_with_python_only_tokenizer(self):
         proto_path = os.path.join(
             self.get_test_data_dir(), "gemma3_test_vocab.spm"
@@ -230,6 +241,7 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
         self.assertEqual(output["token_ids"].shape[0], 2)
         self.assertEqual(output["padding_mask"].shape[0], 2)
 
+    @pytest.mark.requires_tf
     def test_call_with_python_only_tokenizer(self):
         proto_path = os.path.join(
             self.get_test_data_dir(), "gemma3_test_vocab.spm"

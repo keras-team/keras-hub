@@ -118,6 +118,7 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class PaliGemmaCausalLMPreprocessorTFTest(PaliGemmaCausalLMPreprocessorTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

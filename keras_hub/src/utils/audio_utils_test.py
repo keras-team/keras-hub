@@ -1,12 +1,14 @@
 import numpy as np
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.audio_utils import frame_signal
 from keras_hub.src.utils.audio_utils import hann_window
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class AudioUtilsTest(TestCase):
+    @pytest.mark.requires_tf
     def test_hann_window_matches_tf(self):
         for length in (1, 2, 8, 400):
             self.assertAllClose(
@@ -18,6 +20,7 @@ class AudioUtilsTest(TestCase):
                 tf.signal.hann_window(length, periodic=False),
             )
 
+    @pytest.mark.requires_tf
     def test_frame_signal_matches_tf(self):
         x = np.random.default_rng(42).random((2, 97)).astype("float32")
         for frame_length, frame_step in ((10, 5), (16, 16), (32, 3)):

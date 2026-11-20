@@ -1,9 +1,10 @@
 import keras
-import tensorflow as tf
+import pytest
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.utils.tensor_utils import tf
 
 VOCAB_PATH = keras.utils.get_file(
     None,
@@ -43,6 +44,7 @@ class BytePairTokenizerTest(TestCase):
             ],
         )
 
+    @pytest.mark.requires_tf
     def test_tokenize_list_input(self):
         input_data = ["brown.", "black."]
         call_output = self.tokenizer(input_data)
@@ -199,6 +201,7 @@ class BytePairTokenizerTest(TestCase):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
 
 
+@pytest.mark.requires_tf
 class BytePairTokenizerTFTest(BytePairTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

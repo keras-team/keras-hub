@@ -1,6 +1,7 @@
 from unittest import mock
 
 import numpy as np
+import pytest
 
 from keras_hub.src.models.rwkv7.rwkv7_causal_lm_preprocessor import (
     RWKV7CausalLMPreprocessor,
@@ -10,6 +11,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
 
 
+@pytest.mark.requires_tf
 class RWKV7CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = [

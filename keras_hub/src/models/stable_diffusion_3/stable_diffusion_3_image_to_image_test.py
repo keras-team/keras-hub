@@ -117,6 +117,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         image_to_image = StableDiffusion3ImageToImage(**self.init_kwargs)
         seed = 42
@@ -148,6 +149,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
         )
         self.assertAllClose(output, output2)
 
+    @pytest.mark.requires_tf
     def test_generate_with_lower_precision(self):
         original_floatx = keras.config.floatx()
         try:
@@ -189,6 +191,7 @@ class StableDiffusion3ImageToImageTest(TestCase):
             # tests even if there is an exception.
             keras.config.set_floatx(original_floatx)
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         image_to_image = StableDiffusion3ImageToImage(**self.init_kwargs)
         image = self.input_data["images"][0]

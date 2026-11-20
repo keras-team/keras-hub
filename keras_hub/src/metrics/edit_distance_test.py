@@ -1,11 +1,12 @@
 import keras
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.metrics.edit_distance import EditDistance
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class EditDistanceTest(TestCase):
     def test_initialization(self):
         edit_distance = EditDistance()

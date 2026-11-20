@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.metaclip_2.metaclip_2_causal_lm_preprocessor import (
@@ -15,6 +16,7 @@ from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class MetaCLIP2CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # Use the XLM-RoBERTa test vocab since MetaCLIP 2 uses XLM-V

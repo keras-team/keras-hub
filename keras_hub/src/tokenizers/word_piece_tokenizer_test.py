@@ -2,11 +2,11 @@ import os
 
 import numpy as np
 import pytest
-import tensorflow as tf
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
@@ -277,6 +277,7 @@ class WordPieceTokenizerTest(TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
 
+    @pytest.mark.requires_tf
     def test_from_file(self):
         vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
         input_data = ["the quick brown fox."]
@@ -340,6 +341,7 @@ class WordPieceTokenizerTest(TestCase):
             ):
                 tokenizer.set_vocabulary(vocab_path)
 
+    @pytest.mark.requires_tf
     def test_split_false_ragged_inputs(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = self.make_tokenizer(vocabulary=vocab_data, split=False)
@@ -354,6 +356,7 @@ class WordPieceTokenizerTest(TestCase):
             # words when `split=False`.
             self.assertAllEqual(tokenizer("quick"), [2, 3])
 
+    @pytest.mark.requires_tf
     def test_bytes_and_tensor_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept numpy string arrays.")
@@ -370,6 +373,7 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(tokenizer(b"the quick"), expected[0])
         self.assertAllEqual(tokenizer(tf.constant("the quick")), expected[0])
 
+    @pytest.mark.requires_tf
     def test_detokenize_inputs(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = self.make_tokenizer(vocabulary=vocab_data)
@@ -498,6 +502,7 @@ class WordPieceTokenizerTest(TestCase):
             self.assertAllEqual(python_tokenizer(ragged), tf_tokenizer(ragged))
 
 
+@pytest.mark.requires_tf
 class WordPieceTokenizerTFTest(WordPieceTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

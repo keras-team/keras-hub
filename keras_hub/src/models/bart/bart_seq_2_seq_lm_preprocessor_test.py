@@ -1,11 +1,11 @@
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_hub.src.models.bart.bart_tokenizer import BartTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class BartSeq2SeqLMPreprocessorTest(TestCase):
@@ -70,6 +70,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_generate_postprocess(self):
         preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         input_data = {
@@ -99,6 +100,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         output = preprocessor.generate_preprocess([" airplane at airport"])
         self.assertAllClose(output, expected)
 
+    @pytest.mark.requires_tf
     def test_empty_decoder_text(self):
         preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         # Raw inputs (the TensorFlow-free path) and tensors are both handled.

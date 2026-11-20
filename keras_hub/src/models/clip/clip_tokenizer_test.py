@@ -1,8 +1,8 @@
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class CLIPTokenizerTest(TestCase):
@@ -36,6 +36,7 @@ class CLIPTokenizerTest(TestCase):
         tokenizer = CLIPTokenizer(**init_kwargs)
         self.assertEqual(tokenizer.pad_token_id, tokenizer.end_token_id)
 
+    @pytest.mark.requires_tf
     def test_python_tf_consistency(self):
         init_kwargs = self.init_kwargs.copy()
         init_kwargs["sequence_length"] = 10
@@ -79,6 +80,7 @@ class CLIPTokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class CLIPTokenizerDisallowPythonWorkflowTest(CLIPTokenizerTest):
     def setUp(self):
         super().setUp()

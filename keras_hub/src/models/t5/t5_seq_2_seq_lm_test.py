@@ -52,6 +52,7 @@ class T5Seq2SeqLMTest(TestCase):
             expected_output_shape=(2, 10, self.vocabulary_size),
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         # String input.
         inputs = {
@@ -120,6 +121,7 @@ class T5Seq2SeqLMTest(TestCase):
                 rtol=1e-4,
             )
 
+    @pytest.mark.requires_tf
     def test_early_stopping(self):
         seq_2_seq_lm = T5Seq2SeqLM(**self.init_kwargs)
         call_decoder_with_cache = seq_2_seq_lm.call_decoder_with_cache
@@ -154,6 +156,7 @@ class T5Seq2SeqLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertAllEqual(inputs["decoder_text"], output)
 
+    @pytest.mark.requires_tf
     def test_beam_search(self):
         seq_2_seq_lm = T5Seq2SeqLM(**self.init_kwargs)
         seq_2_seq_lm.compile(sampler="beam")

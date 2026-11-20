@@ -1,12 +1,13 @@
 import keras
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.metrics.bleu import Bleu
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_tokenizer import ByteTokenizer
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class BleuTest(TestCase):
     def test_initialization(self):
         bleu = Bleu()

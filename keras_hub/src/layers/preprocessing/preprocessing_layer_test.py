@@ -3,7 +3,6 @@ from unittest import mock
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.layers.preprocessing.preprocessing_layer import (
@@ -11,6 +10,7 @@ from keras_hub.src.layers.preprocessing.preprocessing_layer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
@@ -119,6 +119,7 @@ class PreprocessingLayerTest(TestCase):
         self.assertIs(output["x"], x)
         self.assertIsNone(output["y"])
 
+    @pytest.mark.requires_tf
     def test_python_workflow_is_the_default(self):
         layer = LabelsLayer()
         self.assertTrue(layer._allow_python_workflow)
@@ -127,6 +128,7 @@ class PreprocessingLayerTest(TestCase):
         self.assertFalse(layer._allow_python_workflow)
         self.assertTrue(layer._use_tf_workflow())
 
+    @pytest.mark.requires_tf
     def test_tf_workflow_inside_tf_function(self):
         layer = LabelsLayer()
         ds = tf.data.Dataset.from_tensors(0)

@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.unicode_codepoint_tokenizer import (
     UnicodeCodepointTokenizer,
 )
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
@@ -195,6 +195,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             ],
         )
 
+    @pytest.mark.requires_tf
     def test_detokenize_replace_error(self):
         # 10000000 is an invalid value
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
@@ -202,12 +203,14 @@ class UnicodeCodepointTokenizerTest(TestCase):
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, [b"niKnja"])
 
+    @pytest.mark.requires_tf
     def test_detokenize_ignore_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = self.make_tokenizer(errors="ignore")
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, [b"ninja"])
 
+    @pytest.mark.requires_tf
     def test_detokenize_strict_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = self.make_tokenizer(errors="strict")
@@ -226,6 +229,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
                 normalization_form="NFC",
             )
 
+    @pytest.mark.requires_tf
     def test_lowercase(self):
         input_data = tf.constant(["NiNJaS"])
         tokenizer = self.make_tokenizer()
@@ -235,6 +239,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [[110, 105, 110, 106, 97, 115]],
         )
 
+    @pytest.mark.requires_tf
     def test_skip_lowercase(self):
         input_data = tf.constant(["NiNJaS"])
         tokenizer = self.make_tokenizer(lowercase=False)
@@ -258,6 +263,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         tokens = [tokenizer.id_to_token(i) for i in input_ids]
         self.assertAllEqual(tokens, expected_tokens)
 
+    @pytest.mark.requires_tf
     def test_bytes_and_tensor_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept numpy string arrays.")
@@ -280,6 +286,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             tokenizer(input_data), [[110, 105, 106, 97], [], [111, 107]]
         )
 
+    @pytest.mark.requires_tf
     def test_detokenize_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept int64 inputs.")
@@ -362,6 +369,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
                 )
 
 
+@pytest.mark.requires_tf
 class UnicodeCodepointTokenizerTFTest(UnicodeCodepointTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

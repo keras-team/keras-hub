@@ -1,12 +1,14 @@
 import grain
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Gemma3nAudioConverterTest(TestCase):
@@ -100,6 +102,8 @@ class Gemma3nAudioConverterTest(TestCase):
         ("tf", False),
     )
     def test_dither_determinism(self, allow_python_workflow):
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         kwargs = dict(self.init_kwargs)
         kwargs["dither"] = 1.0
         kwargs["seed"] = 42
@@ -196,6 +200,7 @@ class Gemma3nAudioConverterTest(TestCase):
         instance = Gemma3nAudioConverter(**self.init_kwargs)
         self.run_serialization_test(instance=instance)
 
+    @pytest.mark.requires_tf
     def test_python_matches_tf(self):
         converter = Gemma3nAudioConverter(**self.init_kwargs)
         audio = self.input_data[0][:4000]

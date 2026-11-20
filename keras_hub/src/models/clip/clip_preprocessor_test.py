@@ -35,6 +35,7 @@ class CLIPPreprocessorTest(TestCase):
             "images": [np.zeros([512, 512, 3])],
         }
 
+    @pytest.mark.requires_tf
     def test_preprocessor_basics(self):
         self.run_preprocessing_layer_test(
             cls=CLIPPreprocessor,
@@ -47,6 +48,7 @@ class CLIPPreprocessorTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_without_images(self):
         input_data = {
             "prompts": [" airplane airport"] * 4,
@@ -62,6 +64,7 @@ class CLIPPreprocessorTest(TestCase):
         x = preprocessor(input_data)
         self.assertIsNone(x["images"])
 
+    @pytest.mark.requires_tf
     def test_no_start_end_token(self):
         input_data = {
             "prompts": [" airplane airport"] * 4,
@@ -78,6 +81,7 @@ class CLIPPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [[4, 14, 4, 16, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
 
+    @pytest.mark.requires_tf
     def test_sequence_length_override(self):
         input_data = {
             "prompts": " airplane airport",
@@ -99,6 +103,7 @@ class CLIPPreprocessorTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class CLIPPreprocessorDisallowPythonWorkflowTest(CLIPPreprocessorTest):
     def setUp(self):
         merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]

@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from keras_hub.src.models.metaclip_2.metaclip_2_tokenizer import (
     MetaCLIP2Tokenizer,
 )
@@ -45,6 +47,7 @@ class MetaCLIP2TokenizerTest(TestCase):
         self.assertEqual(tokenizer.special_token_ids, [0, 1, 2, 3])
 
 
+@pytest.mark.requires_tf
 class MetaCLIP2TokenizerTFTest(MetaCLIP2TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

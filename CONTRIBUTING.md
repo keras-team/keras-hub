@@ -218,6 +218,16 @@ pytest --run_extra_large
 When running "extra_large" tests, we recommend also specify a specific test file
 so you aren't waiting around forever!
 
+### Tests that need TensorFlow
+
+The test suite also has to pass when TensorFlow is not installed. Mark a
+test, or a test class in which every test needs TensorFlow, with
+`@pytest.mark.requires_tf`. It is skipped when TensorFlow is missing and
+unchanged when it is installed. Test files must import without TensorFlow:
+use `from keras_hub.src.utils.tensor_utils import tf`, which is `None` when
+TensorFlow is missing, instead of `import tensorflow as tf`. If your change
+makes a marked test pass without TensorFlow, remove the marker.
+
 ## Generating public API and formatting the code
 
 For the first time you are setting up the repo, please run `pre-commit install`.

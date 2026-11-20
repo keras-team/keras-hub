@@ -1,14 +1,16 @@
 import grain
 import numpy as np
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.models.whisper.whisper_audio_converter import (
     WhisperAudioConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class WhisperAudioConverterTest(TestCase):
     def setUp(self):
         self.init_kwargs = {

@@ -36,6 +36,7 @@ class SigLIPPreprocessorTest(TestCase):
             "images": [np.zeros([512, 512, 3])],
         }
 
+    @pytest.mark.requires_tf
     def test_preprocessor_basics(self):
         self.run_preprocessing_layer_test(
             cls=SigLIPPreprocessor,
@@ -48,6 +49,7 @@ class SigLIPPreprocessorTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_canonicalize_text(self):
         # Do upper case and add punctuations in the inputs.
         # The outputs must be identical to the inputs without them.

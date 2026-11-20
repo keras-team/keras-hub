@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
@@ -16,6 +15,7 @@ from keras_hub.src.models.gemma4.gemma4_video_converter import (
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class Gemma4CausalLMPreprocessorTest(TestCase):
@@ -51,6 +51,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             "num_vision_tokens_per_image": 5,
         }
 
+    @pytest.mark.requires_tf
     def test_text_preprocessor_basics(self):
         input_data = {
             "prompts": ["the quick brown fox"],
@@ -73,6 +74,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
 
         self.assertAllClose(output, expected_output_batched)
 
+    @pytest.mark.requires_tf
     def test_preprocessor_basics(self):
         input_data = {
             "prompts": ["the quick brown fox <|image|>"],
@@ -113,6 +115,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(output[1], expected_output[1])
         self.assertAllEqual(output[2], expected_output[2])
 
+    @pytest.mark.requires_tf
     def test_preprocessor_images_input(self):
         # Passes `images` explicitly to ensure ImageConverter integration works
         input_data = {
@@ -137,6 +140,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             output[0]["pixel_values"].shape[-1], 48
         )  # patch_dim (4*4*3 = 48)
 
+    @pytest.mark.requires_tf
     def test_text_no_start_end_token(self):
         input_data = {
             "prompts": ["the quick brown fox"] * 4,
@@ -153,6 +157,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(y, [[14, 10, 12, 15, 0, 0, 0, 0]] * 4)
         self.assertAllEqual(sw, [[0, 0, 0, 1, 0, 0, 0, 0]] * 4)
 
+    @pytest.mark.requires_tf
     def test_text_generate_preprocess(self):
         input_data = "the quick brown fox"
         preprocessor = Gemma4CausalLMPreprocessor(**self.init_text_kwargs)
@@ -160,6 +165,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [1, 9, 14, 10, 12, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0])
 
+    @pytest.mark.requires_tf
     def test_text_generate_preprocess_no_start_token(self):
         input_data = "the quick brown fox"
         preprocessor = Gemma4CausalLMPreprocessor(
@@ -169,6 +175,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["token_ids"], [9, 14, 10, 12, 0, 0, 0, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 0, 0, 0, 0])
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess(self):
         input_data = {
             "prompts": "the quick brown fox <|image|>",
@@ -186,6 +193,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["vision_mask"], [0] * 6 + [1] * 5 + [0] * 9)
         self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_no_start_token(self):
         input_data = {
             "prompts": "the quick brown fox <|image|>",
@@ -211,6 +219,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         )
         self.assertAllEqual(x["pixel_values"].shape, [2, 1, 48])
 
+    @pytest.mark.requires_tf
     def test_text_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 9, 14, 10, 12, 0, 0, 0],
@@ -220,6 +229,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
 
+    @pytest.mark.requires_tf
     def test_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 9, 14, 10, 12, 16, 4]
@@ -232,6 +242,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox \n\n <|image>")
 
+    @pytest.mark.requires_tf
     def test_invalid_shape(self):
         with self.assertRaises(ValueError):
             input_data = {
@@ -246,6 +257,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             }
             self.text_preprocessor(input_data)
 
+    @pytest.mark.requires_tf
     def test_text_input_dummy_pixel_values_shape(self):
         # When an image-capable preprocessor receives text-only input (no
         # images / pixel_values), it must produce dummy pixel_values whose
@@ -270,6 +282,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertEqual(pixel_position_ids.shape[1], 0)
         self.assertEqual(pixel_position_ids.shape[3], 2)
 
+    @pytest.mark.requires_tf
     def test_video_preprocessor_basics(self):
         video_converter = Gemma4VideoConverter(
             patch_size=4,
@@ -305,6 +318,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         # max_soft_tokens=2 produces 1 visible token per frame.
         self.assertEqual(int(keras.ops.sum(vision_mask)), 2)
 
+    @pytest.mark.requires_tf
     def test_video_metadata_timestamps(self):
         """video_metadata attribute produces correct per-frame timestamps."""
         video_converter = Gemma4VideoConverter(
@@ -350,6 +364,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
             expanded_cleared.numpy()[0], expanded_default.numpy()[0]
         )
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_with_python_only_tokenizer(self):
         proto_path = os.path.join(
             self.get_test_data_dir(), "gemma4_test_vocab.spm"
@@ -369,6 +384,7 @@ class Gemma4CausalLMPreprocessorTest(TestCase):
         self.assertEqual(output["token_ids"].shape[0], 2)
         self.assertEqual(output["padding_mask"].shape[0], 2)
 
+    @pytest.mark.requires_tf
     def test_call_with_python_only_tokenizer(self):
         proto_path = os.path.join(
             self.get_test_data_dir(), "gemma4_test_vocab.spm"

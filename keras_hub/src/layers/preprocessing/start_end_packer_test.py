@@ -1,10 +1,11 @@
 import grain
 import numpy as np
-import tensorflow as tf
+import pytest
 from absl.testing import parameterized
 
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class StartEndPackerTest(TestCase):
@@ -12,6 +13,7 @@ class StartEndPackerTest(TestCase):
         ("allow_python_workflow", True),
         ("disallow_python_workflow", False),
     )
+    @pytest.mark.requires_tf
     def test_layer_basics(self, allow_python_workflow):
         self.run_preprocessing_layer_test(
             cls=StartEndPacker,
@@ -32,6 +34,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_dense_input(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [5, 6, 7]
         start_end_packer = StartEndPacker(
             sequence_length=5, _allow_python_workflow=allow_python_workflow
@@ -63,6 +67,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_dense_2D_input(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7]]
         start_end_packer = StartEndPacker(
             sequence_length=5, _allow_python_workflow=allow_python_workflow
@@ -86,6 +92,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_ragged_input(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=5, _allow_python_workflow=allow_python_workflow
@@ -109,6 +117,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_start_end_token(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
@@ -137,6 +147,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_multiple_start_end_tokens(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
             sequence_length=8,
@@ -168,6 +180,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_start_end_padding_value(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=7,
@@ -199,6 +213,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_truncation(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = list(range(10))
         packer = StartEndPacker(
             sequence_length=7,
@@ -225,6 +241,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_truncation_wo_endvalue(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = list(range(10))
         packer = StartEndPacker(
             sequence_length=7,
@@ -249,6 +267,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_end_token_value_during_truncation(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
             sequence_length=5,
@@ -280,6 +300,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_string_input(self, allow_python_workflow):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [["KerasHub", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
             sequence_length=5,
@@ -319,6 +341,8 @@ class StartEndPackerTest(TestCase):
         self, allow_python_workflow
     ):
         # right padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [["KerasHub", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
@@ -359,6 +383,8 @@ class StartEndPackerTest(TestCase):
         ("disallow_python_workflow", False),
     )
     def test_call_overrides(self, allow_python_workflow):
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         x = [5, 6, 7]
         packer = StartEndPacker(
             start_value=1,
@@ -401,6 +427,8 @@ class StartEndPackerTest(TestCase):
     )
     def test_return_padding_mask(self, allow_python_workflow):
         # right_padding
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
@@ -441,6 +469,8 @@ class StartEndPackerTest(TestCase):
         ("disallow_python_workflow", False),
     )
     def test_grain_outputs_numpy(self, allow_python_workflow):
+        if not allow_python_workflow and tf is None:
+            self.skipTest("TensorFlow is not installed.")
         layer = StartEndPacker(
             sequence_length=5,
             start_value=1,

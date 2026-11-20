@@ -31,6 +31,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_preprocessor_basics(self):
         output = self.run_preprocessor_test(
             cls=T5Gemma2Seq2SeqLMPreprocessor,
@@ -50,6 +51,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         self.assertEqual(x["encoder_token_ids"].shape[-1], 8)
         self.assertEqual(x["decoder_token_ids"].shape[-1], 8)
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess(self):
         preprocessor = T5Gemma2Seq2SeqLMPreprocessor(**self.init_kwargs)
         input_data = {
@@ -62,6 +64,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         self.assertIn("decoder_token_ids", output)
         self.assertIn("decoder_padding_mask", output)
 
+    @pytest.mark.requires_tf
     def test_generate_postprocess(self):
         preprocessor = T5Gemma2Seq2SeqLMPreprocessor(**self.init_kwargs)
         input_data = {
@@ -71,6 +74,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         output = preprocessor.generate_postprocess(input_data)
         self.assertIsInstance(output, str)
 
+    @pytest.mark.requires_tf
     def test_add_vision_inputs_multimodal(self):
         """Multimodal preprocessor should add dummy vision inputs
         when text-only is used for inference."""
@@ -101,6 +105,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
             np.zeros_like(result["vision_indices"]),
         )
 
+    @pytest.mark.requires_tf
     def test_add_vision_inputs_skips_when_images_present(self):
         """Should not overwrite existing images."""
         preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
@@ -116,6 +121,7 @@ class T5Gemma2Seq2SeqLMPreprocessorTest(TestCase):
         result = preprocessor._add_vision_inputs(x, batch_size=1)
         np.testing.assert_array_equal(result["images"], existing_images)
 
+    @pytest.mark.requires_tf
     def test_serialization(self):
         preprocessor = T5Gemma2Seq2SeqLMPreprocessor(
             **self.init_kwargs,

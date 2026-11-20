@@ -419,6 +419,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             ):
                 next(iter(ds.map(self.preprocessor)))
 
+    @pytest.mark.requires_tf
     def test_images_and_videos_together_raise(self):
         img = np.ones((16, 16, 3), dtype="float32")
         vid = np.ones((2, 16, 16, 3), dtype="float32")
@@ -434,6 +435,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             ):
                 preprocessor(inputs)
 
+    @pytest.mark.requires_tf
     def test_multiple_images_per_prompt_raise(self):
         img = np.ones((16, 16, 3), dtype="float32")
         two_images = np.ones((1, 2, 16, 16, 3), dtype="float32")
@@ -454,6 +456,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
         ids = ops.convert_to_numpy(out["token_ids"])
         return int((ids == self.tokenizer.token_to_id(placeholder)).sum())
 
+    @pytest.mark.requires_tf
     def test_media_token_truncation_raises(self):
         # 2 frames x 1 soft token + wrappers + 8 words do not fit in 12.
         vid = np.ones((2, 16, 16, 3), dtype="float32")
@@ -470,6 +473,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             )
             self.assertEqual(self._token_count(out, "<|video|>"), 2)
 
+    @pytest.mark.requires_tf
     def test_placeholder_media_mismatch_raises(self):
         img = np.ones((16, 16, 3), dtype="float32")
         aud = np.ones((400,), dtype="float32")
@@ -500,6 +504,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                 with self.assertRaisesRegex(Exception, message):
                     preprocessor(inputs)
 
+    @pytest.mark.requires_tf
     def test_single_item_media_with_list_text(self):
         # The docstring's single-item forms: a list with one text plus a bare
         # rank-3 image or rank-1 waveform is one example, on both paths.
@@ -521,6 +526,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                     ops.convert_to_numpy(listed[key]),
                 )
 
+    @pytest.mark.requires_tf
     def test_texts_none_builds_prompt_from_every_modality(self):
         img = np.ones((16, 16, 3), dtype="float32")
         aud = np.ones((400,), dtype="float32")
@@ -545,6 +551,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
             with self.assertRaisesRegex(Exception, "inconsistently sized"):
                 preprocessor({"images": [img, img], "audio": [aud]})
 
+    @pytest.mark.requires_tf
     def test_long_audio_keeps_hf_frame_count(self):
         # A clip longer than the converter window keeps
         # `(num_samples - 1) // stride` frames, like HF, not one more.
@@ -560,6 +567,7 @@ class EmbeddingGemma2TextEmbedderPreprocessorTest(TestCase):
                 expected_frames,
             )
 
+    @pytest.mark.requires_tf
     def test_video_indices_are_frame_major_per_row(self):
         # Clips whose frames give different soft-token counts: every row is
         # laid out frame by frame with the same width, so the narrower clip

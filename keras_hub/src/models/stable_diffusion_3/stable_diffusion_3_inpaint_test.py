@@ -117,6 +117,7 @@ class StableDiffusion3InpaintTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         inpaint = StableDiffusion3Inpaint(**self.init_kwargs)
         seed = 42
@@ -151,6 +152,7 @@ class StableDiffusion3InpaintTest(TestCase):
         )
         self.assertAllClose(output, output2)
 
+    @pytest.mark.requires_tf
     def test_generate_with_lower_precision(self):
         original_floatx = keras.config.floatx()
         try:
@@ -193,6 +195,7 @@ class StableDiffusion3InpaintTest(TestCase):
             # tests even if there is an exception.
             keras.config.set_floatx(original_floatx)
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         inpaint = StableDiffusion3Inpaint(**self.init_kwargs)
         image = self.input_data["images"][0]

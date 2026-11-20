@@ -63,6 +63,7 @@ class DebertaV3TokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import grain
 import numpy as np
+import pytest
 from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
@@ -235,6 +236,7 @@ class SentencePieceTokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class SentencePieceTokenizerTFTest(SentencePieceTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

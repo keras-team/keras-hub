@@ -14,6 +14,7 @@ from keras_hub.src.models.vit.vit_backbone import ViTBackbone
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class PARSeqCausalLMTest(TestCase):
     def setUp(self):
         self.batch_size = 2

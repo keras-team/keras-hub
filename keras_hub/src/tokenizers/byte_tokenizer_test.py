@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_tokenizer import ByteTokenizer
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
@@ -121,6 +121,7 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(output[0], [[104, 105, 0, 0], [121, 111, 0, 0]])
         self.assertAllEqual(output[1], [[104, 101, 121, 0]])
 
+    @pytest.mark.requires_tf
     def test_tokenize_ragged_tf(self):
         if not self._allow_python_workflow:
             self.skipTest("tf.RaggedTensor only supported on Python path.")
@@ -216,6 +217,7 @@ class ByteTokenizerTest(TestCase):
         tokens = [tokenizer.id_to_token(i) for i in input_ids]
         self.assertAllEqual(tokens, expected_tokens)
 
+    @pytest.mark.requires_tf
     def test_bytes_and_tensor_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept numpy string arrays.")
@@ -229,6 +231,7 @@ class ByteTokenizerTest(TestCase):
         # Invalid utf-8 bytes are passed through.
         self.assertAllEqual(tokenizer(b"h\xffi"), [104, 255, 105])
 
+    @pytest.mark.requires_tf
     def test_detokenize_inputs(self):
         if not self._allow_python_workflow:
             self.skipTest("The TF path does not accept int64 inputs.")
@@ -308,6 +311,7 @@ class ByteTokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class ByteTokenizerTFTest(ByteTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

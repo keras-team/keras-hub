@@ -1,6 +1,7 @@
 import grain
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -321,6 +322,7 @@ class SmolVLM2ImageConverterTest(TestCase):
         with self.assertRaisesRegex(ValueError, "image_size"):
             converter(image)
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_jax_torch(self):
         """Map over tf.data works on all backends for training inputs."""
         import tensorflow as tf
@@ -335,6 +337,7 @@ class SmolVLM2ImageConverterTest(TestCase):
         for batch in ds:
             self.assertEqual(batch["pixel_values"].shape, (2, 16, 16, 3))
 
+    @pytest.mark.requires_tf
     def test_dynamic_sizing_matches_static(self):
         """The `tf.data` dynamic-shape sizing equals the Python helper.
 
@@ -422,6 +425,7 @@ class SmolVLM2ImageConverterTest(TestCase):
         actual = ops.convert_to_numpy(converter(image)["pixel_values"])
         self.assertAllEqual(actual, expected[None])
 
+    @pytest.mark.requires_tf
     def test_batch_paths_match_per_image_path(self):
         """`_resize_batch` and `_call_tf` equal `_convert_image` exactly.
 

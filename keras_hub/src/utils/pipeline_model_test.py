@@ -3,7 +3,7 @@ import warnings
 
 import keras
 import numpy as np
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import pipeline_model
@@ -11,6 +11,7 @@ from keras_hub.src.utils.pipeline_model import PipelineModel
 from keras_hub.src.utils.pipeline_model import _batches_in
 from keras_hub.src.utils.pipeline_model import _build_dataset
 from keras_hub.src.utils.pipeline_model import _convert_inputs_to_dataset
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
@@ -88,6 +89,7 @@ class FunctionalPipeline(PipelineModel):
 
 
 class TestNoopPipelineModel(TestCase):
+    @pytest.mark.requires_tf
     def test_fit(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -101,6 +103,7 @@ class TestNoopPipelineModel(TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
+    @pytest.mark.requires_tf
     def test_evaluate(self):
         x = np.random.uniform(size=(8, 5))
         y = np.random.uniform(size=(8, 1))
@@ -114,6 +117,7 @@ class TestNoopPipelineModel(TestCase):
         model.evaluate(x=x, y=y, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
+    @pytest.mark.requires_tf
     def test_predict(self):
         x = np.random.uniform(size=(8, 5))
         model = NoopPipeline()
@@ -152,6 +156,7 @@ class TestNoopPipelineModel(TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
+@pytest.mark.requires_tf
 class TestFeaturePreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
@@ -218,6 +223,7 @@ class TestFeaturePreprocessingModel(TestCase):
 
 
 class TestLabelPreprocessingModel(TestCase):
+    @pytest.mark.requires_tf
     def test_fit_with_preprocessing(self):
         x = np.random.uniform(size=(100, 5))
         y = tf.strings.as_string(np.random.uniform(size=(100, 1)))
@@ -231,6 +237,7 @@ class TestLabelPreprocessingModel(TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
+    @pytest.mark.requires_tf
     def test_evaluate_with_preprocessing(self):
         x = np.random.uniform(size=(100, 5))
         y = tf.strings.as_string(np.random.uniform(size=(100, 1)))
@@ -244,6 +251,7 @@ class TestLabelPreprocessingModel(TestCase):
         model.evaluate(x=x, y=y, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
+    @pytest.mark.requires_tf
     def test_predict_with_preprocessing(self):
         x = np.random.uniform(size=(100, 5))
         model = LabelPipeline()
@@ -251,6 +259,7 @@ class TestLabelPreprocessingModel(TestCase):
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
+    @pytest.mark.requires_tf
     def test_on_batch(self):
         x = np.random.uniform(size=(8, 5))
         y = tf.strings.as_string(np.random.uniform(size=(8, 1)))
@@ -282,6 +291,7 @@ class TestLabelPreprocessingModel(TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
+@pytest.mark.requires_tf
 class TestDataPreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
         data = tf.strings.as_string(np.random.uniform(size=(100, 1)))
@@ -333,6 +343,7 @@ class TestDataPreprocessingModel(TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
+@pytest.mark.requires_tf
 class TestFunctional(TestCase):
     def test_fit(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
@@ -365,6 +376,7 @@ class TestFunctional(TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
+@pytest.mark.requires_tf
 class TestFitArguments(TestCase):
     def test_validation_data(self):
         x = tf.strings.as_string(np.random.uniform(size=(80, 5)))
@@ -541,6 +553,7 @@ class TestGrainPipeline(TestCase):
         with self.assertRaises(ValueError):
             model.fit(ds, batch_size=4)
 
+    @pytest.mark.requires_tf
     def test_python_string_list_input(self):
         # A `list` enumerates the samples of a single string input.
         x = [[str(v) for v in row] for row in np.random.uniform(size=(8, 5))]
@@ -596,11 +609,13 @@ class TestGrainPipeline(TestCase):
                 batch_size=4,
             )
 
+    @pytest.mark.requires_tf
     def test_ragged_input_falls_back_to_tf_data(self):
         x = tf.ragged.constant([[1, 2, 3], [4, 5]])
         ds = _convert_inputs_to_dataset(x, None, None, batch_size=2)
         self.assertIsInstance(ds, tf.data.Dataset)
 
+    @pytest.mark.requires_tf
     def test_ragged_preprocessing_falls_back_to_tf_data(self):
         # Grain has no ragged type, so a ragged batch comes back as nested
         # lists that `GrainDatasetAdapter` flattens into scalars and rejects.
@@ -627,6 +642,7 @@ class TestGrainPipeline(TestCase):
         model.evaluate(x=x, y=y, batch_size=4)
         model.predict(x=x, batch_size=4)
 
+    @pytest.mark.requires_tf
     def test_string_preprocessing_falls_back_to_tf_data(self):
         # The routing is not about ragged in particular. Grain hands back a
         # list for string output too, and it fails the same rank 0 way, so
@@ -642,6 +658,7 @@ class TestGrainPipeline(TestCase):
         )
         self.assertIsInstance(ds, tf.data.Dataset)
 
+    @pytest.mark.requires_tf
     def test_tf_only_preprocessing_falls_back_to_tf_data(self):
         # Preprocessing written against tf tensors raises on the numpy grain
         # hands it. `tf.data` is where that code was meant to run.
@@ -868,6 +885,7 @@ class TestGrainPipeline(TestCase):
         self.assertEqual(next(iter(ds)).dtype, "float64")
 
 
+@pytest.mark.requires_tf
 class TestTfDataFallback(TestCase):
     """The path taken on a machine with no grain installed.
 
@@ -927,6 +945,7 @@ class TestTfDataFallback(TestCase):
             model.fit(x=tf.constant("test"))
 
 
+@pytest.mark.requires_tf
 class TestInputErrors(TestCase):
     def test_unbatched_input_raises(self):
         model = FeaturePipeline()
