@@ -14,16 +14,12 @@ from keras.src.trainers.data_adapters.data_adapter_utils import (
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import is_tensor_type
+from keras_hub.src.utils.tensor_utils import tf
 
 try:
     import grain
 except ImportError:
     grain = None
-
-try:
-    import tensorflow as tf
-except ImportError:
-    tf = None
 
 
 def _contains_string_data(inputs):

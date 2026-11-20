@@ -130,6 +130,23 @@ class UnlimitedOCRCausalLMTest(TestCase):
         # The preprocessor removes the image tokens. The text stays.
         self.assertIn("airplane at airport", output[0])
 
+    def test_generate_scalar_prompt_with_image(self):
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
+        prompt = "<image>airplane at airport"
+        # The result must not depend on the order of the dict keys.
+        for inputs in (
+            {"prompts": prompt, "images": image},
+            {"images": image, "prompts": prompt},
+            {"prompts": prompt, "images": [image]},
+        ):
+            output = causal_lm.generate(inputs)
+            self.assertIsInstance(output, str)
+            self.assertIn("airplane at airport", output)
+        # A list of prompts gives a list.
+        output = causal_lm.generate({"prompts": [prompt], "images": [image]})
+        self.assertIsInstance(output, list)
+
     def test_generate_text_only(self):
         causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
         output = causal_lm.generate("airplane at airport")
