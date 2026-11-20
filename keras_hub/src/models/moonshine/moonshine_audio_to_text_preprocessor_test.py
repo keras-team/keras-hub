@@ -1,4 +1,6 @@
+import inspect
 import os
+from unittest import mock
 
 import keras
 import numpy as np
@@ -20,6 +22,17 @@ try:
     import grain
 except ImportError:
     grain = None
+
+
+def _device_type(x):
+    """The device type a backend tensor lives on: `"cpu"`, `"gpu"`, ..."""
+    if keras.backend.backend() == "tensorflow":
+        return x.device.rsplit("device:", 1)[-1].split(":")[0].lower()
+    if keras.backend.backend() == "jax":
+        return next(iter(x.devices())).platform
+    if keras.backend.backend() == "torch":
+        return x.device.type
+    raise ValueError(f"Unsupported backend: {keras.backend.backend()}")
 
 
 class MoonshineAudioToTextPreprocessorTest(TestCase):
@@ -100,10 +113,32 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
     @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_pipeline_generate_preprocess(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
+        expected = preprocessor.generate_preprocess(self.input_data[0])
         ds = grain.MapDataset.source([self.input_data[0]])
-        (output,) = list(ds.map(preprocessor.generate_preprocess))
+        unwrapped = inspect.unwrap(
+            MoonshineAudioToTextPreprocessor.generate_preprocess
+        )
+        orig_logical_not = keras.ops.logical_not
+        seen_devices = []
+
+        def tracked_logical_not(*args, **kwargs):
+            result = orig_logical_not(*args, **kwargs)
+            seen_devices.append(_device_type(result))
+            return result
+
+        with mock.patch.object(
+            keras.ops, "logical_not", side_effect=tracked_logical_not
+        ):
+            (output,) = list(ds.map(preprocessor.generate_preprocess))
+            (unwrapped_output,) = list(
+                ds.map(lambda x: unwrapped(preprocessor, x))
+            )
+
         assert_grain_safe_types(output)
-        self.assertEqual(output["decoder_token_ids"].shape, (1, 8))
+        self.assertAllClose(output, expected)
+        assert_grain_safe_types(unwrapped_output)
+        self.assertAllClose(unwrapped_output, expected)
+        self.assertEqual(seen_devices, ["cpu", "cpu"])
 
     def test_generate_postprocess(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)

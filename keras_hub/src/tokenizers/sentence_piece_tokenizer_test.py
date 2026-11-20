@@ -175,7 +175,10 @@ class SentencePieceTokenizerTest(TestCase):
 
     def test_attributes_match_revived_without_tensorflow(self):
         with patch("keras_hub.src.utils.tensor_utils.tf", None):
-            tokenizer = SentencePieceTokenizer(proto=self.proto)
+            tokenizer = SentencePieceTokenizer(
+                proto=self.proto,
+                _allow_python_workflow=self._allow_python_workflow,
+            )
             revived = SentencePieceTokenizer.from_config(tokenizer.get_config())
         self.assertEqual(set(dir(tokenizer)), set(dir(revived)))
 

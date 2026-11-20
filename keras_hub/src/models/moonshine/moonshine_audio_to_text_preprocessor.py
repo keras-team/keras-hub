@@ -12,6 +12,7 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -172,6 +173,25 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
 
     @preprocessing_function
     def generate_preprocess(
+        self,
+        x,
+        decoder_sequence_length=None,
+        sequence_length=None,
+    ):
+        if in_grain_data_pipeline():
+            with keras.device("cpu"):
+                return self._generate_preprocess(
+                    x,
+                    decoder_sequence_length=decoder_sequence_length,
+                    sequence_length=sequence_length,
+                )
+        return self._generate_preprocess(
+            x,
+            decoder_sequence_length=decoder_sequence_length,
+            sequence_length=sequence_length,
+        )
+
+    def _generate_preprocess(
         self,
         x,
         decoder_sequence_length=None,
