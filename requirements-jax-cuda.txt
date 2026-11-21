@@ -8,8 +8,9 @@ torch>=2.1.0
 torchvision>=0.16.0
 
 # Jax with cuda support.
-# Keep same version as Keras repo.
---find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-jax[cuda12]==0.6.2
+# Keep same version as Keras repo. Pinned below the latest release because
+# jax 0.10.2 fails to compile Gemma3n `generate` on GPU
+# (https://github.com/jax-ml/jax/issues/39157). Unpin once that is fixed.
+jax[cuda13]==0.10.1
 
 -r requirements-common.txt

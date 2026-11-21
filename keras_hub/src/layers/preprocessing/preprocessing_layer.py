@@ -3,6 +3,7 @@ import inspect
 import keras
 
 from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import in_tf_function
 
 
@@ -48,6 +49,15 @@ class PreprocessingLayer(keras.layers.Layer):
             and self._call_accepts_labels
         ):
             args = args[0]
+        if in_grain_data_pipeline():
+            # Grain runs `map` on a pool of Python threads and returns NumPy,
+            # so compute on the CPU, as Keras' own preprocessing layers do.
+            # This also keeps the TensorFlow backend off the GPU: with TF 2.20
+            # on an A100, plain `tf.gather`/`tf.shape` calls issued from 16
+            # threads failed in ~1% of calls with another call's inputs (e.g.
+            # a `StridedSlice` fed a shape as `begin`); on the CPU, none did.
+            with keras.device("cpu"):
+                return super().__call__(*args, **kwargs)
         return super().__call__(*args, **kwargs)
 
     def _use_tf_workflow(self):

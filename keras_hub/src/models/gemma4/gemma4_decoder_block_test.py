@@ -198,3 +198,20 @@ class Gemma4DecoderBlockTest(TestCase):
         )
         vision_block(self.dummy_input)
         self.assertFalse(hasattr(vision_block, "layer_scalar"))
+
+    def test_call_uses_given_attention_mask(self):
+        from unittest.mock import patch
+
+        causal_mask = ops.cast(self._build_causal_mask(), "bool")
+
+        with patch.object(
+            self.decoder_block, "_compute_attention_mask", autospec=True
+        ) as mock_compute:
+            out_with_mask = self.decoder_block(
+                self.dummy_input, attention_mask=causal_mask
+            )
+            self.assertEqual(mock_compute.call_count, 0)
+
+        out_without_mask = self.decoder_block(self.dummy_input)
+
+        self.assertAllClose(out_with_mask, out_without_mask, atol=1e-5)

@@ -42,9 +42,9 @@ Keep this checklist handy!
 
 This PR is optional.
 
-- [ ] An `xx/xx_<task>.py` file for adding a task model like classifier, masked LM, etc. \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier.py)\]
-- [ ] An `xx/xx_<task>_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the task model \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor.py)\].
-- [ ] `xx/xx_<task>_test.py` file and `xx/xx_<task>_preprocessor_test.py` files which have unit tests for the above two modules \[[Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_classifier_test.py) and [Example 2](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_preprocessor_test.py)\].
+- [ ] An `xx/xx_<task>.py` file for adding a task model like classifier, masked LM, etc. \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_text_classifier.py)\]
+- [ ] An `xx/xx_<task>_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the task model \[[Example](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_text_classifier_preprocessor.py)\].
+- [ ] `xx/xx_<task>_test.py` file and `xx/xx_<task>_preprocessor_test.py` files which have unit tests for the above two modules \[[Example 1](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_text_classifier_test.py) and [Example 2](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_text_classifier_preprocessor_test.py)\].
 - [ ] A Colab notebook link in the PR description, demonstrating that the output of the preprocessor matches the output of the original preprocessor \[[Example](https://colab.research.google.com/drive/1GFFC7Y1I_2PtYlWDToqKvzYhHWv1b3nC?usp=sharing)].
 
 ## Detailed Instructions
@@ -117,7 +117,7 @@ This is when things might slightly get complicated.
 If the model introduces a paradigm shift, such as using relative attention instead
 of vanilla attention, the contributor will have to implement complete custom layers. A case
 in point is `keras_hub.models.DebertaV3Backbone` where we had to [implement layers
-from scratch](https://github.com/keras-team/keras-hub/tree/master/keras_hub/models/deberta_v3).
+from scratch](https://github.com/keras-team/keras-hub/tree/master/keras_hub/src/models/deberta_v3).
 
 On the other hand, if the model has a small tweak, something simpler can be done.
 For instance, in the Whisper model, the self-attention and cross-attention mechanism
@@ -228,7 +228,7 @@ and return the dictionary in the form expected by the model.
 
 The preprocessor class might have a few intricacies depending on the model. For example,
 the DeBERTaV3 tokenizer does not have the `[MASK]` in the provided sentencepiece
-proto file, and we had to make some modifications [here](https://github.com/keras-team/keras-hub/blob/master/keras_hub/models/deberta_v3/deberta_v3_preprocessor.py). Secondly, we have
+proto file, and we had to make some modifications [here](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/deberta_v3/deberta_v3_tokenizer.py). Secondly, we have
 a separate preprocessor class for every task. This is because different tasks
 might require different input formats. For instance, we have a [separate preprocessor](https://github.com/keras-team/keras-hub/blob/master/keras_hub/src/models/distil_bert/distil_bert_masked_lm_preprocessor.py)
 for masked language modeling (MLM) for DistilBERT.

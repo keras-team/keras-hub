@@ -387,6 +387,7 @@ class Gemma4TextAttention(keras.layers.Layer):
         shared_kv=None,
         training=False,
         positions=None,
+        return_cache=True,
     ):
         query = self.query_dense(x)
         query = self.query_norm(query)
@@ -447,7 +448,12 @@ class Gemma4TextAttention(keras.layers.Layer):
 
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
-                new_cache = ops.stack((key, value), axis=1)
+                # Skip stacking a return value the caller will discard
+                # (e.g. DiffusionGemma's canvas denoising steps, which never
+                # carry the cache forward between calls).
+                new_cache = (
+                    ops.stack((key, value), axis=1) if return_cache else None
+                )
         else:
             if self.is_kv_shared_layer and shared_kv is not None:
                 key = shared_kv[:, 0, ...]

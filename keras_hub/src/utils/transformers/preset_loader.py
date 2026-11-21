@@ -3,16 +3,18 @@
 import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
+from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.utils.preset_utils import PresetLoader
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_blip2
 from keras_hub.src.utils.transformers import convert_deit
+from keras_hub.src.utils.transformers import convert_diffusion_gemma
 from keras_hub.src.utils.transformers import convert_dinov2
 from keras_hub.src.utils.transformers import convert_dinov3
 from keras_hub.src.utils.transformers import convert_distilbert
+from keras_hub.src.utils.transformers import convert_embedding_gemma2
 from keras_hub.src.utils.transformers import convert_esm
 from keras_hub.src.utils.transformers import convert_gemma
 from keras_hub.src.utils.transformers import convert_gemma3
@@ -20,13 +22,20 @@ from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gemma4_assistant
 from keras_hub.src.utils.transformers import convert_gpt2
+from keras_hub.src.utils.transformers import convert_gpt_neo_x
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
+from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_modern_bert
+from keras_hub.src.utils.transformers import convert_mpnet
+from keras_hub.src.utils.transformers import convert_muse_glimmer
+from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
+from keras_hub.src.utils.transformers import convert_qwen2_vl
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
@@ -36,6 +45,7 @@ from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_roberta
 from keras_hub.src.utils.transformers import convert_sam3
 from keras_hub.src.utils.transformers import convert_smollm3
+from keras_hub.src.utils.transformers import convert_smolvlm2
 from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
@@ -60,12 +70,18 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_deit
         elif model_type == "distilbert":
             self.converter = convert_distilbert
+        elif model_type == "modernbert":
+            self.converter = convert_modern_bert
+        elif model_type == "mpnet":
+            self.converter = convert_mpnet
         elif model_type in ("dinov2", "dinov2_with_registers"):
             self.converter = convert_dinov2
         elif model_type == "dinov3_vit":
             self.converter = convert_dinov3
         elif model_type == "esm":
             self.converter = convert_esm
+        elif model_type == "diffusion_gemma":
+            self.converter = convert_diffusion_gemma
         elif model_type in ("gemma", "gemma2"):
             self.converter = convert_gemma
         elif model_type in ("gemma3", "gemma3_text"):
@@ -74,12 +90,16 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gemma3n
         elif model_type in ("gemma4", "gemma4_text"):
             self.converter = convert_gemma4
+        elif model_type == "embedding_gemma2":
+            self.converter = convert_embedding_gemma2
         elif model_type == "gemma4_assistant":
             self.converter = convert_gemma4_assistant
         elif model_type == "gpt2":
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
             self.converter = convert_gpt_oss
+        elif model_type == "gpt_neox":
+            self.converter = convert_gpt_neo_x
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
@@ -87,12 +107,20 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_metaclip_2
         elif model_type == "mistral":
             self.converter = convert_mistral
+        elif model_type == "mistral3":
+            self.converter = convert_mistral3
+        elif model_type == "muse_glimmer":
+            self.converter = convert_muse_glimmer
+        elif model_type == "muse_glimmer_assistant":
+            self.converter = convert_muse_glimmer_assistant
         elif model_type == "paligemma":
             self.converter = convert_pali_gemma
         elif model_type == "vit":
             self.converter = convert_vit
         elif model_type == "qwen2":
             self.converter = convert_qwen
+        elif model_type == "qwen2_vl":
+            self.converter = convert_qwen2_vl
         elif model_type == "mixtral":
             self.converter = convert_mixtral
         elif model_type == "qwen2_moe":
@@ -115,6 +143,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_xlm_roberta
         elif model_type == "smollm3":
             self.converter = convert_smollm3
+        elif model_type == "smolvlm":
+            self.converter = convert_smolvlm2
         elif model_type == "swin":
             self.converter = convert_swin_transformer
         elif model_type == "t5gemma":
@@ -143,7 +173,6 @@ class TransformersPresetLoader(PresetLoader):
             keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            jax_memory_cleanup(backbone)
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
@@ -152,6 +181,15 @@ class TransformersPresetLoader(PresetLoader):
         architecture = self.config["architectures"][0]
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
+        # `convert_head` is only defined for task-specific heads (e.g.
+        # ModernBERT's MaskedLM prediction head). Gate on the task class
+        # itself, not just on whether the converter happens to define
+        # `convert_head` , otherwise any task sharing this converter
+        #  would incorrectly fall through
+        # into a `convert_head` written for a different task class.
+        has_matching_convert_head = hasattr(
+            self.converter, "convert_head"
+        ) and issubclass(cls, MaskedLM)
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -166,6 +204,7 @@ class TransformersPresetLoader(PresetLoader):
             not is_classifier
             and not is_assistant
             and architecture != "ViTModel"
+            and not has_matching_convert_head
         ):
             return super().load_task(
                 cls, load_weights, load_task_weights, **kwargs

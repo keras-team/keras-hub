@@ -2,7 +2,6 @@ import re
 
 import keras
 import numpy as np
-from keras import ops
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.causal_lm_preprocessor import CausalLMPreprocessor
@@ -15,6 +14,7 @@ from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
     Qwen3_5VideoConverter,
 )
 from keras_hub.src.utils.tensor_utils import assert_tf_installed
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
 
@@ -24,8 +24,129 @@ except ImportError:
     tf = None
 
 
+class QwenVLSpecialTokenMixin:
+    """Special-token handling shared by Qwen-VL-family preprocessors.
+
+    The BPE tokenizers used by these models may split added special tokens
+    (``<|image_pad|>``, ``<|vision_start|>``, etc.) into sub-word pieces.
+    This mixin splits text on known special tokens, tokenizes only the
+    plain-text spans, and inserts the correct token IDs directly.
+
+    Host classes must set ``self.tokenizer``, ``self.image_token`` and
+    ``self.video_token``, and initialize ``self._cached_special_token_map``
+    and ``self._cached_special_token_pattern`` to ``None``.
+    """
+
+    _SPECIAL_TOKEN_ATTRS = [
+        "im_start_token",
+        "end_token",
+        "vision_start_token",
+        "vision_end_token",
+        "image_token",
+        "video_token",
+    ]
+
+    # Tokens HF marks as special (stripped from decoded output, kept atomic
+    # during tokenization). Resolved opportunistically so custom
+    # vocabularies that omit them still work.
+    _EXTRA_SPECIAL_TOKENS = [
+        "<|object_ref_start|>",
+        "<|object_ref_end|>",
+        "<|box_start|>",
+        "<|box_end|>",
+        "<|quad_start|>",
+        "<|quad_end|>",
+        "<|vision_pad|>",
+    ]
+
+    @property
+    def image_token_id(self):
+        """Image pad token ID, resolved from the tokenizer."""
+        return getattr(self.tokenizer, "image_token_id", None)
+
+    @property
+    def video_token_id(self):
+        """Video pad token ID, resolved from the tokenizer."""
+        return getattr(self.tokenizer, "video_token_id", None)
+
+    @property
+    def _special_token_map(self):
+        """Lazily build token-string → token-ID map."""
+        if self._cached_special_token_map is None:
+            self._cached_special_token_map = {}
+            for attr in self._SPECIAL_TOKEN_ATTRS:
+                tok_str = getattr(self.tokenizer, attr, None)
+                tok_id = getattr(self.tokenizer, f"{attr}_id", None)
+                if tok_str is not None and tok_id is not None:
+                    self._cached_special_token_map[tok_str] = tok_id
+            for tok_str in self._EXTRA_SPECIAL_TOKENS:
+                try:
+                    tok_id = self.tokenizer.token_to_id(tok_str)
+                except (ValueError, AttributeError):
+                    continue
+                if tok_id is not None:
+                    self._cached_special_token_map[tok_str] = tok_id
+        return self._cached_special_token_map
+
+    @property
+    def _special_token_pattern(self):
+        """Lazily build regex for splitting at special tokens."""
+        if self._cached_special_token_pattern is None:
+            self._cached_special_token_pattern = re.compile(
+                "("
+                + "|".join(re.escape(t) for t in self._special_token_map)
+                + ")"
+            )
+        return self._cached_special_token_pattern
+
+    def _tokenize_with_special_tokens(
+        self, text, num_image_tokens, num_video_tokens
+    ):
+        """Tokenize text while correctly handling special tokens.
+
+        Args:
+            text: str. The prompt string.
+            num_image_tokens: list[int]. Merged token count per image.
+            num_video_tokens: list[int]. Merged token count per video.
+        Returns:
+            list[int]. The complete token ID sequence.
+        """
+        parts = self._special_token_pattern.split(text)
+
+        all_ids = []
+        img_idx = 0
+        vid_idx = 0
+        for part in parts:
+            if part in self._special_token_map:
+                if part == self.image_token:
+                    if img_idx < len(num_image_tokens):
+                        n = num_image_tokens[img_idx]
+                        img_idx += 1
+                    else:
+                        n = 1
+                    all_ids.extend([self.image_token_id] * n)
+                elif part == self.video_token:
+                    if vid_idx < len(num_video_tokens):
+                        n = num_video_tokens[vid_idx]
+                        vid_idx += 1
+                    else:
+                        n = 1
+                    all_ids.extend([self.video_token_id] * n)
+                else:
+                    all_ids.append(self._special_token_map[part])
+            elif part:
+                tokenized = self.tokenizer(part)
+                if hasattr(tokenized, "numpy"):
+                    all_ids.extend(tokenized.numpy().tolist())
+                else:
+                    all_ids.extend(list(tokenized))
+        return all_ids
+
+
 @keras_hub_export("keras_hub.models.Qwen3_5CausalLMPreprocessor")
-class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
+class Qwen3_5CausalLMPreprocessor(
+    QwenVLSpecialTokenMixin, CausalLMPreprocessor
+):
     """Qwen3.5 Causal LM preprocessor with multimodal support.
 
     For text-only usage this behaves identically to the base
@@ -57,15 +178,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
     tokenizer_cls = Qwen3_5Tokenizer
     image_converter_cls = Qwen3_5ImageConverter
     video_converter_cls = Qwen3_5VideoConverter
-
-    _SPECIAL_TOKEN_ATTRS = [
-        "im_start_token",
-        "end_token",
-        "vision_start_token",
-        "vision_end_token",
-        "image_token",
-        "video_token",
-    ]
 
     def __init__(
         self,
@@ -101,92 +213,6 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         self._cached_special_token_map = None
         self._cached_special_token_pattern = None
 
-    @property
-    def image_token_id(self):
-        """Image pad token ID, resolved from the tokenizer."""
-        return getattr(self.tokenizer, "image_token_id", None)
-
-    @property
-    def video_token_id(self):
-        """Video pad token ID, resolved from the tokenizer."""
-        return getattr(self.tokenizer, "video_token_id", None)
-
-    @property
-    def _special_token_map(self):
-        """Lazily build token-string → token-ID map."""
-        if self._cached_special_token_map is None:
-            self._cached_special_token_map = {}
-            for attr in self._SPECIAL_TOKEN_ATTRS:
-                tok_str = getattr(self.tokenizer, attr, None)
-                tok_id = getattr(self.tokenizer, f"{attr}_id", None)
-                if tok_str is not None and tok_id is not None:
-                    self._cached_special_token_map[tok_str] = tok_id
-        return self._cached_special_token_map
-
-    @property
-    def _special_token_pattern(self):
-        """Lazily build regex for splitting at special tokens."""
-        if self._cached_special_token_pattern is None:
-            self._cached_special_token_pattern = re.compile(
-                "("
-                + "|".join(re.escape(t) for t in self._special_token_map)
-                + ")"
-            )
-        return self._cached_special_token_pattern
-
-    def _tokenize_with_special_tokens(
-        self, text, num_image_tokens, num_video_tokens
-    ):
-        """Tokenize text while correctly handling special tokens.
-
-        The KerasHub BPE tokenizer may not encode Qwen3.5's added special
-        tokens (``<|image_pad|>``, ``<|vision_start|>``, etc.) as single
-        tokens — it can break them into sub-word pieces. This method
-        splits the input by known special tokens, tokenizes only the
-        text segments, and manually inserts the correct token IDs.
-
-        For ``<|image_pad|>`` and ``<|video_pad|>`` tokens, each occurrence is
-        expanded to ``N`` copies.
-
-        Args:
-            text: str. The prompt string.
-            num_image_tokens: list[int].
-            num_video_tokens: list[int].
-        Returns:
-            list[int]. The complete token ID sequence.
-        """
-        parts = self._special_token_pattern.split(text)
-
-        all_ids = []
-        img_idx = 0
-        vid_idx = 0
-        for part in parts:
-            if part in self._special_token_map:
-                if part == self.image_token:
-                    # Expand image placeholder to N copies.
-                    if img_idx < len(num_image_tokens):
-                        n = num_image_tokens[img_idx]
-                        img_idx += 1
-                    else:
-                        n = 1
-                    all_ids.extend([self.image_token_id] * n)
-                elif part == self.video_token:
-                    if vid_idx < len(num_video_tokens):
-                        n = num_video_tokens[vid_idx]
-                        vid_idx += 1
-                    else:
-                        n = 1
-                    all_ids.extend([self.video_token_id] * n)
-                else:
-                    all_ids.append(self._special_token_map[part])
-            elif part:
-                tokenized = self.tokenizer(part)
-                if hasattr(tokenized, "numpy"):
-                    all_ids.extend(tokenized.numpy().tolist())
-                else:
-                    all_ids.extend(list(tokenized))
-        return all_ids
-
     def _compute_vision_indices(self, token_ids):
         """Return indices where token_ids matches image or video token IDs.
 
@@ -198,7 +224,7 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             int32 tensor ``(total_vision_tokens,)``.
         """
-        token_ids_np = ops.convert_to_numpy(token_ids)
+        token_ids_np = convert_to_numpy(token_ids)
         img_mask = (token_ids_np == self.image_token_id).reshape(-1)
         img_indices = np.where(img_mask)[0].astype(np.int32)
 
@@ -336,16 +362,16 @@ class Qwen3_5CausalLMPreprocessor(CausalLMPreprocessor):
         Returns:
             int32 tensor ``(batch, 4, seq_len)``.
         """
-        token_ids_np = ops.convert_to_numpy(token_ids)
+        token_ids_np = convert_to_numpy(token_ids)
         if hasattr(image_grid_thw, "numpy"):
-            image_grid_np = ops.convert_to_numpy(image_grid_thw)
+            image_grid_np = convert_to_numpy(image_grid_thw)
         elif image_grid_thw is not None:
             image_grid_np = np.array(image_grid_thw)
         else:
             image_grid_np = np.zeros((0, 3), dtype=np.int32)
 
         if hasattr(video_grid_thw, "numpy"):
-            video_grid_np = ops.convert_to_numpy(video_grid_thw)
+            video_grid_np = convert_to_numpy(video_grid_thw)
         elif video_grid_thw is not None:
             video_grid_np = np.array(video_grid_thw)
         else:

@@ -2,7 +2,6 @@
 
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.timm import convert_cspnet
 from keras_hub.src.utils.timm import convert_densenet
 from keras_hub.src.utils.timm import convert_efficientnet
@@ -47,8 +46,6 @@ class TimmPresetLoader(PresetLoader):
         keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            if not self.config["architecture"].startswith("mobilenetv5"):
-                jax_memory_cleanup(backbone)
             # Use prefix="" to avoid using `get_prefixed_key`.
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_weights(backbone, loader, self.config)

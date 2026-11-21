@@ -1,61 +1,8 @@
+import importlib
 import os
 
 import keras
 import pytest
-
-# OpenVINO supported test paths
-OPENVINO_SUPPORTED_PATHS = [
-    "integration_tests",
-    "keras_hub/src/metrics",
-    "keras_hub/src/tokenizers",
-    "keras_hub/src/models/albert",
-    "keras_hub/src/models/basnet",
-    "keras_hub/src/models/bert",
-    "keras_hub/src/models/bloom",
-    "keras_hub/src/models/cspnet",
-    "keras_hub/src/models/deberta_v3",
-    "keras_hub/src/models/deeplab_v3",
-    "keras_hub/src/models/densenet",
-    "keras_hub/src/models/distil_bert",
-    "keras_hub/src/models/efficientnet",
-    "keras_hub/src/models/electra",
-    "keras_hub/src/models/f_net",
-    "keras_hub/src/models/falcon",
-    "keras_hub/src/models/flux",
-    "keras_hub/src/models/gemma",
-    "keras_hub/src/models/gpt2",
-    "keras_hub/src/models/gpt_oss",
-    "keras_hub/src/models/hgnetv2",
-    "keras_hub/src/models/llama",
-    "keras_hub/src/models/llama3",
-    "keras_hub/src/models/mistral",
-    "keras_hub/src/models/mit",
-    "keras_hub/src/models/mixtral",
-    "keras_hub/src/models/mobilenet",
-    "keras_hub/src/models/mobilenetv5",
-    "keras_hub/src/models/opt",
-    "keras_hub/src/models/pali_gemma",
-    "keras_hub/src/models/parseq",
-    "keras_hub/src/models/phi3",
-    "keras_hub/src/models/qwen",
-    "keras_hub/src/models/qwen3",
-    "keras_hub/src/models/qwen3_moe",
-    "keras_hub/src/models/qwen_moe",
-    "keras_hub/src/models/roberta",
-    "keras_hub/src/models/rqvae",
-    "keras_hub/src/models/siglip",
-    "keras_hub/src/models/smollm3",
-    "keras_hub/src/models/swin_transformer",
-    "keras_hub/src/models/t5",
-    "keras_hub/src/models/t5gemma2",
-    "keras_hub/src/models/vae",
-    "keras_hub/src/models/vgg",
-    "keras_hub/src/models/vit_det",
-    "keras_hub/src/models/whisper",
-    "keras_hub/src/models/xception",
-    "keras_hub/src/models/xlm_roberta",
-    "keras_hub/src/models/xlnet",
-]
 
 
 def pytest_addoption(parser):
@@ -86,13 +33,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    # Monkey-patch training methods for OpenVINO backend
-    if keras.config.backend() == "openvino":
+    # Skip training in tests on backends that can't compute gradients.
+    if not getattr(keras.src.backend, "SUPPORTS_GRADIENT", True):
         keras.Model.fit = lambda *args, **kwargs: pytest.skip(
-            "Model.fit() not supported on OpenVINO backend"
+            "Model.fit() not supported on this backend"
         )
         keras.Model.train_on_batch = lambda *args, **kwargs: pytest.skip(
-            "Model.train_on_batch() not supported on OpenVINO backend"
+            "Model.train_on_batch() not supported on this backend"
         )
 
     # Verify that device has GPU and detected by backend
@@ -162,6 +109,12 @@ def pytest_collection_modifyitems(config, items):
         not found_kaggle_key,
         reason="tests only run with a kaggle api key",
     )
+    # A pluggable backend can list the tests it supports, in a text file at
+    # the root of its repository.
+    supported_tests = read_backend_test_list("keras_hub_tests_whitelist.txt")
+    skip_unsupported = pytest.mark.skip(
+        reason=f"Not supported by the {keras.config.backend()} backend"
+    )
     for item in items:
         if "large" in item.keywords and "extra_large" not in item.keywords:
             item.add_marker(skip_large)
@@ -172,21 +125,34 @@ def pytest_collection_modifyitems(config, items):
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
 
-        # OpenVINO-specific test skipping
-        if keras.config.backend() == "openvino":
-            is_whitelisted = any(
-                item.nodeid.startswith(supported_path + "/")
-                or item.nodeid.startswith(supported_path + "::")
-                or item.nodeid == supported_path
-                for supported_path in OPENVINO_SUPPORTED_PATHS
-            )
+        # Skip tests that the pluggable backend doesn't list as passing.
+        if supported_tests is not None and not any(
+            item.nodeid == path
+            or item.nodeid.startswith(path + "/")
+            or item.nodeid.startswith(path + "::")
+            for path in supported_tests
+        ):
+            item.add_marker(skip_unsupported)
 
-            if not is_whitelisted:
-                item.add_marker(
-                    pytest.mark.skipif(
-                        True, reason="OpenVINO: File/directory not in whitelist"
-                    )
-                )
+
+def read_backend_test_list(filename):
+    """Read a test list from the root of a pluggable backend's repository."""
+    backend = keras.config.backend()
+    if backend in ("jax", "numpy", "tensorflow", "torch"):
+        return None
+    package = importlib.import_module(f"keras_{backend}")
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(package.__file__)), filename
+    )
+    # An installed backend package has no test list.
+    if not os.path.exists(path):
+        return None
+    with open(path) as file:
+        return [
+            stripped
+            for line in file
+            if (stripped := line.strip()) and not stripped.startswith("#")
+        ]
 
 
 # Disable traceback filtering for quicker debugging of tests failures.

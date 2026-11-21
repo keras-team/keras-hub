@@ -2,8 +2,8 @@ import keras
 from absl.testing import parameterized
 from keras import ops
 from keras import random
-from keras.src.backend import get_keras_mask
-from keras.src.backend import set_keras_mask
+from keras.src.backend.common.masking import get_keras_mask
+from keras.src.backend.common.masking import set_keras_mask
 
 from keras_hub.src.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_hub.src.tests.test_case import TestCase

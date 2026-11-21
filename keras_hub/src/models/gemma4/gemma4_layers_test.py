@@ -1,4 +1,6 @@
+import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -182,3 +184,62 @@ class Gemma4InterleaveEmbeddingsTest(TestCase):
             name="interleave_test",
         )
         self.run_serialization_test(layer)
+
+    def test_zero_images(self):
+        # A text-only batch on a multimodal model hands the layer an empty
+        # image axis; the text embeddings must pass through unchanged.
+        reconstructed = ops.convert_to_numpy(
+            Gemma4InterleaveEmbeddings(
+                num_vision_tokens_per_image=self.num_vision_tokens_per_image,
+            )(
+                np.zeros(
+                    [self.batch_size, 0, 0, self.embedding_dim], "float32"
+                ),
+                self.text_embeddings,
+                np.zeros([self.batch_size, 0], "int32"),
+            )
+        )
+        self.assertAllEqual(reconstructed, self.text_embeddings)
+
+    @pytest.mark.tf_only
+    def test_predict_retrace(self):
+        # On the TensorFlow backend a second `predict()` with a different
+        # image-shape class makes Keras retrace with relaxed dims; a Python
+        # branch on the image count raises `OperatorNotAllowedInGraphError`.
+        def build_model():
+            image_in = keras.Input((None, None, self.embedding_dim))
+            text_in = keras.Input((self.seq_length, self.embedding_dim))
+            indices_in = keras.Input((None,), dtype="int32")
+            return keras.Model(
+                [image_in, text_in, indices_in],
+                Gemma4InterleaveEmbeddings(
+                    num_vision_tokens_per_image=(
+                        self.num_vision_tokens_per_image
+                    ),
+                )(image_in, text_in, indices_in),
+            )
+
+        with_images = [
+            self.image_embeddings,
+            self.text_embeddings,
+            self.vision_indices.astype("int32"),
+        ]
+        no_images = [
+            np.zeros([self.batch_size, 0, 0, self.embedding_dim], "float32"),
+            self.text_embeddings,
+            np.zeros([self.batch_size, 0], "int32"),
+        ]
+        for order in ([no_images, with_images], [with_images, no_images]):
+            # A fresh model per order, so the second call really retraces.
+            model = build_model()
+            outputs = [model.predict(x, verbose=0) for x in order]
+            for out in outputs:
+                self.assertEqual(
+                    out.shape,
+                    (self.batch_size, self.seq_length, self.embedding_dim),
+                )
+            empty = outputs[0 if order[0] is no_images else 1]
+            self.assertAllEqual(empty, self.text_embeddings)
+            traced = outputs[0 if order[0] is with_images else 1]
+            eager = ops.convert_to_numpy(model.layers[-1](*with_images))
+            self.assertAllClose(traced, eager, atol=1e-6)
