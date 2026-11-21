@@ -1,6 +1,7 @@
 import json
 import os
 
+import keras
 import pytest
 from keras.src.saving import serialization_lib
 
@@ -120,6 +121,50 @@ class WhisperTokenizerTest(TestCase):
             ):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
 
+        serialized = keras.saving.serialize_keras_object(
+            WhisperTokenizer(**self.init_kwargs)
+        )
+        serialized_cases = [
+            (
+                {
+                    **serialized,
+                    "config": {
+                        **serialized["config"],
+                        "language_tokens": language_tokens_path,
+                    },
+                },
+                r"Requested the loading of a tokenizer asset file outside of "
+                r"the model archive.*Asset file: .*language_tokens\.json",
+            ),
+            (
+                {
+                    **serialized,
+                    "config": {
+                        **serialized["config"],
+                        "special_tokens": special_tokens_path,
+                    },
+                },
+                r"Requested the loading of a tokenizer asset file outside of "
+                r"the model archive.*Asset file: .*special_tokens\.json",
+            ),
+        ]
+
+        for serialized_config, error_pattern in serialized_cases:
+            with self.assertRaisesRegex(TypeError, error_pattern):
+                keras.saving.deserialize_keras_object(serialized_config)
+
+        # Unscoped construction from file paths should remain allowed.
+        tokenizer = WhisperTokenizer(
+            vocabulary=vocab_path,
+            merges=merges_path,
+            special_tokens=special_tokens_path,
+            language_tokens=language_tokens_path,
+        )
+        self.assertAllEqual(
+            tokenizer(self.input_data),
+            [[23, 14, 24, 23, 16, 32], [23, 14, 23, 16]],
+        )
+
         with serialization_lib.SafeModeScope(False):
             tokenizer = WhisperTokenizer(
                 vocabulary=vocab_path,
@@ -131,6 +176,13 @@ class WhisperTokenizerTest(TestCase):
                 tokenizer(self.input_data),
                 [[23, 14, 24, 23, 16, 32], [23, 14, 23, 16]],
             )
+
+        for serialized_config, _ in serialized_cases:
+            restored = keras.saving.deserialize_keras_object(
+                serialized_config, safe_mode=False
+            )
+            self.assertEqual(restored.language_tokens, self.language_tokens)
+            self.assertEqual(restored._special_token_dict, self.special_tokens)
 
     @pytest.mark.extra_large
     def test_smallest_preset(self):
