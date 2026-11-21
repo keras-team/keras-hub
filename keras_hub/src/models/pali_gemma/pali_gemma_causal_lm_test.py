@@ -19,6 +19,7 @@ from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class PaliGemmaCausalLMTest(TestCase):
@@ -75,11 +76,17 @@ class PaliGemmaCausalLMTest(TestCase):
         }
 
     def test_causal_lm_basics(self):
+        # The eager and `tf.data` predict paths drift by up to ~3e-3 on GPU
+        # (TF32 matmuls on the L4 runner), beyond the shared GPU tolerance.
+        # CPU keeps the original 1e-5.
+        tol = 1e-2 if running_on_gpu() else 1e-5
         self.run_task_test(
             cls=PaliGemmaCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
             expected_output_shape=(2, 16, 11),
+            atol=tol,
+            rtol=tol,
         )
 
     @pytest.mark.large
@@ -104,6 +111,34 @@ class PaliGemmaCausalLMTest(TestCase):
             cls=PaliGemmaCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=input_data,
+        )
+
+    def test_litert_export(self):
+        input_data = {
+            "token_ids": np.random.randint(
+                0,
+                self.vocabulary_size,
+                size=(self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "images": np.ones(
+                (self.batch_size, self.image_size, self.image_size, 3)
+            ),
+            "padding_mask": np.ones(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+            "response_mask": np.zeros(
+                (self.batch_size, self.text_sequence_length),
+                dtype="int32",
+            ),
+        }
+        self.run_litert_export_test(
+            cls=PaliGemmaCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 2e-6, "mean": 1e-6}},
         )
 
     def test_pali_gemma_causal_model(self):

@@ -1,3 +1,18 @@
+
+When performing code reviews on pull requests, you must strictly adhere to the following principles in addition to the API design guidelines above:
+
+1. **Question the Necessity of Changes**: Do not assume that the pull request changes are strictly necessary. Critically review the proposed changes to ensure they add real value. Point out any code that solving a non-existent problem or adding unnecessary complexity.
+
+2. **Call out "AI Slop"**: Actively look for and identify "AI slop"—generic, overly verbose, or hallucinated code that lacks context or violates best practices. If you suspect the code is AI slop, explicitly call it out.
+
+3. **Poke Holes in the Implementation**: Your goal is to critically test the logic. Actively search for and point out failing edge cases, race conditions, or unhandled exceptions in the implementation.
+
+4. **Demand Robustness**: Do not accept fragile code. If the proposed code is not robust enough or lacks proper error handling, explicitly tell the author why the current approach is brittle and what must be done to reinforce it.
+
+5. **Respect Existing Repo Patterns**: Before suggesting review comments (like asking users to add boilerplate or specific patterns), actively check for existing design patterns across the repository. Do not suggest adding useless code or structures that contradict or fall outside the established Keras repo coding style.
+
+
+
 ## Key Principles
 
 - **Modularity**: Models are broken down into distinct, reusable components: Backbone, Converter (Tokenizer, ImageConverter, etc.), Preprocessor, and Task.
@@ -5,6 +20,7 @@
 - **Validation**: Every component must be validated against the original model's implementation. Numerical equivalence is a primary requirement, demonstrated via Colab notebooks.
 - **Reusability**: Prioritize using existing layers from `keras.layers` and `keras_hub.layers` before implementing custom logic.
 - **Backend Agnostic**: All code must be keras 3 backend-agnostic, supporting TensorFlow, JAX, and PyTorch backends.
+- **Model license**: The model must use a permissive license, such as MIT or Apache. If the model is under a copyleft license, the PR must flag this immediately, and the pull request should be marked to be closed.
 
 ## Directory and File Structure
 
@@ -668,18 +684,20 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=backbone.get_layer("token_embedding").embeddings,
         hf_weight_key="model.embed_tokens.weight",
     )
-    
+
     # Transformer layers
     for i in range(backbone.num_layers):
         layer = backbone.get_layer(f"transformer_layer_{i}")
         hf_prefix = f"model.layers.{i}"
-        
+
         # Attention weights
         loader.port_weight(
             keras_variable=layer.attention.query_dense.kernel,
             hf_weight_key=f"{hf_prefix}.self_attn.q_proj.weight",
             hook_fn=lambda hf_tensor, keras_shape: np.transpose(
-                np.reshape(hf_tensor, (keras_shape[0], keras_shape[2], keras_shape[1])),
+                np.reshape(
+                    hf_tensor, (keras_shape[0], keras_shape[2], keras_shape[1])
+                ),
                 axes=(0, 2, 1),
             ),
         )
@@ -700,7 +718,9 @@ import pytest
 
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.my_model.my_model_backbone import MyModelBackbone
-from keras_hub.src.models.my_model.my_model_text_classifier import MyModelTextClassifier
+from keras_hub.src.models.my_model.my_model_text_classifier import (
+    MyModelTextClassifier,
+)
 from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.tests.test_case import TestCase
 
@@ -722,7 +742,7 @@ class TestMyModelConverter(TestCase):
             load_weights=False,
         )
         self.assertIsInstance(model, MyModelTextClassifier)
-        
+
         model = Backbone.from_preset(
             "hf://huggingface/my-model-base",
             load_weights=False,

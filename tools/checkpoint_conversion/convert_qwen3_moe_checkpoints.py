@@ -20,7 +20,11 @@ from transformers import AutoTokenizer  # noqa: E402
 import keras_hub  # noqa: E402
 
 PRESET_MAP = {
+    # Qwen-3 MoE Models
     "qwen3_moe_30b_a3b_en": "Qwen/Qwen3-30B-A3B",
+    "qwen3_moe_235b_a22b_en": "Qwen/Qwen3-235B-A22B",
+    # Qwen-3 Coder MoE Models
+    "qwen3_coder_instruct_30b_a3b_en": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
 }
 
 FLAGS = flags.FLAGS
@@ -85,21 +89,11 @@ def test_tokenizer(keras_hub_tokenizer, hf_tokenizer):
     np.testing.assert_equal(keras_hub_output, hf_output)
 
 
-def validate_output(
-    keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
-):
+def validate_output(qwen3_moe_lm, hf_model, hf_tokenizer):
     input_str = "What is Keras?"
     length = 32
 
-    # KerasHub
-    preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
-        keras_hub_tokenizer
-    )
-    qwen_moe_lm = keras_hub.models.Qwen3MoeCausalLM(
-        backbone=keras_hub_model, preprocessor=preprocessor, sampler="greedy"
-    )
-
-    keras_output = qwen_moe_lm.generate([input_str], max_length=length)
+    keras_output = qwen3_moe_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
     print("🔶 KerasHub output:", keras_output)
 
@@ -150,11 +144,16 @@ def main(_):
     test_tokenizer(keras_hub_tokenizer, hf_tokenizer)
     test_model(keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer)
 
-    # == Validate model.generate output ==
-    validate_output(
-        keras_hub_model, keras_hub_tokenizer, hf_model, hf_tokenizer
+    preprocessor = keras_hub.models.Qwen3MoeCausalLMPreprocessor(
+        keras_hub_tokenizer
     )
+    qwen3_moe_lm = keras_hub.models.Qwen3MoeCausalLM(
+        backbone=keras_hub_model, preprocessor=preprocessor, sampler="greedy"
+    )
+    # == Validate model.generate output ==
+    validate_output(qwen3_moe_lm, hf_model, hf_tokenizer)
     print("\n-> Tests passed!")
+    qwen3_moe_lm.save_to_preset(f"./{preset}")
 
 
 if __name__ == "__main__":

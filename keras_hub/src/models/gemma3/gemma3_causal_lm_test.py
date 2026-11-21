@@ -19,11 +19,12 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
 from keras_hub.src.models.gemma3.gemma3_vision_encoder import (
     Gemma3VisionEncoder,
 )
+from keras_hub.src.tests.mocks.mock_attention import assert_fused_attention_used
+from keras_hub.src.tests.mocks.mock_attention import patch_dot_product_attention
 from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
@@ -150,13 +151,10 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the JAX backend.")
 
-        with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
+        with patch_dot_product_attention() as mock_func:
             causal_lm = Gemma3CausalLM(**self.text_init_kwargs)
             causal_lm.generate("the quick brown fox")
-            if running_on_gpu():
-                mock_func.assert_called()
-            else:
-                mock_func.assert_not_called()
+            assert_fused_attention_used(mock_func)
 
     def test_text_early_stopping(self):
         causal_lm = Gemma3CausalLM(**self.text_init_kwargs)
@@ -224,6 +222,62 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
             cls=Gemma3CausalLM,
             init_kwargs=init_kwargs,
             input_data=input_data,
+        )
+
+    def test_litert_export(self):
+        """Test LiteRT export for Gemma3CausalLM with small test model."""
+        # Use the small text-only model for fast testing
+        model = Gemma3CausalLM(**self.text_init_kwargs)
+
+        # Test with text input data
+        input_data = self.text_input_data.copy()
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            20,
+            self.text_preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
+        )
+
+    @pytest.mark.large
+    def test_litert_export_multimodal(self):
+        """Test LiteRT export for multimodal Gemma3CausalLM with small test
+        model."""
+        # Use the small multimodal model for testing
+        model = Gemma3CausalLM(**self.init_kwargs)
+
+        # Test with multimodal input data
+        input_data = self.input_data.copy()
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            20,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-2, "mean": 1e-4}},
         )
 
     @pytest.mark.kaggle_key_required

@@ -413,6 +413,11 @@ class DFineObjectDetector(ObjectDetector):
     ):
         assert_bounding_box_support(self.__class__.__name__)
 
+        if num_classes != backbone.num_labels:
+            config = backbone.get_config()
+            config["num_labels"] = num_classes
+            backbone = backbone.__class__.from_config(config)
+
         # === Functional Model ===
         image_input = keras.layers.Input(
             shape=backbone.image_shape, name="images"

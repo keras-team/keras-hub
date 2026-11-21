@@ -8,6 +8,7 @@ from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter,
 )
 from keras_hub.src.models.siglip.siglip_tokenizer import SigLIPTokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
@@ -106,6 +107,7 @@ class SigLIPPreprocessor(CausalLMPreprocessor):
         self.built = True
 
     def canonicalize_inputs(self, inputs):
+        assert_tf_installed("SigLIPPreprocessor with canonicalize_text=True")
         # Ref: https://github.com/google-research/big_vision/blob/main/big_vision/evaluators/proj/image_text/prompt_engineering.py
         inputs = tf.convert_to_tensor(inputs)
         # Do lower case.

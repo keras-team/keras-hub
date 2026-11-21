@@ -271,7 +271,6 @@ class Qwen3CausalLM(CausalLM):
             hidden_states=hidden_states,
             model=self,
         )
-        print("generated token ids = ", token_ids[0])
 
         # Compute an output padding mask with the token ids we updated.
         if stop_token_ids is not None:

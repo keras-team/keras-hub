@@ -10,16 +10,21 @@ from keras_hub.src.models.falcon.falcon_causal_lm_preprocessor import (
 )
 from keras_hub.src.models.falcon.falcon_tokenizer import FalconTokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class FalconCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = FalconTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -27,8 +32,9 @@ class FalconCausalLMTest(TestCase):
             self.tokenizer,
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = FalconBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_attention_heads=2,
             hidden_dim=4,
@@ -47,12 +53,11 @@ class FalconCausalLMTest(TestCase):
         self.input_data = self.preprocessor(*self.train_data)[0]
 
     def test_causal_lm_basics(self):
-        vocabulary_size = self.tokenizer.vocabulary_size()
         self.run_task_test(
             cls=FalconCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, vocabulary_size),
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):
@@ -144,6 +149,50 @@ class FalconCausalLMTest(TestCase):
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
+    def test_cached_decoding_matches_full_forward(self):
+        # The ALiBi bias must span the cache, not just the query window.
+        # Building it from the query length breaks cached decoding two ways:
+        # it fails to broadcast when more than one token is passed, and it
+        # collapses to all zeros for a single token, silently disabling ALiBi.
+        causal_lm = FalconCausalLM(**self.init_kwargs)
+        token_ids = self.input_data["token_ids"]
+        batch_size, seq_length = token_ids.shape
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_attention_heads
+        head_dim = self.backbone.hidden_dim // num_heads
+        cache_shape = [
+            batch_size,
+            num_layers,
+            2,
+            seq_length,
+            num_heads,
+            head_dim,
+        ]
+        dtype = causal_lm.compute_dtype
+
+        # One pass over the whole sequence, seeding an empty cache.
+        full_logits, _, _ = causal_lm.call_with_cache(
+            token_ids, ops.zeros(cache_shape, dtype=dtype), 0
+        )
+
+        # Prefill half the sequence, then decode a token at a time.
+        cache = ops.zeros(cache_shape, dtype=dtype)
+        prefill = seq_length // 2
+        logits, _, cache = causal_lm.call_with_cache(
+            token_ids[:, :prefill], cache, 0
+        )
+        pieces = [logits]
+        for i in range(prefill, seq_length):
+            logits, _, cache = causal_lm.call_with_cache(
+                token_ids[:, i : i + 1], cache, i
+            )
+            pieces.append(logits)
+        stepwise_logits = ops.concatenate(pieces, axis=1)
+
+        # Cached and full-sequence attention use different kernels on GPU.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(stepwise_logits, full_logits, atol=tol, rtol=tol)
+
     def test_generate_compilation(self):
         causal_lm = FalconCausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
@@ -159,6 +208,13 @@ class FalconCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=FalconCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=FalconCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

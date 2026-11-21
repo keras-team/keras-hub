@@ -17,6 +17,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 class PaliGemmaCausalLMPreprocessorTest(TestCase):
     def setUp(self):
+        self._allow_python_workflow = True
         # TODO make a pali gemma test vocab that inclues normal prompts?
         self.tokenizer = PaliGemmaTokenizer(
             proto=os.path.join(
@@ -28,6 +29,7 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
             "tokenizer": self.tokenizer,
             "image_converter": self.image_converter,
             "sequence_length": 8,
+            "_allow_python_workflow": self._allow_python_workflow,
         }
         self.input_data = {
             "prompts": ["the quick"],
@@ -83,6 +85,20 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
         self.assertAllEqual(x["response_mask"], [0, 0, 0, 0, 0, 0, 0, 0])
         self.assertAllEqual(x["images"], np.zeros([1, 224, 224, 3]))
 
+    def test_generate_preprocess_no_start_token(self):
+        input_data = {
+            "prompts": "the quick",
+            "images": np.zeros([1, 512, 512, 3]),
+        }
+        preprocessor = PaliGemmaCausalLMPreprocessor(
+            **self.init_kwargs, add_start_token=False
+        )
+        x = preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(x["token_ids"], [4, 9, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(x["response_mask"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(x["images"], np.zeros([1, 224, 224, 3]))
+
     def test_generate_postprocess(self):
         input_data = {
             "token_ids": [1, 4, 9, 5, 7, 2, 0, 0],
@@ -100,3 +116,17 @@ class PaliGemmaCausalLMPreprocessorTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class PaliGemmaCausalLMPreprocessorTFTest(PaliGemmaCausalLMPreprocessorTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "image_converter": self.image_converter,
+            "sequence_length": 8,
+            "_allow_python_workflow": self._allow_python_workflow,
+        }

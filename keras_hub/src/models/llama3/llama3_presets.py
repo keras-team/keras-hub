@@ -63,7 +63,7 @@ backbone_presets = {
             "params": 8030261248,
             "path": "llama3",
         },
-        "kaggle_handle": ("kaggle://keras/llama3/keras/lama3.1_instruct_8b/2"),
+        "kaggle_handle": ("kaggle://keras/llama3/keras/llama3.1_instruct_8b/2"),
     },
     "llama3.1_guard_8b": {
         "metadata": {

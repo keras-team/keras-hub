@@ -2,7 +2,10 @@
 dm-tree
 regex
 rich
-kagglehub
+kagglehub!=1.0.1
+kagglesdk
+tokenizers
+sentencepiece
 # Tooling deps.
 pre-commit
 astor
@@ -10,13 +13,14 @@ packaging
 ruff
 pytest
 pytest-cov
+pytest-xdist
+pytest-split
 build
 namex
 # Optional deps.
+grain
 rouge-score
-sentencepiece
 tensorflow-datasets
 safetensors
 pillow
-openvino
 transformers

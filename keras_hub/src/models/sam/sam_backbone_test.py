@@ -33,7 +33,7 @@ class SAMBackboneTest(TestCase):
         )
         self.mask_decoder = SAMMaskDecoder(
             num_layers=2,
-            hidden_size=8,
+            hidden_size=16,
             intermediate_dim=32,
             num_heads=8,
             embedding_dim=8,

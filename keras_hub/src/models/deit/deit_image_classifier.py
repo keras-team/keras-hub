@@ -20,10 +20,11 @@ class DeiTImageClassifier(ImageClassifier):
     `num_classes` argument, controlling the number of predicted output classes.
 
     To fine-tune with `fit()`, pass a dataset containing tuples of `(x, y)`
-    labels where `x` is a string and `y` is a integer from `[0, num_classes)`.
+    labels where `x` is a string and `y` is an integer from `[0, num_classes)`.
 
-    Not that unlike `keras_hub.model.ImageClassifier`, the `DeiTImageClassifier`
-    we pluck out `cls_token` which is first seqence from the backbone.
+    Note that unlike `keras_hub.model.ImageClassifier`, the
+    `DeiTImageClassifier` we pluck out `cls_token` which is first seqence from
+    the backbone.
 
     Args:
         backbone: A `keras_hub.models.DeiTBackbone` instance or a `keras.Model`.

@@ -70,3 +70,18 @@ class DeepLabV3ImageSegmenterTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.images,
         )
+
+    @pytest.mark.skip(
+        reason="TODO: DeepLabV3ImageSegmenter LiteRT export fails with "
+        "'symbolic tf.Tensor used as a Python bool' while tracing for export."
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=DeepLabV3ImageSegmenter,
+            init_kwargs=self.init_kwargs,
+            input_data=self.images,
+            comparison_mode="statistical",
+            output_thresholds={
+                "*": {"max": 0.6, "mean": 0.3},
+            },
+        )

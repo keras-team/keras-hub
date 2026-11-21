@@ -75,6 +75,14 @@ class EditDistanceTest(TestCase):
         edit_distance_val = edit_distance(y_true, y_pred)
         self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
+    def test_dense_tensor_input(self):
+        edit_distance = EditDistance()
+        y_true = tf.constant([[1, 2], [3, 4]])
+        y_pred = tf.constant([[1, 2], [3, 5]])
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 0.25, delta=1e-3)
+
     @pytest.mark.tf_only  # string model output only applies to tf.
     def test_model_compile_normalize(self):
         inputs = keras.Input(shape=(None,), dtype="string")

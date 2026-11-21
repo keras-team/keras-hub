@@ -66,8 +66,14 @@ from keras_hub.src.layers.preprocessing.random_swap import (
 from keras_hub.src.layers.preprocessing.start_end_packer import (
     StartEndPacker as StartEndPacker,
 )
+from keras_hub.src.layers.preprocessing.video_converter import (
+    VideoConverter as VideoConverter,
+)
 from keras_hub.src.models.basnet.basnet_image_converter import (
     BASNetImageConverter as BASNetImageConverter,
+)
+from keras_hub.src.models.blip2.blip2_image_converter import (
+    BLIP2ImageConverter as BLIP2ImageConverter,
 )
 from keras_hub.src.models.clip.clip_image_converter import (
     CLIPImageConverter as CLIPImageConverter,
@@ -90,17 +96,53 @@ from keras_hub.src.models.densenet.densenet_image_converter import (
 from keras_hub.src.models.depth_anything.depth_anything_image_converter import (
     DepthAnythingImageConverter as DepthAnythingImageConverter,
 )
+from keras_hub.src.models.diffusion_gemma.diffusion_gemma_image_converter import (
+    DiffusionGemmaImageConverter as DiffusionGemmaImageConverter,
+)
 from keras_hub.src.models.dinov2.dinov2_image_converter import (
     DINOV2ImageConverter as DINOV2ImageConverter,
+)
+from keras_hub.src.models.dinov3.dinov3_image_converter import (
+    DINOV3ImageConverter as DINOV3ImageConverter,
 )
 from keras_hub.src.models.efficientnet.efficientnet_image_converter import (
     EfficientNetImageConverter as EfficientNetImageConverter,
 )
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_audio_converter import (
+    EmbeddingGemma2AudioConverter as EmbeddingGemma2AudioConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_image_converter import (
+    EmbeddingGemma2ImageConverter as EmbeddingGemma2ImageConverter,
+)
+from keras_hub.src.models.embedding_gemma2.embedding_gemma2_video_converter import (
+    EmbeddingGemma2VideoConverter as EmbeddingGemma2VideoConverter,
+)
 from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter as Gemma3ImageConverter,
 )
+from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
+    Gemma3nAudioConverter as Gemma3nAudioConverter,
+)
+from keras_hub.src.models.gemma3n.gemma3n_image_converter import (
+    Gemma3nImageConverter as Gemma3nImageConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_audio_converter import (
+    Gemma4AudioConverter as Gemma4AudioConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_image_converter import (
+    Gemma4ImageConverter as Gemma4ImageConverter,
+)
+from keras_hub.src.models.gemma4.gemma4_video_converter import (
+    Gemma4VideoConverter as Gemma4VideoConverter,
+)
 from keras_hub.src.models.hgnetv2.hgnetv2_image_converter import (
     HGNetV2ImageConverter as HGNetV2ImageConverter,
+)
+from keras_hub.src.models.metaclip_2.metaclip_2_image_converter import (
+    MetaCLIP2ImageConverter as MetaCLIP2ImageConverter,
+)
+from keras_hub.src.models.mistral3.mistral3_image_converter import (
+    Mistral3ImageConverter as Mistral3ImageConverter,
 )
 from keras_hub.src.models.mit.mit_image_converter import (
     MiTImageConverter as MiTImageConverter,
@@ -108,14 +150,38 @@ from keras_hub.src.models.mit.mit_image_converter import (
 from keras_hub.src.models.mobilenet.mobilenet_image_converter import (
     MobileNetImageConverter as MobileNetImageConverter,
 )
+from keras_hub.src.models.mobilenetv5.mobilenetv5_image_converter import (
+    MobileNetV5ImageConverter as MobileNetV5ImageConverter,
+)
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter as MoonshineAudioConverter,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_image_converter import (
+    MuseGlimmerImageConverter as MuseGlimmerImageConverter,
+)
+from keras_hub.src.models.muse_glimmer.muse_glimmer_video_converter import (
+    MuseGlimmerVideoConverter as MuseGlimmerVideoConverter,
 )
 from keras_hub.src.models.pali_gemma.pali_gemma_image_converter import (
     PaliGemmaImageConverter as PaliGemmaImageConverter,
 )
 from keras_hub.src.models.parseq.parseq_image_converter import (
     PARSeqImageConverter as PARSeqImageConverter,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
+    Qwen2VLImageConverter as Qwen2VLImageConverter,
+)
+from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
+    Qwen2VLVideoConverter as Qwen2VLVideoConverter,
+)
+from keras_hub.src.models.qwen3_5.qwen3_5_image_converter import (
+    Qwen3_5ImageConverter as Qwen3_5ImageConverter,
+)
+from keras_hub.src.models.qwen3_5.qwen3_5_video_converter import (
+    Qwen3_5VideoConverter as Qwen3_5VideoConverter,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_audio_converter import (
+    Qwen3ASRAudioConverter as Qwen3ASRAudioConverter,
 )
 from keras_hub.src.models.resnet.resnet_image_converter import (
     ResNetImageConverter as ResNetImageConverter,
@@ -132,14 +198,50 @@ from keras_hub.src.models.sam.sam_mask_decoder import (
 from keras_hub.src.models.sam.sam_prompt_encoder import (
     SAMPromptEncoder as SAMPromptEncoder,
 )
+from keras_hub.src.models.sam3.sam3_detr_decoder import (
+    SAM3DetrDecoder as SAM3DetrDecoder,
+)
+from keras_hub.src.models.sam3.sam3_detr_encoder import (
+    SAM3DetrEncoder as SAM3DetrEncoder,
+)
+from keras_hub.src.models.sam3.sam3_geometry_encoder import (
+    SAM3GeometryEncoder as SAM3GeometryEncoder,
+)
+from keras_hub.src.models.sam3.sam3_image_converter import (
+    SAM3ImageConverter as SAM3ImageConverter,
+)
+from keras_hub.src.models.sam3.sam3_mask_decoder import (
+    SAM3MaskDecoder as SAM3MaskDecoder,
+)
+from keras_hub.src.models.sam3.sam3_text_encoder import (
+    SAM3TextEncoder as SAM3TextEncoder,
+)
+from keras_hub.src.models.sam3.sam3_vision_encoder import (
+    SAM3VisionEncoder as SAM3VisionEncoder,
+)
 from keras_hub.src.models.segformer.segformer_image_converter import (
     SegFormerImageConverter as SegFormerImageConverter,
 )
 from keras_hub.src.models.siglip.siglip_image_converter import (
     SigLIPImageConverter as SigLIPImageConverter,
 )
+from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
+    SmolVLM2ImageConverter as SmolVLM2ImageConverter,
+)
+from keras_hub.src.models.smolvlm2.smolvlm2_video_converter import (
+    SmolVLM2VideoConverter as SmolVLM2VideoConverter,
+)
+from keras_hub.src.models.swin_transformer.swin_transformer_image_converter import (
+    SwinTransformerImageConverter as SwinTransformerImageConverter,
+)
+from keras_hub.src.models.t5gemma2.t5gemma2_image_converter import (
+    T5Gemma2ImageConverter as T5Gemma2ImageConverter,
+)
 from keras_hub.src.models.vgg.vgg_image_converter import (
     VGGImageConverter as VGGImageConverter,
+)
+from keras_hub.src.models.video_prism.video_prism_image_converter import (
+    VideoPrismImageConverter as VideoPrismImageConverter,
 )
 from keras_hub.src.models.vit.vit_image_converter import (
     ViTImageConverter as ViTImageConverter,

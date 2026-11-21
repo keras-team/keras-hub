@@ -4,6 +4,7 @@ from functools import partial
 import keras
 from keras import ops
 from keras import tree
+from keras.src.distribution import distribution_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
@@ -132,17 +133,6 @@ class CausalLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if keras.config.backend() == "openvino":
-            from keras_hub.src.utils.openvino_utils import ov_infer
-
-            def wrapped_generate_function(inputs, stop_token_ids=None):
-                # Convert to numpy for OpenVINO backend
-                inputs = tree.map_structure(ops.array, inputs)
-                return ov_infer(
-                    self, inputs, stop_token_ids, self.generate_step
-                )
-
-            self.generate_function = wrapped_generate_function
         if keras.config.backend() == "torch":
             import torch
 
@@ -196,7 +186,7 @@ class CausalLM(Task):
 
                 # Create an explicit tuple of all variable state.
                 state = (
-                    self.sampler.variables,
+                    [v.value for v in self.sampler.variables],
                     # Use the explicit variable.value to preserve the
                     # sharding spec of distribution.
                     [v.value for v in self.trainable_variables],
@@ -354,6 +344,26 @@ class CausalLM(Task):
                 x, sequence_length=max_length
             )
 
+        def distribute(x):
+            """Distribute tensors according to the distribution library."""
+            distribution = distribution_lib.distribution()
+            if distribution is None:
+                return x
+
+            def _distribute_tensor(value):
+                if value is None:
+                    return None
+                if not ops.is_tensor(value):
+                    value = ops.convert_to_tensor(value)
+                layout = distribution.get_data_layout(value.shape)
+                return (
+                    distribution_lib.distribute_tensor(value, layout)
+                    if layout
+                    else value
+                )
+
+            return tree.map_structure(_distribute_tensor, x)
+
         def generate(x):
             return generate_function(x, stop_token_ids=stop_token_ids)
 
@@ -362,10 +372,12 @@ class CausalLM(Task):
             # response, in a batch-friendly fashion.
             y = {}
             prompt_mask = prompt["padding_mask"]
-            seq_len = prompt_mask.shape[1]
+            seq_len = ops.shape(prompt_mask)[1]
 
             # We need to shift every output sequence by the size of the prompt.
-            shifts = -ops.sum(ops.cast(prompt_mask, "int"), axis=1) % seq_len
+            shifts = ops.mod(
+                -ops.sum(ops.cast(prompt_mask, "int"), axis=1), seq_len
+            )
             ix = ops.arange(seq_len, dtype="int")
             ix = ops.expand_dims(ix, axis=0) - ops.expand_dims(shifts, axis=1)
 
@@ -393,6 +405,8 @@ class CausalLM(Task):
 
         if self.preprocessor is not None:
             inputs = [preprocess(x) for x in inputs]
+
+        inputs = [distribute(x) for x in inputs]
 
         if strip_prompt:
             outputs = [strip_prompt_function(generate(x), x) for x in inputs]
@@ -424,3 +438,30 @@ class CausalLM(Task):
         )
 
         export_to_safetensors(self, path)
+
+    def _post_quantize(self, mode, **kwargs):
+        super()._post_quantize(mode, **kwargs)
+        # Reset the compiled generate function.
+        self.generate_function = None
+
+    def get_quantization_layer_structure(self, mode):
+        if mode not in ["gptq", "awq"]:
+            return None
+
+        backbone = self.backbone
+        # Check for standard backbone structure.
+        if not hasattr(backbone, "transformer_layers"):
+            return None
+
+        # Check for embedding.
+        embedding = getattr(backbone, "token_embedding", None)
+        if embedding is None:
+            embedding = getattr(backbone, "embedding", None)
+
+        if embedding is None:
+            return None
+
+        return {
+            "pre_block_layers": [embedding],
+            "sequential_blocks": backbone.transformer_layers,
+        }

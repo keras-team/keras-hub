@@ -21,7 +21,7 @@ class ObjectDetectorPreprocessor(Preprocessor):
 
     All `ObjectDetectorPreprocessor` take three inputs, `x`, `y`, and
     `sample_weight`. `x`, the first input, should always be included. It can
-    be a image or batch of images. See examples below. `y` and `sample_weight`
+    be an image or batch of images. See examples below. `y` and `sample_weight`
     are optional inputs that will be passed through unaltered. Usually, `y`
     will be the a dict of `{"boxes": Tensor(batch_size, num_boxes, 4),
     "classes": (batch_size, num_boxes)}.

@@ -1,9 +1,7 @@
 import keras
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
 from keras_hub.src.utils.keras_utils import gelu_approximate
@@ -24,7 +22,8 @@ class GPTNeoXBackbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     GPT-NeoX model with any number of layers, heads, and embedding
-    dimensions.
+    dimensions. To load preset architectures and weights, use the
+    `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -40,6 +39,11 @@ class GPTNeoXBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
+        tie_word_embeddings: bool. If `True`, the output layer will share
+            weights with the embedding layer. Defaults to `True`.
+        activation: string or function. The activation function to use for the
+            intermediate layers of the transformer. Defaults to the tanh
+            approximation of GELU.
         layer_norm_epsilon: float. a value added to the denominator for
             numerical stability.
         rotary_max_wavelength: int. The maximum angular wavelength of the
@@ -54,6 +58,29 @@ class GPTNeoXBackbone(Backbone):
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
+
+    Example:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained GPT-NeoX decoder.
+    model = keras_hub.models.GPTNeoXBackbone.from_preset("pythia_70m_en")
+    model(input_data)
+
+    # Randomly initialized GPT-NeoX decoder with custom config.
+    model = keras_hub.models.GPTNeoXBackbone(
+        vocabulary_size=50304,
+        num_layers=6,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        max_sequence_length=2048,
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(
@@ -64,6 +91,8 @@ class GPTNeoXBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout=0.0,
+        tie_word_embeddings=True,
+        activation=gelu_approximate,
         rotary_percentage=0.25,
         rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
@@ -72,9 +101,12 @@ class GPTNeoXBackbone(Backbone):
         **kwargs,
     ):
         # === Layers ===
+        activation = keras.activations.get(activation)
+
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            tie_weights=tie_word_embeddings,
             embeddings_initializer=_gpt_neo_x_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
@@ -94,7 +126,7 @@ class GPTNeoXBackbone(Backbone):
                 rotary_percentage=rotary_percentage,
                 rotary_max_wavelength=rotary_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
-                activation=gelu_approximate,
+                activation=activation,
                 kernel_initializer=_gpt_neo_x_kernel_initializer(stddev=0.02),
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
@@ -137,6 +169,8 @@ class GPTNeoXBackbone(Backbone):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
+        self.tie_word_embeddings = tie_word_embeddings
+        self.activation = activation
         self.rotary_percentage = rotary_percentage
         self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
@@ -152,6 +186,8 @@ class GPTNeoXBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
+                "tie_word_embeddings": self.tie_word_embeddings,
+                "activation": keras.activations.serialize(self.activation),
                 "rotary_percentage": self.rotary_percentage,
                 "rotary_max_wavelength": self.rotary_max_wavelength,
                 "max_sequence_length": self.max_sequence_length,

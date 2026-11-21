@@ -44,7 +44,7 @@ class DebertaV3TokenizerTest(TestCase):
         output = tokenizer.detokenize(input_data)
         self.assertEqual(output, ["the quick brown fox"])
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=DebertaV3Tokenizer,
@@ -61,3 +61,15 @@ class DebertaV3TokenizerTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class DebertaV3TokenizerTFTest(DebertaV3TokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        proto = os.path.join(
+            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
+        )
+        self.init_kwargs = {"proto": proto, "_allow_python_workflow": False}
+        self.tokenizer = DebertaV3Tokenizer(**self.init_kwargs)

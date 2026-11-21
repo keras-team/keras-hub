@@ -7,7 +7,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TimmMobileNetBackboneTest(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_mobilenet_backbone(self):
         model = Backbone.from_preset(
             "hf://timm/mobilenetv3_small_050.lamb_in1k"
@@ -15,7 +15,7 @@ class TimmMobileNetBackboneTest(TestCase):
         outputs = model.predict(ops.ones((1, 224, 224, 3)))
         self.assertEqual(outputs.shape, (1, 7, 7, 288))
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_mobilenet_classifier(self):
         model = ImageClassifier.from_preset(
             "hf://timm/mobilenetv3_small_050.lamb_in1k"

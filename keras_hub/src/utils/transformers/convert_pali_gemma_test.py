@@ -13,7 +13,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_convert_tiny_preset(self):
         model = PaliGemmaCausalLM.from_preset(
             "hf://ariG23498/tiny-pali-gemma-test"

@@ -1,7 +1,4 @@
-import os
 from unittest.mock import patch
-
-os.environ["KERAS_BACKEND"] = "jax"
 
 import keras
 import pytest
@@ -13,27 +10,32 @@ from keras_hub.src.models.qwen_moe.qwen_moe_causal_lm_preprocessor import (
     QwenMoeCausalLMPreprocessor,
 )
 from keras_hub.src.models.qwen_moe.qwen_moe_tokenizer import QwenMoeTokenizer
+from keras_hub.src.tests.mocks.mock_attention import assert_fused_attention_used
+from keras_hub.src.tests.mocks.mock_attention import patch_dot_product_attention
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
-from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class QwenMoeCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab += ["<|eot_id|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|endoftext|>", "<|eot_id|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = QwenMoeCausalLMPreprocessor(
             QwenMoeTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = QwenMoeBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=2,
@@ -55,7 +57,7 @@ class QwenMoeCausalLMTest(TestCase):
             cls=QwenMoeCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 8),
+            expected_output_shape=(2, 7, self.vocabulary_size),
         )
 
     def test_flash_attention_call(self):
@@ -66,13 +68,10 @@ class QwenMoeCausalLMTest(TestCase):
         ):
             self.skipTest("`flash_attention` testing requires the Jax backend.")
 
-        with patch("keras.src.backend.nn.dot_product_attention") as mock_func:
+        with patch_dot_product_attention() as mock_func:
             causal_lm = QwenMoeCausalLM(**self.init_kwargs)
             causal_lm.generate("the quick brown fox")
-            if running_on_gpu():
-                mock_func.assert_called()
-            else:
-                mock_func.assert_not_called()
+            assert_fused_attention_used(mock_func)
 
     def test_generate(self):
         causal_lm = QwenMoeCausalLM(**self.init_kwargs)
@@ -134,6 +133,17 @@ class QwenMoeCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=QwenMoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="litert-torch cannot lower aten._assert_async from MoE routing.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=QwenMoeCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

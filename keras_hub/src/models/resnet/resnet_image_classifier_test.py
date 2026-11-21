@@ -1,17 +1,23 @@
+import numpy as np
 import pytest
-from keras import ops
 
 from keras_hub.src.models.resnet.resnet_backbone import ResNetBackbone
 from keras_hub.src.models.resnet.resnet_image_classifier import (
     ResNetImageClassifier,
+)
+from keras_hub.src.models.resnet.resnet_image_classifier_preprocessor import (
+    ResNetImageClassifierPreprocessor,
+)
+from keras_hub.src.models.resnet.resnet_image_converter import (
+    ResNetImageConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
 
 
 class ResNetImageClassifierTest(TestCase):
     def setUp(self):
-        self.images = ops.ones((2, 16, 16, 3))
-        self.labels = [0, 3]
+        self.images = np.ones((2, 16, 16, 3), dtype="float32")
+        self.labels = [0, 1]
         self.backbone = ResNetBackbone(
             input_conv_filters=[64],
             input_conv_kernel_sizes=[7],
@@ -27,13 +33,13 @@ class ResNetImageClassifierTest(TestCase):
             "num_classes": 2,
             "pooling": "avg",
             "activation": "softmax",
+            "preprocessor": ResNetImageClassifierPreprocessor(
+                image_converter=ResNetImageConverter(image_size=(16, 16))
+            ),
         }
         self.train_data = (self.images, self.labels)
 
     def test_classifier_basics(self):
-        pytest.skip(
-            reason="TODO: enable after preprocessor flow is figured out"
-        )
         self.run_task_test(
             cls=ResNetImageClassifier,
             init_kwargs=self.init_kwargs,
@@ -45,7 +51,7 @@ class ResNetImageClassifierTest(TestCase):
         model = ResNetImageClassifier(**self.init_kwargs, head_dtype="bfloat16")
         self.assertEqual(model.output_dense.compute_dtype, "bfloat16")
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         # Test that our forward pass is stable!
         image_batch = self.load_test_image()[None, ...] / 255.0
@@ -63,6 +69,20 @@ class ResNetImageClassifierTest(TestCase):
             cls=ResNetImageClassifier,
             init_kwargs=self.init_kwargs,
             input_data=self.images,
+        )
+
+    def test_litert_export(self):
+        """Test LiteRT export for ResNetImageClassifier with small test
+        model."""
+        model = ResNetImageClassifier(**self.init_kwargs)
+        expected_output_shape = (2, 2)  # 2 images, 2 classes
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=self.images,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 5e-5, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large

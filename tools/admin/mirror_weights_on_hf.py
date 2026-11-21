@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shutil
+import time
 
 from huggingface_hub import HfApi
 from huggingface_hub import hf_hub_download
@@ -18,6 +19,7 @@ except ImportError:
 HF_BASE_URI = "hf://keras"
 JSON_FILE_PATH = "tools/admin/hf_uploaded_presets.json"
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+KAGGLE_API_RATE_LIMIT_DELAY = 1  # Delay between Kaggle API calls (s)
 
 
 def load_latest_hf_uploads(json_file_path):
@@ -54,7 +56,7 @@ def download_and_upload_missing_models(missing_in_hf_uploads):
             uploaded_handles.append(kaggle_handle)
         except Exception as e:
             print(
-                "Error in downloading  and uploading preset "
+                "Error in downloading and uploading preset "
                 f"{kaggle_handle}: {e}"
             )
             errored_uploads.append(kaggle_handle)
@@ -73,6 +75,9 @@ def update_hf_uploads_json(json_file_path, latest_kaggle_handles):
 def update_model_cards_on_hugging_face(presets):
     kaggle_api = KaggleApi()
     kaggle_api.authenticate()
+    updated_count = 0
+    skipped_count = 0
+
     for model, data in presets.items():
         try:
             kaggle_handle = data["kaggle_handle"].removeprefix("kaggle://")
@@ -80,11 +85,36 @@ def update_model_cards_on_hugging_face(presets):
             repo_id = f"keras/{model}"
             readme_path = "README.md"
             model_slug = kaggle_handle.split("/")[1]
-            model_metadata = kaggle_api.get_model_with_http_info(
-                owner, model_slug
-            )
-            description = model_metadata[0]["description"]
-            usage = model_metadata[0]["instances"][0]["usage"].replace(
+
+            # Skip Gemma models
+            if "gemma" in kaggle_handle:
+                print(f"Skipping Gemma model preset: {kaggle_handle}")
+                continue
+            # for rate limiting
+            max_retries = 3
+            retry_delay = 2
+            for attempt in range(max_retries):
+                try:
+                    model_metadata = kaggle_api.model_get(
+                        f"{owner}/{model_slug}"
+                    )
+                    time.sleep(KAGGLE_API_RATE_LIMIT_DELAY)  # Rate limit delay
+                    break
+                except Exception as e:
+                    status_code = getattr(e, "status", None)
+                    if status_code == 429 and attempt < max_retries - 1:
+                        wait_time = retry_delay ** (attempt + 1)
+                        print(
+                            f"Rate limited (429). Retrying in "
+                            f"{wait_time}s... (Attempt "
+                            f"{attempt + 1}/{max_retries})"
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        raise
+
+            description = model_metadata.description
+            usage = model_metadata.instances[0].usage.replace(
                 "${VARIATION_SLUG}", model
             )
             usage = re.sub(
@@ -96,6 +126,7 @@ def update_model_cards_on_hugging_face(presets):
 
             # --- Construct Model Card Markup ---
             initial_markup = "---\nlibrary_name: keras-hub\n---\n"
+            existing_content = None
             try:
                 readme_path = hf_hub_download(
                     repo_id=repo_id,
@@ -104,17 +135,17 @@ def update_model_cards_on_hugging_face(presets):
                     local_dir=".",
                 )
                 with open(readme_path, "r") as readme_file:
-                    readme_content = readme_file.read()
+                    existing_content = readme_file.read()
                     # Extract existing markup between ---\n and ---\n
                     match = re.search(
-                        r"^(---\n.*?\n---\n)", readme_content, re.DOTALL
+                        r"^(---\n.*?\n---\n)", existing_content, re.DOTALL
                     )
                     if match:
                         initial_markup = match.group(1)
             except Exception as e:
                 print(
                     f"README.md not found on HF for {repo_id}: {e}. "
-                    "Writing new README.md"
+                    "Will write new README.md"
                 )
 
             model_card_markup = (
@@ -136,6 +167,12 @@ def update_model_cards_on_hugging_face(presets):
                 .replace("&gt;=", ">=")
             )
 
+            # --- Check if content has changed ---
+            if existing_content == model_card_markup:
+                print(f"No changes detected for {model}, skipping upload")
+                skipped_count += 1
+                continue
+
             # --- Save Model Card Content to README.md ---
 
             with open(readme_path, "w") as readme_file:
@@ -150,9 +187,10 @@ def update_model_cards_on_hugging_face(presets):
                 path_in_repo="README.md",
                 repo_id=repo_id,
                 token=HF_TOKEN,
-                commit_message="Update README.md with new model card content",
+                commit_message=("Update README.md with new model card content"),
             )
-            print(f"Uploaded README.md to Hugging Face repository: {repo_id}")
+            print(f"✓ Uploaded README.md to Hugging Face repository: {repo_id}")
+            updated_count += 1
 
             # --- Clean up the README.md file after upload ---
             os.remove(readme_path)
@@ -161,6 +199,10 @@ def update_model_cards_on_hugging_face(presets):
         except Exception as e:
             print(f"Error updating model card for {model}: {e}")
             continue
+
+    print("\nModel card update summary:")
+    print(f"Updated: {updated_count}")
+    print(f"Skipped (no changes): {skipped_count}")
 
 
 def main():
@@ -191,7 +233,7 @@ def main():
         JSON_FILE_PATH,
         sorted(list(set(latest_kaggle_handles) - set(errored_uploads))),
     )
-    print("uploads for the following models failed: ", errored_uploads)
+    print("Uploads for the following models failed: ", errored_uploads)
     print("Rest of the models up to date on HuggingFace")
 
     # Step 6: Update HuggingFace model card

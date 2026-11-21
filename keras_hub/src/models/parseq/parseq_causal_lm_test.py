@@ -101,3 +101,29 @@ class PARSeqCausalLMTest(TestCase):
             train_data=self.train_data,
             expected_output_shape=expected_shape_full,
         )
+
+    def test_litert_export(self):
+        # Create input data for export test
+        input_data = {
+            "images": np.random.randn(
+                self.batch_size,
+                self.image_height,
+                self.image_width,
+                self.num_channels,
+            ),
+            "token_ids": np.random.randint(
+                0,
+                self.vocabulary_size,
+                (self.batch_size, self.max_label_length),
+            ),
+            "padding_mask": np.ones(
+                (self.batch_size, self.max_label_length), dtype="int32"
+            ),
+        }
+        self.run_litert_export_test(
+            cls=PARSeqCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-4}},
+        )

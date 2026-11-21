@@ -145,7 +145,10 @@ class Gemma3CausalLM(CausalLM):
 
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
-            cache: a dense float Tensor, the cache of key and value.
+            cache: a tuple of per-layer caches, one entry per transformer
+                layer. Each entry is a `(key, value)` tuple, where `key` and
+                `value` are dense float Tensors with shape
+                `(batch_size, max_length, num_key_value_heads, head_dim)`.
             cache_update_index: int, or int Tensor. The index of current inputs
                 in the whole sequence.
             img_embeddings: a dense float Tensor with shape
@@ -157,7 +160,8 @@ class Gemma3CausalLM(CausalLM):
             A (logits, hidden_states, cache) tuple. Where `logits` is the
             language model logits for the input token_ids, `hidden_states` is
             the final hidden representation of the input tokens, and `cache` is
-            the decoding cache.
+            the updated decoding cache, in the same tuple-of-tuples format as
+            the `cache` argument.
         """
 
         text_embeddings = self.backbone.token_embedding(token_ids)
@@ -178,9 +182,10 @@ class Gemma3CausalLM(CausalLM):
             x = text_embeddings
 
         # Each decoder layer has a cache; we update them separately.
+        # Cache is a tuple of per-layer (key, value) pairs — no stacking.
         caches = []
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            current_cache = cache[:, i, ...]
+            current_cache = cache[i]
             x, next_cache = transformer_layer(
                 x,
                 cache=current_cache,
@@ -190,7 +195,7 @@ class Gemma3CausalLM(CausalLM):
                 cache_update_mask=cache_update_mask,
             )
             caches.append(next_cache)
-        cache = ops.stack(caches, axis=1)
+        cache = tuple(caches)
         hidden_states = x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
@@ -212,8 +217,15 @@ class Gemma3CausalLM(CausalLM):
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = ops.zeros(shape, dtype=self.compute_dtype)
+        # Allocate per-layer (key, value) caches as a tuple.
+        layer_shape = [batch_size, max_length, num_heads, head_dim]
+        cache = tuple(
+            (
+                ops.zeros(layer_shape, dtype=self.compute_dtype),
+                ops.zeros(layer_shape, dtype=self.compute_dtype),
+            )
+            for _ in range(num_layers)
+        )
         # Seed the cache.
         logits, hidden_states, cache = self.call_with_cache(
             token_ids=token_ids,
@@ -249,7 +261,22 @@ class Gemma3CausalLM(CausalLM):
             inputs.get("vision_mask", None),
             inputs.get("vision_indices", None),
         )
-        if not self.backbone.text_only_model:
+
+        # Determine if we have actual images to process.
+        # After preprocessing, images shape is (batch, num_images, h, w, 3).
+        # For text-only input, num_images=0 (static shape).
+        # We use static shape check which returns a Python int, not a tensor.
+        num_images = 0
+        if (
+            images is not None
+            and hasattr(images, "shape")
+            and len(images.shape) > 1
+        ):
+            num_images = images.shape[
+                1
+            ]  # Static shape, returns Python int or None
+
+        if not self.backbone.text_only_model and num_images:
             # Handle an unbatched image. Unlike `token_ids` and
             # `padding_mask`, this will not automatically be upranked.
             if len(ops.shape(images)) == 4:

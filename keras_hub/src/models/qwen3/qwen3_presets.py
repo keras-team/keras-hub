@@ -70,4 +70,54 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/qwen-3/keras/qwen3_32b_en/1",
     },
+    "qwen3_embedding_0.6b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 1024."
+            ),
+            "params": 595776512,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_0.6b_en/1",
+    },
+    "qwen3_embedding_4b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 2560."
+            ),
+            "params": 4021774336,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_4b_en/1",
+    },
+    "qwen3_embedding_8b_en": {
+        "metadata": {
+            "description": (
+                "This text embedding model features a 32k context length and "
+                "offers flexible, user-defined embedding dimensions that can "
+                "range from 32 to 4096."
+            ),
+            "params": 8188515328,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/qwen-3-embedding/keras/qwen3_embedding_8b_en/1",
+    },
+    # Microsoft harrier model presets.
+    "harrier_embedding_oss_0.6b": {
+        "metadata": {
+            "description": (
+                "Microsoft harrier-oss-v1 0.6B multilingual text embedding "
+                "model based on the Qwen3-0.6B architecture, fine-tuned for "
+                "dense retrieval and semantic similarity across 94+ languages. "
+                "Achieves 69.0 on Multilingual MTEB v2."
+            ),
+            "params": 596049920,
+            "path": "qwen3",
+        },
+        "kaggle_handle": "kaggle://keras/harrier/keras/harrier_embedding_oss_0.6b/1",
+    },
 }

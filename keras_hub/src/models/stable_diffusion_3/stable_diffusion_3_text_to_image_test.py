@@ -23,11 +23,15 @@ from keras_hub.src.tests.test_case import TestCase
 class StableDiffusion3TextToImageTest(TestCase):
     def setUp(self):
         # Instantiate the preprocessor.
-        vocab = ["air", "plane</w>", "port</w>"]
-        vocab += ["<|endoftext|>", "<|startoftext|>"]
-        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]
         merges += ["po rt</w>", "pla ne</w>"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab += ["<|endoftext|>", "<|startoftext|>"]
+        vocab = sorted(set(vocab))  # Remove duplicates
+        vocab = dict([(token, i) for i, token in enumerate(vocab)])
         clip_l_tokenizer = CLIPTokenizer(vocab, merges, pad_with_end_token=True)
         clip_g_tokenizer = CLIPTokenizer(vocab, merges)
         clip_l_preprocessor = CLIPPreprocessor(clip_l_tokenizer)
@@ -192,6 +196,17 @@ class StableDiffusion3TextToImageTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=StableDiffusion3TextToImage,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="AdjustablePositionEmbedding cannot be lowered by torch.export.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=StableDiffusion3TextToImage,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

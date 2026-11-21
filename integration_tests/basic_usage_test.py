@@ -8,6 +8,8 @@ import keras_hub
 
 class BasicUsageTest(unittest.TestCase):
     def test_transformer(self):
+        keras.utils.set_random_seed(1337)
+
         # Tokenize some inputs with a binary label.
         vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         sentences = ["The quick brown fox jumped.", "The fox slept."]
@@ -32,12 +34,19 @@ class BasicUsageTest(unittest.TestCase):
         outputs = keras.layers.Dense(1, activation="sigmoid")(outputs)
         model = keras.Model(inputs, outputs)
 
-        # Run a single batch of gradient descent.
-        model.compile(loss="binary_crossentropy")
-        loss = model.train_on_batch(x, y)
+        # Train the model end-to-end.
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.01),
+            loss="binary_crossentropy",
+        )
+        initial_loss = model.evaluate(x, y, verbose=0)
+        model.fit(x, y, epochs=5, verbose=0)
+        final_loss = model.evaluate(x, y, verbose=0)
 
-        # Make sure we have a valid loss.
-        self.assertGreater(loss, 0)
+        # Make sure training produces a finite, decreasing loss.
+        self.assertTrue(np.isfinite(initial_loss))
+        self.assertTrue(np.isfinite(final_loss))
+        self.assertLess(final_loss, initial_loss)
 
     def test_quickstart(self):
         """This roughly matches the quick start example in our base README."""

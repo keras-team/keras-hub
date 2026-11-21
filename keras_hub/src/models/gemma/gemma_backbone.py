@@ -1,10 +1,8 @@
 import keras
 from keras import ops
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.gemma.gemma_decoder_block import GemmaDecoderBlock
 from keras_hub.src.models.gemma.rms_normalization import RMSNormalization
@@ -36,7 +34,7 @@ class GemmaBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         head_dim: int. The size of each attention head.
-        layer_norm_epsilon: float. The epsilon value user for every layer norm
+        layer_norm_epsilon: float. The epsilon value used for every layer norm
             in the transformer model.
         dropout: float. Dropout probability for the Transformer encoder.
         query_head_dim_normalize: boolean. If `True` normalize the query before
@@ -57,7 +55,7 @@ class GemmaBackbone(Backbone):
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype.
 
     Example:
     ```python

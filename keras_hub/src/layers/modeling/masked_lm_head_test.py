@@ -1,3 +1,4 @@
+import keras
 from keras import random
 
 from keras_hub.src.layers.modeling.masked_lm_head import MaskedLMHead
@@ -8,6 +9,20 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class MaskedLMHeadTest(TestCase):
+    def test_dynamic_mask_positions(self):
+        inputs = keras.Input(shape=(None, 16))
+        mask_positions = keras.Input(shape=(None,), dtype="int32")
+        outputs = MaskedLMHead(vocabulary_size=100)(inputs, mask_positions)
+        model = keras.Model([inputs, mask_positions], outputs)
+        encoded_tokens = random.uniform(shape=(2, 6, 16))
+
+        for mask_count in (2, 4):
+            positions = random.randint(
+                minval=0, maxval=6, shape=(2, mask_count)
+            )
+            outputs = model([encoded_tokens, positions])
+            self.assertEqual(outputs.shape, (2, mask_count, 100))
+
     def test_layer_behaviors(self):
         self.run_layer_test(
             cls=MaskedLMHead,

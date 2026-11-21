@@ -9,12 +9,16 @@ from keras_hub.src.tests.test_case import TestCase
 
 class RobertaTextClassifierPreprocessorTest(TestCase):
     def setUp(self):
-        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
-        self.vocab += ["port", "<mask>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<s>", "<pad>", "</s>", "<mask>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.tokenizer = RobertaTokenizer(
             vocabulary=self.vocab, merges=self.merges
         )
@@ -35,7 +39,7 @@ class RobertaTextClassifierPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[0, 4, 5, 6, 4, 7, 2, 1]],
+                    "token_ids": [[3, 27, 18, 28, 27, 20, 0, 2]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
                 },
                 [1],  # Pass through labels.

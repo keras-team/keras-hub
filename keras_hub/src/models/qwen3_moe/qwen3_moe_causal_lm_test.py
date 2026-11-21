@@ -1,8 +1,6 @@
-import os
 from unittest.mock import patch
 
-os.environ["KERAS_BACKEND"] = "jax"
-
+import keras
 import pytest
 from keras import ops
 
@@ -17,19 +15,23 @@ from keras_hub.src.tests.test_case import TestCase
 
 class Qwen3MoeCausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab += ["<|im_end|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["<|im_end|>", "<|endoftext|>", "!"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = Qwen3MoeCausalLMPreprocessor(
             Qwen3MoeTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=7,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = Qwen3MoeBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_query_heads=4,
             num_key_value_heads=2,
@@ -52,7 +54,7 @@ class Qwen3MoeCausalLMTest(TestCase):
             cls=Qwen3MoeCausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 7, 8),
+            expected_output_shape=(2, 7, self.vocabulary_size),
         )
 
     def test_generate(self):
@@ -115,6 +117,17 @@ class Qwen3MoeCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=Qwen3MoeCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="litert-torch cannot lower aten._assert_async from MoE routing.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=Qwen3MoeCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

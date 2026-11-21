@@ -3,9 +3,11 @@ import re
 from typing import Iterable
 
 import keras
+from keras.src.saving import serialization_lib
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.tokenizers import tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_libs_installed
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
@@ -13,9 +15,11 @@ from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 try:
     import tensorflow as tf
-    import tensorflow_text as tf_text
 except ImportError:
     tf = None
+try:
+    import tensorflow_text as tf_text
+except ImportError:
     tf_text = None
 
 PARSEQ_VOCAB = list(
@@ -99,6 +103,17 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
+            if serialization_lib.in_safe_mode():
+                raise ValueError(
+                    "Requested the loading of a vocabulary file outside of the "
+                    "model archive. This carries a potential risk of loading "
+                    "arbitrary and sensitive files and thus it is disallowed "
+                    "by default. If you trust the source of the artifact, you "
+                    "can override this error by passing `safe_mode=False` to "
+                    "the loading function, or calling "
+                    "`keras.config.enable_unsafe_deserialization()`. "
+                    f"Vocabulary file: '{vocabulary}'"
+                )
             with open(vocabulary, "r", encoding="utf-8") as file:
                 self.vocabulary = [line.rstrip() for line in file]
                 self.vocabulary = "".join(self.vocabulary)
@@ -120,7 +135,9 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         self._add_special_token("[B]", "start_token")
         self._add_special_token("[E]", "end_token")
         self._add_special_token("[P]", "pad_token")
-        # Create lookup tables.
+        # Create lookup tables. This tokenizer has no pure Python path, so
+        # TensorFlow is required as soon as a vocabulary is set.
+        assert_tf_libs_installed(self.__class__.__name__)
         self.char_to_id = tf.lookup.StaticHashTable(
             initializer=tf.lookup.KeyValueTensorInitializer(
                 keys=list(self._stoi.keys()),
@@ -197,7 +214,6 @@ class PARSeqTokenizer(tokenizer.Tokenizer):
         )
         if unbatched:
             token_ids = tf.squeeze(token_ids, 0)
-            tf.ensure_shape(token_ids, shape=[self.max_label_length])
         return token_ids
 
     @preprocessing_function

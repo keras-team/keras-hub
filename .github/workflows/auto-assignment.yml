@@ -1,6 +1,10 @@
 name: auto-assignment
+
 on:
   issues:
+    types:
+      - opened
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types:
       - opened
 
@@ -10,12 +14,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  welcome:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./\.github/workflows/scripts/auto-assignment.js')
-            script({github, context})
+  auto_assign:
+    uses: keras-team/shared-workflows/.github/workflows/auto-assignment.yml@32f8421420f190c8c1b3cbe98326bc011687a933
+    with:
+      issue_assignees: 'maitry63,mrinalghoshh,dhantule'
+      # TODO(jeffcarp): Transition to CODEOWNERS for this.
+      pr_reviewers: 'laxmareddyp,JyotinderSingh'

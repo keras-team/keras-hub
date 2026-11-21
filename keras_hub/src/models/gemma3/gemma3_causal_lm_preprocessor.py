@@ -1,6 +1,5 @@
 import keras
 import numpy as np
-import tensorflow as tf
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
@@ -12,8 +11,14 @@ from keras_hub.src.models.gemma3.gemma3_image_converter import (
     Gemma3ImageConverter,
 )
 from keras_hub.src.models.gemma3.gemma3_tokenizer import Gemma3Tokenizer
+from keras_hub.src.utils.tensor_utils import assert_tf_installed
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 
 @keras_hub_export("keras_hub.models.Gemma3CausalLMPreprocessor")
@@ -251,6 +256,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         num_vision_tokens_per_image=256,
         **kwargs,
     ):
+        assert_tf_installed("Gemma3CausalLMPreprocessor")
         super().__init__(
             tokenizer=tokenizer,
             sequence_length=sequence_length,
@@ -283,9 +289,14 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # is `None`.
         self.text_only_model = self.image_converter is None
 
-        self.image_placeholder = self.tokenizer.image_placeholder
-        self.start_of_image_token = self.tokenizer.start_of_image_token
-        self.end_of_image_token = self.tokenizer.end_of_image_token
+        if self.text_only_model:
+            self.image_placeholder = None
+            self.start_of_image_token = None
+            self.end_of_image_token = None
+        else:
+            self.image_placeholder = self.tokenizer.image_placeholder
+            self.start_of_image_token = self.tokenizer.start_of_image_token
+            self.end_of_image_token = self.tokenizer.end_of_image_token
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -480,9 +491,9 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         )
         images = self.image_converter(images)
 
-        if keras.config.backend() == "torch" and not isinstance(
-            images, tf.Tensor
-        ):
+        # Inside a Grain pipeline the image converter returns NumPy arrays,
+        # otherwise torch tensors which may live on an accelerator.
+        if keras.config.backend() == "torch" and keras.ops.is_tensor(images):
             images = images.cpu()
 
         # Recover the rank.
@@ -600,7 +611,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = self.image_converter.image_size[0]
         desired_width = self.image_converter.image_size[1]
         if images is None:
@@ -734,6 +745,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         token_ids, segment_ids = self.packer(
             segments,
             sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
             add_end_value=False,
         )
         response_mask = segment_ids == 1
@@ -754,7 +766,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(token_ids)[0]
         desired_height = self.image_converter.image_size[0]
         desired_width = self.image_converter.image_size[1]
         if images is None:

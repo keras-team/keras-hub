@@ -110,6 +110,7 @@ PRESET_MAP = {
     "siglip2_so400m_patch16_256": "google/siglip2-so400m-patch16-256",
     "siglip2_so400m_patch16_384": "google/siglip2-so400m-patch16-384",
     "siglip2_so400m_patch16_512": "google/siglip2-so400m-patch16-512",
+    "medsiglip_900m_448": "google/medsiglip-448",
 }
 
 flags.DEFINE_string(

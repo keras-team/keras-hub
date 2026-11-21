@@ -138,6 +138,27 @@ class DFineObjectDetectorTest(TestCase):
             },
         )
 
+    def test_num_classes_mismatch(self):
+        backbone = DFineBackbone(**self.base_backbone_kwargs)
+        self.assertEqual(backbone.num_labels, 4)
+        init_kwargs = {
+            "backbone": backbone,
+            "num_classes": 2,
+            "bounding_box_format": self.bounding_box_format,
+            "preprocessor": self.preprocessor,
+        }
+        self.run_task_test(
+            cls=DFineObjectDetector,
+            init_kwargs=init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape={
+                "boxes": (1, 10, 4),
+                "labels": (1, 10),
+                "confidence": (1, 10),
+                "num_detections": (1,),
+            },
+        )
+
     @pytest.mark.large
     def test_saved_model(self):
         backbone = DFineBackbone(**self.base_backbone_kwargs)
@@ -151,4 +172,34 @@ class DFineObjectDetectorTest(TestCase):
             cls=DFineObjectDetector,
             init_kwargs=init_kwargs,
             input_data=self.images,
+        )
+
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="D-FINE's multi-scale features hit a torch.export shape guard.",
+    )
+    def test_litert_export(self):
+        backbone = DFineBackbone(**self.base_backbone_kwargs)
+        init_kwargs = {
+            "backbone": backbone,
+            "num_classes": 4,
+            "bounding_box_format": self.bounding_box_format,
+            "preprocessor": self.preprocessor,
+        }
+
+        # D-Fine ObjectDetector only takes images as input
+        input_data = self.images
+
+        self.run_litert_export_test(
+            cls=DFineObjectDetector,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+            comparison_mode="statistical",
+            output_thresholds={
+                "intermediate_predicted_corners": {"max": 5.0, "mean": 0.05},
+                "intermediate_logits": {"max": 5.0, "mean": 0.1},
+                "enc_topk_logits": {"max": 5.0, "mean": 0.03},
+                "logits": {"max": 2.0, "mean": 0.03},
+                "*": {"max": 1.0, "mean": 0.03},
+            },
         )

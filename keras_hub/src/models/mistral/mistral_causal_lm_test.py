@@ -47,6 +47,30 @@ class MistralCausalLMTest(TestCase):
             expected_output_shape=(2, 8, 10),
         )
 
+    def test_generate_with_explicit_head_dim(self):
+        # Magistral-style config where `head_dim` is set explicitly and does
+        # not equal `hidden_dim // num_query_heads`. The generation cache must
+        # be built with the explicit `head_dim`, not the derived value.
+        backbone = MistralBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            head_dim=6,
+            sliding_window=None,
+        )
+        self.assertNotEqual(
+            backbone.head_dim, backbone.hidden_dim // backbone.num_query_heads
+        )
+        causal_lm = MistralCausalLM(
+            preprocessor=self.preprocessor, backbone=backbone
+        )
+        prompt = "the quick brown fox"
+        output = causal_lm.generate(prompt)
+        self.assertTrue(prompt in output)
+
     def test_generate(self):
         causal_lm = MistralCausalLM(**self.init_kwargs)
         # String input.
@@ -104,6 +128,31 @@ class MistralCausalLMTest(TestCase):
             cls=MistralCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+        )
+
+    def test_litert_export(self):
+        """Test LiteRT export for MistralCausalLM with small test model."""
+        model = MistralCausalLM(**self.init_kwargs)
+
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            8,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
         )
 
     @pytest.mark.extra_large
@@ -199,3 +248,18 @@ class MistralCausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_get_quantization_layer_structure(self):
+        causal_lm = MistralCausalLM(**self.init_kwargs)
+        structure = causal_lm.get_quantization_layer_structure("gptq")
+        self.assertIsInstance(structure, dict)
+        self.assertIn("pre_block_layers", structure)
+        self.assertIn("sequential_blocks", structure)
+        self.assertEqual(
+            structure["pre_block_layers"], [self.backbone.token_embedding]
+        )
+        self.assertEqual(
+            structure["sequential_blocks"], self.backbone.transformer_layers
+        )
+
+        self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))

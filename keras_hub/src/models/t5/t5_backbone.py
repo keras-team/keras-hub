@@ -1,9 +1,7 @@
 import keras
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.t5.t5_layer_norm import T5LayerNorm
 from keras_hub.src.models.t5.t5_transformer_layer import T5TransformerLayer
@@ -170,14 +168,12 @@ class T5Backbone(Backbone):
         encoder_attention_mask = encoder_padding_mask_input[:, None, :]
         position_bias = None
         for transformer_layer in self.encoder_transformer_layers:
-            output = transformer_layer(
+            x, position_bias = transformer_layer(
                 x,
                 attention_mask=encoder_attention_mask,
                 position_bias=position_bias,
                 use_causal_mask=False,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
         x = self.encoder_layer_norm(x)
         x = self.encoder_dropout(x)
         encoder_output = x
@@ -187,7 +183,7 @@ class T5Backbone(Backbone):
         decoder_attention_mask = decoder_padding_mask_input[:, None, :]
         position_bias = None
         for transformer_layer in self.decoder_transformer_layers:
-            output = transformer_layer(
+            x, position_bias = transformer_layer(
                 x,
                 attention_mask=decoder_attention_mask,
                 position_bias=position_bias,
@@ -195,8 +191,6 @@ class T5Backbone(Backbone):
                 encoder_attention_mask=encoder_attention_mask,
                 use_causal_mask=True,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
         x = self.decoder_layer_norm(x)
         x = self.decoder_dropout(x)
         decoder_output = x

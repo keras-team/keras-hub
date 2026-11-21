@@ -1,10 +1,8 @@
 import keras
 from keras import ops
+from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
-from keras_hub.src.layers.modeling.reversible_embedding import (
-    ReversibleEmbedding,
-)
 from keras_hub.src.models.backbone import Backbone
 from keras_hub.src.models.qwen.qwen_decoder import QwenTransformerDecoder
 from keras_hub.src.models.qwen.qwen_layernorm import QwenLayerNorm

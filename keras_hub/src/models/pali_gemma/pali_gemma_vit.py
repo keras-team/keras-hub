@@ -423,17 +423,17 @@ class PaliGemmaVit(keras.Model):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for transformer.
         num_classes: int. The number of output classes. If this model is used
-            as a image classifier, this value would correspond to the number of
+            as an image classifier, this value would correspond to the number of
             output classes.
         pooling: string. The encoded vision embeddings are pooled using the
-            specified polling setting. The accepted values are `"map"`, `"gap"`,
+            specified pooling setting. The accepted values are `"map"`, `"gap"`,
             `"zero"` or `None`. Defaults to `None`.
-        classifier_activation: activation fucntion. The activation that is used
-            for final output classification
+        classifier_activation: activation function. The activation that is used
+            for final output classification.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for the models computations and weights. Note that some
             computations, such as softmax and layer normalization will always
-            be done a float32 precision regardless of dtype.
+            be done in float32 precision regardless of dtype.
 
     Example:
     ```python
@@ -490,7 +490,7 @@ class PaliGemmaVit(keras.Model):
         else:
             raise ValueError(
                 "Invalid value for argument `pooling`. "
-                "Expected one of 'map', 'gap', None. "
+                "Expected one of 'map', 'gap', 'zero', None. "
                 f"Received: pooling={pooling}"
             )
         outputs = keras.layers.Dense(

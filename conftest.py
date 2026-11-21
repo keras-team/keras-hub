@@ -1,23 +1,8 @@
+import importlib
 import os
 
 import keras
 import pytest
-
-# OpenVINO supported test paths
-OPENVINO_SUPPORTED_PATHS = [
-    "keras-hub/integration_tests",
-    "keras_hub/src/models/gemma",
-    "keras_hub/src/models/gpt2",
-    "keras_hub/src/models/mistral",
-    "keras_hub/src/tokenizers",
-]
-
-# OpenVINO specific test skips
-OPENVINO_SPECIFIC_SKIPPING_TESTS = {
-    "test_backbone_basics": "bfloat16 dtype not supported",
-    "test_score_loss": "Non-implemented roll operation",
-    "test_causal_lm_basics": "Missing ops and requires trainable backend",
-}
 
 
 def pytest_addoption(parser):
@@ -48,13 +33,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    # Monkey-patch training methods for OpenVINO backend
-    if keras.config.backend() == "openvino":
+    # Skip training in tests on backends that can't compute gradients.
+    if not getattr(keras.src.backend, "SUPPORTS_GRADIENT", True):
         keras.Model.fit = lambda *args, **kwargs: pytest.skip(
-            "Model.fit() not supported on OpenVINO backend"
+            "Model.fit() not supported on this backend"
         )
         keras.Model.train_on_batch = lambda *args, **kwargs: pytest.skip(
-            "Model.train_on_batch() not supported on OpenVINO backend"
+            "Model.train_on_batch() not supported on this backend"
         )
 
     # Verify that device has GPU and detected by backend
@@ -99,8 +84,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     run_extra_large_tests = config.getoption("--run_extra_large")
-    # Run large tests for --run_extra_large or --run_large.
-    run_large_tests = config.getoption("--run_large") or run_extra_large_tests
+    run_large_tests = config.getoption("--run_large")
 
     # Messages to annotate skipped tests with.
     skip_large = pytest.mark.skipif(
@@ -125,8 +109,14 @@ def pytest_collection_modifyitems(config, items):
         not found_kaggle_key,
         reason="tests only run with a kaggle api key",
     )
+    # A pluggable backend can list the tests it supports, in a text file at
+    # the root of its repository.
+    supported_tests = read_backend_test_list("keras_hub_tests_whitelist.txt")
+    skip_unsupported = pytest.mark.skip(
+        reason=f"Not supported by the {keras.config.backend()} backend"
+    )
     for item in items:
-        if "large" in item.keywords:
+        if "large" in item.keywords and "extra_large" not in item.keywords:
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:
             item.add_marker(skip_extra_large)
@@ -135,33 +125,34 @@ def pytest_collection_modifyitems(config, items):
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
 
-        # OpenVINO-specific test skipping
-        if keras.config.backend() == "openvino":
-            test_name = item.name.split("[")[0]
+        # Skip tests that the pluggable backend doesn't list as passing.
+        if supported_tests is not None and not any(
+            item.nodeid == path
+            or item.nodeid.startswith(path + "/")
+            or item.nodeid.startswith(path + "::")
+            for path in supported_tests
+        ):
+            item.add_marker(skip_unsupported)
 
-            if test_name in OPENVINO_SPECIFIC_SKIPPING_TESTS:
-                item.add_marker(
-                    pytest.mark.skipif(
-                        True,
-                        reason="OpenVINO: "
-                        f"{OPENVINO_SPECIFIC_SKIPPING_TESTS[test_name]}",
-                    )
-                )
-                continue
 
-            is_whitelisted = any(
-                item.nodeid.startswith(supported_path + "/")
-                or item.nodeid.startswith(supported_path + "::")
-                or item.nodeid == supported_path
-                for supported_path in OPENVINO_SUPPORTED_PATHS
-            )
-
-            if not is_whitelisted:
-                item.add_marker(
-                    pytest.mark.skipif(
-                        True, reason="OpenVINO: File/directory not in whitelist"
-                    )
-                )
+def read_backend_test_list(filename):
+    """Read a test list from the root of a pluggable backend's repository."""
+    backend = keras.config.backend()
+    if backend in ("jax", "numpy", "tensorflow", "torch"):
+        return None
+    package = importlib.import_module(f"keras_{backend}")
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(package.__file__)), filename
+    )
+    # An installed backend package has no test list.
+    if not os.path.exists(path):
+        return None
+    with open(path) as file:
+        return [
+            stripped
+            for line in file
+            if (stripped := line.strip()) and not stripped.startswith("#")
+        ]
 
 
 # Disable traceback filtering for quicker debugging of tests failures.

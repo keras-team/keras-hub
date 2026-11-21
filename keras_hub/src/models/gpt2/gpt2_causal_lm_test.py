@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import pytest
 from keras import ops
 
@@ -14,18 +15,23 @@ from keras_hub.src.tests.test_case import TestCase
 
 class GPT2CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
-        self.vocab += ["<|endoftext|>"]
-        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.preprocessor = GPT2CausalLMPreprocessor(
             GPT2Tokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
         )
+        self.vocabulary_size = self.preprocessor.tokenizer.vocabulary_size()
         self.backbone = GPT2Backbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=self.vocabulary_size,
             num_layers=2,
             num_heads=2,
             hidden_dim=4,
@@ -44,7 +50,7 @@ class GPT2CausalLMTest(TestCase):
             cls=GPT2CausalLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 8, 7),
+            expected_output_shape=(2, 8, self.vocabulary_size),
         )
 
     def test_generate(self):
@@ -106,6 +112,31 @@ class GPT2CausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    def test_litert_export(self):
+        """Test LiteRT export for GPT2CausalLM with small test model."""
+        model = GPT2CausalLM(**self.init_kwargs)
+
+        # Convert boolean padding_mask to int32 for LiteRT compatibility
+        input_data = self.input_data.copy()
+        if "padding_mask" in input_data:
+            input_data["padding_mask"] = ops.cast(
+                input_data["padding_mask"], "int32"
+            )
+
+        expected_output_shape = (
+            2,
+            8,
+            self.preprocessor.tokenizer.vocabulary_size(),
+        )
+
+        self.run_litert_export_test(
+            model=model,
+            input_data=input_data,
+            expected_output_shape=expected_output_shape,
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-3, "mean": 1e-5}},
+        )
+
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GPT2CausalLM.presets:
@@ -119,7 +150,7 @@ class GPT2CausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = [" airplane at airport", " airplane at airport"]
         causal_lm = GPT2CausalLM(**self.init_kwargs)
-        expected_score_shape = (2, 8, 7)
+        expected_score_shape = (2, 8, self.vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -166,7 +197,7 @@ class GPT2CausalLMTest(TestCase):
         prompts = [" airplane at airport", " airplane at airport"]
         causal_lm = GPT2CausalLM(**self.init_kwargs)
         expected_embedded_shape = (2, 8, 4)
-        expected_score_shape = (2, 8, 7)
+        expected_score_shape = (2, 8, self.vocabulary_size)
 
         # Preprocess prompts to get tokenized representations and padding masks.
         preprocessed_prompts = causal_lm.preprocessor.generate_preprocess(
@@ -199,3 +230,99 @@ class GPT2CausalLMTest(TestCase):
         # Assert shapes for info exfiltrated into the parent context.
         self.assertEqual(ops.shape(embedded_prompts), expected_embedded_shape)
         self.assertEqual(ops.shape(scores), expected_score_shape)
+
+    def test_get_quantization_layer_structure(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        structure = causal_lm.get_quantization_layer_structure("gptq")
+        self.assertIsInstance(structure, dict)
+        self.assertIn("pre_block_layers", structure)
+        self.assertIn("sequential_blocks", structure)
+        self.assertLen(structure["pre_block_layers"], 1)
+        self.assertIsInstance(structure["pre_block_layers"][0], keras.Model)
+        self.assertEqual(
+            structure["sequential_blocks"], self.backbone.transformer_layers
+        )
+
+        self.assertIsNone(causal_lm.get_quantization_layer_structure("int8"))
+
+
+@pytest.mark.skipif(keras.config.backend() != "jax", reason="JAX only")
+@pytest.mark.multi_device
+class GPT2CausalLMDistributionTest(TestCase):
+    def setUp(self):
+        super().setUp()
+
+        self.device_count = len(keras.distribution.list_devices())
+
+        # Initialize kwargs for model creation
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.vocab = []
+        for merge in self.merges:
+            a, b = merge.split(" ")
+            self.vocab.extend([a, b, a + b])
+        self.vocab += ["!", "<|endoftext|>"]
+        self.vocab = sorted(set(self.vocab))  # Remove duplicates
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.vocabulary_size = len(self.vocab)
+
+        self.tokenizer = GPT2Tokenizer(
+            vocabulary=self.vocab,
+            merges=self.merges,
+        )
+        self.preprocessor = GPT2CausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            sequence_length=8,
+        )
+        self.backbone = GPT2Backbone(
+            vocabulary_size=self.vocabulary_size,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=4,
+            intermediate_dim=4,
+            max_sequence_length=8,
+        )
+        self.init_kwargs = {
+            "backbone": self.backbone,
+            "preprocessor": self.preprocessor,
+        }
+
+        self.device_mesh = keras.distribution.DeviceMesh(
+            shape=(self.device_count,),
+            axis_names=["batch"],
+            devices=keras.distribution.list_devices(),
+        )
+
+        self.layout_map = keras.distribution.LayoutMap(self.device_mesh)
+
+        self.distribution = keras.distribution.DataParallel(
+            self.device_mesh,
+            self.layout_map,
+        )
+
+    def test_e2e_data_parallel_generate(self):
+        with self.distribution.scope():
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
+
+            # Pass prompts to match the number of devices.
+            prompts = [" airplane at airport"] * self.device_count
+
+            # This should run without errors and use the distribution.
+            output = causal_lm.generate(prompts)
+            self.assertIsInstance(output, (list, tuple))
+            self.assertLen(output, self.device_count)
+
+    def test_e2e_data_parallel_generate_indivisible_error(self):
+        with self.distribution.scope():
+            if self.device_count < 2:
+                pytest.skip("This test requires at least 2 devices")
+            keras.distribution.set_distribution(self.distribution)
+            causal_lm = GPT2CausalLM(**self.init_kwargs)
+
+            # Pass only 1 prompt, which is not divisible by the number of
+            # devices.
+            prompt = " airplane at airport"
+
+            with self.assertRaises(Exception):
+                causal_lm.generate(prompt)

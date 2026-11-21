@@ -70,18 +70,14 @@ class Phi3SuScaledRotaryEmbedding(RotaryEmbedding):
 
         rotary_dim = ops.shape(inputs)[feature_axis]
         inverse_freq = self._get_inverse_freq(rotary_dim)
-
-        # Multiply inverse_freq by a factor.
-        if ops.shape(inputs)[sequence_axis] > self.pretraining_sequence_length:
-            inverse_freq = ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(self.inverese_freq_long_factor),
-            )
-        else:
-            inverse_freq = ops.divide(
-                inverse_freq,
-                ops.convert_to_tensor(self.inverese_freq_short_factor),
-            )
+        seq_len = ops.shape(inputs)[sequence_axis]
+        # Keyed off the last position; `seq_len` is always 1 while decoding.
+        factor = ops.where(
+            start_index + seq_len > self.pretraining_sequence_length,
+            ops.convert_to_tensor(self.inverese_freq_long_factor),
+            ops.convert_to_tensor(self.inverese_freq_short_factor),
+        )
+        inverse_freq = ops.divide(inverse_freq, factor)
 
         if positions is None:
             positions = self._compute_positions(inputs, start_index)

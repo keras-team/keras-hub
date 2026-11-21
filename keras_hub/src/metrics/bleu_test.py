@@ -181,3 +181,20 @@ class BleuTest(TestCase):
             "smooth": True,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
+
+    def test_invalid_input_rank(self):
+        bleu = Bleu()
+        # y_pred has base_rank 0. Rank 2 (base_rank + 2) is allowed ONLY if
+        # last dim is 1.
+        y_pred = tf.constant([["a", "b"], ["c", "d"]])
+        y_true = [["a b"], ["c d"]]
+        with self.assertRaisesRegex(ValueError, "y_pred is of rank 2"):
+            bleu.update_state(y_true, y_pred)
+
+        # y_true has base_rank 1. Rank 4 (base_rank + 3) is never allowed.
+        y_true = tf.constant([[[["a"]]]])
+        y_pred = ["a"]
+        with self.assertRaisesRegex(
+            ValueError, "y_true must be of rank 1, 2, or 3"
+        ):
+            bleu.update_state(y_true, y_pred)

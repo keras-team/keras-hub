@@ -1,0 +1,13 @@
+name: Zizmor
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    uses: keras-team/shared-workflows/.github/workflows/zizmor.yml@32f8421420f190c8c1b3cbe98326bc011687a933

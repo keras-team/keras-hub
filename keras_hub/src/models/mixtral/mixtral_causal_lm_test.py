@@ -1,6 +1,7 @@
 import os
 from unittest.mock import patch
 
+import keras
 import pytest
 from keras import ops
 
@@ -102,6 +103,17 @@ class MixtralCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
+            cls=MixtralCausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
+
+    @pytest.mark.xfail(
+        condition=keras.backend.backend() == "torch",
+        reason="litert-torch cannot lower aten._assert_async from MoE routing.",
+    )
+    def test_litert_export(self):
+        self.run_litert_export_test(
             cls=MixtralCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

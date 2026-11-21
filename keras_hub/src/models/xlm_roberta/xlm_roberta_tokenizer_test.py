@@ -26,7 +26,7 @@ class XLMRobertaTokenizerTest(TestCase):
             expected_output=[[6, 11, 7, 9], [6, 8, 10, 12]],
         )
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=XLMRobertaTokenizer,
@@ -43,3 +43,16 @@ class XLMRobertaTokenizerTest(TestCase):
                 preset=preset,
                 input_data=self.input_data,
             )
+
+
+class XLMRobertaTokenizerTFTest(XLMRobertaTokenizerTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self.init_kwargs = {
+            "proto": os.path.join(
+                self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
+            ),
+            "_allow_python_workflow": False,
+        }

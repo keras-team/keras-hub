@@ -1,10 +1,10 @@
 import os
 import pathlib
 
+import grain
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
@@ -17,20 +17,82 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class ImageConverterTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = True
+
+    def test_layer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=ImageConverter,
+            init_kwargs={
+                "image_size": (4, 4),
+                "scale": 1 / 255.0,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=np.ones((2, 10, 10, 3)) * 255.0,
+            expected_output=np.ones((2, 4, 4, 3)).tolist(),
+        )
+
+    def test_data_format_is_serialized(self):
+        # `run_preprocessing_layer_test` compares config to config, so a key
+        # that is missing from `get_config` is missing on both sides and
+        # matches. The value only matters once the global image data format
+        # differs from the one the converter was built with.
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        built = converter.data_format
+        config = converter.get_config()
+        self.assertEqual(config["data_format"], built)
+
+        original = keras.config.image_data_format()
+        other = (
+            "channels_first" if built == "channels_last" else "channels_last"
+        )
+        try:
+            keras.config.set_image_data_format(other)
+            # `get_config` does not save `_allow_python_workflow`.
+            config["_allow_python_workflow"] = self._allow_python_workflow
+            revived = ImageConverter.from_config(config)
+            self.assertEqual(revived.data_format, built)
+            self.assertEqual(revived.resizing.data_format, built)
+            shape = (2, 3, 4, 4) if built == "channels_first" else (2, 4, 4, 3)
+            outputs = revived(np.ones(shape))
+            self.assertEqual(ops.shape(outputs), shape)
+        finally:
+            keras.config.set_image_data_format(original)
+
+    def test_channels_first_scalar_scale_and_offset(self):
+        converter = ImageConverter(
+            scale=1 / 255.0,
+            offset=-1.0,
+            data_format="channels_first",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        inputs = np.ones((2, 3, 4, 4)) * 255.0
+        self.assertAllClose(converter(inputs), np.zeros((2, 3, 4, 4)))
+        self.assertAllClose(converter(inputs[0]), np.zeros((3, 4, 4)))
+
     def test_resize_simple(self):
-        converter = ImageConverter(height=4, width=4, scale=1 / 255.0)
+        converter = ImageConverter(
+            height=4,
+            width=4,
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         inputs = np.ones((10, 10, 3)) * 255.0
         outputs = converter(inputs)
         self.assertAllClose(outputs, ops.ones((4, 4, 3)))
 
-    def test_resize_dataset(self):
-        converter = ImageConverter(image_size=(4, 4), scale=1 / 255.0)
-        ds = tf.data.Dataset.from_tensor_slices(tf.zeros((8, 10, 10, 3)))
-        batch = ds.batch(2).map(converter).take(1).get_single_element()
-        self.assertAllClose(batch, tf.zeros((2, 4, 4, 3)))
-
     def test_resize_in_model(self):
-        converter = ImageConverter(height=4, width=4, scale=1 / 255.0)
+        converter = ImageConverter(
+            height=4,
+            width=4,
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         inputs = keras.Input(shape=(10, 10, 3))
         outputs = converter(inputs)
         model = keras.Model(inputs, outputs)
@@ -42,6 +104,7 @@ class ImageConverterTest(TestCase):
             image_size=(4, 4),
             scale=(1.0 / 255.0, 0.8 / 255.0, 1.2 / 255.0),
             offset=(0.2, -0.1, 0.25),
+            _allow_python_workflow=self._allow_python_workflow,
         )
         inputs = np.ones((10, 10, 3)) * 128
         outputs = converter(inputs)
@@ -51,7 +114,11 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(outputs[:, :, 2], np.ones((4, 4)) * 0.852353)
 
     def test_dtypes(self):
-        converter = ImageConverter(image_size=(4, 4), scale=1.0 / 255.0)
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1.0 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         int_image = ops.ones((10, 10, 3), dtype="uint8") * 255
         float_image = ops.ones((10, 10, 3), dtype="float64") * 255
         self.assertDTypeEqual(converter(int_image), "float32")
@@ -59,7 +126,10 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(converter(int_image), np.ones((4, 4, 3)))
         self.assertAllClose(converter(float_image), np.ones((4, 4, 3)))
         converter = ImageConverter(
-            image_size=(4, 4), scale=1.0 / 255.0, dtype="bfloat16"
+            image_size=(4, 4),
+            scale=1.0 / 255.0,
+            dtype="bfloat16",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         self.assertDTypeEqual(converter(int_image), "bfloat16")
         self.assertDTypeEqual(converter(float_image), "bfloat16")
@@ -77,6 +147,7 @@ class ImageConverterTest(TestCase):
             offset=(0.2, -0.1, 0.25),
             crop_to_aspect_ratio=crop_to_aspect_ratio,
             pad_to_aspect_ratio=pad_to_aspect_ratio,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         inputs = np.ones((2, 10, 10, 3)) * 128
         outputs = converter(inputs)
@@ -92,19 +163,8 @@ class ImageConverterTest(TestCase):
                 scale=1 / 255.0,
                 crop_to_aspect_ratio=True,
                 pad_to_aspect_ratio=True,
+                _allow_python_workflow=self._allow_python_workflow,
             )
-
-    def test_config(self):
-        converter = ImageConverter(
-            image_size=(12, 20),
-            scale=(0.25 / 255.0, 0.1 / 255.0, 0.5 / 255.0),
-            offset=(0.2, -0.1, 0.25),
-            crop_to_aspect_ratio=False,
-            interpolation="nearest",
-        )
-        clone = ImageConverter.from_config(converter.get_config())
-        test_batch = np.random.rand(4, 10, 20, 3) * 255
-        self.assertAllClose(converter(test_batch), clone(test_batch))
 
     def test_preset_accessors(self):
         resnet_presets = set(ResNetImageConverter.presets.keys())
@@ -134,6 +194,7 @@ class ImageConverterTest(TestCase):
         converter = ImageConverter.from_preset(
             "resnet_50_imagenet",
             interpolation="nearest",
+            _allow_python_workflow=self._allow_python_workflow,
         )
         converter.save_to_preset(save_dir)
         # Save a tiny backbone so the preset is valid.
@@ -156,3 +217,53 @@ class ImageConverterTest(TestCase):
         restored = ImageConverter.from_preset(save_dir)
         test_image = np.random.rand(100, 100, 3) * 255
         self.assertAllClose(restored(test_image), converter(test_image))
+
+    def test_grain_outputs_numpy(self):
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+        )
+        images = [
+            np.random.randint(0, 255, size=(6, 6, 3)).astype("uint8"),
+            np.random.randint(0, 255, size=(8, 8, 3)).astype("uint8"),
+        ]
+        # Direct call returns backend tensors.
+        self.assertNotIsInstance(converter(images[0]), np.ndarray)
+        # Grain returns numpy arrays.
+        ds = grain.MapDataset.source(images).map(converter)
+        for output in ds:
+            self.assertIsInstance(output, np.ndarray)
+            self.assertEqual(output.shape, (4, 4, 3))
+        (batch,) = list(ds.batch(2))
+        self.assertIsInstance(batch, np.ndarray)
+        self.assertEqual(batch.shape, (2, 4, 4, 3))
+        # Numerics match the direct call.
+        self.assertAllClose(batch[0], converter(images[0]))
+
+    def test_inhomogeneous_batch(self):
+        if not self._allow_python_workflow:
+            self.skipTest("TF workflow does not support inhomogeneous batches.")
+        converter = ImageConverter(
+            image_size=(4, 4),
+            scale=1 / 255.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        inputs = [
+            np.ones((10, 10, 3)) * 255.0,
+            np.ones((20, 20, 3)) * 128.0,
+        ]
+        outputs = converter(inputs)
+        self.assertIsInstance(outputs, list)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(ops.shape(outputs[0]), (4, 4, 3))
+        self.assertEqual(ops.shape(outputs[1]), (4, 4, 3))
+        self.assertAllClose(outputs[0], ops.ones((4, 4, 3)))
+        self.assertAllClose(outputs[1], ops.ones((4, 4, 3)) * (128.0 / 255.0))
+
+
+class ImageConverterTFTest(ImageConverterTest):
+    """Set `_allow_python_workflow=False` to test TF execution."""
+
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False
