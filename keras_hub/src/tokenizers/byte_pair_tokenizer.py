@@ -16,6 +16,7 @@ import tokenizers
 from keras.src.saving import serialization_lib
 from tokenizers import decoders
 from tokenizers import models
+from tokenizers import normalizers
 from tokenizers import pre_tokenizers
 
 from keras_hub.src.api_export import keras_hub_export
@@ -286,6 +287,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     ['butterfly']
     """
 
+    # Regex that splits text into words before byte-pair encoding in the
+    # Python workflow, or `None` to encode each input string without
+    # splitting it. Subclasses set this to the split pattern declared in the
+    # `tokenizer.json` of their checkpoints.
+    _python_split_pattern = None
+
     def __init__(
         self,
         vocabulary=None,
@@ -405,17 +412,34 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         if self.unsplittable_tokens:
             self._tokenizer.add_special_tokens(self.unsplittable_tokens)
-        # Ensure the implementation matches Llama3's tokenizer behavior.
-        self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
-            [
-                pre_tokenizers.Split(
-                    pattern=SPLIT_PATTERN_TOKENIZERS, behavior="isolated"
-                ),
-                pre_tokenizers.ByteLevel(
-                    add_prefix_space=self.add_prefix_space, use_regex=False
-                ),
-            ]
-        )
+        if self._python_split_pattern is None:
+            pre_tokenizer = pre_tokenizers.ByteLevel(
+                add_prefix_space=self.add_prefix_space, use_regex=False
+            )
+        else:
+            if self.add_prefix_space:
+                # `ByteLevel` would add a space to every split. Add it before
+                # splitting instead, unless the text starts with a space.
+                self._tokenizer.normalizer = normalizers.Sequence(
+                    [
+                        normalizers.Prepend(" "),
+                        normalizers.Replace(tokenizers.Regex(r"\A  "), " "),
+                    ]
+                )
+            # `Split` matches a plain `str` pattern literally, so the regex
+            # must be wrapped in `tokenizers.Regex`.
+            pre_tokenizer = pre_tokenizers.Sequence(
+                [
+                    pre_tokenizers.Split(
+                        tokenizers.Regex(self._python_split_pattern),
+                        behavior="isolated",
+                    ),
+                    pre_tokenizers.ByteLevel(
+                        add_prefix_space=False, use_regex=False
+                    ),
+                ]
+            )
+        self._tokenizer.pre_tokenizer = pre_tokenizer
         self._tokenizer.decoder = decoders.ByteLevel()
 
         # Dummy attrs for serialization compatibility.
