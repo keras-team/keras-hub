@@ -126,10 +126,7 @@ def _to_numpy_dict(weights_dict):
 
     result = {}
     for k, v in weights_dict.items():
-        tensor = v.value if hasattr(v, "value") else v
-        result[k] = np.array(
-            tensor.numpy() if hasattr(tensor, "numpy") else tensor
-        )
+        result[k] = np.asarray(keras.ops.convert_to_numpy(v))
     return result
 
 
