@@ -3,6 +3,7 @@ import sys
 
 import keras
 from absl import logging
+from keras.src.utils.module_utils import get_pluggable_backend_module
 
 try:
     import tensorflow as tf
@@ -177,39 +178,38 @@ def sharded_weights_available():
     return "max_shard_size" in save_weights_signature.parameters
 
 
-def set_backend_generate_function(model, static_argnames=()):
-    """Let a pluggable backend build `model.generate_function`.
+def make_pluggable_backend_generate_function(
+    model, generate_step, static_argnames=()
+):
+    """Build a generation function through a pluggable backend hook.
 
-    A pluggable Keras backend lives in a `keras_<backend>` package. If that
-    package defines
-    `make_generate_function(model, generate_step, static_argnames=())`,
-    the function it returns is assigned to `model.generate_function`. The
-    returned function is called exactly like `model.generate_step`, and
-    owns any compiled state.
+    A pluggable Keras backend can define
+    `make_generate_function(model, generate_step, static_argnames=())` in
+    `keras_<backend>.src.keras_hub`. The returned callable is invoked with the
+    same positional and keyword arguments as `generate_step` and owns any
+    compiled state.
 
     The hook is called even when `model.run_eagerly` is set, so the backend
-    decides whether to compile. It must return a callable. Static arguments
-    such as `stop_token_ids` may arrive as a `list`, and `inputs` may arrive
-    as NumPy arrays when no preprocessor is attached.
+    decides whether to compile. Static arguments such as `stop_token_ids` may
+    arrive as a `list`, and `inputs` may arrive as NumPy arrays when no
+    preprocessor is attached.
 
-    This does nothing on the jax, numpy, tensorflow and torch backends,
-    when `model.generate_function` is already set, or when the backend
-    package does not define the hook.
+    If `keras_<backend>.src.keras_hub` is missing or does not define
+    `make_generate_function`, `generate_step` is returned directly.
 
     Args:
-        model: `keras.Model`. The task model that owns `generate_step`.
-        static_argnames: tuple of strings. Names of the `generate_step`
-            arguments that are plain Python values and not tensors.
+        model: `keras.Model`. The task model being run.
+        generate_step: callable. Typically `model.generate_step`.
+        static_argnames: tuple of strings. Names of `generate_step` arguments
+            that are plain Python values rather than tensors.
+
+    Returns:
+        A callable with the same call signature as `generate_step`.
     """
-    if model.generate_function is not None:
-        return
-    backend = keras.config.backend()
-    if backend in ("jax", "numpy", "tensorflow", "torch"):
-        return
-    # Keras imports the backend package before any model is built.
-    package = sys.modules.get(f"keras_{backend}")
-    hook = getattr(package, "make_generate_function", None)
+    backend_keras_hub_module = get_pluggable_backend_module(
+        "src.keras_hub", allow_missing=True
+    )
+    hook = getattr(backend_keras_hub_module, "make_generate_function", None)
     if hook is not None:
-        model.generate_function = hook(
-            model, model.generate_step, static_argnames=static_argnames
-        )
+        return hook(model, generate_step, static_argnames=static_argnames)
+    return generate_step

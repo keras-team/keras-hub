@@ -7,7 +7,9 @@ from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
-from keras_hub.src.utils.keras_utils import set_backend_generate_function
+from keras_hub.src.utils.keras_utils import (
+    make_pluggable_backend_generate_function,
+)
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 try:
@@ -134,11 +136,9 @@ class Inpaint(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
-        set_backend_generate_function(self)
         if self.generate_function is not None:
             return self.generate_function
 
-        self.generate_function = self.generate_step
         if keras.config.backend() == "torch":
             import torch
 
@@ -147,40 +147,55 @@ class Inpaint(Task):
                     return self.generate_step(*args, **kwargs)
 
             self.generate_function = wrapped_function
-        elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=self.jit_compile
+        elif keras.config.backend() == "tensorflow":
+            if not self.run_eagerly:
+                self.generate_function = tf.function(
+                    self.generate_step, jit_compile=self.jit_compile
+                )
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "jax":
+            if not self.run_eagerly:
+                import jax
+
+                @partial(jax.jit)
+                def compiled_function(state, *args, **kwargs):
+                    (
+                        trainable_variables,
+                        non_trainable_variables,
+                    ) = state
+                    mapping = itertools.chain(
+                        zip(self.trainable_variables, trainable_variables),
+                        zip(
+                            self.non_trainable_variables,
+                            non_trainable_variables,
+                        ),
+                    )
+
+                    with keras.StatelessScope(state_mapping=mapping):
+                        outputs = self.generate_step(*args, **kwargs)
+                    return outputs
+
+                def wrapped_function(*args, **kwargs):
+                    # Create an explicit tuple of all variable state.
+                    state = (
+                        # Use the explicit variable.value to preserve the
+                        # sharding spec of distribution.
+                        [v.value for v in self.trainable_variables],
+                        [v.value for v in self.non_trainable_variables],
+                    )
+                    outputs = compiled_function(state, *args, **kwargs)
+                    return outputs
+
+                self.generate_function = wrapped_function
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "numpy":
+            self.generate_function = self.generate_step
+        else:  # pluggable backend
+            self.generate_function = make_pluggable_backend_generate_function(
+                self, self.generate_step
             )
-        elif keras.config.backend() == "jax" and not self.run_eagerly:
-            import jax
-
-            @partial(jax.jit)
-            def compiled_function(state, *args, **kwargs):
-                (
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
-                )
-
-                with keras.StatelessScope(state_mapping=mapping):
-                    outputs = self.generate_step(*args, **kwargs)
-                return outputs
-
-            def wrapped_function(*args, **kwargs):
-                # Create an explicit tuple of all variable state.
-                state = (
-                    # Use the explicit variable.value to preserve the
-                    # sharding spec of distribution.
-                    [v.value for v in self.trainable_variables],
-                    [v.value for v in self.non_trainable_variables],
-                )
-                outputs = compiled_function(state, *args, **kwargs)
-                return outputs
-
-            self.generate_function = wrapped_function
         return self.generate_function
 
     def _normalize_generate_images(self, inputs):

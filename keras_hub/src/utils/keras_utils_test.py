@@ -1,3 +1,5 @@
+import contextlib
+import os
 import sys
 import types
 from unittest import mock
@@ -15,6 +17,9 @@ from keras_hub.src.models.inpaint import Inpaint
 from keras_hub.src.models.text_to_image import TextToImage
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import clone_initializer
+from keras_hub.src.utils.keras_utils import (
+    make_pluggable_backend_generate_function,
+)
 
 
 class CloneInitializerTest(TestCase):
@@ -54,16 +59,39 @@ def fake_generate_function(*args, **kwargs):
     """Stands in for the function a backend hook returns."""
 
 
-def backend_package(name, **attributes):
+def backend_package(name, with_keras_hub=True, **attributes):
     """Put a `keras_<name>` backend package into `sys.modules`."""
     package = types.ModuleType(f"keras_{name}")
-    package.__dict__.update(attributes)
-    return mock.patch.dict(sys.modules, {package.__name__: package})
+    package.__path__ = []
+    modules = {package.__name__: package}
+    if with_keras_hub:
+        src_module = types.ModuleType(f"keras_{name}.src")
+        src_module.__path__ = []
+        hub_module = types.ModuleType(f"keras_{name}.src.keras_hub")
+        hub_module.__dict__.update(attributes)
+        package.src = src_module
+        src_module.keras_hub = hub_module
+        modules[src_module.__name__] = src_module
+        modules[hub_module.__name__] = hub_module
+    else:
+        package.__dict__.update(attributes)
+    return mock.patch.dict(sys.modules, modules)
 
 
-def backend_name(name):
-    """Make `keras.config.backend()` return `name`."""
-    return mock.patch.object(keras.config, "backend", return_value=name)
+@contextlib.contextmanager
+def backend_name(name, unofficial=True):
+    """Make Keras report `name` as the active backend."""
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(
+            mock.patch.object(keras.src.backend.config, "_BACKEND", name)
+        )
+        if unofficial:
+            stack.enter_context(
+                mock.patch.dict(
+                    os.environ, {"KERAS_ALLOW_UNOFFICIAL_BACKEND": "1"}
+                )
+            )
+        yield
 
 
 class BackendGenerateFunctionTest(TestCase):
@@ -83,6 +111,7 @@ class BackendGenerateFunctionTest(TestCase):
         ):
             generate_function = model.make_generate_function()
             self.assertIs(generate_function, fake_generate_function)
+            self.assertIs(model.generate_function, fake_generate_function)
             self.hook.assert_called_once_with(
                 model, model.generate_step, static_argnames=static_argnames
             )
@@ -148,11 +177,24 @@ class BackendGenerateFunctionTest(TestCase):
 
     @parameterized.named_parameters(*GENERATE_TASKS)
     def test_backend_without_hook_is_unchanged(self, cls, static_argnames):
-        # The backend package is loaded and does not define the hook.
+        # `src.keras_hub` is present and does not define the hook.
         model = cls()
         with backend_package("fakebackend"), backend_name("fakebackend"):
             generate_function = model.make_generate_function()
             self.assertEqual(generate_function, model.generate_step)
+        # Top-level package is loaded without `src.keras_hub`.
+        model = cls()
+        with (
+            backend_package(
+                "fakebackend",
+                with_keras_hub=False,
+                make_generate_function=self.hook,
+            ),
+            backend_name("fakebackend"),
+        ):
+            generate_function = model.make_generate_function()
+            self.assertEqual(generate_function, model.generate_step)
+            self.hook.assert_not_called()
         # The backend package is not loaded.
         model = cls()
         with backend_name("fakebackend"):
@@ -169,3 +211,55 @@ class BackendGenerateFunctionTest(TestCase):
             generate_function = model.make_generate_function()
         self.hook.assert_not_called()
         self.assertIsNot(generate_function, fake_generate_function)
+
+    @parameterized.named_parameters(*GENERATE_TASKS)
+    def test_numpy_backend_uses_generate_step(self, cls, static_argnames):
+        model = cls()
+        with (
+            backend_package("numpy", make_generate_function=self.hook),
+            backend_name("numpy", unofficial=False),
+        ):
+            generate_function = model.make_generate_function()
+            self.assertEqual(generate_function, model.generate_step)
+            self.assertEqual(model.generate_function, model.generate_step)
+        self.hook.assert_not_called()
+
+    @parameterized.named_parameters(*GENERATE_TASKS)
+    def test_eager_built_in_backend_uses_generate_step(
+        self, cls, static_argnames
+    ):
+        model = cls()
+        model.run_eagerly = True
+        generate_function = model.make_generate_function()
+        if keras.config.backend() in ("tensorflow", "jax"):
+            self.assertEqual(generate_function, model.generate_step)
+            self.assertEqual(model.generate_function, model.generate_step)
+        else:
+            self.assertTrue(callable(generate_function))
+            self.assertIs(model.generate_function, generate_function)
+
+    def test_helper_returns_without_mutating_model(self):
+        model = CausalLM()
+        custom_step = mock.Mock()
+        with (
+            backend_package("fakebackend", make_generate_function=self.hook),
+            backend_name("fakebackend"),
+        ):
+            result = make_pluggable_backend_generate_function(
+                model, custom_step, static_argnames=("stop_token_ids",)
+            )
+        self.assertIs(result, fake_generate_function)
+        self.assertIsNone(model.generate_function)
+        self.hook.assert_called_once_with(
+            model, custom_step, static_argnames=("stop_token_ids",)
+        )
+
+        with backend_package("fakebackend"), backend_name("fakebackend"):
+            result = make_pluggable_backend_generate_function(
+                model, custom_step
+            )
+        self.assertIs(result, custom_step)
+        self.assertIsNone(model.generate_function)
+
+        with self.assertRaises(ValueError):
+            make_pluggable_backend_generate_function(model, custom_step)
