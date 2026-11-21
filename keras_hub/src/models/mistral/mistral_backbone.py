@@ -74,6 +74,8 @@ class MistralBackbone(Backbone):
             Set explicitly when the model's head size is not equal to
             `hidden_dim // num_query_heads` — e.g. Magistral uses
             `head_dim=128` with `hidden_dim=5120` and `num_query_heads=32`.
+        dropout: float, optional. Dropout probability for the Transformer
+            decoder blocks. Defaults to `0`.
         llama_4_scaling_beta: float, optional. When set, scales query
             magnitude by absolute position with a Llama4-style
             `attn_temperature_tuning`: `query *= 1 + llama_4_scaling_beta *
