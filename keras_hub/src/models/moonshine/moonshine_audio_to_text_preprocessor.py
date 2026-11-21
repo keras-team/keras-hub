@@ -9,6 +9,10 @@ from keras_hub.src.models.moonshine.moonshine_backbone import MoonshineBackbone
 from keras_hub.src.models.moonshine.moonshine_tokenizer import (
     MoonshineTokenizer,
 )
+from keras_hub.src.utils.tensor_utils import (
+    convert_preprocessing_outputs_python,
+)
+from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -163,12 +167,31 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
         y_out = decoder_token_ids[..., 1:]
         sample_weight_out = decoder_padding_mask[..., 1:]
 
-        return keras.utils.pack_x_y_sample_weight(
-            x_out, y_out, sample_weight_out
+        return convert_preprocessing_outputs_python(
+            keras.utils.pack_x_y_sample_weight(x_out, y_out, sample_weight_out)
         )
 
     @preprocessing_function
     def generate_preprocess(
+        self,
+        x,
+        decoder_sequence_length=None,
+        sequence_length=None,
+    ):
+        if in_grain_data_pipeline():
+            with keras.device("cpu"):
+                return self._generate_preprocess(
+                    x,
+                    decoder_sequence_length=decoder_sequence_length,
+                    sequence_length=sequence_length,
+                )
+        return self._generate_preprocess(
+            x,
+            decoder_sequence_length=decoder_sequence_length,
+            sequence_length=sequence_length,
+        )
+
+    def _generate_preprocess(
         self,
         x,
         decoder_sequence_length=None,
@@ -233,12 +256,14 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
             add_end_value=False,
         )
 
-        return {
-            "encoder_input_values": encoder_inputs,
-            "encoder_padding_mask": encoder_padding_mask,
-            "decoder_token_ids": decoder_token_ids,
-            "decoder_padding_mask": decoder_padding_mask,
-        }
+        return convert_preprocessing_outputs_python(
+            {
+                "encoder_input_values": encoder_inputs,
+                "encoder_padding_mask": encoder_padding_mask,
+                "decoder_token_ids": decoder_token_ids,
+                "decoder_padding_mask": decoder_padding_mask,
+            }
+        )
 
     @preprocessing_function
     def generate_postprocess(self, x):

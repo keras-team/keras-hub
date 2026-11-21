@@ -1,3 +1,4 @@
+import inspect
 from unittest import mock
 
 from keras import ops
@@ -170,11 +171,11 @@ class MockGemmaTokenizersTest(TestCase):
                 with self.assertRaisesRegex(
                     ImportError, rf"{cls.__name__} requires `tensorflow`"
                 ):
-                    cls._tokenize_tf.__wrapped__(tokenizer, ["the fox"])
+                    inspect.unwrap(cls._tokenize_tf)(tokenizer, ["the fox"])
                 with self.assertRaisesRegex(
                     ImportError, rf"{cls.__name__} requires `tensorflow`"
                 ):
-                    cls._detokenize_tf.__wrapped__(tokenizer, [9, 12])
+                    inspect.unwrap(cls._detokenize_tf)(tokenizer, [9, 12])
 
     def test_get_config_round_trip(self):
         for cls in (
