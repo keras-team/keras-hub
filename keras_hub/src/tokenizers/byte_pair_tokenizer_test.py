@@ -91,6 +91,27 @@ class BytePairTokenizerTest(TestCase):
         output = tokenizer("sp")
         self.assertAllEqual(output, [0])
 
+    def test_tokenize_with_many_unsplittable_tokens(self):
+        # From the eleventh token on, the internal alternates share prefixes
+        # (e.g. "ĴB" and "ĴBA"), which must not corrupt each other.
+        special_tokens = [f"<|t{i}|>" for i in range(100)]
+        vocab = {"a": 0, "b": 1, "Ġ": 2, "Ġa": 3}
+        vocab.update({token: 4 + i for i, token in enumerate(special_tokens)})
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=["Ġ a"],
+            unsplittable_tokens=special_tokens,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        inputs = ["<|t1|><|t10|>a", " a<|t99|>b<|t12|>", "<|t0|>"]
+        expected = [[5, 14, 0], [3, 103, 1, 16], [4]]
+        self.assertAllEqual(tokenizer(inputs), expected)
+
+        # Tracing under `tf.data` stays fast with many unsplittable tokens.
+        ds = tf.data.Dataset.from_tensor_slices(inputs).batch(3)
+        output = ds.map(tokenizer).get_single_element()
+        self.assertAllEqual(output, expected)
+
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
         tokenizer = BytePairTokenizer(
