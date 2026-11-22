@@ -46,13 +46,9 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from transformers import AutoConfig  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
-from transformers.models.llama.modeling_llama import (  # noqa: E402
-    LlamaForCausalLM,
-)
+from transformers.models.llama.modeling_llama import LlamaForCausalLM  # noqa: E402
 
-from keras_hub.src.models.llama3.llama3_causal_lm import (  # noqa: E402
-    Llama3CausalLM,
-)
+from keras_hub.src.models.llama3.llama3_causal_lm import Llama3CausalLM  # noqa: E402
 
 print(f"Keras backend: {keras.config.backend()}")
 print(f"Keras version: {keras.__version__}")

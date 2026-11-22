@@ -240,6 +240,10 @@ class ImageConverter(PreprocessingLayer):
 
     def _expand_non_channel_dims(self, value, inputs):
         """Expand non channel dims so value is broadcastable with inputs."""
+        if np.ndim(value) == 0:
+            # A scalar has no channel axis, so the expand below would fail
+            # for `"channels_first"`.
+            value = np.reshape(value, (1,))
         unbatched = len(ops.shape(inputs)) == 3
         channels_first = self.data_format == "channels_first"
         if unbatched:
@@ -256,7 +260,7 @@ class ImageConverter(PreprocessingLayer):
             import tensorflow as tf
 
             return tf.cast(x, dtype), tf.cast(y, dtype)
-        x = ops.cast(x, dtype)
+        x = ops.cast(ops.convert_to_tensor(x), dtype)
         y = ops.cast(y, dtype)
         if keras.backend.backend() == "torch":
             # Place on the same device as x (the image).
@@ -275,6 +279,7 @@ class ImageConverter(PreprocessingLayer):
                 "crop_to_aspect_ratio": self.crop_to_aspect_ratio,
                 "pad_to_aspect_ratio": self.pad_to_aspect_ratio,
                 "bounding_box_format": self.bounding_box_format,
+                "data_format": self.data_format,
             }
         )
         return config

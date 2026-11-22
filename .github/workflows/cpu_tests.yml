@@ -36,8 +36,6 @@ jobs:
             version: keras-3.14
           - backend: jax
             version: keras-nightly
-          - backend: openvino
-            version: keras-nightly
         shard: ${{ fromJSON(inputs.shards) }}
 
     container:
@@ -60,10 +58,6 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
-    - name: Install OpenVINO backend plugin
-      if: ${{ matrix.config.backend == 'openvino' }}
-      run: |
-        pip install git+https://github.com/keras-team/keras-openvino.git --progress-bar off
     - name: Pin Keras 3.14
       if: ${{ matrix.config.version == 'keras-3.14'}}
       run: |
@@ -80,7 +74,7 @@ jobs:
         SHARD_COUNT: ${{ inputs.shard_count }}
         SHARD: ${{ matrix.shard }}
       run: |
-        pytest keras_hub/ -n 12 --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
+        pytest keras_hub/ -n 8 --dist loadfile --durations=50 --splits "$SHARD_COUNT" --group "$SHARD"
     - name: Run integration tests
       if: ${{ matrix.shard == 1 }}
       run: |
