@@ -1,16 +1,28 @@
-import json
 import re
 
 import numpy as np
 
 from keras_hub.src.models.whisper.whisper_backbone import WhisperBackbone
+from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 
 backbone_cls = WhisperBackbone
 
-# `<|en|>`, `<|fr|>`, `<|jw|>`, `<|yue|>` etc. (1-3 lowercase letters).
-_LANGUAGE_TOKEN_RE = re.compile(r"^<\|[a-z]{1,3}\|>$")
+# Timestamp tokens: `<|0.00|>`, `<|0.02|>`, ..., `<|30.00|>`.
+_TIMESTAMP_TOKEN_RE = re.compile(r"^<\|\d+\.\d+\|>$")
+# The control tokens that `WhisperTokenizer` exposes as `special_tokens`.
+_CONTROL_TOKENS = (
+    "<|endoftext|>",
+    "<|startoftranscript|>",
+    "<|translate|>",
+    "<|transcribe|>",
+    "<|startoflm|>",
+    "<|startofprev|>",
+    "<|nocaptions|>",
+    "<|nospeech|>",
+    "<|notimestamps|>",
+)
 
 
 def convert_backbone_config(transformers_config):
@@ -20,8 +32,11 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["encoder_attention_heads"],
         "hidden_dim": transformers_config["d_model"],
         "intermediate_dim": transformers_config["encoder_ffn_dim"],
+        "decoder_num_layers": transformers_config["decoder_layers"],
+        "decoder_num_heads": transformers_config["decoder_attention_heads"],
+        "decoder_intermediate_dim": transformers_config["decoder_ffn_dim"],
         "num_mels": transformers_config["num_mel_bins"],
-        "dropout": transformers_config.get("dropout", 0.0),
+        "dropout": transformers_config["dropout"],
         # Keras halves this internally for the encoder position embedding,
         # so we double the HF value to match `embed_positions` length.
         "max_encoder_sequence_length": (
@@ -183,7 +198,7 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     # Decoder transformer layers.
-    for i in range(backbone.num_layers):
+    for i in range(backbone.decoder_num_layers):
         layer = backbone.decoder_transformer_layers[i]
         prefix = f"decoder.layers.{i}"
         _port_layer_norm(
@@ -212,57 +227,99 @@ def convert_weights(backbone, loader, transformers_config):
     _port_layer_norm(loader, backbone.decoder_layer_norm, "decoder.layer_norm")
 
 
-def _split_special_and_language_tokens(added_tokens):
-    """Split the HF added-tokens map into Whisper special vs language tokens.
+def _load_generation_config(preset):
+    if check_file_exists(preset, "generation_config.json"):
+        return load_json(preset, "generation_config.json")
+    return {}
 
-    HF Whisper packs language codes (`<|en|>`, `<|jw|>`, ...), task tokens
-    (`<|transcribe|>`, ...), structural tokens (`<|startoftranscript|>`,
-    `<|endoftext|>`, `<|notimestamps|>`), and per-frame timestamp tokens
-    (`<|0.00|>`, ...) into the same `added_tokens.json`. WhisperTokenizer
-    expects these split into two maps; the multilingual variant is signaled
-    by a non-None `language_tokens` argument.
-    """
-    language_tokens = {}
-    special_tokens = {}
-    for token, token_id in added_tokens.items():
-        if _LANGUAGE_TOKEN_RE.match(token):
-            language_tokens[token] = token_id
-        else:
-            special_tokens[token] = token_id
-    return special_tokens, language_tokens
+
+def _is_multilingual(generation_config, vocabulary_size):
+    if "is_multilingual" in generation_config:
+        return bool(generation_config["is_multilingual"])
+    # Same fallback as Hugging Face: English-only checkpoints have a 51864
+    # token vocabulary and multilingual checkpoints 51865 or more.
+    return vocabulary_size >= 51865
+
+
+def _load_vocabulary_and_merges(preset):
+    """Return the full vocabulary (with added tokens) and the merges."""
+    if check_file_exists(preset, "tokenizer.json"):
+        # `transformers` v5 `save_pretrained` writes only `tokenizer.json`.
+        tokenizer_config = load_json(preset, "tokenizer.json")
+        vocabulary = dict(tokenizer_config["model"]["vocab"])
+        merges = [
+            " ".join(merge) if isinstance(merge, (list, tuple)) else merge
+            for merge in tokenizer_config["model"]["merges"]
+        ]
+        for added_token in tokenizer_config.get("added_tokens", []):
+            vocabulary[added_token["content"]] = added_token["id"]
+        return vocabulary, merges
+
+    vocabulary = load_json(preset, "vocab.json")
+    with open(get_file(preset, "merges.txt"), encoding="utf-8") as f:
+        merges = [
+            line.rstrip("\n")
+            for line in f
+            if line.strip() and not line.startswith("#version")
+        ]
+    if check_file_exists(preset, "added_tokens.json"):
+        vocabulary.update(load_json(preset, "added_tokens.json"))
+    return vocabulary, merges
+
+
+def _language_tokens(vocabulary, generation_config):
+    """The language tokens, from `lang_to_id` or from the vocabulary layout."""
+    if generation_config.get("lang_to_id"):
+        return {
+            token: int(token_id)
+            for token, token_id in generation_config["lang_to_id"].items()
+        }
+    # Whisper places the language tokens right after `<|startoftranscript|>`
+    # and right before `<|translate|>`.
+    start = vocabulary["<|startoftranscript|>"]
+    end = vocabulary["<|translate|>"]
+    return {
+        token: token_id
+        for token, token_id in vocabulary.items()
+        if start < token_id < end
+    }
 
 
 def convert_tokenizer(cls, preset, **kwargs):
-    vocab_file = get_file(preset, "vocab.json")
-    merges_file = get_file(preset, "merges.txt")
-    added_tokens_file = get_file(preset, "added_tokens.json")
-    with open(vocab_file, "r", encoding="utf-8") as f:
-        vocab = json.load(f)
-    with open(added_tokens_file, "r", encoding="utf-8") as f:
-        added_tokens = json.load(f)
-    # `<|endoftext|>` lives in `vocab.json` for HF Whisper while every other
-    # `<|...|>` token (start-of-transcript, language codes, timestamps, ...)
-    # lives in `added_tokens.json`. Pull them all into one map.
-    pipe_tokens = {
-        token: token_id
-        for token, token_id in {**vocab, **added_tokens}.items()
-        if token.startswith("<|") and token.endswith("|>")
+    vocabulary, merges = _load_vocabulary_and_merges(preset)
+    transformers_config = load_json(preset, "config.json")
+    generation_config = _load_generation_config(preset)
+
+    # Only the named control tokens are special. The 1,501 timestamp tokens
+    # stay in the vocabulary but are not made unsplittable, which keeps BPE
+    # splitting fast.
+    special_tokens = {
+        token: vocabulary[token]
+        for token in _CONTROL_TOKENS
+        if token in vocabulary
     }
-    special_tokens, language_tokens = _split_special_and_language_tokens(
-        pipe_tokens
-    )
+    language_tokens = None
+    if _is_multilingual(generation_config, transformers_config["vocab_size"]):
+        language_tokens = _language_tokens(vocabulary, generation_config)
     return cls(
-        vocabulary=vocab_file,
-        merges=merges_file,
+        vocabulary=vocabulary,
+        merges=merges,
         special_tokens=special_tokens,
-        language_tokens=language_tokens or None,
+        language_tokens=language_tokens,
         **kwargs,
     )
 
 
 def load_audio_converter_config(preset, transformers_config):
     """Return WhisperAudioConverter kwargs from HF preprocessor config."""
-    feature_extractor = load_json(preset, "preprocessor_config.json")
+    if check_file_exists(preset, "preprocessor_config.json"):
+        feature_extractor = load_json(preset, "preprocessor_config.json")
+    else:
+        # `transformers` v5 `WhisperProcessor.save_pretrained` nests the
+        # feature extractor config in `processor_config.json`.
+        feature_extractor = load_json(preset, "processor_config.json")[
+            "feature_extractor"
+        ]
     return {
         "num_mels": feature_extractor["feature_size"],
         "num_fft_bins": feature_extractor["n_fft"],
@@ -270,3 +327,47 @@ def load_audio_converter_config(preset, transformers_config):
         "sampling_rate": feature_extractor["sampling_rate"],
         "max_audio_length": feature_extractor["chunk_length"],
     }
+
+
+def load_preprocessor_config(preset, transformers_config):
+    """Return `WhisperAudioToTextPreprocessor` kwargs.
+
+    `decoder_sequence_length` follows `max_target_positions`, and the language
+    and task come from `forced_decoder_ids` in `generation_config.json` when
+    it pins them.
+    """
+    config = {
+        "decoder_sequence_length": transformers_config["max_target_positions"],
+    }
+    generation_config = _load_generation_config(preset)
+    if not _is_multilingual(
+        generation_config, transformers_config["vocab_size"]
+    ):
+        return config
+    id_to_language = {
+        token_id: token
+        for token, token_id in generation_config.get("lang_to_id", {}).items()
+    }
+    id_to_task = {
+        token_id: task
+        for task, token_id in generation_config.get("task_to_id", {}).items()
+    }
+    forced_decoder_ids = generation_config.get("forced_decoder_ids") or []
+    for _, token_id in forced_decoder_ids:
+        if token_id in id_to_language:
+            config["language"] = id_to_language[token_id]
+        elif token_id in id_to_task:
+            config["task"] = id_to_task[token_id]
+    return config
+
+
+def load_task_config(preset, transformers_config):
+    """Return the token suppression config for `WhisperAudioToText`."""
+    generation_config = _load_generation_config(preset)
+    config = {}
+    for key in ("suppress_tokens", "begin_suppress_tokens"):
+        # Older checkpoints only carry these in `config.json`.
+        value = generation_config.get(key, transformers_config.get(key))
+        if value:
+            config[key] = [int(token_id) for token_id in value]
+    return config

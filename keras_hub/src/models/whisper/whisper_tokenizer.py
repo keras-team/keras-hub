@@ -102,12 +102,26 @@ class WhisperTokenizer(BytePairTokenizer):
         self.transcribe_token_id = special_tokens[self.transcribe_token]
 
         # Aliases matching the naming convention used elsewhere in the library
-        # (e.g. `Seq2SeqLMPreprocessor`, `CausalLM.generate`).
+        # (e.g. `Seq2SeqLMPreprocessor`, `CausalLM.generate`), set the same
+        # way as `Tokenizer._add_special_token`.
+        self.start_token = self.bos_token
         self.start_token_id = self.bos_token_id
+        self.end_token = self.eos_token
         self.end_token_id = self.eos_token_id
 
         self._special_token_dict = special_tokens
         self.language_tokens = language_tokens
+        if (
+            kwargs.get("unsplittable_tokens") is None
+            and language_tokens is not None
+        ):
+            # Keep language tags such as `<|en|>` atomic, like the special
+            # tokens, so they map to their own ids.
+            kwargs["unsplittable_tokens"] = list(special_tokens) + [
+                token
+                for token in language_tokens
+                if token not in special_tokens
+            ]
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,

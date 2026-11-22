@@ -187,6 +187,51 @@ class NoTensorflow(unittest.TestCase):
         unbatched = preprocessor.generate_preprocess(" airplane at airport")
         self.assertEqual(np.shape(unbatched["decoder_token_ids"]), (8,))
 
+    def test_whisper_generate_preprocess_works(self):
+        # Whisper's audio converter, prefix packing and postprocessing all
+        # have a pure Python path.
+        merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
+        special_tokens = {
+            token: len(vocab) + i
+            for i, token in enumerate(
+                [
+                    "<|endoftext|>",
+                    "<|startoftranscript|>",
+                    "<|notimestamps|>",
+                    "<|transcribe|>",
+                    "<|translate|>",
+                ]
+            )
+        }
+        tokenizer = keras_hub.models.WhisperTokenizer(
+            vocabulary=vocab, merges=merges, special_tokens=special_tokens
+        )
+        audio_converter = keras_hub.layers.WhisperAudioConverter(
+            num_mels=80, max_audio_length=1
+        )
+        preprocessor = keras_hub.models.WhisperAudioToTextPreprocessor(
+            audio_converter=audio_converter,
+            tokenizer=tokenizer,
+            decoder_sequence_length=8,
+        )
+        audio = np.zeros((2, 16000), dtype="float32")
+        batched = preprocessor.generate_preprocess(
+            {"audio": audio, "text": " airplane"}
+        )
+        self.assertEqual(np.shape(batched["encoder_features"]), (2, 100, 80))
+        self.assertEqual(np.shape(batched["decoder_token_ids"]), (2, 8))
+        unbatched = preprocessor.generate_preprocess({"audio": audio[0]})
+        self.assertEqual(np.shape(unbatched["decoder_token_ids"]), (8,))
+        outputs = preprocessor.generate_postprocess(batched)
+        self.assertEqual(outputs, [" airplane", " airplane"])
+
     def test_tf_only_layer_errors(self):
         # Layers that can only run on the TensorFlow path raise an informative
         # error at construction rather than failing on first call.
