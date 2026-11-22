@@ -359,7 +359,7 @@ class Gemma3CausalLM(CausalLM):
         }
         if images is not None:
             output_dict["images"] = images
-    
+
         return output_dict
 
     def generate(
