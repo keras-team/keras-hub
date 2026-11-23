@@ -594,6 +594,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
                 "split": self.split,
+                "split_on_cjk": self.split_on_cjk,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
                 "special_tokens": self._init_special_tokens,
