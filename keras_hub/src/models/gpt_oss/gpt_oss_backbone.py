@@ -47,7 +47,7 @@ class GptOssBackbone(Backbone):
         rope_max_wavelength: int. The maximum angular wavelength of
             the sine/cosine curves, for rotary embeddings. Defaults to `10000`.
         rope_scaling_factor: float. The scaling factor for
-            calculation of roatary embedding. Defaults to `1.0`.
+            calculation of rotary embedding. Defaults to `1.0`.
         layer_norm_epsilon: float. Epsilon for the layer
             normalization layers in the transformer decoder. Defaults to `1e-6`.
         sliding_window: int. The sliding window for the attention
