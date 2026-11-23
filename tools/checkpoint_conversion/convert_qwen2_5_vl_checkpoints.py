@@ -289,7 +289,7 @@ def _compare_media_parity(
         f"keras={keras_valid}, hf={hf_input_ids.shape[1]}"
     )
     keras_ids = ops.convert_to_numpy(keras_preprocessed["token_ids"])
-    np.testing.assert_array_equal(keras_ids, hf_input_ids)
+    np.testing.assert_array_equal(keras_ids[:, :keras_valid], hf_input_ids)
     print(f"  {label} token IDs match.")
 
     keras_real = keras_logits[:, :keras_valid]
