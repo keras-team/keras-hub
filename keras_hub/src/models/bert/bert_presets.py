@@ -428,4 +428,44 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/mxbai-embed/keras/mxbai_embed_xsmall_v1_en/1",
     },
+    # GTE family: Alibaba DAMO Academy General Text Embedding models.
+    "thenlper_gte_small": {
+        "metadata": {
+            "description": (
+                "12-layer GTE small English sentence embedding model "
+                "(thenlper/gte-small). Maps text to 384-dimensional "
+                "L2-normalized mean-pooled dense vectors for retrieval, "
+                "semantic similarity, and clustering."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/gte/keras/thenlper_gte_small/1",
+    },
+    "thenlper_gte_base": {
+        "metadata": {
+            "description": (
+                "12-layer GTE base English sentence embedding model "
+                "(thenlper/gte-base). Maps text to 768-dimensional "
+                "L2-normalized mean-pooled dense vectors for retrieval, "
+                "semantic similarity, and clustering."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/gte/keras/thenlper_gte_base/1",
+    },
+    "thenlper_gte_large": {
+        "metadata": {
+            "description": (
+                "24-layer GTE large English sentence embedding model "
+                "(thenlper/gte-large). Maps text to 1024-dimensional "
+                "L2-normalized mean-pooled dense vectors for retrieval, "
+                "semantic similarity, and clustering."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/gte/keras/thenlper_gte_large/1",
+    },
 }

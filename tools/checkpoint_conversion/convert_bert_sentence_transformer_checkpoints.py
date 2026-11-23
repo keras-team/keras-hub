@@ -96,6 +96,10 @@ SENTENCE_TRANSFORMER_PRESET_MAP = {
     "msmarco_minilm_l12_cos_v5_en": (
         "sentence-transformers/msmarco-MiniLM-L12-cos-v5"
     ),
+    # GTE Models
+    "thenlper_gte_small": "thenlper/gte-small",
+    "thenlper_gte_base": "thenlper/gte-base",
+    "thenlper_gte_large": "thenlper/gte-large",
 }
 
 # Combined map for --preset lookup.
