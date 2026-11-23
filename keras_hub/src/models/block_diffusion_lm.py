@@ -113,36 +113,6 @@ class BlockDiffusionLM(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if keras.config.backend() == "openvino":
-            from keras_hub.src.utils.openvino_utils import ov_infer
-
-            def wrapped_generate_function(
-                inputs,
-                max_length=None,
-                stop_token_ids=None,
-                **kwargs,
-            ):
-                # `ov_infer` reuses the compiled model across calls. Pass the
-                # extra generation arguments as model inputs, so each call
-                # reads its own values instead of the first call's constants.
-                kwarg_names = tuple(kwargs)
-                inputs = tree.map_structure(
-                    ops.convert_to_numpy, {**inputs, **kwargs}
-                )
-
-                def fn(x, stops):
-                    x = dict(x)
-                    step_kwargs = {name: x.pop(name) for name in kwarg_names}
-                    return self.generate_step(
-                        x,
-                        max_length=max_length,
-                        stop_token_ids=stops,
-                        **step_kwargs,
-                    )
-
-                return ov_infer(self, inputs, stop_token_ids, fn)
-
-            self.generate_function = wrapped_generate_function
 
         if keras.config.backend() == "torch":
             import torch

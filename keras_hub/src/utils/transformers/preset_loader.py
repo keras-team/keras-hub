@@ -5,7 +5,6 @@ import inspect
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
 from keras_hub.src.utils.preset_utils import PresetLoader
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
 from keras_hub.src.utils.transformers import convert_bert
@@ -23,6 +22,7 @@ from keras_hub.src.utils.transformers import convert_gemma3n
 from keras_hub.src.utils.transformers import convert_gemma4
 from keras_hub.src.utils.transformers import convert_gemma4_assistant
 from keras_hub.src.utils.transformers import convert_gpt2
+from keras_hub.src.utils.transformers import convert_gpt_neo_x
 from keras_hub.src.utils.transformers import convert_gpt_oss
 from keras_hub.src.utils.transformers import convert_llama3
 from keras_hub.src.utils.transformers import convert_metaclip_2
@@ -36,9 +36,11 @@ from keras_hub.src.utils.transformers import convert_muse_glimmer
 from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
+from keras_hub.src.utils.transformers import convert_qwen2_vl
 from keras_hub.src.utils.transformers import convert_qwen3
 from keras_hub.src.utils.transformers import convert_qwen3_5
 from keras_hub.src.utils.transformers import convert_qwen3_5_moe
+from keras_hub.src.utils.transformers import convert_qwen3_asr
 from keras_hub.src.utils.transformers import convert_qwen3_moe
 from keras_hub.src.utils.transformers import convert_qwen_moe
 from keras_hub.src.utils.transformers import convert_roberta
@@ -97,6 +99,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gpt2
         elif model_type == "gpt_oss":
             self.converter = convert_gpt_oss
+        elif model_type == "gpt_neox":
+            self.converter = convert_gpt_neo_x
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
@@ -116,6 +120,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_vit
         elif model_type == "qwen2":
             self.converter = convert_qwen
+        elif model_type == "qwen2_vl":
+            self.converter = convert_qwen2_vl
         elif model_type == "mixtral":
             self.converter = convert_mixtral
         elif model_type == "mobilebert":
@@ -126,6 +132,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen3_moe
         elif model_type == "qwen3":
             self.converter = convert_qwen3
+        elif model_type == "qwen3_asr":
+            self.converter = convert_qwen3_asr
         elif model_type == "qwen3_5_moe":
             self.converter = convert_qwen3_5_moe
         elif model_type == "qwen3_5":
@@ -168,7 +176,6 @@ class TransformersPresetLoader(PresetLoader):
             keras_config = self.converter.convert_backbone_config(self.config)
         backbone = cls(**{**keras_config, **kwargs})
         if load_weights:
-            jax_memory_cleanup(backbone)
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
