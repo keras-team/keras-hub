@@ -268,8 +268,9 @@ def _compare_media_parity(
     pixel_values_np = hf_pixel_values.reshape(-1, C, T, pH, pW)
     pixel_values_np = np.transpose(pixel_values_np, (0, 2, 3, 4, 1))
 
-    grid_key = "image_grid_thw" if label == "image" else "video_grid_thw"
-    keras_grid = ops.convert_to_numpy(keras_preprocessed[grid_key])
+    # Single-media preprocess emits the combined grid under
+    # "image_grid_thw" for both modalities.
+    keras_grid = ops.convert_to_numpy(keras_preprocessed["image_grid_thw"])
     np.testing.assert_array_equal(keras_grid, hf_grid_thw)
     print(f"  {label} grid_thw matches HF.")
 
