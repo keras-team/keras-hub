@@ -220,9 +220,10 @@ def validate_text_output(keras_model, hf_results):
     np.testing.assert_array_equal(keras_valid, hf_ids[0])
     print("  Token IDs match.")
 
-    keras_logits = ops.convert_to_numpy(keras_model(keras_preprocessed)).astype(
-        np.float32
-    )
+    with torch.no_grad():
+        keras_logits = ops.convert_to_numpy(
+            keras_model(keras_preprocessed)
+        ).astype(np.float32)
 
     hf_logits = hf_results["text_logits"]
     abs_diff = np.abs(keras_logits - hf_logits)
@@ -232,9 +233,10 @@ def validate_text_output(keras_model, hf_results):
     print("  Logits match within atol=1e-3.")
 
     if not FLAGS.skip_generation:
-        keras_output = keras_model.generate(
-            TEXT_PROMPT, max_length=int(hf_ids.shape[1]) + 32
-        )
+        with torch.no_grad():
+            keras_output = keras_model.generate(
+                TEXT_PROMPT, max_length=int(hf_ids.shape[1]) + 32
+            )
         keras_text = extract_response(keras_output)
         hf_text = extract_response(hf_results["text_generated"])
         print(f"  KerasHub: {keras_text}")
@@ -278,9 +280,10 @@ def _compare_media_parity(
     np.testing.assert_allclose(keras_pixels, pixel_values_np, atol=1e-5)
     print(f"  {label} pixels match HF processor (atol=1e-5).")
 
-    keras_logits = ops.convert_to_numpy(keras_model(keras_preprocessed)).astype(
-        np.float32
-    )
+    with torch.no_grad():
+        keras_logits = ops.convert_to_numpy(
+            keras_model(keras_preprocessed)
+        ).astype(np.float32)
 
     # Sequence lengths must match exactly — no common-prefix slicing.
     keras_mask = ops.convert_to_numpy(keras_preprocessed["padding_mask"])
@@ -351,13 +354,14 @@ def validate_multimodal_output(keras_model, hf_results):
     )
 
     if not FLAGS.skip_generation:
-        keras_output = keras_model.generate(
-            {
-                "prompts": [MULTIMODAL_PROMPT],
-                "images": [np.array(hf_results["raw_image"])],
-            },
-            max_length=int(hf_results["mm_input_ids"].shape[1]) + 32,
-        )
+        with torch.no_grad():
+            keras_output = keras_model.generate(
+                {
+                    "prompts": [MULTIMODAL_PROMPT],
+                    "images": [np.array(hf_results["raw_image"])],
+                },
+                max_length=int(hf_results["mm_input_ids"].shape[1]) + 32,
+            )
         keras_text = (
             keras_output[0] if isinstance(keras_output, list) else keras_output
         )
