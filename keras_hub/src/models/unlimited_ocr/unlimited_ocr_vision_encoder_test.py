@@ -54,6 +54,10 @@ class UnlimitedOCRVisionEncoderTest(TestCase):
         self.assertEqual(tuple(global_features.shape), (1, 16, 32))
         self.assertEqual(tuple(tile_features.shape), (3, 9, 32))
 
+    def test_empty_image_batch(self):
+        output = self.encoder(np.zeros((0, 64, 64, 3), "float32"))
+        self.assertEqual(tuple(output.shape), (0, 4, 32))
+
     def test_output_concatenates_clip_before_sam(self):
         # The last channels are the SAM features. The first are CLIP.
         encoder = self.encoder

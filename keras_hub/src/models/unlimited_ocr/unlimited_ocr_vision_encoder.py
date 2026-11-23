@@ -242,6 +242,18 @@ class UnlimitedOCRVisionEncoder(keras.Model):
         self.built = True
 
     def call(self, x):
+        # An empty batch breaks some reshapes and XLA shape checks. Append one
+        # zero image, run `max(batch, 1)` images, and slice the output back.
+        batch = ops.shape(x)[0]
+        run_batch = (
+            max(batch, 1) if isinstance(batch, int) else ops.maximum(batch, 1)
+        )
+        zero_image = ops.zeros((1, *x.shape[1:]), dtype=x.dtype)
+        x = ops.concatenate([x, zero_image], axis=0)
+        x = ops.take(x, ops.arange(run_batch), axis=0)
+        return ops.take(self._encode(x), ops.arange(batch), axis=0)
+
+    def _encode(self, x):
         # === SAM encoder ===
         x = self.sam_patch_embedding(x)
         x = self.sam_position_embedding(x)

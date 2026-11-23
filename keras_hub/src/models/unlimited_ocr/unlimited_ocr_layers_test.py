@@ -30,6 +30,14 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
     UnlimitedOCRVisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
+
+
+def _tolerance(atol, rtol, gpu_atol, gpu_rtol):
+    """Return the tolerances. GPU matmuls use TF32 and need larger ones."""
+    if running_on_gpu():
+        return {"atol": gpu_atol, "rtol": gpu_rtol}
+    return {"atol": atol, "rtol": rtol}
 
 
 class UnlimitedOCRSparseMoeBlockTest(TestCase):
@@ -80,7 +88,9 @@ class UnlimitedOCRSparseMoeBlockTest(TestCase):
             ],
         ]
         output = ops.convert_to_numpy(block(x))
-        self.assertAllClose(output[:, :, :4], expected, atol=1e-3, rtol=1e-4)
+        self.assertAllClose(
+            output[:, :, :4], expected, **_tolerance(1e-3, 1e-4, 0.1, 2e-3)
+        )
 
     def test_group_limited_greedy_routing(self):
         init_kwargs = {
@@ -119,7 +129,9 @@ class UnlimitedOCRSparseMoeBlockTest(TestCase):
             ],
         ]
         output = ops.convert_to_numpy(block(x))
-        self.assertAllClose(output[:, :, :4], expected, atol=1e-3, rtol=1e-4)
+        self.assertAllClose(
+            output[:, :, :4], expected, **_tolerance(1e-3, 1e-4, 0.1, 2e-3)
+        )
 
     def test_invalid_group_arguments(self):
         with self.assertRaises(ValueError):
@@ -152,7 +164,9 @@ class UnlimitedOCRSparseMoeBlockTest(TestCase):
         for position in range(5):
             step = ops.convert_to_numpy(block(x[:, position : position + 1]))
             self.assertAllClose(
-                step[:, 0], full[:, position], atol=1e-4, rtol=1e-4
+                step[:, 0],
+                full[:, position],
+                **_tolerance(1e-4, 1e-4, 0.1, 2e-3),
             )
 
 
@@ -214,7 +228,37 @@ class UnlimitedOCRExpertsTest(TestCase):
         layer.down_kernel.assign(self.down_kernel)
         dense = layer(self.tokens, self.routing_weights)
         gathered = layer(self.tokens, self.routing_weights, self.top_k_index)
-        self.assertAllClose(gathered, dense, atol=1e-5, rtol=1e-5)
+        self.assertAllClose(
+            gathered, dense, **_tolerance(1e-5, 1e-5, 1e-2, 1e-2)
+        )
+
+    def test_silu_runs_in_float32_for_bfloat16(self):
+        # PyTorch `F.silu` computes in float32 and casts back to bfloat16.
+        layer = UnlimitedOCRExperts(
+            num_experts=1,
+            hidden_dim=16,
+            intermediate_dim=8,
+            dtype="bfloat16",
+        )
+        x = np.random.RandomState(1).normal(size=(64, 16)).astype("float32")
+        routing_weights = np.ones((64, 1), "float32")
+        layer(x, routing_weights)
+        layer.gate_up_kernel.assign(self.gate_up_kernel[:1])
+        layer.down_kernel.assign(self.down_kernel[:1])
+        hidden_states = ops.cast(x, "bfloat16")
+        gate_up = ops.matmul(hidden_states, layer.gate_up_kernel[0])
+        gate, up = ops.split(gate_up, 2, axis=-1)
+        activated = ops.cast(ops.silu(ops.cast(gate, "float32")), "bfloat16")
+        expected = ops.matmul(up * activated, layer.down_kernel[0])
+        dense = layer(x, routing_weights)
+        gathered = layer(x, routing_weights, np.zeros((64, 1), "int32"))
+        for output in (dense, gathered):
+            self.assertAllClose(
+                ops.cast(output, "float32"),
+                ops.cast(expected, "float32"),
+                atol=1e-6,
+                rtol=1e-6,
+            )
 
 
 class UnlimitedOCRResizeTest(TestCase):
@@ -229,8 +273,6 @@ class UnlimitedOCRResizeTest(TestCase):
 
     def test_bicubic_resize_matches_keras_antialias_resize(self):
         # Keras resizes with the same kernel as PyTorch `antialias=True`.
-        if keras.config.backend() == "openvino":
-            self.skipTest("The bicubic resize of OpenVINO ignores `antialias`.")
         x = np.random.normal(size=(1, 16, 16, 3)).astype("float32")
         for size in ((10, 10), (5, 7), (16, 16)):
             expected = ops.image.resize(
@@ -241,7 +283,9 @@ class UnlimitedOCRResizeTest(TestCase):
                 data_format="channels_last",
             )
             actual = _resize_bicubic(ops.convert_to_tensor(x), size)
-            self.assertAllClose(actual, expected, atol=1e-4, rtol=1e-4)
+            self.assertAllClose(
+                actual, expected, **_tolerance(1e-4, 1e-4, 1e-2, 1e-2)
+            )
 
 
 class UnlimitedOCRSamPositionEmbeddingTest(TestCase):
@@ -477,7 +521,7 @@ class UnlimitedOCRImageFeatureExtractorTest(TestCase):
             run_training_check=False,
         )
 
-    def test_empty_batches_skip_the_encoder(self):
+    def test_empty_batches(self):
         global_features, local_features = self.extractor(
             np.zeros((2, 0, 128, 128, 3), "float32"),
             np.zeros((2, 0, 80, 80, 3), "float32"),

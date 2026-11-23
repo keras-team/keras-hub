@@ -22,7 +22,7 @@ class UnlimitedOCRCausalLM(CausalLM):
 
     This model has a `generate()` method. The `sampler` argument of
     `compile()` controls the generation strategy. By default, the model uses
-    `"top_k"` sampling. For OCR, use `sampler="greedy"`.
+    `"greedy"` sampling.
 
     During generation, the model uses the reference sliding window attention
     (R-SWA). Each new token attends to all prompt tokens, including the image
@@ -65,6 +65,23 @@ class UnlimitedOCRCausalLM(CausalLM):
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
+        sampler="greedy",
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            sampler=sampler,
+            **kwargs,
+        )
 
     def _normalize_generate_inputs(self, inputs):
         """Normalize the inputs of `generate()`.
@@ -204,40 +221,30 @@ class UnlimitedOCRCausalLM(CausalLM):
         row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user token.
         index = ops.min(row_lengths)
-        first_index = index
 
-        # The first decode step feeds the last prompt token as plain text.
-        # The step has no image features, so an image token at this position
-        # gets the wrong output. The prefill pass has the right output.
+        # The first decode step of a row feeds its last prompt token as plain
+        # text. The step has no image features, so an image token at this
+        # position gets the wrong output. The prefill pass has the right
+        # output. Each row takes the prefill output at its last prompt token.
         batch_size = ops.shape(token_ids)[0]
+        last_index = ops.maximum(row_lengths, 1) - 1
+        last_index = ops.broadcast_to(
+            last_index[:, None, None],
+            (batch_size, 1, ops.shape(hidden_states)[-1]),
+        )
         prefill_hidden = ops.squeeze(
-            ops.slice(
-                hidden_states,
-                [0, first_index - 1, 0],
-                [batch_size, 1, ops.shape(hidden_states)[-1]],
-            ),
-            axis=1,
+            ops.take_along_axis(hidden_states, last_index, axis=1), axis=1
         )
         prefill_logits = self.backbone.token_embedding(
             prefill_hidden, reverse=True
         )
 
-        # OpenVINO loop bodies read only loop variables. The sampler passes
-        # `cache` through the loop, so the cache carries these tensors. Each
-        # tensor has the batch size as its first axis.
-        first_index = ops.broadcast_to(first_index, (batch_size,))
-        cache = (
-            cache,
-            prefill_logits,
-            prefill_hidden,
-            row_lengths,
-            first_index,
-        )
+        # The sampler passes `cache` through the loop, so the cache carries
+        # these tensors. Each tensor has the batch size as its first axis.
+        cache = (cache, prefill_logits, prefill_hidden, row_lengths)
 
         def next(prompt, cache, index):
-            cache, prefill_logits, prefill_hidden, row_lengths, first_index = (
-                cache
-            )
+            cache, prefill_logits, prefill_hidden, row_lengths = cache
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
@@ -250,17 +257,12 @@ class UnlimitedOCRCausalLM(CausalLM):
             )
             logits = ops.squeeze(logits, axis=1)
             hidden_states = ops.squeeze(hidden_states, axis=1)
-            is_first_step = ops.equal(index, first_index[0])
+            # A row is at its first step when `index` equals its length.
+            is_first_step = ops.equal(index, row_lengths)[:, None]
             return (
                 ops.where(is_first_step, prefill_logits, logits),
                 ops.where(is_first_step, prefill_hidden, hidden_states),
-                (
-                    cache,
-                    prefill_logits,
-                    prefill_hidden,
-                    row_lengths,
-                    first_index,
-                ),
+                (cache, prefill_logits, prefill_hidden, row_lengths),
             )
 
         token_ids = self.sampler(

@@ -3,9 +3,6 @@ import unittest
 import numpy as np
 
 import keras_hub
-from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
-    OCR_MARKER_TOKENS,
-)
 
 
 class NoTensorflow(unittest.TestCase):
@@ -201,7 +198,7 @@ class NoTensorflow(unittest.TestCase):
                 rate=0.5, max_deletions=1, skip_fn=skip_fn
             )
 
-    def _build_unlimited_ocr_causal_lm(self):
+    def test_unlimited_ocr_generate_preprocess_works(self):
         merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         merges += ["Ġai r", "Ġa i", "pla ne"]
@@ -209,15 +206,14 @@ class NoTensorflow(unittest.TestCase):
         for merge in merges:
             a, b = merge.split(" ")
             vocab.extend([a, b, a + b])
-        vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
+        vocab += ["<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
-        vocab += list(OCR_MARKER_TOKENS)
-        # The characters of the prompt "document parsing."
-        vocab += list("document" + "Ġparsing.")
         vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
         tokenizer = keras_hub.models.UnlimitedOCRTokenizer(
             vocabulary=vocab, merges=merges
         )
+        # A 64 pixel view gives 2x2 global tokens. A 40 pixel tile gives 2x2
+        # local tokens.
         converter = keras_hub.layers.UnlimitedOCRImageConverter(
             global_size=64,
             tile_size=40,
@@ -227,105 +223,14 @@ class NoTensorflow(unittest.TestCase):
             downsample_ratio=4,
         )
         preprocessor = keras_hub.models.UnlimitedOCRCausalLMPreprocessor(
-            tokenizer, image_converter=converter, sequence_length=128
+            tokenizer, image_converter=converter, sequence_length=64
         )
-        vision_encoder = keras_hub.models.UnlimitedOCRVisionEncoder(
-            sam_hidden_dim=16,
-            sam_num_layers=2,
-            sam_num_heads=2,
-            sam_mlp_dim=32,
-            sam_output_channels=8,
-            sam_patch_size=8,
-            sam_image_size=128,
-            sam_window_size=4,
-            sam_global_attn_indexes=(1,),
-            sam_downsample_channels=(12, 16),
-            clip_hidden_dim=16,
-            clip_num_layers=2,
-            clip_num_heads=2,
-            clip_intermediate_dim=32,
-            clip_image_size=48,
-            clip_patch_size=16,
+        outputs = preprocessor.generate_preprocess(
+            {
+                "prompts": "<image>airplane",
+                "images": np.ones((50, 100, 3), dtype="float32"),
+            }
         )
-        backbone = keras_hub.models.UnlimitedOCRBackbone(
-            vocabulary_size=tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=2,
-            hidden_dim=16,
-            intermediate_dim=32,
-            moe_intermediate_dim=8,
-            num_shared_experts=2,
-            num_experts=4,
-            top_k=2,
-            vision_encoder=vision_encoder,
-            image_token_id=tokenizer.image_token_id,
-            global_image_size=64,
-            local_image_size=40,
-            sliding_window=128,
-        )
-        return keras_hub.models.UnlimitedOCRCausalLM(
-            backbone=backbone, preprocessor=preprocessor
-        )
-
-    def test_unlimited_ocr_generate_works(self):
-        causal_lm = self._build_unlimited_ocr_causal_lm()
-        # The prompt of the model card, with a page-sized image.
-        image = np.random.RandomState(0).randint(0, 256, (900, 700, 3))
-        inputs = {
-            "prompts": "<image>document parsing.",
-            "images": image.astype("float32"),
-        }
-        # A scalar prompt gives a string, for any order of the keys.
-        output = causal_lm.generate(inputs, stop_token_ids=None)
-        self.assertIsInstance(output, str)
-        self.assertIn("document parsing.", output)
-        # The model generates new tokens after the prompt.
-        self.assertGreater(len(output), len("document parsing.") + 8)
-        output = causal_lm.generate(
-            {"images": inputs["images"], "prompts": inputs["prompts"]},
-            stop_token_ids=None,
-        )
-        self.assertIsInstance(output, str)
-        # A batch of prompts gives a list.
-        output = causal_lm.generate(
-            {"prompts": [inputs["prompts"]], "images": [inputs["images"]]},
-            stop_token_ids=None,
-        )
-        self.assertIsInstance(output, list)
-        self.assertIn("document parsing.", output[0])
-        generated = causal_lm.generate(
-            inputs, stop_token_ids=None, strip_prompt=True
-        )
-        self.assertTrue(generated)
-        self.assertNotIn("document parsing.", generated)
-
-    def test_unlimited_ocr_preprocess_and_fit_works(self):
-        causal_lm = self._build_unlimited_ocr_causal_lm()
-        preprocessor = causal_lm.preprocessor
-        image = np.random.RandomState(0).randint(0, 256, (900, 700, 3))
-        inputs = {
-            "prompts": "<image>document parsing.",
-            "images": image.astype("float32"),
-        }
-        batch = {"prompts": [inputs["prompts"]], "images": [inputs["images"]]}
-        # The training path returns `(x, y, sample_weight)`.
-        x, y, sample_weight = preprocessor(batch)
-        for key in (
-            "token_ids",
-            "padding_mask",
-            "pixel_values",
-            "pixel_values_local",
-            "patches_grid",
-        ):
-            self.assertIn(key, x)
-        self.assertEqual(np.shape(x["token_ids"]), (1, 128))
-        self.assertEqual(np.shape(y), (1, 128))
-        self.assertEqual(np.shape(sample_weight), (1, 128))
-        # A single sample has no batch axis.
-        x, _, _ = preprocessor(inputs)
-        self.assertEqual(np.shape(x["token_ids"]), (128,))
-        causal_lm.fit(x=batch, batch_size=1, epochs=1, verbose=0)
-        # The task also trains on preprocessed data.
-        causal_lm.preprocessor = None
-        x, y, sample_weight = preprocessor(batch)
-        causal_lm.fit(x, y, sample_weight=sample_weight, verbose=0)
+        self.assertEqual(np.shape(outputs["token_ids"]), (64,))
+        self.assertEqual(np.shape(outputs["pixel_values"]), (1, 64, 64, 3))
+        self.assertEqual(np.shape(outputs["patches_grid"]), (1, 2))

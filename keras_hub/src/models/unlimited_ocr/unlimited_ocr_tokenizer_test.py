@@ -1,10 +1,8 @@
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
-    OCR_MARKER_TOKENS,
-)
-from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     UnlimitedOCRTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class UnlimitedOCRTokenizerTest(TestCase):
@@ -18,10 +16,18 @@ class UnlimitedOCRTokenizerTest(TestCase):
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         self.vocab += ["<｜▁pad▁｜>", "<image>"]
-        self.vocab += list(OCR_MARKER_TOKENS)
+        self.markers = ["<|det|>", "<|/det|>", "<|grounding|>"]
+        self.vocab += self.markers
         self.vocab = sorted(set(self.vocab))
         self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
-        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        # The converter passes the added tokens of `tokenizer.json`.
+        special_tokens = ["<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
+        special_tokens += ["<｜▁pad▁｜>", "<image>"]
+        self.init_kwargs = {
+            "vocabulary": self.vocab,
+            "merges": self.merges,
+            "unsplittable_tokens": special_tokens + self.markers,
+        }
         self.input_data = [
             "<｜begin▁of▁sentence｜>airplane at airport<｜end▁of▁sentence｜>",
             "<image><|grounding|> airplane airport",
@@ -48,7 +54,7 @@ class UnlimitedOCRTokenizerTest(TestCase):
 
     def test_markers_are_single_tokens_but_not_special(self):
         tokenizer = UnlimitedOCRTokenizer(**self.init_kwargs)
-        for marker in OCR_MARKER_TOKENS:
+        for marker in self.markers:
             self.assertEqual(
                 list(tokenizer(marker)), [self.vocab[marker]], msg=marker
             )
@@ -86,3 +92,17 @@ class UnlimitedOCRTokenizerTest(TestCase):
     def test_no_prefix_space_is_added(self):
         tokenizer = UnlimitedOCRTokenizer(**self.init_kwargs)
         self.assertFalse(tokenizer.add_prefix_space)
+
+    def test_detokenize_in_tf_data(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        tokenizer = UnlimitedOCRTokenizer(**self.init_kwargs)
+        dataset = (
+            tf.data.Dataset.from_tensor_slices(self.input_data)
+            .batch(2)
+            .map(tokenizer)
+            .map(tokenizer.detokenize)
+        )
+        outputs = [x.decode("utf-8") for x in next(iter(dataset)).numpy()]
+        expected = tokenizer.detokenize(tokenizer(self.input_data))
+        self.assertEqual(outputs, list(expected))

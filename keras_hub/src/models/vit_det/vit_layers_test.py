@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -6,6 +7,14 @@ from keras_hub.src.models.vit_det.vit_layers import (
 )
 from keras_hub.src.models.vit_det.vit_layers import WindowedTransformerEncoder
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
+
+
+def _tolerance(atol, rtol, gpu_atol, gpu_rtol):
+    """Return the tolerances. GPU matmuls use TF32 and need larger ones."""
+    if running_on_gpu():
+        return {"atol": gpu_atol, "rtol": gpu_rtol}
+    return {"atol": atol, "rtol": rtol}
 
 
 class AddRelativePositionalEmbeddingTest(TestCase):
@@ -30,6 +39,19 @@ class AddRelativePositionalEmbeddingTest(TestCase):
         ]
         self.assertAllClose(
             rel_pos[self.rows, self.cols], expected, atol=1e-4, rtol=1e-4
+        )
+
+    def test_get_rel_pos_when_table_resizes_with_channels_first(self):
+        layer = AddRelativePositionalEmbedding(input_size=(64, 64), key_dim=4)
+        expected = ops.convert_to_numpy(layer._get_rel_pos(40, 40, self.table))
+        data_format = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_first")
+        try:
+            rel_pos = layer._get_rel_pos(40, 40, self.table)
+        finally:
+            keras.config.set_image_data_format(data_format)
+        self.assertAllClose(
+            ops.convert_to_numpy(rel_pos), expected, atol=1e-5, rtol=1e-5
         )
 
     def test_get_rel_pos_when_table_matches(self):
@@ -82,7 +104,9 @@ class AddRelativePositionalEmbeddingTest(TestCase):
             ],
         ]
         self.assertAllClose(
-            output[:, ::23, ::23], expected, atol=1e-3, rtol=1e-4
+            output[:, ::23, ::23],
+            expected,
+            **_tolerance(1e-3, 1e-4, 1e-2, 1e-2),
         )
 
     def test_bias_equals_the_terms_added_to_a_zero_map(self):

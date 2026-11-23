@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     UnlimitedOCRTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 from keras_hub.src.utils.transformers import convert_unlimited_ocr
 
 IMAGE_TOKEN_ID = 99
@@ -149,6 +151,11 @@ def _build_tiny_hf_model(transformers, num_key_value_heads=4):
                 values = values + 1.0
             parameter.copy_(values)
     return model.eval()
+
+
+def _tolerance(atol, gpu_atol):
+    """Return the `atol`. GPU matmuls use TF32 and need a larger one."""
+    return {"atol": gpu_atol if running_on_gpu() else atol}
 
 
 class TestUnlimitedOCRConverter(TestCase):
@@ -321,6 +328,7 @@ class TestUnlimitedOCRConverter(TestCase):
             "<｜▁pad▁｜>": 2,
             "<image>": 300,
             "<|det|>": 301,
+            "<|EOT|>": 302,
         }
         # The original `tokenizer.json` lists the base tokens, the special
         # tokens and the merges.
@@ -343,10 +351,49 @@ class TestUnlimitedOCRConverter(TestCase):
         output = [int(i) for i in tokenizer("a<image>b <|det|>")]
         self.assertIn(300, output)
         self.assertIn(301, output)
+        # Every added token stays one token.
+        self.assertEqual([int(i) for i in tokenizer("<|EOT|>")], [302])
         self.assertEqual(
             tokenizer.detokenize(tokenizer("a<image>b <|det|>")),
             "a<image>b <|det|>",
         )
+
+    def test_load_preprocessor_config_sets_sequence_length(self):
+        config = convert_unlimited_ocr.load_preprocessor_config(None, {})
+        self.assertEqual(config, {"sequence_length": 4096})
+
+    def test_convert_backbone_config_null_rope_parameters(self):
+        config = json.loads(json.dumps(REAL_CONFIG))
+        config["language_config"]["rope_parameters"] = None
+        converted = convert_unlimited_ocr.convert_backbone_config(config)
+        self.assertEqual(converted["rope_max_wavelength"], 10000.0)
+
+    def _get_head_key(self, transformers_config):
+        class Stop(Exception):
+            pass
+
+        keys = []
+
+        class Loader:
+            def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
+                keys.append(hf_weight_key)
+                if len(keys) == 2:
+                    raise Stop
+
+        embedding = SimpleNamespace(embeddings=None, reverse_embeddings=None)
+        backbone = SimpleNamespace(get_layer=lambda name: embedding)
+        with self.assertRaises(Stop):
+            convert_unlimited_ocr.convert_weights(
+                backbone, Loader(), transformers_config
+            )
+        return keys[1]
+
+    def test_convert_weights_reads_the_untied_head(self):
+        self.assertEqual(self._get_head_key({}), "lm_head.weight")
+
+    def test_convert_weights_ties_the_head_to_the_embeddings(self):
+        key = self._get_head_key({"tie_word_embeddings": True})
+        self.assertEqual(key, "model.embed_tokens.weight")
 
     @pytest.mark.large
     def test_class_detection(self):
@@ -422,7 +469,9 @@ class TestUnlimitedOCRConverter(TestCase):
         self.assertEqual(keras_out.shape, hf_out.shape)
         # Compare the real tokens. Padding rows differ by design.
         valid = padding_mask.astype(bool)
-        self.assertAllClose(keras_out[valid], hf_out[valid], atol=1e-4)
+        self.assertAllClose(
+            keras_out[valid], hf_out[valid], **_tolerance(1e-4, 5e-3)
+        )
 
     def _assert_decode_matches_hf(self, num_key_value_heads):
         torch = pytest.importorskip("torch")
@@ -496,7 +545,9 @@ class TestUnlimitedOCRConverter(TestCase):
                 ),
             )
             keras_logits.append(ops.convert_to_numpy(logits)[0, 0])
-        self.assertAllClose(np.stack(keras_logits), hf_logits, atol=1e-4)
+        self.assertAllClose(
+            np.stack(keras_logits), hf_logits, **_tolerance(1e-4, 5e-3)
+        )
 
     @pytest.mark.large
     def test_converted_backbone_matches_hf(self):

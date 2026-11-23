@@ -25,9 +25,8 @@ def _bicubic_antialias_matrix(size_in, size_out):
     align_corners=False)` of PyTorch. A strided window scales the kernel
     when the axis shrinks. The weights of every output index sum to one.
     The sizes are static, so the weights are constants. The resize then runs
-    as a matrix product. TensorFlow and OpenVINO use this path. The
-    antialiased resize op of TensorFlow (`ScaleAndTranslate`) has no XLA
-    kernel. The bicubic resize of OpenVINO ignores `antialias`.
+    as a matrix product. TensorFlow uses this path. The antialiased resize
+    op of TensorFlow (`ScaleAndTranslate`) has no XLA kernel.
 
     Args:
         size_in: int. The input size of the axis.
@@ -57,12 +56,8 @@ def _resize_bicubic(x, size):
     """
     dtype = x.dtype
     x = ops.cast(x, "float32")
-    if keras.config.backend() in ("tensorflow", "openvino"):
+    if keras.config.backend() == "tensorflow":
         # The antialiased resize op of TensorFlow does not compile with XLA.
-        # The bicubic resize of OpenVINO ignores `antialias` and clamps the
-        # edge indices, so its result differs from PyTorch.
-        # TODO: Remove "openvino" here when keras-openvino honors `antialias`
-        # for bicubic.
         height_weights = ops.convert_to_tensor(
             _bicubic_antialias_matrix(x.shape[1], size[0]), dtype="float32"
         )
@@ -281,9 +276,9 @@ class UnlimitedOCRExperts(keras.layers.Layer):
                     "th,thf->tf", hidden_states, selected_gate_up
                 )
                 gate, up = ops.split(gate_up, 2, axis=-1)
-                expert_out = ops.einsum(
-                    "ti,tih->th", up * ops.silu(gate), selected_down
-                )
+
+                gate = ops.cast(ops.silu(ops.cast(gate, "float32")), gate.dtype)
+                expert_out = ops.einsum("ti,tih->th", up * gate, selected_down)
                 output = output + expert_out * weights[:, slot : slot + 1]
             return output
 
@@ -294,9 +289,8 @@ class UnlimitedOCRExperts(keras.layers.Layer):
         for index in range(self.num_experts):
             gate_up = ops.matmul(hidden_states, self.gate_up_kernel[index])
             gate, up = ops.split(gate_up, 2, axis=-1)
-            expert_out = ops.matmul(
-                up * ops.silu(gate), self.down_kernel[index]
-            )
+            gate = ops.cast(ops.silu(ops.cast(gate, "float32")), gate.dtype)
+            expert_out = ops.matmul(up * gate, self.down_kernel[index])
             output = output + expert_out * routing_weights[:, index : index + 1]
         return output
 
@@ -504,9 +498,8 @@ class UnlimitedOCRImageFeatureExtractor(keras.layers.Layer):
 
     The layer runs the vision tower and the projector on both inputs. Each
     input has a sample axis and an image axis, or a tile axis. The layer
-    flattens the two axes before the vision tower. A batch with no images,
-    or no tiles, skips the vision tower. Some backends cannot run a
-    convolution with a batch size of `0`.
+    flattens the two axes before the vision tower. The vision tower accepts
+    a batch with no images, or no tiles.
 
     Args:
         vision_encoder: A `keras_hub.models.UnlimitedOCRVisionEncoder`
@@ -537,43 +530,27 @@ class UnlimitedOCRImageFeatureExtractor(keras.layers.Layer):
             grid = [(size + 1) // 2 for size in grid]
         return grid[0] * grid[1]
 
-    def _encode(self, pixel_values, image_shape):
-        def encode():
-            features = self.vision_encoder(pixel_values)
-            return self.multimodal_projector(features)
-
-        def skip(batch=0):
-            return ops.zeros(
-                (
-                    batch,
-                    self._num_tokens(image_shape),
-                    self.multimodal_projector.units,
-                ),
-                dtype=self.compute_dtype,
-            )
-
-        batch_size = pixel_values.shape[0]
-        if batch_size == 0:
-            return skip()
-        if batch_size is not None:
-            return encode()
-        # The batch size is unknown while TensorFlow traces a graph. A text
-        # batch then reaches the encoder with no image, so check at run time.
-        # OpenVINO merges the two branches with a broadcasting select. The
-        # skip branch takes the input batch size, so the shapes match.
-        batch = ops.shape(pixel_values)[0]
-        return ops.cond(batch > 0, encode, lambda: skip(batch))
+    def _encode(self, pixel_values):
+        # The vision encoder accepts an empty batch. The projector can be
+        # quantized, and a quantized `Dense` layer fails on an empty batch.
+        # Run at least one feature row and slice the output back.
+        features = self.vision_encoder(pixel_values)
+        batch = ops.shape(features)[0]
+        run_batch = (
+            max(batch, 1) if isinstance(batch, int) else ops.maximum(batch, 1)
+        )
+        zero_row = ops.zeros((1, *features.shape[1:]), dtype=features.dtype)
+        features = ops.concatenate([features, zero_row], axis=0)
+        features = ops.take(features, ops.arange(run_batch), axis=0)
+        features = self.multimodal_projector(features)
+        return ops.take(features, ops.arange(batch), axis=0)
 
     def _flatten(self, images):
         return ops.reshape(images, (-1, *images.shape[2:]))
 
     def call(self, pixel_values, pixel_values_local):
-        global_features = self._encode(
-            self._flatten(pixel_values), pixel_values.shape[2:4]
-        )
-        local_features = self._encode(
-            self._flatten(pixel_values_local), pixel_values_local.shape[2:4]
-        )
+        global_features = self._encode(self._flatten(pixel_values))
+        local_features = self._encode(self._flatten(pixel_values_local))
         return global_features, local_features
 
     def compute_output_spec(self, pixel_values, pixel_values_local):
@@ -756,7 +733,22 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         global_column = ops.mod(global_position, global_side + 1)
         global_is_newline = global_column == global_side
         global_is_separator = global_position >= global_side * (global_side + 1)
-        num_local = batch_size * max_tiles * local_side * local_side
+        # An empty feature tensor breaks the gradient under XLA. Append one
+        # padding row to each tensor. No placeholder selects the row.
+        local_bank, global_bank = (
+            ops.reshape(
+                ops.concatenate(
+                    [
+                        features,
+                        ops.zeros((1, *features.shape[1:]), features.dtype),
+                    ],
+                    axis=0,
+                ),
+                (-1, hidden_dim),
+            )
+            for features in (local_features, global_features)
+        )
+        num_local = ops.shape(local_bank)[0]
         global_bank_index = (
             num_local
             + (sample * max_images + slot) * global_side * global_side
@@ -764,9 +756,7 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
             + global_column
         )
 
-        newline_index = (
-            num_local + batch_size * max_images * global_side * global_side
-        )
+        newline_index = num_local + ops.shape(global_bank)[0]
         bank_index = ops.where(
             position < image_local_tokens,
             ops.where(local_is_newline, newline_index, local_bank_index),
@@ -782,8 +772,8 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         dtype = token_embeddings.dtype
         bank = ops.concatenate(
             [
-                ops.cast(ops.reshape(local_features, (-1, hidden_dim)), dtype),
-                ops.cast(ops.reshape(global_features, (-1, hidden_dim)), dtype),
+                ops.cast(local_bank, dtype),
+                ops.cast(global_bank, dtype),
                 ops.cast(self.image_newline[None, :], dtype),
                 ops.cast(self.view_separator[None, :], dtype),
             ],

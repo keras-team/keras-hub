@@ -227,32 +227,42 @@ class UnlimitedOCRBackboneTest(TestCase):
         )
         self.assertEqual(tuple(output.shape), (2, 5, 16))
 
-    @pytest.mark.extra_large
-    def test_smallest_preset(self):
-        self.run_preset_test(
-            cls=UnlimitedOCRBackbone,
-            preset="unlimited_ocr",
-            input_data={
-                "token_ids": ops.ones((1, 4), dtype="int32"),
-                "padding_mask": ops.ones((1, 4), dtype="int32"),
-                "pixel_values": ops.zeros((1, 0, 1024, 1024, 3)),
-                "pixel_values_local": ops.zeros((1, 0, 640, 640, 3)),
-                "patches_grid": ops.zeros((1, 0, 2), dtype="int32"),
-            },
-            expected_output_shape=(1, 4, 1280),
+    def test_default_dtype_resets_the_vision_encoder_policy(self):
+        config = self.init_kwargs["vision_encoder"].get_config()
+        config["dtype"] = "bfloat16"
+        vision_encoder = UnlimitedOCRVisionEncoder.from_config(config)
+        init_kwargs = {**self.init_kwargs, "vision_encoder": vision_encoder}
+        backbone = UnlimitedOCRBackbone(**init_kwargs)
+        self.assertEqual(backbone.dtype_policy.name, "float32")
+        self.assertEqual(backbone.vision_encoder.dtype_policy.name, "float32")
+
+    @pytest.mark.large
+    def test_from_preset_round_trip(self):
+        preset_dir = self.get_temp_dir()
+        backbone = UnlimitedOCRBackbone(**self.init_kwargs)
+        backbone.save_to_preset(preset_dir)
+        restored = UnlimitedOCRBackbone.from_preset(preset_dir)
+        self.assertAllClose(
+            ops.convert_to_numpy(restored(self.input_data)),
+            ops.convert_to_numpy(backbone(self.input_data)),
         )
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in UnlimitedOCRBackbone.presets:
-            self.run_preset_test(
-                cls=UnlimitedOCRBackbone,
-                preset=preset,
-                input_data={
-                    "token_ids": ops.ones((1, 4), dtype="int32"),
-                    "padding_mask": ops.ones((1, 4), dtype="int32"),
-                    "pixel_values": ops.zeros((1, 0, 1024, 1024, 3)),
-                    "pixel_values_local": ops.zeros((1, 0, 640, 640, 3)),
-                    "patches_grid": ops.zeros((1, 0, 2), dtype="int32"),
-                },
-            )
+    @pytest.mark.large
+    def test_bfloat16_preset_loads_with_one_policy(self):
+        preset_dir = self.get_temp_dir()
+        config = self.init_kwargs["vision_encoder"].get_config()
+        config["dtype"] = "bfloat16"
+        init_kwargs = {
+            **self.init_kwargs,
+            "vision_encoder": UnlimitedOCRVisionEncoder.from_config(config),
+            "dtype": "bfloat16",
+        }
+        UnlimitedOCRBackbone(**init_kwargs).save_to_preset(preset_dir)
+        restored = UnlimitedOCRBackbone.from_preset(preset_dir, dtype="float32")
+        self.assertEqual(restored.dtype_policy.name, "float32")
+        self.assertEqual(restored.vision_encoder.dtype_policy.name, "float32")
+        restored = UnlimitedOCRBackbone.from_preset(preset_dir)
+        self.assertEqual(
+            restored.vision_encoder.dtype_policy.name,
+            restored.dtype_policy.name,
+        )

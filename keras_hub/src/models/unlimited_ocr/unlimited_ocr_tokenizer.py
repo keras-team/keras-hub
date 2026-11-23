@@ -6,6 +6,7 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
     UnlimitedOCRBackbone,
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -24,23 +25,6 @@ TEXT_PATTERN = (
     r"|\s+"
 )
 
-# Markers that appear in prompts and in OCR output. The tokenizer keeps each
-# marker as one token. They are not special tokens, so `generate()` keeps them
-# in the output text.
-OCR_MARKER_TOKENS = (
-    "<|ref|>",
-    "<|/ref|>",
-    "<|det|>",
-    "<|/det|>",
-    "<|grounding|>",
-    "<td>",
-    "</td>",
-    "<tr>",
-    "</tr>",
-    "<|User|>",
-    "<|Assistant|>",
-)
-
 
 @keras_hub_export(
     [
@@ -52,9 +36,9 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
     """An Unlimited-OCR byte-level BPE tokenizer.
 
     The tokenizer uses the three regular expression rules of the checkpoint
-    `tokenizer.json` as its pre-tokenizer. The tokenizer keeps the image
-    token and the OCR marker tokens, such as `"<|det|>"` and
-    `"<|grounding|>"`, as single tokens.
+    `tokenizer.json` as its pre-tokenizer. The tokenizer keeps the special
+    tokens as single tokens. The checkpoint converter also keeps every added
+    token of `tokenizer.json`, such as `"<|det|>"`, as a single token.
 
     Args:
         vocabulary: dict or `None`. Maps token strings to integer ids.
@@ -64,9 +48,6 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         pad_token: str. The padding token.
         image_token: str. The placeholder token of the image features.
             Defaults to `"<image>"`.
-        unsplittable_tokens: list or `None`. The tokens that the tokenizer
-            never splits. If `None`, the tokenizer uses its special tokens
-            and the OCR marker tokens.
 
     Example:
 
@@ -96,23 +77,13 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         eos_token="<｜end▁of▁sentence｜>",
         pad_token="<｜▁pad▁｜>",
         image_token="<image>",
-        unsplittable_tokens=None,
         **kwargs,
     ):
         self._add_special_token(bos_token, "start_token")
         self._add_special_token(eos_token, "end_token")
         self._add_special_token(pad_token, "pad_token")
         self._add_special_token(image_token, "image_token")
-        if unsplittable_tokens is None:
-            unsplittable_tokens = sorted(self.special_tokens) + list(
-                OCR_MARKER_TOKENS
-            )
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            unsplittable_tokens=unsplittable_tokens,
-            **kwargs,
-        )
+        super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
         super()._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
@@ -172,6 +143,38 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         if unbatched:
             tokens = tokens[0]
         return tokens
+
+    @preprocessing_function
+    def _detokenize_tf(self, inputs):
+        # The base class maps ids to bytes with the GPT-2 table. That table
+        # drops the characters `｜` and `▁`. This method calls the
+        # `tokenizers` backend from the graph instead.
+        self._maybe_initialized_tokenizers()
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+
+        def _decode(flat_values, row_splits):
+            flat_values = flat_values.numpy().tolist()
+            row_splits = row_splits.numpy().tolist()
+            token_ids = [
+                flat_values[start:end]
+                for start, end in zip(row_splits[:-1], row_splits[1:])
+            ]
+            return tf.constant(
+                self._tokenizer.decode_batch(
+                    token_ids, skip_special_tokens=False
+                ),
+                dtype="string",
+            )
+
+        outputs = tf.py_function(
+            _decode,
+            [inputs.flat_values, inputs.row_splits],
+            Tout=tf.string,
+        )
+        outputs.set_shape([None])
+        if unbatched:
+            outputs = outputs[0]
+        return outputs
 
     def get_config(self):
         config = super().get_config()

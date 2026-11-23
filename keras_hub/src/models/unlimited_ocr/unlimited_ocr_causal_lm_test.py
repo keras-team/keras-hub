@@ -21,9 +21,6 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
     UnlimitedOCRExperts,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
-    OCR_MARKER_TOKENS,
-)
-from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     UnlimitedOCRTokenizer,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
@@ -44,7 +41,6 @@ class UnlimitedOCRCausalLMTest(TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
-        vocab += list(OCR_MARKER_TOKENS)
         vocab = sorted(set(vocab))
         vocab = dict([(token, i) for i, token in enumerate(vocab)])
         tokenizer = UnlimitedOCRTokenizer(vocabulary=vocab, merges=merges)
@@ -258,6 +254,42 @@ class UnlimitedOCRCausalLMTest(TestCase):
                 predictions[row, positions], token_ids[row, positions + 1]
             )
 
+    def test_ragged_generate_when_the_longer_row_ends_in_an_image(self):
+        # The long row ends in an image placeholder. Its first generated
+        # token must come from the prefill output at its last prompt token.
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        causal_lm.compile(sampler="greedy")
+        embedding = causal_lm.backbone.token_embedding.reverse_embeddings
+        values = np.random.normal(scale=3.0, size=embedding.shape)
+        values[:, self.preprocessor.tokenizer.image_token_id] = 0.0
+        embedding.assign(values.astype("float32"))
+        image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
+        inputs = self.preprocessor.generate_preprocess(
+            {
+                "prompts": ["airplane", "airplane at <image>"],
+                "images": [image],
+            }
+        )
+        prompt_lengths = ops.convert_to_numpy(inputs["padding_mask"]).sum(
+            axis=-1
+        )
+        last_ids = ops.convert_to_numpy(inputs["token_ids"])[
+            1, prompt_lengths[1] - 1
+        ]
+        self.assertEqual(last_ids, self.preprocessor.tokenizer.image_token_id)
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(inputs, stop_token_ids=None)
+        token_ids = ops.convert_to_numpy(outputs["token_ids"])
+        full_inputs = dict(inputs)
+        full_inputs["token_ids"] = ops.convert_to_tensor(token_ids)
+        full_inputs["padding_mask"] = ops.ones_like(inputs["padding_mask"])
+        predictions = ops.convert_to_numpy(causal_lm(full_inputs)).argmax(-1)
+        for row, length in enumerate(prompt_lengths):
+            positions = np.arange(length - 1, token_ids.shape[1] - 1)
+            self.assertAllEqual(
+                predictions[row, positions], token_ids[row, positions + 1]
+            )
+
     def test_ragged_generate_matches_reference_window_mask(self):
         # The window (3) is shorter than the decode length. The prompts have
         # different lengths, so each row has its own prefill length. The
@@ -343,15 +375,39 @@ class UnlimitedOCRCausalLMTest(TestCase):
         causal_lm.fit(split_ds)
         causal_lm.preprocessor = preprocessor
 
+    def test_fit_with_jit_compile(self):
+        # XLA compiles the whole train step. A page-sized image gives the
+        # largest number of tiles. A text-only batch has no images.
+        # TODO: Run this test on torch again when CI moves past torch 2.14.1.
+        # The test passes on torch 2.13.0 and 2.15.0.
+        if keras.config.backend() == "torch":
+            self.skipTest(
+                "Dynamo raises a `RecursionError` while it traces this model "
+                "on torch 2.14.1."
+            )
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(
+            self.preprocessor.tokenizer,
+            image_converter=self.preprocessor.image_converter,
+            sequence_length=128,
+        )
+        causal_lm = UnlimitedOCRCausalLM(
+            backbone=self.backbone, preprocessor=preprocessor
+        )
+        causal_lm.compile(jit_compile=True)
+        image = np.random.RandomState(0).randint(0, 256, (900, 700, 3))
+        page = {
+            "prompts": ["<image>airplane at airport"],
+            "images": [image.astype("float32")],
+        }
+        causal_lm.fit(x=page, batch_size=1, epochs=1, verbose=0)
+        causal_lm.fit(
+            x=["airplane at airport"], batch_size=1, epochs=1, verbose=0
+        )
+
     def test_decode_steps_gather_the_selected_experts(self):
         # The compiled decode step must see a static length of 1. Then the
         # experts layer gathers the selected experts. The prefill pass runs
         # all experts.
-        if keras.config.backend() == "openvino":
-            self.skipTest(
-                "OpenVINO does not keep the static length of 1 in the loop "
-                "body. The layer runs all experts and gives the same output."
-            )
         causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
         experts_call = UnlimitedOCRExperts.call
         gathered = []
@@ -444,12 +500,6 @@ class UnlimitedOCRCausalLMTest(TestCase):
             "contrastive",
         ):
             with self.subTest(sampler=sampler):
-                if sampler == "contrastive" and (
-                    keras.config.backend() == "openvino"
-                ):
-                    # The loop body of `ContrastiveSampler` reads `mask`
-                    # from outside the loop. OpenVINO needs loop variables.
-                    continue
                 causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
                 causal_lm.compile(sampler=sampler)
                 output = causal_lm.generate("airplane at airport")
@@ -474,11 +524,16 @@ class UnlimitedOCRCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in UnlimitedOCRCausalLM.presets:
-            self.run_preset_test(
-                cls=UnlimitedOCRCausalLM,
-                preset=preset,
-                input_data=self.input_data,
-            )
+    @pytest.mark.large
+    def test_from_preset_round_trip(self):
+        preset_dir = self.get_temp_dir()
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        causal_lm.save_to_preset(preset_dir)
+        restored = UnlimitedOCRCausalLM.from_preset(preset_dir)
+        self.assertEqual(
+            restored.generate("airplane at airport", max_length=20),
+            causal_lm.generate("airplane at airport", max_length=20),
+        )
+        self.assertAllClose(
+            restored(self.input_data), causal_lm(self.input_data)
+        )

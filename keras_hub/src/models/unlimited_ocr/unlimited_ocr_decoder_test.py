@@ -5,6 +5,14 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_decoder import (
     UnlimitedOCRTransformerDecoder,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
+
+
+def _tolerance(atol, rtol, gpu_atol, gpu_rtol):
+    """Return the tolerances. GPU matmuls use TF32 and need larger ones."""
+    if running_on_gpu():
+        return {"atol": gpu_atol, "rtol": gpu_rtol}
+    return {"atol": atol, "rtol": rtol}
 
 
 class UnlimitedOCRDecoderTest(TestCase):
@@ -117,7 +125,9 @@ class UnlimitedOCRDecoderTest(TestCase):
             )
             outputs.append(ops.convert_to_numpy(step))
         actual = np.concatenate(outputs, axis=1)
-        self.assertAllClose(actual, expected, atol=1e-4, rtol=1e-4)
+        self.assertAllClose(
+            actual, expected, **_tolerance(1e-4, 1e-4, 1e-2, 1e-2)
+        )
 
     def test_sliding_window_changes_output(self):
         # With a short window and a long decode, the R-SWA output must differ
@@ -139,6 +149,8 @@ class UnlimitedOCRDecoderTest(TestCase):
             outputs.append(ops.convert_to_numpy(step))
         windowed = np.concatenate(outputs, axis=1)
         # Positions before the window fills match full attention.
-        self.assertAllClose(windowed[:, :3], full[:, :3], atol=1e-4, rtol=1e-4)
+        self.assertAllClose(
+            windowed[:, :3], full[:, :3], **_tolerance(1e-4, 1e-4, 1e-2, 1e-2)
+        )
         difference = np.abs(windowed[:, 7] - full[:, 7]).max()
         self.assertGreater(float(difference), 1e-3)

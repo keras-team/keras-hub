@@ -193,7 +193,7 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             self_attention_cache_update_index=self_attention_cache_update_index,
             prefill_length=prefill_length,
         )
-        residual = decoder_sequence
+        residual = ops.cast(decoder_sequence, self.compute_dtype)
         x = self._self_attention_layernorm(decoder_sequence)
         x = self._self_attention_layer(
             hidden_states=x,

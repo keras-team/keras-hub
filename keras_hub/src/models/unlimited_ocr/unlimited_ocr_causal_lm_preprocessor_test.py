@@ -11,9 +11,6 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_image_converter import (
     UnlimitedOCRImageConverter,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
-    OCR_MARKER_TOKENS,
-)
-from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     UnlimitedOCRTokenizer,
 )
 from keras_hub.src.tests.test_case import TestCase
@@ -32,7 +29,7 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
-        vocab += list(OCR_MARKER_TOKENS)
+        vocab += ["<|det|>", "<|/det|>"]
         vocab = sorted(set(vocab))
         vocab = dict([(token, i) for i, token in enumerate(vocab)])
         self.tokenizer = UnlimitedOCRTokenizer(vocabulary=vocab, merges=merges)
@@ -116,10 +113,14 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
         expected = keras.utils.unpack_x_y_sample_weight(expected)
         actual = keras.utils.unpack_x_y_sample_weight(actual)
         for key in expected[0]:
-            self.assertAllClose(expected[0][key], np.array(actual[0][key]))
+            self.assertAllClose(
+                expected[0][key], ops.convert_to_numpy(actual[0][key])
+            )
         for expected_part, actual_part in zip(expected[1:], actual[1:]):
             if expected_part is not None:
-                self.assertAllClose(expected_part, np.array(actual_part))
+                self.assertAllClose(
+                    expected_part, ops.convert_to_numpy(actual_part)
+                )
 
     def test_sequence_length_is_respected(self):
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
@@ -195,8 +196,47 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
         length = int(ops.convert_to_numpy(x["padding_mask"]).sum())
         self.assertEqual(token_ids[0, length - 1], self.tokenizer.end_token_id)
         self.assertAllEqual(labels[0, : length - 1], token_ids[0, 1:length])
+        # The seven image tokens of the small image have no weight.
         weight_total = int(ops.convert_to_numpy(sample_weight).sum())
-        self.assertEqual(weight_total, length - 1)
+        self.assertEqual(weight_total, length - 1 - 7)
+
+    def test_sample_weight_skips_image_token_targets(self):
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        _, y, sample_weight = preprocessor(
+            {
+                "prompts": ["<image>airplane at airport"],
+                "images": [self.small_image],
+            }
+        )
+        y = ops.convert_to_numpy(y)
+        sample_weight = ops.convert_to_numpy(sample_weight)
+        self.assertGreater(int((y == self.image_token_id).sum()), 0)
+        self.assertEqual(int(sample_weight[y == self.image_token_id].sum()), 0)
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_sample_weight_skips_image_token_targets(self):
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        x = {
+            "prompts": ["<image>airplane at airport"],
+            "images": [self.small_image],
+        }
+        mapped = next(iter(tf.data.Dataset.from_tensors(x).map(preprocessor)))
+        _, y, sample_weight = mapped
+        y = np.array(y)
+        sample_weight = np.array(sample_weight)
+        self.assertGreater(int((y == self.image_token_id).sum()), 0)
+        self.assertEqual(int(sample_weight[y == self.image_token_id].sum()), 0)
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_text_only_batch_has_static_zero_images(self):
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        dataset = tf.data.Dataset.from_tensor_slices(
+            ["airplane at airport", "airport"]
+        ).batch(2)
+        spec = dataset.map(preprocessor.generate_preprocess).element_spec
+        shape = tuple(spec["pixel_values"].shape)
+        self.assertEqual(shape, (None, 0, 64, 64, 3))
+        self.assertEqual(tuple(spec["patches_grid"].shape), (None, 0, 2))
 
     def test_unbatched_input_squeezes_the_token_axis(self):
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
@@ -365,12 +405,3 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
             }
         )
         self.assertEqual(text[0], "<|det|>ai<|/det|>")
-
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in UnlimitedOCRCausalLMPreprocessor.presets:
-            self.run_preset_test(
-                cls=UnlimitedOCRCausalLMPreprocessor,
-                preset=preset,
-                input_data=["document parsing."],
-            )

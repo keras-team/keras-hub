@@ -133,7 +133,7 @@ def convert_backbone_config(transformers_config):
         "topk_method": text_config["topk_method"],
         "num_expert_groups": text_config["n_group"],
         "num_topk_groups": text_config["topk_group"],
-        "rope_max_wavelength": text_config.get("rope_parameters", {}).get(
+        "rope_max_wavelength": (text_config.get("rope_parameters") or {}).get(
             "rope_theta", _DEFAULT_ROPE_THETA
         ),
         "layer_norm_epsilon": text_config.get("rms_norm_eps", 1e-6),
@@ -165,6 +165,12 @@ def load_image_converter_config(preset, transformers_config):
         config["patch_size"] = processor_config["patch_size"]
         config["downsample_ratio"] = processor_config["downsample_ratio"]
     return config
+
+
+def load_preprocessor_config(preset, transformers_config):
+    # The checkpoint has no sequence length. 4096 fits the image tokens of a
+    # page with 12 tiles (1513) and leaves room for the output.
+    return {"sequence_length": 4096}
 
 
 def convert_weights(backbone, loader, transformers_config):
@@ -206,10 +212,14 @@ def convert_weights(backbone, loader, transformers_config):
     # === Text decoder ===
     token_embedding = backbone.get_layer("token_embedding")
     port_plain(token_embedding.embeddings, "model.embed_tokens.weight")
-    # The checkpoint does not tie the output projection to the embeddings.
+    # A tied checkpoint has no `lm_head.weight` tensor. The Keras output
+    # projection reads the input embeddings in that case.
+    tied = transformers_config.get("tie_word_embeddings", False)
     loader.port_weight(
         keras_variable=token_embedding.reverse_embeddings,
-        hf_weight_key="lm_head.weight",
+        hf_weight_key=(
+            "model.embed_tokens.weight" if tied else "lm_head.weight"
+        ),
         hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor.astype(np.float32)),
     )
 
@@ -431,9 +441,12 @@ def convert_tokenizer(cls, preset, **kwargs):
     if merges and isinstance(merges[0], list):
         merges = [" ".join(merge) for merge in merges]
 
-    # The tokenizer class picks its unsplittable tokens. Every added token
-    # needs a vocabulary entry to keep its id.
+    # Every added token needs a vocabulary entry to keep its id. The
+    # tokenizer never splits an added token.
+    added_tokens = []
     for token in tokenizer_config["added_tokens"]:
         vocab[token["content"]] = token["id"]
+        added_tokens.append(token["content"])
+    kwargs.setdefault("unsplittable_tokens", added_tokens)
 
     return cls(vocabulary=vocab, merges=merges, **kwargs)

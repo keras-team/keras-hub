@@ -1,6 +1,7 @@
 import grain
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_image_converter import (
     UnlimitedOCRImageConverter,
@@ -63,7 +64,7 @@ class UnlimitedOCRImageConverterTest(TestCase):
             }
         )
         outputs = converter([image])
-        view = np.array(outputs["pixel_values"])[0]
+        view = ops.convert_to_numpy(outputs["pixel_values"])[0]
         background = (127 - 127.5) / 127.5
         self.assertAllClose(view[:8], np.full((8, 32, 3), background))
         self.assertAllClose(view[24:], np.full((8, 32, 3), background))
@@ -83,7 +84,7 @@ class UnlimitedOCRImageConverterTest(TestCase):
                 "maximum_pad_value": 32,
             }
         )
-        view = np.array(converter([image])["pixel_values"])[0]
+        view = ops.convert_to_numpy(converter([image])["pixel_values"])[0]
         self.assertAllClose(view, np.ones((32, 32, 3)))
 
     def test_tiles_are_cut_in_row_major_order(self):
@@ -93,7 +94,7 @@ class UnlimitedOCRImageConverterTest(TestCase):
         image[:, :16] = 255.0
         outputs = self.converter([image])
         self.assertAllEqual(outputs["patches_grid"], [[2, 1]])
-        tiles = np.array(outputs["pixel_values_local"])
+        tiles = ops.convert_to_numpy(outputs["pixel_values_local"])
         self.assertEqual(tiles.shape, (2, 16, 16, 3))
         # The left tile is white and the right tile is black.
         self.assertAllClose(tiles[0], np.ones((16, 16, 3)))
@@ -172,7 +173,9 @@ class UnlimitedOCRImageConverterTest(TestCase):
                 actual = converter._call_tf(tf.constant(image))
                 for key in expected:
                     self.assertEqual(expected[key].shape, actual[key].shape)
-                    self.assertAllClose(expected[key], np.array(actual[key]))
+                    self.assertAllClose(
+                        expected[key], ops.convert_to_numpy(actual[key])
+                    )
 
     @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
     def test_tf_path_matches_python_path_for_a_batch(self):
@@ -182,7 +185,9 @@ class UnlimitedOCRImageConverterTest(TestCase):
         actual = self.converter._call_tf(tf.constant(images))
         for key in expected:
             self.assertEqual(expected[key].shape, actual[key].shape)
-            self.assertAllClose(expected[key], np.array(actual[key]))
+            self.assertAllClose(
+                expected[key], ops.convert_to_numpy(actual[key])
+            )
 
     @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
     def test_tf_data_unknown_size_matches_python_path(self):

@@ -272,8 +272,8 @@ class UnlimitedOCRBackbone(Backbone):
             name="sequence_output_layernorm",
         )
         # `dtype` must reach the vision tower, which the caller creates.
-        if dtype is not None:
-            vision_encoder = _apply_dtype(vision_encoder, dtype)
+        # `dtype=None` resolves to the global policy.
+        vision_encoder = _apply_dtype(vision_encoder, dtype)
         self.vision_encoder = vision_encoder
         self.multimodal_projector = keras.layers.Dense(
             hidden_dim,

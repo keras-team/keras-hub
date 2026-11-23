@@ -16,7 +16,6 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
 from keras_hub.src.utils.tensor_utils import (
     convert_preprocessing_outputs_python,
 )
-from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -356,9 +355,7 @@ class UnlimitedOCRImageConverter(ImageConverter):
             "pixel_values_local": pixel_values_local,
             "patches_grid": patches_grid,
         }
-        if in_grain_data_pipeline():
-            return convert_preprocessing_outputs_python(outputs)
-        return {k: ops.convert_to_tensor(v) for k, v in outputs.items()}
+        return convert_preprocessing_outputs_python(outputs)
 
     def _normalize_tf(self, image):
         mean = tf.constant(self._mean_pixels, dtype="float32")

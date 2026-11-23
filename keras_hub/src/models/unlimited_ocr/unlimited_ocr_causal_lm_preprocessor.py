@@ -346,16 +346,17 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
             )
         token_ids = convert_to_numpy(token_ids).astype("int32")
         padding_mask = convert_to_numpy(padding_mask).astype("bool")
+        image_token_id = self.tokenizer.image_token_id
         if add_labels:
+            # Image tokens are inputs only. They get no weight as targets.
             outputs = [
                 token_ids[..., :-1],
                 padding_mask[..., :-1],
                 token_ids[..., 1:],
-                padding_mask[..., 1:],
+                padding_mask[..., 1:] & (token_ids[..., 1:] != image_token_id),
             ]
         else:
             outputs = [token_ids, padding_mask]
-        image_token_id = self.tokenizer.image_token_id
         expected = sum(ids.count(image_token_id) for ids in expanded)
         found = int(np.sum(outputs[0] == self.tokenizer.image_token_id))
         if found != expected:
@@ -491,11 +492,13 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         token_ids = tf.cast(token_ids, "int32")
         padding_mask = tf.cast(padding_mask, "bool")
         if add_labels:
+            # Image tokens are inputs only. They get no weight as targets.
             outputs = [
                 token_ids[..., :-1],
                 padding_mask[..., :-1],
                 token_ids[..., 1:],
-                padding_mask[..., 1:],
+                padding_mask[..., 1:]
+                & tf.not_equal(token_ids[..., 1:], image_token_id),
             ]
         else:
             outputs = [token_ids, padding_mask]
@@ -516,7 +519,7 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         # an unbatched `tf.data` element static.
         converter = self.image_converter
         batch = prompts.shape[0]
-        max_images = static_images if batch == 1 else None
+        max_images = static_images if batch == 1 or static_images == 0 else None
         max_tiles = 0 if static_images == 0 else None
         if not converter.crop_to_patches:
             max_tiles = 0

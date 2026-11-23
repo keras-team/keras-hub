@@ -113,6 +113,7 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
                 ),
                 size=(max_rel_dist, ops.shape(rel_pos)[1]),
                 interpolation="bilinear",
+                data_format="channels_last",
             )
             rel_pos_resized = ops.squeeze(rel_pos_resized, axis=(0, -1))
         # Query coordinates
