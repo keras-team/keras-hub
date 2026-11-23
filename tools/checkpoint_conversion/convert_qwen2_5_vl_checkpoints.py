@@ -316,7 +316,8 @@ def validate_multimodal_output(keras_model, hf_results):
         {
             "prompts": [MULTIMODAL_PROMPT],
             "images": [np.asarray(hf_results["raw_image"])],
-        }
+        },
+        sequence_length=int(hf_results["mm_input_ids"].shape[1]),
     )
     _compare_media_parity(
         keras_model,
@@ -334,7 +335,8 @@ def validate_multimodal_output(keras_model, hf_results):
             "prompts": [VIDEO_PROMPT],
             "videos": [hf_results["video_frames"]],
             "second_per_grid_ts": hf_results["second_per_grid_ts"],
-        }
+        },
+        sequence_length=int(hf_results["video_input_ids"].shape[1]),
     )
     _compare_media_parity(
         keras_model,
