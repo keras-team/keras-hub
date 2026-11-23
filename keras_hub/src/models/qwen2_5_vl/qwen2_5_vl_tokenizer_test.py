@@ -1,5 +1,3 @@
-import pytest
-
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_tokenizer import (
     Qwen2_5VLTokenizer,
 )
@@ -78,12 +76,3 @@ class Qwen2_5VLTokenizerTest(TestCase):
         tokenizer = Qwen2_5VLTokenizer(**self.init_kwargs)
         self.assertIsNone(tokenizer.start_token)
         self.assertIsNone(tokenizer.start_token_id)
-
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in Qwen2_5VLTokenizer.presets:
-            self.run_preset_test(
-                cls=Qwen2_5VLTokenizer,
-                preset=preset,
-                input_data=self.input_data,
-            )

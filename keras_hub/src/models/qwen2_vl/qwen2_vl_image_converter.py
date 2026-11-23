@@ -9,6 +9,93 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 
 
+def _cubic_weight(x):
+    """Evaluates the bicubic kernel (`a=-0.5`) with NumPy."""
+    x = np.abs(x)
+    near = ((-0.5 + 2) * x - (-0.5 + 3)) * x * x + 1
+    far = (((x - 5) * x + 8) * x - 4) * -0.5
+    return np.where(x < 1, near, np.where(x < 2, far, 0.0))
+
+
+def _resize_weights(size_in, size_out):
+    """Computes the separable bicubic weights of one axis.
+
+    Antialiased bicubic (`align_corners=False`, `a=-0.5`): taps past
+    the image edge are dropped before normalization, and the tap count
+    is clamped to `ceil(2*support)*2 + 1` per ATen.
+
+    Returns:
+        `float64` array of shape `(size_out, size_in)`.
+    """
+    scale = size_in / size_out
+    filter_scale = max(scale, 1.0)
+    support = 2.0 * filter_scale
+    max_interp = int(np.ceil(support)) * 2 + 1
+    center = (np.arange(size_out) + 0.5) * scale
+    start = np.maximum(np.floor(center - support + 0.5).astype(np.int64), 0)
+    stop = np.minimum(
+        np.floor(center + support + 0.5).astype(np.int64), size_in
+    )
+    xsize = np.minimum(stop - start, max_interp)
+    index = np.arange(size_in)[None, :]
+    inside = (index >= start[:, None]) & (index < (start + xsize)[:, None])
+    weights = _cubic_weight((index + 0.5 - center[:, None]) / filter_scale)
+    weights = weights * inside
+    return weights / weights.sum(axis=1, keepdims=True)
+
+
+def _quantized_weights(size_in, size_out):
+    """Integer-quantized `_resize_weights` for the `uint8` resize path.
+
+    Matches ATen's adaptive int16 quantization: `precision` is the
+    smallest `p` such that the largest normalized weight reaches int16
+    range (`wt_max * 2**(p+1) >= 32767.5`), and each weight is
+    `round(weight * 2**precision)` (half away from zero).
+
+    Returns:
+        `(weights, precision)`. `weights` is a `float64` array of integer
+        values with shape `(size_out, size_in)`.
+    """
+    weights = _resize_weights(size_in, size_out)
+    wt_max = float(weights.max())
+    precision = 0
+    while precision < 22 and int(0.5 + wt_max * 2.0 ** (precision + 1)) < (
+        1 << 15
+    ):
+        precision += 1
+    scaled = weights * 2.0**precision
+    half = np.where(scaled < 0, -0.5, 0.5)
+    return np.trunc(scaled + half), precision
+
+
+def _resize_axis(image, axis, size_out, quantized):
+    """Resizes one axis of an image with separable bicubic weights.
+
+    Args:
+        image: float64 array.
+        axis: int. The axis to resize.
+        size_out: int. The output size of the axis.
+        quantized: bool. Use the `uint8` integer path — weights are
+            quantized and the result rounded/clipped to integers
+            after each pass.
+
+    Returns:
+        A `float64` array with the axis resized.
+    """
+    if quantized:
+        weights, precision = _quantized_weights(image.shape[axis], size_out)
+    else:
+        weights, precision = (
+            _resize_weights(image.shape[axis], size_out),
+            0,
+        )
+    image = np.tensordot(weights, image, axes=(1, axis))
+    image = np.moveaxis(image, 0, axis)
+    if quantized:
+        image = np.floor((image + 2.0 ** (precision - 1)) / 2.0**precision)
+    return np.clip(image, 0, 255)
+
+
 def smart_resize(
     height, width, factor=28, min_pixels=56 * 56, max_pixels=12845056
 ):
@@ -191,15 +278,13 @@ class Qwen2VLImageConverter(ImageConverter):
         )
 
         if resized_h != height or resized_w != width:
-            image = ops.convert_to_numpy(
-                ops.image.resize(
-                    image,
-                    (resized_h, resized_w),
-                    interpolation="bicubic",
-                    antialias=True,
-                )
-            )
-            image = np.clip(image, 0.0, 255.0)
+            # Separable bicubic, width then height. Integer-valued
+            # pixels use the quantized `uint8` path.
+            quantized = bool(np.all(image == np.floor(image)))
+            image = image.astype("float64")
+            image = _resize_axis(image, 2, resized_w, quantized)
+            image = _resize_axis(image, 1, resized_h, quantized)
+            image = np.clip(image.astype("float32"), 0.0, 255.0)
         patches = image
 
         patches = patches / np.float32(255.0)

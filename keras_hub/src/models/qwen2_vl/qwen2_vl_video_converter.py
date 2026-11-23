@@ -69,18 +69,27 @@ class Qwen2VLVideoConverter(VideoConverter):
     ):
         super().__init__(**kwargs)
         self.image_converter = image_converter or Qwen2VLImageConverter()
-        self.min_pixels = (
-            self.image_converter.min_pixels
-            if min_pixels is None
-            else min_pixels
-        )
-        self.max_pixels = (
-            self.image_converter.max_pixels
-            if max_pixels is None
-            else max_pixels
-        )
+        # `None` means "inherit from `image_converter`".
+        self._min_pixels = min_pixels
+        self._max_pixels = max_pixels
         self.cap_pixels_per_frame = cap_pixels_per_frame
         self.max_video_tokens = max_video_tokens
+
+    @property
+    def min_pixels(self):
+        return (
+            self.image_converter.min_pixels
+            if self._min_pixels is None
+            else self._min_pixels
+        )
+
+    @property
+    def max_pixels(self):
+        return (
+            self.image_converter.max_pixels
+            if self._max_pixels is None
+            else self._max_pixels
+        )
 
     @property
     def merge_size(self):
@@ -107,10 +116,10 @@ class Qwen2VLVideoConverter(VideoConverter):
         if self.cap_pixels_per_frame:
             factor = image_converter.patch_size * image_converter.merge_size
             total_pixels = int(self.max_video_tokens * factor * factor * 0.9)
-            num_frames = video.shape[0]
+            # A 3D `(H, W, C)` input counts as one frame.
+            num_frames = max(video.shape[0] if len(video.shape) == 4 else 1, 1)
             # Even share of the token budget per frame, floored at
-            # ~min_pixels so very long clips still produce usable frames
-            # (matches the Hugging Face formula).
+            # ~min_pixels (never above `max_pixels`).
             max_pixels = max(
                 min(
                     max_pixels,
@@ -118,7 +127,7 @@ class Qwen2VLVideoConverter(VideoConverter):
                     * image_converter.temporal_patch_size
                     // num_frames,
                 ),
-                int(self.min_pixels * 1.05),
+                min(int(self.min_pixels * 1.05), self.max_pixels),
             )
         return image_converter(
             video, min_pixels=self.min_pixels, max_pixels=max_pixels
@@ -129,8 +138,8 @@ class Qwen2VLVideoConverter(VideoConverter):
         config.update(
             {
                 "image_converter": keras.layers.serialize(self.image_converter),
-                "min_pixels": self.min_pixels,
-                "max_pixels": self.max_pixels,
+                "min_pixels": self._min_pixels,
+                "max_pixels": self._max_pixels,
                 "cap_pixels_per_frame": self.cap_pixels_per_frame,
                 "max_video_tokens": self.max_video_tokens,
             }

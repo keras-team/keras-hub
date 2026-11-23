@@ -23,6 +23,7 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
             "num_heads": 4,
             "intermediate_dim": 256,
             "spatial_merge_size": 2,
+            "fullatt_block_indexes": [1],
         }
 
     def _patches(self, n_patches, seed=0):

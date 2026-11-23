@@ -1,5 +1,3 @@
-import math
-
 import keras
 from keras import ops
 
@@ -146,8 +144,8 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         depth: int. Number of ViT blocks.
         num_heads: int. Attention heads per ViT block.
         intermediate_dim: int. Vision MLP intermediate dimension
-            (HF ``vision_config.intermediate_size``). Defaults to
-            ``embed_dim * 4``.
+            (HF ``vision_config.intermediate_size``). Defaults to ``3420``,
+            the HF ``Qwen2_5_VLVisionConfig`` default.
         spatial_merge_size: int. Spatial merge factor.
         window_size: int. Window attention size in pixels.
         fullatt_block_indexes: list of int. Block indexes that use
@@ -156,6 +154,12 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         epsilon: float. RMSNorm epsilon.
         dtype: compute dtype; the vision tower always runs in float32.
     """
+
+    vision_block_cls = Qwen2_5VLVisionBlock
+    patch_merger_cls = Qwen2_5VLPatchMerger
+
+    def _vision_mlp_dim(self):
+        return self.intermediate_dim
 
     def __init__(
         self,
@@ -175,81 +179,41 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         dtype=None,
         **kwargs,
     ):
-        # Always run the vision encoder in float32 for numerical stability.
-        keras.Model.__init__(self, dtype="float32", **kwargs)
-
-        self.patch_size = patch_size
-        self.temporal_patch_size = temporal_patch_size
-        self.in_channels = in_channels
-        self.embed_dim = embed_dim
-        self.out_dim = out_dim if out_dim is not None else embed_dim
-        self.depth = depth
-        self.num_heads = num_heads
+        if any(i < 0 or i >= depth for i in fullatt_block_indexes):
+            raise ValueError(
+                f"`fullatt_block_indexes` must lie in [0, depth); got "
+                f"{list(fullatt_block_indexes)} with depth={depth}."
+            )
+        # `_vision_mlp_dim` reads this while the parent builds blocks.
         self.intermediate_dim = (
-            intermediate_dim if intermediate_dim is not None else embed_dim * 4
+            intermediate_dim if intermediate_dim is not None else 3420
         )
-        self.spatial_merge_size = spatial_merge_size
+        super().__init__(
+            patch_size=patch_size,
+            temporal_patch_size=temporal_patch_size,
+            in_channels=in_channels,
+            embed_dim=embed_dim,
+            out_dim=out_dim,
+            depth=depth,
+            num_heads=num_heads,
+            mlp_ratio=self.intermediate_dim / embed_dim,
+            spatial_merge_size=spatial_merge_size,
+            theta=theta,
+            epsilon=epsilon,
+            dtype=dtype,
+            **kwargs,
+        )
         self.window_size = window_size
         self.fullatt_block_indexes = list(fullatt_block_indexes)
-        self.theta = theta
-        self.epsilon = epsilon
-
-        self.head_dim = embed_dim // num_heads
-
-        # Vision rotary inverse frequencies (matches HF `persistent=False`,
-        # i.e. computed at runtime, not a stored weight).
-        spatial_dim = self.head_dim // 2
-        self._inv_freq = [
-            1.0 / (math.pow(theta, i / spatial_dim))
-            for i in range(0, spatial_dim, 2)
-        ]
-
-        # Conv3D patch embedding (no bias, matching HF `visual.patch_embed`).
-        self.patch_embed = keras.layers.Conv3D(
-            filters=embed_dim,
-            kernel_size=(temporal_patch_size, patch_size, patch_size),
-            strides=(temporal_patch_size, patch_size, patch_size),
-            padding="valid",
-            use_bias=False,
-            dtype=self.dtype_policy,
-            name="patch_embed",
-        )
-
-        self.blocks = [
-            Qwen2_5VLVisionBlock(
-                embed_dim=embed_dim,
-                num_heads=num_heads,
-                mlp_dim=self.intermediate_dim,
-                epsilon=epsilon,
-                dtype=self.dtype_policy,
-                name=f"blocks_{i}",
-            )
-            for i in range(depth)
-        ]
-
-        self.merger = Qwen2_5VLPatchMerger(
-            embed_dim=embed_dim,
-            out_dim=self.out_dim,
-            spatial_merge_size=spatial_merge_size,
-            epsilon=epsilon,
-            dtype=self.dtype_policy,
-            name="merger",
-        )
 
     def _window_layout(self, grid_thw, num_units):
         """Window reorder + per-unit window ids for windowed attention.
 
-        Vectorized port of HF ``get_vision_window_index``: merge units are
-        regrouped into ``ws x ws`` windows
-        (``ws = window_size // spatial_merge_size // patch_size`` units per
-        side) per (image, frame). Every output shape is static and only
-        *values* depend on the grids — required for ``jax.jit`` /
-        ``tf.function`` compilation, where grid values are dynamic.
-
-        Real cells inside a window always form a ``rh x cw`` top-left
-        rectangle, so a unit's rank inside its window is ``ir * cw + ic``
-        and its emission position is its window's exclusive-cumsum start
-        plus that rank.
+        Merge units are regrouped into ``ws x ws`` windows
+        (``ws = window_size // spatial_merge_size // patch_size`` units
+        per side) per (image, frame). Every output shape is static and
+        only *values* depend on the grids — required for ``jax.jit`` /
+        ``tf.function`` tracing.
 
         Args:
             grid_thw: int tensor ``(num_images, 3)`` with [T, H, W] per
@@ -260,10 +224,10 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
             ``(window_index, unit_window)``:
             - ``window_index``: ``(num_units,)`` int32 gather order;
               ``take(units, window_index)`` groups each window's units
-              contiguously (HF ``window_index`` semantics).
+              contiguously.
             - ``unit_window``: ``(num_units,)`` int32 global window id of
               each unit *in original order*; permute via ``window_index``
-              for per-token segment ids.
+              for per-token window ids.
         """
         ms = self.spatial_merge_size
         ws = self.window_size // ms // self.patch_size
@@ -288,6 +252,7 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         within = u - ops.take(starts, img_idx, axis=0)
 
         hw_i = ops.take(lh * lw, img_idx, axis=0)
+        lh_i = ops.take(lh, img_idx, axis=0)
         lw_i = ops.take(lw, img_idx, axis=0)
         frame = within // hw_i
         j = within - frame * hw_i
@@ -308,16 +273,27 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         local_win = (frame * nw_h_i + wr) * nw_w_i + wc
         unit_window = ops.take(win_off, img_idx, axis=0) + local_win
 
-        # `window_index` is a stable sort of units by window id: inside a
-        # window HF emits units in (ir, ic) row-major order, which
-        # coincides with their original order — so the sort only needs
-        # stability within equal window ids, encoded explicitly in the
-        # key (sort stability is not guaranteed cross-backend).
-        key = ops.cast(unit_window, "int64") * ops.cast(
-            num_units, "int64"
-        ) + ops.cast(u, "int64")
-        window_index = ops.cast(ops.argsort(key), "int32")
-        return window_index, ops.cast(unit_window, "int32")
+        # Real units fill an ``rh x cw`` top-left rectangle in raster
+        # order, so rank = ``ir * cw + ic`` at the window's cumsum start.
+        ir = r - wr * ws
+        ic = c - wc * ws
+        cw_i = ops.minimum(ws, lw_i - wc * ws)
+        unit_rank = ir * cw_i + ic
+
+        rh_i = ops.minimum(ws, lh_i - wr * ws)
+        win_units = rh_i * cw_i
+        counts = ops.scatter_update(
+            ops.zeros((num_units,), "int32"),
+            ops.expand_dims(unit_window, axis=1),
+            win_units,
+        )
+        emit_starts = ops.cumsum(counts) - counts
+        emit = ops.take(emit_starts, unit_window, axis=0) + unit_rank
+        window_index = ops.argsort(emit)
+        return (
+            ops.cast(window_index, "int32"),
+            ops.cast(unit_window, "int32"),
+        )
 
     def call(self, pixel_values, grid_thw):
         """Forward pass through the vision encoder.
@@ -354,10 +330,8 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
                 merged = ops.expand_dims(merged, axis=0)
             return merged
 
-        # `ops.cond` can't express a 0-vs-N patch branch under `jax.jit`
-        # (branches must return equal shapes). Instead, always encode by
-        # appending one dummy merge group and gathering the real tokens
-        # back out.
+        # `ops.cond` can't branch on 0-vs-N patches under jit (equal
+        # branch shapes required); encode a dummy group and gather back.
         num_patches = ops.shape(pixel_values)[0]
         ms2 = self.spatial_merge_size * self.spatial_merge_size
         num_merged = num_patches // ms2
@@ -386,9 +360,8 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         cos_emb, sin_emb = self._rot_pos_emb(grid_thw, seq_len)
         frame_segs = self._segment_ids(grid_thw, seq_len)
 
-        # Window attention: regroup merge units window-major and permute
-        # tokens, rotary embeddings and segment ids together (HF
-        # `get_vision_window_index` + `permute`).
+        # Regroup merge units window-major and permute tokens, rotary
+        # embeddings and segment ids together.
         num_units = seq_len // ms2
         window_index, unit_window = self._window_layout(grid_thw, num_units)
 
@@ -401,24 +374,34 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         cos_emb = _permute(cos_emb, self.head_dim)
         sin_emb = _permute(sin_emb, self.head_dim)
 
-        # Per-token segment ids in permuted order. Each merge unit's ms2
-        # tokens share one segment (merging never crosses frames/windows),
-        # so ids are taken per-unit then repeated.
+        # Per-token window/frame ids in permuted order, taken per merge
+        # unit and repeated over its ms2 tokens.
         unit_frame_segs = ops.take(
             ops.reshape(frame_segs, (num_units, ms2)), 0, axis=1
         )
-        window_segs = ops.repeat(
+        window_ids = ops.repeat(
             ops.take(unit_window, window_index, axis=0), ms2
         )
         frame_segs = ops.repeat(
             ops.take(unit_frame_segs, window_index, axis=0), ms2
         )
+        ws = self.window_size // self.spatial_merge_size // self.patch_size
+        window_cap = ws * ws * ms2
 
         fullatt = set(self.fullatt_block_indexes)
         position_embeddings = (cos_emb, sin_emb)
         for i, blk in enumerate(self.blocks):
-            segment_ids = frame_segs if i in fullatt else window_segs
-            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
+            if i in fullatt:
+                hidden_states = blk(
+                    hidden_states, position_embeddings, frame_segs
+                )
+            else:
+                hidden_states = blk(
+                    hidden_states,
+                    position_embeddings,
+                    window_ids=window_ids,
+                    window_cap=window_cap,
+                )
 
         merged = self.merger(hidden_states)  # (num_units, out_dim)
         # Undo the window permutation (HF `reverse_indices`), then drop
@@ -431,26 +414,14 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         return merged
 
     def get_config(self):
-        # Skip `Qwen2VLVisionEncoder.get_config`: its fields (`mlp_ratio`)
-        # do not exist on this class — 2.5-VL uses `intermediate_dim` and a
-        # gated MLP instead. Base-layer config still carries
-        # name/trainable/dtype.
-        config = keras.layers.Layer.get_config(self)
+        config = super().get_config()
+        # `intermediate_dim` parameterizes the MLP, not `mlp_ratio`.
+        config.pop("mlp_ratio")
         config.update(
             {
-                "patch_size": self.patch_size,
-                "temporal_patch_size": self.temporal_patch_size,
-                "in_channels": self.in_channels,
-                "embed_dim": self.embed_dim,
-                "out_dim": self.out_dim,
-                "depth": self.depth,
-                "num_heads": self.num_heads,
                 "intermediate_dim": self.intermediate_dim,
-                "spatial_merge_size": self.spatial_merge_size,
                 "window_size": self.window_size,
                 "fullatt_block_indexes": self.fullatt_block_indexes,
-                "theta": self.theta,
-                "epsilon": self.epsilon,
             }
         )
         return config

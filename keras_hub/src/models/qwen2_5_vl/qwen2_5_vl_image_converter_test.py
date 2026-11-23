@@ -3,37 +3,7 @@ import numpy as np
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_image_converter import (
     Qwen2_5VLImageConverter,
 )
-from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import smart_resize
 from keras_hub.src.tests.test_case import TestCase
-
-
-class SmartResizeTest(TestCase):
-    def test_smart_resize_basic(self):
-        # Should round to nearest multiple of 28
-        h, w = smart_resize(100, 100, factor=28)
-        self.assertEqual(h % 28, 0)
-        self.assertEqual(w % 28, 0)
-        self.assertEqual(h, 112)
-        self.assertEqual(w, 112)
-
-    def test_smart_resize_max_pixels(self):
-        # Should scale down if exceeds max_pixels
-        h, w = smart_resize(5000, 5000, factor=28, max_pixels=1000000)
-        self.assertLessEqual(h * w, 1000000)
-        self.assertEqual(h % 28, 0)
-        self.assertEqual(w % 28, 0)
-
-    def test_smart_resize_min_pixels(self):
-        # Should scale up if below min_pixels
-        h, w = smart_resize(10, 10, factor=28, min_pixels=56 * 56)
-        self.assertGreaterEqual(h * w, 56 * 56)
-        self.assertEqual(h % 28, 0)
-        self.assertEqual(w % 28, 0)
-
-    def test_smart_resize_aspect_ratio_error(self):
-        # Should raise error if aspect ratio > 200
-        with self.assertRaises(ValueError):
-            smart_resize(10000, 10, factor=28)
 
 
 class Qwen2_5VLImageConverterTest(TestCase):

@@ -20,6 +20,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
     QwenVLSpecialTokenMixin,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
@@ -42,8 +43,10 @@ def _flatten_media(node, leaf_ndim):
     """
     if not isinstance(node, (list, tuple)):
         try:
-            arr = np.asarray(node)
-        except (ValueError, TypeError):
+            # `convert_to_numpy` also handles backend tensors (e.g. CUDA)
+            # that `np.asarray` cannot inspect.
+            arr = convert_to_numpy(node)
+        except (ValueError, TypeError, RuntimeError):
             arr = None
         if arr is None or arr.dtype == object:
             return [node]
@@ -55,8 +58,8 @@ def _flatten_media(node, leaf_ndim):
             for leaf in _flatten_media(arr[i], leaf_ndim)
         ]
     try:
-        arr = np.asarray(node)
-    except (ValueError, TypeError):
+        arr = convert_to_numpy(node)
+    except (ValueError, TypeError, RuntimeError):
         arr = None
     if arr is not None and arr.dtype != object:
         if arr.ndim > leaf_ndim:
@@ -97,8 +100,8 @@ class Qwen2VLCausalLMPreprocessor(
         image_converter: A ``Qwen2VLImageConverter`` instance, or ``None``
             for text-only mode.
         video_converter: A ``Qwen2VLVideoConverter`` instance, or ``None``.
-            Falls back to ``image_converter`` when unset, since Qwen2-VL
-            applies identical preprocessing to video frames and images.
+            When unset, one is auto-built around ``image_converter``,
+            inheriting its pixel bounds unless overridden.
         sequence_length: int. Total padded sequence length. Default 1024.
         add_start_token: bool. Prepend BOS token. Default ``False``.
         add_end_token: bool. Append EOS token. Default ``True``.
@@ -128,10 +131,6 @@ class Qwen2VLCausalLMPreprocessor(
         )
         self.image_converter = image_converter
         if video_converter is None and image_converter is not None:
-            # HF routes videos through a dedicated video processor with its
-            # own size bounds. Auto-wrap a given image converter so the
-            # image-converter-only + videos configuration still applies
-            # video bounds rather than image bounds.
             video_converter = self.video_converter_cls(
                 image_converter=image_converter
             )
@@ -365,6 +364,22 @@ class Qwen2VLCausalLMPreprocessor(
         image_grid_np = _grid_to_numpy(image_grid_thw)
         video_grid_np = _grid_to_numpy(video_grid_thw)
 
+        if second_per_grid_ts is not None:
+            # float64 keeps truncation boundaries exact (e.g. 10/3 in
+            # float32 truncates a temporal position differently).
+            second_per_grid_ts = np.asarray(
+                convert_to_numpy(second_per_grid_ts), dtype=np.float64
+            )
+            if (
+                second_per_grid_ts.ndim != 1
+                or second_per_grid_ts.shape[0] != video_grid_np.shape[0]
+            ):
+                raise ValueError(
+                    "`second_per_grid_ts` must be a 1-D sequence with one "
+                    f"value per video (got {video_grid_np.shape[0]} video "
+                    f"grids); received shape {second_per_grid_ts.shape}."
+                )
+
         batch_size, seq_len = token_ids_np.shape
         merge_size = self._merge_size()
 
@@ -529,13 +544,37 @@ class Qwen2VLCausalLMPreprocessor(
             "grid_thw": ops.concatenate(all_grid_thw, axis=0),
         }
 
-    @preprocessing_function
     def call(
         self,
         x,
         y=None,
         sample_weight=None,
         sequence_length=None,
+        second_per_grid_ts=None,
+    ):
+        # Popped ahead of input conversion so float64 values are not
+        # downcast to float32 during tensorization.
+        if second_per_grid_ts is None and isinstance(x, dict):
+            second_per_grid_ts = x.get("second_per_grid_ts")
+            if second_per_grid_ts is not None:
+                x = dict(x)
+                x.pop("second_per_grid_ts")
+        return self._call(
+            x,
+            y=y,
+            sample_weight=sample_weight,
+            sequence_length=sequence_length,
+            second_per_grid_ts=second_per_grid_ts,
+        )
+
+    @preprocessing_function
+    def _call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+        second_per_grid_ts=None,
     ):
         sequence_length = sequence_length or self.sequence_length
 
@@ -638,7 +677,7 @@ class Qwen2VLCausalLMPreprocessor(
                 x_out["token_ids"],
                 img_grid,
                 vid_grid,
-                second_per_grid_ts=x.get("second_per_grid_ts"),
+                second_per_grid_ts=second_per_grid_ts,
             )
             x_out["vision_indices"] = vision_indices
             x_out["position_ids"] = pos_ids
@@ -664,8 +703,25 @@ class Qwen2VLCausalLMPreprocessor(
 
         return keras.utils.pack_x_y_sample_weight(x_out, y, sample_weight)
 
+    def generate_preprocess(
+        self, x, sequence_length=None, second_per_grid_ts=None
+    ):
+        # Same pre-conversion capture as `call`.
+        if second_per_grid_ts is None and isinstance(x, dict):
+            second_per_grid_ts = x.get("second_per_grid_ts")
+            if second_per_grid_ts is not None:
+                x = dict(x)
+                x.pop("second_per_grid_ts")
+        return self._generate_preprocess(
+            x,
+            sequence_length=sequence_length,
+            second_per_grid_ts=second_per_grid_ts,
+        )
+
     @preprocessing_function
-    def generate_preprocess(self, x, sequence_length=None):
+    def _generate_preprocess(
+        self, x, sequence_length=None, second_per_grid_ts=None
+    ):
         """Preprocess inputs for generation (prompt-only, no labels).
 
         Accepts either:
@@ -730,7 +786,7 @@ class Qwen2VLCausalLMPreprocessor(
             token_ids,
             img_grid,
             vid_grid,
-            second_per_grid_ts=x.get("second_per_grid_ts"),
+            second_per_grid_ts=second_per_grid_ts,
         )
 
         # 7. Build combined pixel_values / image_grid_thw for the encoder.

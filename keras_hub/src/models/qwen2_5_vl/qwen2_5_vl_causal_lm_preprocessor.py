@@ -1,3 +1,5 @@
+import numpy as np
+
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_backbone import (
     Qwen2_5VLBackbone,
@@ -40,7 +42,9 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
         image_converter: A ``Qwen2_5VLImageConverter`` instance, or ``None``
             for text-only mode.
         video_converter: A ``Qwen2_5VLVideoConverter`` instance, or
-            ``None``. Falls back to ``image_converter`` when unset.
+            ``None``. When unset, one is auto-built around
+            ``image_converter``, inheriting its pixel bounds unless
+            overridden.
         tokens_per_second: int. Temporal position scale per second of
             video (HF ``vision_config.tokens_per_second``). Default 4.
         sequence_length: int. Total padded sequence length. Default 1024.
@@ -76,9 +80,9 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
         if sgt is not None and media_index < len(sgt):
             second_per_grid_ts = float(sgt[media_index])
         time_interval = self.tokens_per_second * second_per_grid_ts
-        # HF: `(torch.arange(t) * time_interval).long()` — truncate per
-        # frame index after scaling.
-        return int(frame * time_interval)
+        # Temporal index is the float32 product of frame and interval,
+        # truncated.
+        return int(np.float32(frame) * np.float32(time_interval))
 
     def get_config(self):
         config = super().get_config()

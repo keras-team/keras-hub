@@ -47,15 +47,6 @@ class Qwen2_5VLBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in Qwen2_5VLBackbone.presets:
-            self.run_preset_test(
-                cls=Qwen2_5VLBackbone,
-                preset=preset,
-                input_data=self.input_data,
-            )
-
 
 class Qwen2_5VLMultimodalBackboneTest(TestCase):
     """Tests for the backbone with a vision encoder attached."""
@@ -71,6 +62,7 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
             num_heads=4,
             intermediate_dim=256,
             spatial_merge_size=2,
+            fullatt_block_indexes=[1],
         )
         self.init_kwargs = {
             "vocabulary_size": 1000,

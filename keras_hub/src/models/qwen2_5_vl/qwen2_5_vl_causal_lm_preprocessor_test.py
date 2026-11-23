@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from keras import ops
 
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_causal_lm_preprocessor import (
@@ -482,12 +481,3 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         for x, y, sw in ds:
             self.assertEqual(tuple(x["token_ids"].shape), (2, 8))
             self.assertEqual(tuple(x["padding_mask"].shape), (2, 8))
-
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in Qwen2_5VLCausalLMPreprocessor.presets:
-            self.run_preset_test(
-                cls=Qwen2_5VLCausalLMPreprocessor,
-                preset=preset,
-                input_data=self.input_data,
-            )

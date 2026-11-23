@@ -12,6 +12,9 @@ from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_vision_encoder import (
     Qwen2_5VLVisionEncoder,
 )
 from keras_hub.src.utils.preset_utils import load_json
+from keras_hub.src.utils.transformers.convert_qwen2_vl import (
+    convert_tokenizer as convert_tokenizer,
+)
 
 backbone_cls = Qwen2_5VLBackbone
 
@@ -21,7 +24,7 @@ def convert_backbone_config(transformers_config):
     tc = transformers_config.get("text_config", transformers_config)
     vision_config = transformers_config.get("vision_config", None)
     rope_params = tc.get("rope_parameters", tc.get("rope_scaling", {}))
-    rope_theta = tc.get("rope_theta", rope_params.get("rope_theta", 1000000))
+    rope_theta = tc["rope_theta"]
     # M-RoPE section lives inside rope_parameters/rope_scaling in the HF
     # config; HF defaults to [16, 24, 24].
     mrope_section = rope_params.get("mrope_section", [16, 24, 24])
@@ -29,21 +32,21 @@ def convert_backbone_config(transformers_config):
     vision_encoder = None
     if vision_config is not None:
         vision_encoder = Qwen2_5VLVisionEncoder(
-            patch_size=vision_config["patch_size"],
-            temporal_patch_size=vision_config["temporal_patch_size"],
+            patch_size=vision_config.get("patch_size", 14),
+            temporal_patch_size=vision_config.get("temporal_patch_size", 2),
             in_channels=vision_config.get(
                 "in_chans", vision_config.get("in_channels", 3)
             ),
-            embed_dim=vision_config.get(
-                "embed_dim", vision_config.get("hidden_size", 1280)
+            embed_dim=vision_config.get("hidden_size", 3584),
+            out_dim=vision_config.get("out_hidden_size", 3584),
+            depth=vision_config.get("depth", 32),
+            num_heads=vision_config.get("num_heads", 16),
+            intermediate_dim=vision_config.get("intermediate_size", 3420),
+            spatial_merge_size=vision_config.get("spatial_merge_size", 2),
+            window_size=vision_config.get("window_size", 112),
+            fullatt_block_indexes=vision_config.get(
+                "fullatt_block_indexes", [7, 15, 23, 31]
             ),
-            out_dim=vision_config["out_hidden_size"],
-            depth=vision_config["depth"],
-            num_heads=vision_config["num_heads"],
-            intermediate_dim=vision_config["intermediate_size"],
-            spatial_merge_size=vision_config["spatial_merge_size"],
-            window_size=vision_config["window_size"],
-            fullatt_block_indexes=vision_config["fullatt_block_indexes"],
             theta=vision_config.get("rope_parameters", {}).get(
                 "rope_theta", vision_config.get("rope_theta", 10000.0)
             ),
@@ -334,35 +337,3 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
     return backbone
-
-
-def convert_tokenizer(cls, preset, **kwargs):
-    tokenizer_config = load_json(preset, "tokenizer.json")
-    vocab = tokenizer_config["model"]["vocab"]
-    merges = tokenizer_config["model"]["merges"]
-
-    # Load all special tokens except reserved placeholders.
-    special_tokens = set()
-    reserved_prefix = "<" + "|reserved_special_token_"
-    for token in tokenizer_config["added_tokens"]:
-        if not token["content"].startswith(reserved_prefix):
-            vocab[token["content"]] = token["id"]
-            special_tokens.add(token["content"])
-
-    # HF's tokenizer.json added_tokens goes up to the vision-pad ids but
-    # tokenizer_config.json also defines the image/video pad tokens in
-    # added_tokens_decoder. Load those too.
-    tok_cfg = load_json(preset, "tokenizer_config.json")
-    for _id_str, meta in tok_cfg.get("added_tokens_decoder", {}).items():
-        content = meta["content"]
-        if content not in vocab and not content.startswith(reserved_prefix):
-            vocab[content] = int(_id_str)
-            special_tokens.add(content)
-
-    kwargs.update(
-        {
-            "unsplittable_tokens": list(special_tokens),
-        }
-    )
-
-    return cls(vocabulary=vocab, merges=merges, **kwargs)

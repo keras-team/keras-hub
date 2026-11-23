@@ -119,6 +119,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
                 num_heads=2,
                 intermediate_dim=256,
                 spatial_merge_size=1,
+                fullatt_block_indexes=[1],
             ),
         )
         causal_lm = Qwen2_5VLCausalLM(
@@ -165,6 +166,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
                 num_heads=2,
                 intermediate_dim=256,
                 spatial_merge_size=1,
+                fullatt_block_indexes=[1],
             ),
         )
         causal_lm = Qwen2_5VLCausalLM(
@@ -233,11 +235,59 @@ class Qwen2_5VLCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in Qwen2_5VLCausalLM.presets:
-            self.run_preset_test(
-                cls=Qwen2_5VLCausalLM,
-                preset=preset,
-                input_data=self.input_data,
-            )
+    @pytest.mark.large
+    def test_saved_model_multimodal(self):
+        """Save/reload a model whose preprocessor emits image inputs."""
+        image_converter = Qwen2_5VLImageConverter(
+            patch_size=2,
+            temporal_patch_size=2,
+            merge_size=1,
+            min_pixels=16,
+            max_pixels=100,
+        )
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            Qwen2_5VLTokenizer(vocabulary=self.vocab, merges=self.merges),
+            image_converter=image_converter,
+            sequence_length=32,
+        )
+        backbone = Qwen2_5VLBackbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            mrope_section=[1, 0, 0],
+            vision_encoder=Qwen2_5VLVisionEncoder(
+                patch_size=2,
+                temporal_patch_size=2,
+                in_channels=3,
+                embed_dim=16,
+                out_dim=8,
+                depth=2,
+                num_heads=2,
+                intermediate_dim=256,
+                spatial_merge_size=1,
+                fullatt_block_indexes=[1],
+            ),
+        )
+        init_kwargs = {
+            "preprocessor": preprocessor,
+            "backbone": backbone,
+        }
+        train_data = (
+            {
+                "prompts": [
+                    "<|vision_start|><|image_pad|><|vision_end|> air",
+                ]
+                * 2,
+                "responses": [" at airport"] * 2,
+                "images": np.ones((2, 4, 4, 3), dtype="float32"),
+            },
+        )
+        input_data = preprocessor(*train_data)[0]
+        self.run_model_saving_test(
+            cls=Qwen2_5VLCausalLM,
+            init_kwargs=init_kwargs,
+            input_data=input_data,
+        )
