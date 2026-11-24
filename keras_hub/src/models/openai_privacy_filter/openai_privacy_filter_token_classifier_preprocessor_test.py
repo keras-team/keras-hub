@@ -10,11 +10,18 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_clas
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
+from keras_hub.src.models.token_classifier_preprocessor import (
+    _ROW_COUNT_MESSAGE,
+)
 from keras_hub.src.models.token_classifier_preprocessor import _SHORT_Y_MESSAGE
 from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
 
 SHORT_Y = re.escape(_SHORT_Y_MESSAGE)
+
+
+def _row_count(name):
+    return re.escape(_ROW_COUNT_MESSAGE.format(name=name))
 
 
 class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
@@ -43,8 +50,9 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
     def test_sample_weight_handling(self):
         # An explicit `sample_weight` is aligned with the packed `y`: per-token
         # weights are padded or truncated to `sequence_length` (floats kept),
-        # a per-sample weight is broadcast and masked. Each batched case runs
-        # on both the Python and the TF workflow via `run_preprocessor_test`.
+        # a per-sample weight is broadcast, and both are masked so padded
+        # positions carry no weight. Each batched case runs on both the
+        # Python and the TF workflow via `run_preprocessor_test`.
         pad = self.tokenizer.pad_token_id
         ids = [4, 16, 26, 25, 18, pad, pad, pad]
         mask = [True, True, True, True, True, False, False, False]
@@ -54,7 +62,8 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
             # (name, sample_weight, expected sample_weight)
             ("numpy_2d", np.array([[1.0, 0.5]]), [padded_half]),
             ("ragged_2d", [[1.0, 0.5]], [padded_half]),
-            ("truncated", [[1.0] * 10], [[1.0] * 8]),
+            ("truncated", [[1.0] * 10], [[1.0] * 5 + [0.0] * 3]),
+            ("pre_padded", [[1.0] * 8], [[1.0] * 5 + [0.0] * 3]),
             ("per_sample", [2.0], [[2.0] * 5 + [0.0] * 3]),
         ]
         for name, sw, expected_sw in cases:
@@ -81,15 +90,21 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
         preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
             **self.init_kwargs
         )
-        sample = ("airplane at airport", [1, 2, 0, 0, 0], [1.0, 0.5])
-        expected = (
-            {"token_ids": ids, "padding_mask": mask},
-            labels,
-            padded_half,
-        )
-        self.assertAllClose(preprocessor(*sample), expected)
-        ds = tf.data.Dataset.from_tensors(sample).map(preprocessor)
-        self.assertAllClose(ds.get_single_element(), expected)
+        # Per-token and scalar per-sample weights for one unbatched string.
+        unbatched = [
+            ([1.0, 0.5], padded_half),
+            (2.0, [2.0] * 5 + [0.0] * 3),
+        ]
+        for sw, expected_sw in unbatched:
+            sample = ("airplane at airport", [1, 2, 0, 0, 0], sw)
+            expected = (
+                {"token_ids": ids, "padding_mask": mask},
+                labels,
+                expected_sw,
+            )
+            self.assertAllClose(preprocessor(*sample), expected)
+            ds = tf.data.Dataset.from_tensors(sample).map(preprocessor)
+            self.assertAllClose(ds.get_single_element(), expected)
 
     def test_output_structure(self):
         preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
@@ -236,7 +251,7 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
         )
         texts = ["airplane at airport"] * 3
         labels = [[1, 2, 0, 0, 0]] * 2
-        with self.assertRaisesRegex(ValueError, "has 3 rows but"):
+        with self.assertRaisesRegex(ValueError, _row_count("y")):
             preprocessor(texts, labels)
 
         # Inside `tf.data`, the per-row length assert compares two different
@@ -244,6 +259,28 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
         ds = tf.data.Dataset.from_tensors((texts, labels))
         with self.assertRaises(tf.errors.InvalidArgumentError):
             ds.map(preprocessor).get_single_element()
+
+    def test_sample_weight_row_count_mismatch_raises(self):
+        # A one-row `sample_weight` would otherwise broadcast over a 3-row
+        # batch, per-token or per-sample, on both workflows.
+        import tensorflow as tf
+
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
+        texts = ["airplane at airport"] * 3
+        labels = [[1, 2, 0, 0, 0]] * 3
+        for name, sw in [("per_token", [[1.0] * 5]), ("per_sample", [1.0])]:
+            with self.subTest(name):
+                with self.assertRaisesRegex(
+                    ValueError, _row_count("sample_weight")
+                ):
+                    preprocessor(texts, labels, sw)
+                ds = tf.data.Dataset.from_tensors((texts, labels, sw))
+                with self.assertRaisesRegex(
+                    tf.errors.InvalidArgumentError, _row_count("sample_weight")
+                ):
+                    ds.map(preprocessor).get_single_element()
 
     def test_truncated_y_and_mismatched_batch_shapes(self):
         import tensorflow as tf

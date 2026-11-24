@@ -42,15 +42,18 @@ class TokenClassifier(Task):
         optimizer="auto",
         loss="auto",
         *,
-        metrics="auto",
+        weighted_metrics="auto",
         **kwargs,
     ):
         """Configures the `TokenClassifier` task for training.
 
         The `TokenClassifier` task extends the default compilation signature of
         `keras.Model.compile` with defaults for `optimizer`, `loss`, and
-        `metrics`. To override these defaults, pass any value to these
+        `weighted_metrics`. To override these defaults, pass any value to these
         arguments during compilation.
+
+        Note that because padded positions are masked via `sample_weight`,
+        metrics should be passed as `weighted_metrics`, not `metrics`.
 
         Args:
             optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
@@ -60,9 +63,9 @@ class TokenClassifier(Task):
                 Defaults to `"auto"`, where a
                 `keras.losses.SparseCategoricalCrossentropy` loss is applied
                 per token. Padding tokens are masked via `sample_weight`.
-            metrics: `"auto"`, or a list of metrics. Defaults to `"auto"`,
-                where `keras.metrics.SparseCategoricalAccuracy` is used.
-                For production NER evaluation, replace with seqeval F1.
+            weighted_metrics: `"auto"`, or a list of metrics. Defaults to
+                `"auto"`, where `keras.metrics.SparseCategoricalAccuracy` is
+                used. For production NER evaluation, replace with seqeval F1.
             **kwargs: See `keras.Model.compile` for additional arguments.
         """
         if optimizer == "auto":
@@ -72,11 +75,11 @@ class TokenClassifier(Task):
             activation = keras.activations.get(activation)
             from_logits = activation != keras.activations.softmax
             loss = keras.losses.SparseCategoricalCrossentropy(from_logits)
-        if metrics == "auto":
-            metrics = [keras.metrics.SparseCategoricalAccuracy()]
+        if weighted_metrics == "auto":
+            weighted_metrics = [keras.metrics.SparseCategoricalAccuracy()]
         super().compile(
             optimizer=optimizer,
             loss=loss,
-            metrics=metrics,
+            weighted_metrics=weighted_metrics,
             **kwargs,
         )

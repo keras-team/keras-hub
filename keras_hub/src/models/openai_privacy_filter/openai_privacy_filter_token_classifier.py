@@ -23,14 +23,14 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
     Args:
         backbone: A `OpenAIPrivacyFilterBackbone` instance.
         num_classes: int. Number of output classes (BIOES labels).
-        classifier_dropout: float. Dropout rate before the classification
-            head. Defaults to `0.0`.
-        activation: Optional `str` or callable. The activation function to use
-            on the model outputs. Set `activation="softmax"` to return output
-            probabilities. Defaults to `None`.
         preprocessor: A `OpenAIPrivacyFilterTokenClassifierPreprocessor` or
             `None`. To change the maximum sequence length, set
             `preprocessor.sequence_length`.
+        activation: Optional `str` or callable. The activation function to use
+            on the model outputs. Set `activation="softmax"` to return output
+            probabilities. Defaults to `None`.
+        dropout: float. Dropout rate before the classification head.
+            Defaults to `0.0`.
 
     Example:
     ```python
@@ -54,17 +54,20 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
         self,
         backbone,
         num_classes,
-        classifier_dropout=0.0,
-        activation=None,
         preprocessor=None,
+        activation=None,
+        dropout=0.0,
         **kwargs,
     ):
         # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+        self.activation = keras.activations.get(activation)
         inputs = backbone.input
         x = backbone(inputs)
 
         self._classifier_dropout_layer = keras.layers.Dropout(
-            rate=classifier_dropout,
+            rate=dropout,
             dtype=backbone.dtype_policy,
             name="classifier_dropout",
         )
@@ -73,6 +76,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
         self._classifier_dense = keras.layers.Dense(
             num_classes,
             activation=activation,
+            kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
             dtype=backbone.dtype_policy,
             name="classifier",
         )
@@ -85,18 +89,15 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
         )
 
         # === Config ===
-        self.backbone = backbone
         self.num_classes = num_classes
-        self.classifier_dropout = classifier_dropout
-        self.activation = keras.activations.get(activation)
-        self.preprocessor = preprocessor
+        self.dropout = dropout
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "num_classes": self.num_classes,
-                "classifier_dropout": self.classifier_dropout,
+                "dropout": self.dropout,
                 "activation": keras.activations.serialize(self.activation),
             }
         )

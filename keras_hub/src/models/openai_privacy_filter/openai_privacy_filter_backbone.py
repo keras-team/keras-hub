@@ -21,9 +21,6 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_layers imp
 )
 
 
-# ---------------------------------------------------------------------------
-# Backbone
-# ---------------------------------------------------------------------------
 @keras_hub_export("keras_hub.models.OpenAIPrivacyFilterBackbone")
 class OpenAIPrivacyFilterBackbone(Backbone):
     """OpenAI Privacy Filter encoder-only backbone.
@@ -55,7 +52,10 @@ class OpenAIPrivacyFilterBackbone(Backbone):
         sliding_window: int. Bidirectional sliding window size.
             Defaults to `128`.
         attention_dropout: float. Attention dropout. Defaults to `0.0`.
-        dtype: string or `keras.mixed_precision.DTypePolicy`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            `float32` precision regardless of dtype.
 
     Example:
     ```python
@@ -66,15 +66,19 @@ class OpenAIPrivacyFilterBackbone(Backbone):
         "hf://openai/privacy-filter"
     )
 
+    # Randomly initialized backbone with a small custom config.
     model = keras_hub.models.OpenAIPrivacyFilterBackbone(
-        vocabulary_size=200064,
-        num_layers=8,
-        num_query_heads=14,
+        vocabulary_size=1000,
+        num_layers=2,
+        num_query_heads=4,
         num_key_value_heads=2,
-        hidden_dim=640,
-        intermediate_dim=640,
-        head_dim=64,
-        num_experts=128,
+        hidden_dim=64,
+        intermediate_dim=64,
+        head_dim=16,
+        num_experts=4,
+        top_k=2,
+        rope_scaling_factor=32.0,
+        sliding_window=8,
     )
     input_data = {
         "token_ids": np.ones((1, 12), dtype="int32"),

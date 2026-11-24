@@ -8,9 +8,6 @@ from keras_hub.src.models.gpt_oss.gpt_oss_layer_norm import (
 from keras_hub.src.utils.keras_utils import clone_initializer
 
 
-# ---------------------------------------------------------------------------
-# Bidirectional sliding-window attention with sinks & interleaved RoPE
-# ---------------------------------------------------------------------------
 class OpenAIPrivacyFilterAttention(keras.layers.Layer):
     """Bidirectional sliding-window GQA with sinks and interleaved RoPE.
 
@@ -18,6 +15,29 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
     - Bidirectional (not causal) attention mask
     - Interleaved RoPE layout (even/odd indices)
     - Dual Q/K scaling: Q*s, K*s where s = head_dim^-0.25
+
+    Args:
+        num_query_heads: int. The number of query attention heads.
+        num_key_value_heads: int. The number of key and value attention
+            heads (GQA).
+        head_dim: int. The size of each attention head. Defaults to `64`.
+        rope_max_wavelength: float. The RoPE base wavelength. Defaults to
+            `150000.0`.
+        rope_scaling_factor: float. The RoPE scaling factor. Defaults to
+            `1.0`.
+        rope_type: string. The RoPE scaling type. Defaults to `"yarn"`.
+        beta_fast: float. The YaRN beta fast parameter. Defaults to `32.0`.
+        beta_slow: float. The YaRN beta slow parameter. Defaults to `1.0`.
+        original_max_position_embeddings: int. The context length YaRN
+            scales from. Defaults to `4096`.
+        truncate: bool. Whether to truncate the YaRN correction range.
+            Defaults to `False`.
+        sliding_window: int. A token attends to tokens at most this many
+            positions away, in both directions. Defaults to `128`.
+        attention_dropout: float. The dropout rate on the attention
+            weights. Defaults to `0.0`.
+        kernel_initializer: string or initializer. The initializer for the
+            projection kernels. Defaults to `"glorot_uniform"`.
     """
 
     def __init__(
@@ -228,10 +248,23 @@ class OpenAIPrivacyFilterAttention(keras.layers.Layer):
         return config
 
 
-# ---------------------------------------------------------------------------
-# Experts — GLU with swiglu_alpha=1.702, swiglu_limit=7.0, has biases
-# ---------------------------------------------------------------------------
 class OpenAIPrivacyFilterExperts(keras.layers.Layer):
+    """GLU experts of the sparse MoE block, with biases.
+
+    The fused `gate_up_proj` holds the gate in its first half and the up
+    projection in its second half.
+
+    Args:
+        num_experts: int. The total number of experts.
+        hidden_dim: int. The hidden size of the model.
+        intermediate_dim: int. The intermediate size of each expert.
+        kernel_initializer: string or initializer. The initializer for the
+            expert kernels. Defaults to `"glorot_uniform"`.
+        alpha: float. The SwiGLU alpha parameter. Defaults to `1.702`.
+        limit: float. The clamping limit for the gate and up projections.
+            Defaults to `7.0`.
+    """
+
     def __init__(
         self,
         num_experts,
@@ -313,9 +346,6 @@ class OpenAIPrivacyFilterExperts(keras.layers.Layer):
         return config
 
 
-# ---------------------------------------------------------------------------
-# Router — Dense with bias, fp32 cast, softmax+top_k, div by top_k
-# ---------------------------------------------------------------------------
 class _Float32RouterDense(keras.layers.Dense):
     """`Dense` whose weights the router reads directly in float32.
 
@@ -338,7 +368,14 @@ class _Float32RouterDense(keras.layers.Dense):
 class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
     """Top-k router of the sparse MoE block.
 
-    The router computes in float32 and is excluded from quantization.
+    The router computes in float32 and is excluded from quantization. The
+    softmax over the top-k logits is divided by `top_k`.
+
+    Args:
+        num_experts: int. The total number of experts.
+        top_k: int. The number of experts each token is routed to.
+        kernel_initializer: string or initializer. The initializer for the
+            router kernel. Defaults to `"glorot_uniform"`.
     """
 
     def __init__(
@@ -399,10 +436,24 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         return config
 
 
-# ---------------------------------------------------------------------------
-# Sparse MoE block — router + experts, output *= num_experts_per_tok
-# ---------------------------------------------------------------------------
 class OpenAIPrivacyFilterSparseMoeBlock(keras.layers.Layer):
+    """Sparse MoE block: a top-k router and GLU experts.
+
+    The weighted sum of the expert outputs is multiplied by `top_k`.
+
+    Args:
+        hidden_dim: int. The hidden size of the model.
+        intermediate_dim: int. The intermediate size of each expert.
+        num_experts: int. The total number of experts.
+        top_k: int. The number of experts each token is routed to.
+            Defaults to `4`.
+        swiglu_alpha: float. The SwiGLU alpha parameter. Defaults to
+            `1.702`.
+        swiglu_limit: float. The SwiGLU clamping limit. Defaults to `7.0`.
+        kernel_initializer: string or initializer. The initializer for the
+            router and expert kernels. Defaults to `"glorot_uniform"`.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -485,10 +536,46 @@ class OpenAIPrivacyFilterSparseMoeBlock(keras.layers.Layer):
         return config
 
 
-# ---------------------------------------------------------------------------
-# Encoder layer — pre-norm, attn, residual, post-norm, MoE, residual
-# ---------------------------------------------------------------------------
 class OpenAIPrivacyFilterEncoderLayer(keras.layers.Layer):
+    """Pre-norm encoder layer: attention and a sparse MoE block.
+
+    Each sublayer is preceded by an RMS norm and wrapped in a residual
+    connection.
+
+    Args:
+        hidden_dim: int. The hidden size of the model.
+        intermediate_dim: int. The intermediate size of each expert.
+        num_query_heads: int. The number of query attention heads.
+        num_key_value_heads: int. The number of key and value attention
+            heads (GQA).
+        head_dim: int. The size of each attention head. Defaults to `64`.
+        num_experts: int. The total number of experts. Defaults to `128`.
+        top_k: int. The number of experts each token is routed to.
+            Defaults to `4`.
+        rope_max_wavelength: float. The RoPE base wavelength. Defaults to
+            `150000.0`.
+        rope_scaling_factor: float. The RoPE scaling factor. Defaults to
+            `1.0`.
+        rope_type: string. The RoPE scaling type. Defaults to `"yarn"`.
+        beta_fast: float. The YaRN beta fast parameter. Defaults to `32.0`.
+        beta_slow: float. The YaRN beta slow parameter. Defaults to `1.0`.
+        original_max_position_embeddings: int. The context length YaRN
+            scales from. Defaults to `4096`.
+        truncate: bool. Whether to truncate the YaRN correction range.
+            Defaults to `False`.
+        swiglu_alpha: float. The SwiGLU alpha parameter. Defaults to
+            `1.702`.
+        swiglu_limit: float. The SwiGLU clamping limit. Defaults to `7.0`.
+        rms_norm_eps: float. The epsilon of the RMS norms. Defaults to
+            `1e-5`.
+        sliding_window: int. A token attends to tokens at most this many
+            positions away, in both directions. Defaults to `128`.
+        attention_dropout: float. The dropout rate on the attention
+            weights. Defaults to `0.0`.
+        kernel_initializer: string or initializer. The initializer for all
+            kernels in the layer. Defaults to `"glorot_uniform"`.
+    """
+
     def __init__(
         self,
         hidden_dim,

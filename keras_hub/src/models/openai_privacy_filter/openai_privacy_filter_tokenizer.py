@@ -88,11 +88,22 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
     Args:
         vocabulary: string or dict, maps token to integer ids.
         merges: string or list, contains the merge rule.
+        add_prefix_space: bool. Must be `False` (the default). The o200k
+            split runs before the prefix space is added, so `True` would make
+            the Python and TensorFlow workflows disagree.
     """
 
     backbone_cls = OpenAIPrivacyFilterBackbone
 
     def __init__(self, vocabulary=None, merges=None, **kwargs):
+        if kwargs.get("add_prefix_space", False):
+            raise ValueError(
+                "`add_prefix_space=True` is not supported by "
+                "`OpenAIPrivacyFilterTokenizer`. The o200k split runs before "
+                "the prefix space is added, so the Python and TensorFlow "
+                "workflows would return different ids. Received: "
+                f"add_prefix_space={kwargs['add_prefix_space']}"
+            )
         self.start_token_id = None
         self._add_special_token("<|endoftext|>", "pad_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
@@ -111,8 +122,6 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
 
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
         super()._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
-        if getattr(self, "_tokenizer", None) is None:
-            return
         self._tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
             [
                 pre_tokenizers.Split(

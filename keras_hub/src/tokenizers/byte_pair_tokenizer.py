@@ -138,8 +138,9 @@ def split_strings_for_bpe(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
     if unsplittable_tokens:
-        # Replace special tokens alternate with originals.
-        for token, alt in zip(unsplittable_tokens, alts):
+        # Replace special tokens alternate with originals. Restore longer
+        # alts first; `ĴB` is a prefix of `ĴBA`.
+        for token, alt in reversed(list(zip(unsplittable_tokens, alts))):
             escaped_alt = re.escape(alt)
             raw_tokens = tf.strings.regex_replace(
                 raw_tokens, escaped_alt, token

@@ -16,7 +16,7 @@ backbone_cls = OpenAIPrivacyFilterBackbone
 def convert_task_config(transformers_config):
     return {
         "num_classes": len(transformers_config["id2label"]),
-        "classifier_dropout": transformers_config["classifier_dropout"],
+        "dropout": transformers_config["classifier_dropout"],
     }
 
 
@@ -152,11 +152,21 @@ def convert_tokenizer(cls, preset, **kwargs):
     merges = tokenizer_data["model"]["merges"]
     added_tokens = tokenizer_data["added_tokens"]
 
-    regex = tokenizer_data["pre_tokenizer"]["pretokenizers"][0]["pattern"][
-        "Regex"
-    ]
+    pre_tokenizer = tokenizer_data.get("pre_tokenizer")
+    try:
+        regex = pre_tokenizer["pretokenizers"][0]["pattern"]["Regex"]
+    except (KeyError, IndexError, TypeError):
+        raise ValueError(
+            "Expected `pre_tokenizer` in tokenizer.json to be a `Sequence` "
+            "whose first entry is a `Split` on the o200k regex. "
+            f"Received: {pre_tokenizer}"
+        ) from None
     if regex != O200K_SPLIT_PATTERN:
-        raise ValueError("O200K_SPLIT_PATTERN mismatch in pre_tokenizer")
+        raise ValueError(
+            "The `pre_tokenizer` regex in tokenizer.json does not match the "
+            f"o200k pattern. Expected: {O200K_SPLIT_PATTERN!r}. "
+            f"Received: {regex!r}"
+        )
 
     vocab_dict = {}
     for token, token_id in vocabulary.items():
@@ -171,6 +181,9 @@ def convert_tokenizer(cls, preset, **kwargs):
         else:
             merges_strings.append(str(merge))
 
+    kwargs.setdefault(
+        "unsplittable_tokens", [t["content"] for t in added_tokens]
+    )
     return cls(vocabulary=vocab_dict, merges=merges_strings, **kwargs)
 
 

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from keras import ops
 
@@ -33,6 +35,14 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
         del vocab["<|endoftext|>"]
         with self.assertRaises(ValueError):
             OpenAIPrivacyFilterTokenizer(vocabulary=vocab, merges=self.merges)
+
+    def test_add_prefix_space_is_rejected(self):
+        # The o200k split runs before the prefix space is added, so the
+        # Python and TensorFlow workflows would return different ids.
+        with self.assertRaisesRegex(ValueError, "add_prefix_space"):
+            OpenAIPrivacyFilterTokenizer(
+                vocabulary=self.vocab, merges=self.merges, add_prefix_space=True
+            )
 
     def test_python_workflow_uses_o200k_split(self):
         # The o200k pattern splits digit runs into groups of at most three
@@ -143,6 +153,12 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
             "a \u2002b",
             "x \u096c y",
         ]
+        # Every HF added token must stay a single id on both workflows. From
+        # the eleventh one on, their TensorFlow placeholders share a prefix
+        # with an earlier one.
+        with open(tok_path, encoding="utf-8") as f:
+            added_tokens = [t["content"] for t in json.load(f)["added_tokens"]]
+        corpus += added_tokens + ["a<|startoftext|>b"]
         # RE2 cannot express `\s+(?!\S)`, and the `६` emulation in
         # `_split_strings_tf` and `split_strings_for_bpe` does not cover
         # every whitespace mix. One input per difference listed in the

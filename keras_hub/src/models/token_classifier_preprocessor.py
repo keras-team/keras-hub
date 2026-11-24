@@ -20,6 +20,15 @@ from keras_hub.src.utils.tensor_utils import try_import_tensorflow
 tf = try_import_tensorflow()
 
 _SHORT_Y_MESSAGE = "A row of `y` is shorter than its (truncated) token count."
+_ROW_COUNT_MESSAGE = "`x` and `{name}` have a different number of rows."
+
+
+def _check_row_count(x_rows, rows, name):
+    if x_rows != rows:
+        raise ValueError(
+            _ROW_COUNT_MESSAGE.format(name=name)
+            + f" Received: x rows={x_rows}, {name} rows={rows}."
+        )
 
 
 def _check_same_rank(x_batched, y_batched):
@@ -65,8 +74,12 @@ class TokenClassifierPreprocessor(Preprocessor):
     positions would otherwise be trained toward label `0`. When `sample_weight`
     is not provided, it defaults to `padding_mask` so that padded positions do
     not contribute to the loss. When an explicit `sample_weight` is provided,
-    per-token weights are padded or truncated to `sequence_length`, while a
-    per-sample weight is broadcast over tokens and multiplied by `padding_mask`.
+    it must have as many rows as `x`. Per-token weights are padded with `0` or
+    truncated to `sequence_length` and then multiplied by `padding_mask`, so
+    padded positions never carry weight. Unlike a short `y`, a per-token weight
+    row shorter than its token count is not rejected: it is zero-padded, so
+    its trailing real tokens get weight `0`. A per-sample weight is broadcast
+    over tokens and multiplied by `padding_mask`.
 
     All `TokenClassifierPreprocessor` tasks include a `from_preset()`
     constructor which can be used to load a pre-trained config and
@@ -146,20 +159,35 @@ class TokenClassifierPreprocessor(Preprocessor):
         """Align an explicit `sample_weight` with the packed `y`.
 
         A per-sample weight (one rank below `padding_mask`) is broadcast over
-        the tokens and multiplied by the padding mask. A per-token weight is
-        padded or truncated to `sequence_length`, like `y`, and is otherwise
-        left as given. `MultiSegmentPacker` is float-preserving inside a
-        `tf.function` / `tf.data` graph but casts to `int32` on its Python
-        path, so outside a graph the layer pads by hand.
+        the tokens. A per-token weight is padded with `0` or truncated to
+        `sequence_length`, like `y`. Both are then multiplied by the padding
+        mask, and a batched weight must have as many rows as `x`.
+        `MultiSegmentPacker` is float-preserving inside a `tf.function` /
+        `tf.data` graph but casts to `int32` on its Python path, so outside a
+        graph the layer pads by hand.
         """
         if in_tf_function():
             # Inside a `tf.function` / `tf.data` graph both inputs are tf
             # tensors already.
             sw = sample_weight
+
+            def rows_match(sw):
+                if padding_mask.shape.rank != 2:
+                    return []
+                return [
+                    tf.debugging.assert_equal(
+                        tf.shape(sw)[0],
+                        tf.shape(padding_mask)[0],
+                        message=_ROW_COUNT_MESSAGE.format(name="sample_weight"),
+                    )
+                ]
+
             if sw.shape.rank == padding_mask.shape.rank - 1:
-                return sw[..., None] * tf.cast(padding_mask, sw.dtype)
+                with tf.control_dependencies(rows_match(sw)):
+                    return sw[..., None] * tf.cast(padding_mask, sw.dtype)
             sw, _ = self.y_packer((sw,), sequence_length=sequence_length)
-            return sw
+            with tf.control_dependencies(rows_match(sw)):
+                return sw * tf.cast(padding_mask, sw.dtype)
 
         # The packer returns backend tensors on the Python path; work in numpy
         # and convert back the same way the packer does.
@@ -173,6 +201,15 @@ class TokenClassifierPreprocessor(Preprocessor):
         )
         if not isinstance(padding_mask, (list, tuple)):
             padding_mask = keras.ops.convert_to_numpy(padding_mask)
+
+        def check_rows(values):
+            # Only a batched weight has rows; an unbatched per-sample weight
+            # is a scalar.
+            if padding_mask.ndim == 2:
+                _check_row_count(
+                    padding_mask.shape[0], len(values), "sample_weight"
+                )
+
         # A ragged list of lists has `np.ndim == 1`; detect it by its first
         # element instead.
         is_nested = isinstance(sw_np, (list, tuple)) and (
@@ -185,15 +222,18 @@ class TokenClassifierPreprocessor(Preprocessor):
         rank = 2 if is_nested else np.ndim(sw_np)
         if rank == padding_mask.ndim - 1:
             sw = np.asarray(sw_np, dtype="float32")
+            check_rows(sw)
             sw = sw[..., None] * padding_mask.astype(sw.dtype)
             return convert_preprocessing_outputs_python(sw)
         rows = [sw_np] if padding_mask.ndim == 1 else sw_np
+        check_rows(rows)
         padded = []
         for row in rows:
             row = list(row)[:sequence_length]
             padded.append(row + [0.0] * (sequence_length - len(row)))
         sw = np.asarray(padded, dtype="float32")
         sw = sw[0] if padding_mask.ndim == 1 else sw
+        sw = sw * padding_mask.astype(sw.dtype)
         return convert_preprocessing_outputs_python(sw)
 
     @preprocessing_function
@@ -258,10 +298,8 @@ class TokenClassifierPreprocessor(Preprocessor):
             x_canon, x_batched = canonicalize_python_inputs(x[0])
             y_canon, y_batched = canonicalize_python_inputs(y)
             _check_same_rank(x_batched, y_batched)
-            if x_batched and len(x_canon) != len(y_canon):
-                raise ValueError(
-                    f"`x` has {len(x_canon)} rows but `y` has {len(y_canon)}."
-                )
+            if x_batched:
+                _check_row_count(len(x_canon), len(y_canon), "y")
 
             for tokens, labels in zip(x_canon, y_canon):
                 num_labels = len(labels)

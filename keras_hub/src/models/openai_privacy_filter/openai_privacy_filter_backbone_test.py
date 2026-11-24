@@ -87,8 +87,7 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         # deterministic weights. Any of these one-line mutations changes the
         # values below: SwiGLU `alpha` or `limit`, the `(up + 1)` term, the
         # attention sinks column, the router softmax, the `/ top_k` and
-        # `* top_k` scalings, the fp32 attention softmax, and the sliding
-        # fp32 attention softmax, and the sliding window. The expected values
+        # `* top_k` scalings, and the sliding window. The expected values
         # were computed once on CPU in float32 and agree across the JAX,
         # TensorFlow and PyTorch backends.
         model = OpenAIPrivacyFilterBackbone(
@@ -114,7 +113,9 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         self.assertEqual(out.shape, (1, 6, 8))
         expected_first = EXPECTED_FIRST_TOKEN
         expected_last = EXPECTED_LAST_TOKEN
-        atol = 2e-3 if running_on_gpu() else 1e-4
+        # A100 worst drift 6.8e-4 (jax, CI TF32 defaults), at least 3x
+        # headroom.
+        atol = 3e-3 if running_on_gpu() else 1e-4
         self.assertAllClose(out[0, 0], expected_first, atol=atol, rtol=atol)
         self.assertAllClose(out[0, 3], expected_last, atol=atol, rtol=atol)
 
@@ -137,25 +138,24 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         self.assertGreater(diff, 0.0)
 
     def test_sliding_window_mask(self):
-        """Verify tokens outside the sliding window don't affect output."""
-        # Use sliding_window=2 so position 0 can only see positions 0-2.
-        kwargs = {**self.init_kwargs, "sliding_window": 2}
+        """Verify a key is seen exactly up to `sliding_window` positions."""
+        # With one layer, `out[0, 0]` depends only on keys `j` with
+        # `|0 - j| <= sliding_window`, so position 2 must change it and
+        # position 3 must not.
+        kwargs = {**self.init_kwargs, "num_layers": 1, "sliding_window": 2}
         model = OpenAIPrivacyFilterBackbone(**kwargs)
-
-        tokens = np.array([[1, 2, 3, 4, 5, 6, 7, 8]], dtype="int32")
         mask = np.ones((1, 8), dtype="int32")
-        out1 = model({"token_ids": tokens, "padding_mask": mask})
 
-        # Change token at position 7 (far outside window of position 0).
-        tokens2 = np.array([[1, 2, 3, 4, 5, 6, 7, 100]], dtype="int32")
-        out2 = model({"token_ids": tokens2, "padding_mask": mask})
+        def first_token_change(position):
+            tokens = np.array([[1, 2, 3, 4, 5, 6, 7, 8]], dtype="int32")
+            out1 = model({"token_ids": tokens, "padding_mask": mask})
+            tokens[0, position] = 999
+            out2 = model({"token_ids": tokens, "padding_mask": mask})
+            diff = ops.abs(out1[0, 0] - out2[0, 0])
+            return ops.convert_to_numpy(ops.max(diff))
 
-        # With only 2 layers and small sliding_window=2, position 0
-        # should be minimally affected by position 7 (5 hops away).
-        # After 2 layers with window=2, info propagates max 4 positions.
-        # So position 0 should see zero or near-zero difference.
-        diff = ops.convert_to_numpy(ops.max(ops.abs(out1[0, 0] - out2[0, 0])))
-        self.assertLess(diff, 1e-5)
+        self.assertGreater(first_token_change(2), 1e-6)
+        self.assertLess(first_token_change(3), 1e-6)
 
     def test_yarn_rope_matches_hf(self):
         # Reference values from HF, with the openai/privacy-filter RoPE
@@ -207,7 +207,8 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
             0.066750452,
             0.154417753,
         ]
-        atol = 2e-3 if running_on_gpu() else 1e-4
+        # A100 worst drift 3.1e-7 (jax), within the CPU tolerance.
+        atol = 1e-4
         self.assertAllClose(
             outputs[0, 0, 0, 9:18], expected_even, atol=atol, rtol=atol
         )
@@ -365,24 +366,50 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
                     self.assertDTypeEqual(weight, policy.variable_dtype)
 
     def test_get_config_preserves_new_args(self):
-        # Assert arguments from threads #15 and #16 round-trip.
+        # YaRN, SwiGLU, RoPE and norm args reach the encoder layers and
+        # round-trip through `get_config`. All values differ from defaults.
         kwargs = {
             **self.init_kwargs,
+            "rope_max_wavelength": 10000.0,
+            "rope_scaling_factor": 32.0,
+            "rope_type": "linear",
             "beta_fast": 16.0,
             "beta_slow": 2.0,
             "original_max_position_embeddings": 2048,
             "truncate": True,
             "swiglu_alpha": 1.5,
             "swiglu_limit": 5.0,
+            "rms_norm_eps": 1e-6,
+            "attention_dropout": 0.1,
         }
         model = OpenAIPrivacyFilterBackbone(**kwargs)
         restored = OpenAIPrivacyFilterBackbone.from_config(model.get_config())
-        self.assertEqual(restored.beta_fast, 16.0)
-        self.assertEqual(restored.beta_slow, 2.0)
-        self.assertEqual(restored.original_max_position_embeddings, 2048)
-        self.assertEqual(restored.truncate, True)
-        self.assertEqual(restored.swiglu_alpha, 1.5)
-        self.assertEqual(restored.swiglu_limit, 5.0)
+        layer = restored.encoder_layers[0]
+        rope = layer.self_attention.rotary_embedding_layer
+        experts = layer.sparse_moe_block.experts
+        expected = {
+            "rope_max_wavelength": [(rope, "max_wavelength")],
+            "rope_scaling_factor": [(rope, "scaling_factor")],
+            "rope_type": [(rope, "rope_type")],
+            "beta_fast": [(rope, "beta_fast")],
+            "beta_slow": [(rope, "beta_slow")],
+            "original_max_position_embeddings": [
+                (rope, "original_max_position_embeddings")
+            ],
+            "truncate": [(rope, "truncate")],
+            "swiglu_alpha": [(experts, "alpha")],
+            "swiglu_limit": [(experts, "limit")],
+            "rms_norm_eps": [
+                (layer.input_layernorm, "epsilon"),
+                (layer.post_attention_layernorm, "epsilon"),
+                (restored.final_layernorm, "epsilon"),
+            ],
+            "attention_dropout": [(layer.self_attention.dropout_layer, "rate")],
+        }
+        for arg, targets in expected.items():
+            self.assertEqual(getattr(restored, arg), kwargs[arg], arg)
+            for obj, attr in targets:
+                self.assertEqual(getattr(obj, attr), kwargs[arg], arg)
 
     def test_missing_required_args(self):
         for missing_arg in ("head_dim", "num_experts"):
