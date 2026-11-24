@@ -171,7 +171,6 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
             keras.utils.pack_x_y_sample_weight(x_out, y_out, sample_weight_out)
         )
 
-    @preprocessing_function
     def generate_preprocess(
         self,
         x,
@@ -191,6 +190,7 @@ class MoonshineAudioToTextPreprocessor(AudioToTextPreprocessor):
             sequence_length=sequence_length,
         )
 
+    @preprocessing_function
     def _generate_preprocess(
         self,
         x,

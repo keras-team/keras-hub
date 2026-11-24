@@ -180,6 +180,7 @@ class SentencePieceTokenizerTest(TestCase):
                 _allow_python_workflow=self._allow_python_workflow,
             )
             revived = SentencePieceTokenizer.from_config(tokenizer.get_config())
+            self.assertEqual(tokenizer.id_to_token(4), "▁fox.")
         self.assertEqual(set(dir(tokenizer)), set(dir(revived)))
 
     def test_safe_mode_proto_file_disallowed(self):

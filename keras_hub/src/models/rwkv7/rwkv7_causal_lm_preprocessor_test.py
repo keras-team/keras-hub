@@ -1,3 +1,4 @@
+import inspect
 from unittest import mock
 
 import numpy as np
@@ -86,8 +87,10 @@ class RWKV7CausalLMPreprocessorTest(TestCase):
     def test_generate_preprocess_requires_tensorflow(self):
         preprocessor = RWKV7CausalLMPreprocessor(**self.init_kwargs)
         # Without TensorFlow, `preprocessing_function` returns the undecorated
-        # method, which is what `__wrapped__` gives us here.
-        generate_preprocess = type(preprocessor).generate_preprocess.__wrapped__
+        # method, which is what `inspect.unwrap` gives us here.
+        generate_preprocess = inspect.unwrap(
+            type(preprocessor).generate_preprocess
+        )
         with mock.patch.object(tensor_utils, "tf", None):
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
                 generate_preprocess(

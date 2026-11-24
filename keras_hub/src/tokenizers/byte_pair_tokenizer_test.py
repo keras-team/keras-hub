@@ -163,6 +163,12 @@ class BytePairTokenizerTest(TestCase):
             )
             self.assertIsNone(stale._tokenizer)
 
+            # A failed TF build must not leave partial state behind.
+            vocabulary = tokenizer.vocabulary
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                tokenizer._set_vocabulary_and_merges_tf({"x": 0}, [])
+            self.assertIs(tokenizer.vocabulary, vocabulary)
+
             with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
                 tokenizer.tokenize("brown.")
 
@@ -220,12 +226,12 @@ class BytePairTokenizerTest(TestCase):
                     "a": 0,
                     "b": 1,
                     "ab": 2,
-                    "<s>": 0,
-                    "<pad>": 1,
-                    "</s>": 2,
-                    "<mask>": 3,
+                    "<s>": 3,
+                    "<pad>": 4,
+                    "</s>": 5,
+                    "<mask>": 6,
                 },
-                2,
+                5,
             ),
         ]
         with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
@@ -236,6 +242,9 @@ class BytePairTokenizerTest(TestCase):
                     _allow_python_workflow=False,
                 )
                 self.assertEqual(tok.end_token_id, expected_end_id)
+                self.assertEqual(
+                    tok.id_to_token(expected_end_id), tok.end_token
+                )
                 revived = cls.from_config(tok.get_config())
                 self.assertEqual(set(dir(tok)), set(dir(revived)))
                 with self.assertRaisesRegex(
