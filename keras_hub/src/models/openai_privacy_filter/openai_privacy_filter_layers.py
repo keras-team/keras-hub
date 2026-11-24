@@ -376,8 +376,11 @@ class OpenAIPrivacyFilterTopKRouter(keras.layers.Layer):
         # Additional scaling: divide by top_k
         routing_weights = routing_weights / self.top_k
 
-        expert_mask = ops.one_hot(selected_experts, self.num_experts)
-        expert_mask = ops.cast(expert_mask, dtype="float32")
+        expert_ids = ops.arange(self.num_experts, dtype=selected_experts.dtype)
+        expert_mask = ops.cast(
+            ops.equal(ops.expand_dims(selected_experts, axis=-1), expert_ids),
+            dtype="float32",
+        )
         weighted_mask = expert_mask * ops.expand_dims(routing_weights, axis=-1)
         router_scores = ops.sum(weighted_mask, axis=1)
         return router_scores

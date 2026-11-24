@@ -8,6 +8,7 @@ from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone i
 from keras_hub.src.tokenizers.byte_pair_tokenizer import SPECIAL_WHITESPACES
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
+from keras_hub.src.utils.tensor_utils import tf
 
 # The `pre_tokenizer` regex from `openai/privacy-filter`'s `tokenizer.json`
 # (the o200k pattern). It differs from the GPT-2 split in `BytePairTokenizer`
@@ -27,9 +28,10 @@ O200K_SPLIT_PATTERN = (
 )
 
 # The same pattern for the TensorFlow workflow. RE2 has no lookahead, so the
-# `\s+(?!\S)` alternative is emulated the way `split_strings_for_bpe` does
-# for GPT-2: a `६` marker is inserted before every space that precedes a
-# non-space, consumed by the second-to-last alternative, and removed again
+# `\s+(?!\S)` alternative is emulated with the `६` marker: `_split_strings_tf`
+# inserts `६` before horizontal non-space whitespace preceding a letter/mark,
+# and `split_strings_for_bpe` inserts `६` before spaces preceding non-spaces
+# (excluding `६`), consumed by the second-to-last alternative and removed again
 # after splitting. `६` is therefore excluded from the character classes.
 O200K_TF_SPLIT_PATTERN_1 = (
     r"[^\r\n\p{L}\p{N}६]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*"
@@ -58,8 +60,14 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
     the o200k regex the model was trained with, so its ids match the
     Hugging Face tokenizer. The TensorFlow workflow (`tf.data` pipelines and
     `tf.function` tracing) uses an RE2 form of the same pattern and gives
-    the same ids, except for a run of spaces at the very end of a text,
-    where RE2's lack of lookahead leaves one split different.
+    the same ids, with these known differences:
+
+    - Whitespace at the very end of a text is split differently.
+    - Whitespace that contains a carriage return, a vertical tab or a
+      non-ASCII space (such as a no-break space, em space or line
+      separator) can be split differently.
+    - `६` (U+096C), which the splitter uses internally as a marker, is
+      dropped from the text.
 
     Examples:
 
@@ -90,6 +98,11 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
     def _split_strings_tf(self, inputs):
+        inputs = tf.strings.regex_replace(
+            inputs,
+            rf"([\t\f\v{SPECIAL_WHITESPACES}])([\p{{L}}\p{{M}}])",
+            r"६\1\2",
+        )
         return split_strings_for_bpe(
             inputs,
             self.unsplittable_tokens,

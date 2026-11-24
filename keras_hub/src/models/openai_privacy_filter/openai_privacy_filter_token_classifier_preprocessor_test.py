@@ -4,22 +4,20 @@ import keras
 import numpy as np
 import pytest
 
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
-    _SHORT_Y_MESSAGE,
-)
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
-    OpenAIPrivacyFilterPreprocessor,
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier_preprocessor import (  # noqa: E501
+    OpenAIPrivacyFilterTokenClassifierPreprocessor,
 )
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
+from keras_hub.src.models.token_classifier_preprocessor import _SHORT_Y_MESSAGE
 from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
 
 SHORT_Y = re.escape(_SHORT_Y_MESSAGE)
 
 
-class OpenAIPrivacyFilterPreprocessorTest(TestCase):
+class OpenAIPrivacyFilterTokenClassifierPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab, self.merges = get_bpe_fixture()
         self.tokenizer = OpenAIPrivacyFilterTokenizer(
@@ -37,7 +35,7 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
 
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
-            cls=OpenAIPrivacyFilterPreprocessor,
+            cls=OpenAIPrivacyFilterTokenClassifierPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
@@ -62,7 +60,7 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         for name, sw, expected_sw in cases:
             with self.subTest(name):
                 self.run_preprocessor_test(
-                    cls=OpenAIPrivacyFilterPreprocessor,
+                    cls=OpenAIPrivacyFilterTokenClassifierPreprocessor,
                     init_kwargs=self.init_kwargs,
                     input_data=(
                         ["airplane at airport"],
@@ -80,7 +78,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # pipeline directly.
         import tensorflow as tf
 
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         sample = ("airplane at airport", [1, 2, 0, 0, 0], [1.0, 0.5])
         expected = (
             {"token_ids": ids, "padding_mask": mask},
@@ -92,14 +92,18 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         self.assertAllClose(ds.get_single_element(), expected)
 
     def test_output_structure(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         output = preprocessor(["airplane at airport"])
         x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(output)
         self.assertIn("token_ids", x)
         self.assertIn("padding_mask", x)
 
     def test_sequence_length_override(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         output = preprocessor(["airplane at airport"], sequence_length=16)
         x, _, _ = keras.utils.unpack_x_y_sample_weight(output)
         from keras import ops
@@ -107,7 +111,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         self.assertEqual(ops.shape(x["token_ids"])[-1], 16)
 
     def test_no_special_tokens(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         x = preprocessor(["airplane at airport"])
         pad = self.tokenizer.pad_token_id
         self.assertAllEqual(
@@ -119,25 +125,36 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         )
 
     def test_get_config(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         config = preprocessor.get_config()
         self.assertEqual(config["sequence_length"], 8)
         self.assertEqual(config["truncate"], "round_robin")
 
     def test_backend_tensor_sample_weight(self):
-        # A backend tensor passed as sample_weight on the Python path
-        # should be converted safely.
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
-        sw = keras.ops.convert_to_tensor([1.0, 0.5])
+        # A ragged list of backend tensors passed as sample_weight on the
+        # Python path should be converted safely via `tree.map_structure`.
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
+        sw = [
+            keras.ops.convert_to_tensor([1.0, 0.5]),
+            keras.ops.convert_to_tensor([1.0, 0.5, 0.25]),
+        ]
         if keras.backend.backend() == "torch":
-            sw = sw.requires_grad_()
-        sample = ("airplane at airport", [1, 2, 0, 0, 0], sw)
-        # Check it does not raise.
-        x, y, sample_weight = preprocessor(*sample)
-        self.assertEqual(list(sample_weight), [1.0, 0.5] + [0.0] * 6)
+            sw = [t.requires_grad_() for t in sw]
+        text, labels = "airplane at airport", [1, 2, 0, 0, 0]
+        _, _, sample_weight = preprocessor([text, text], [labels, labels], sw)
+        self.assertAllClose(
+            sample_weight,
+            [[1.0, 0.5] + [0.0] * 6, [1.0, 0.5, 0.25] + [0.0] * 5],
+        )
 
     def test_multi_segment_raises(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         # Multi-segment input is a tuple of batches, one per segment. It has
         # to be passed as `x=`: a positional 2-tuple is unpacked as `(x, y)`.
         with self.assertRaisesRegex(ValueError, "Multi-segment"):
@@ -148,7 +165,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # padded with label 0 at weight 1. Both workflows refuse it.
         import tensorflow as tf
 
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         with self.assertRaisesRegex(ValueError, SHORT_Y):
             preprocessor(["airplane at airport"], [[1]])
         with self.assertRaisesRegex(ValueError, SHORT_Y):
@@ -180,7 +199,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # output: a list of lists for a ragged batch ("at" is 2 tokens). The
         # `y` length check must accept it rather than fail to build a dense
         # tensor from it.
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         preprocessor._allow_python_workflow = False
         _, y, _ = preprocessor(
             ["airplane at airport", "at"], [[1, 2, 0, 0, 0], [1, 1]]
@@ -193,7 +214,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # Outside a graph, the TensorFlow workflow pads `sample_weight` by
         # hand like the Python workflow, so per-token float weights keep
         # their dtype and values instead of being cast to int32.
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         preprocessor._allow_python_workflow = False
         _, _, sw = preprocessor(
             ["airplane at airport"], [[1, 2, 0, 0, 0]], [[1.0, 0.5]]
@@ -208,7 +231,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
         # cannot broadcast (a one-row `y` still broadcasts; see the PR body).
         import tensorflow as tf
 
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         texts = ["airplane at airport"] * 3
         labels = [[1, 2, 0, 0, 0]] * 2
         with self.assertRaisesRegex(ValueError, "has 3 rows but"):
@@ -223,7 +248,9 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
     def test_truncated_y_and_mismatched_batch_shapes(self):
         import tensorflow as tf
 
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         # "airplane at airport " * 3 has 16 tokens.
         # It gets truncated to 8 tokens (init_kwargs has sequence_length=8).
         # A y of length 8 should be accepted. A y of length 7 should raise.
@@ -276,17 +303,28 @@ class OpenAIPrivacyFilterPreprocessorTest(TestCase):
             ds.map(preprocessor)
 
     def test_default_sample_weight(self):
-        preprocessor = OpenAIPrivacyFilterPreprocessor(**self.init_kwargs)
+        preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            **self.init_kwargs
+        )
         x_dict, y, sample_weight = preprocessor(
             "airplane at airport", [1, 2, 3, 4, 5]
         )
         self.assertAllEqual(sample_weight, x_dict["padding_mask"])
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in OpenAIPrivacyFilterPreprocessor.presets:
-            self.run_preset_test(
-                cls=OpenAIPrivacyFilterPreprocessor,
-                preset=preset,
-                input_data=self.input_data,
+    @pytest.mark.large
+    def test_from_preset(self):
+        preprocessor = (
+            OpenAIPrivacyFilterTokenClassifierPreprocessor.from_preset(
+                "hf://yujiepan/openai-privacy-filter-tiny-random",
+                sequence_length=12,
             )
+        )
+        out = preprocessor("My name is John Smith.")
+        self.assertAllEqual(
+            out["token_ids"],
+            [5444, 1308, 382, 5928, 16627, 13] + [199999] * 6,
+        )
+        self.assertAllEqual(
+            out["padding_mask"],
+            [True] * 6 + [False] * 6,
+        )

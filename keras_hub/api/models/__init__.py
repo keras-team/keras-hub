@@ -680,11 +680,11 @@ from keras_hub.src.models.object_detector_preprocessor import (
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (
     OpenAIPrivacyFilterBackbone as OpenAIPrivacyFilterBackbone,
 )
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (
-    OpenAIPrivacyFilterPreprocessor as OpenAIPrivacyFilterPreprocessor,
-)
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier import (
     OpenAIPrivacyFilterTokenClassifier as OpenAIPrivacyFilterTokenClassifier,
+)
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier_preprocessor import (
+    OpenAIPrivacyFilterTokenClassifierPreprocessor as OpenAIPrivacyFilterTokenClassifierPreprocessor,
 )
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (
     OpenAIPrivacyFilterTokenizer as OpenAIPrivacyFilterTokenizer,
@@ -1084,6 +1084,9 @@ from keras_hub.src.models.text_to_image_preprocessor import (
 )
 from keras_hub.src.models.token_classifier import (
     TokenClassifier as TokenClassifier,
+)
+from keras_hub.src.models.token_classifier_preprocessor import (
+    TokenClassifierPreprocessor as TokenClassifierPreprocessor,
 )
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone as VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import (

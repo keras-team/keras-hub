@@ -1,4 +1,5 @@
 import pytest
+from keras import ops
 
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
@@ -50,20 +51,47 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
         # these merge ranks it encodes as `4 11 | 1`; the GPT-2 split keeps
         # "4111" whole and BPE gives `4 111`. The TensorFlow path must agree
         # with the Python path, not with GPT-2.
-        merges = self.merges + ["1 1", "4 1", "11 1"]
+        merges = self.merges + [
+            "1 1",
+            "4 1",
+            "11 1",
+            "Ġ Ġ",
+            "ĉ a",
+            "ĉa i",
+            "ĉai r",
+            "ĉ air",
+        ]
         vocab = dict(self.vocab)
-        for piece in ["1", "11", "4", "41", "111"]:
+        for piece in [
+            "1",
+            "11",
+            "4",
+            "41",
+            "111",
+            "ĠĠ",
+            "ĉ",
+            "ĉa",
+            "ĉai",
+            "ĉair",
+        ]:
             vocab.setdefault(piece, len(vocab))
         tokenizer = OpenAIPrivacyFilterTokenizer(
             vocabulary=vocab, merges=merges
         )
-        expected = [vocab[p] for p in ["4", "11", "1", "Ġ", "Ġair"]]
-        tokenizer._allow_python_workflow = True
-        self.assertAllEqual(tokenizer("4111  air"), expected)
-        tokenizer._allow_python_workflow = False
-        self.assertAllEqual(tokenizer("4111  air"), expected)
+        cases = [
+            ("4111  air", ["4", "11", "1", "Ġ", "Ġair"]),
+            ("  \tair", ["ĠĠ", "ĉair"]),
+            (" \tair", ["Ġ", "ĉair"]),
+            ("a\t\tair", ["a", "ĉ", "ĉair"]),
+        ]
+        for text, pieces in cases:
+            expected = [vocab[p] for p in pieces]
+            tokenizer._allow_python_workflow = True
+            self.assertAllEqual(tokenizer(text), expected)
+            tokenizer._allow_python_workflow = False
+            self.assertAllEqual(tokenizer(text), expected)
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_hf_tokenizer_parity(self):
         try:
             from huggingface_hub import hf_hub_download
@@ -79,6 +107,10 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
 
         corpus = [
             "My name is John Smith and my email is john@example.com",
+            "John Smith\t\tjohn@example.com",
+            " \tword",
+            "  \tword",
+            "  \vword",
             "card 4111 1111 1111 1111",
             "Contact me at jane.doe+work@sub.example.co.uk today.",
             "See https://example.com/path?user=bob&id=12345 for details",
@@ -107,14 +139,22 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
             " ",
             "x",
             "<|endoftext|>",
+            "x\r\r y",
+            "a \u2002b",
+            "x \u096c y",
         ]
-        # RE2 cannot express `\s+(?!\S)`; the `६` emulation in
-        # `split_strings_for_bpe` covers every case above except a trailing
-        # run of spaces, which the GPT-2 TensorFlow path gets wrong the same
-        # way. Pinned here so a fix shows up as a failure.
-        tf_known_misses = ["   leading spaces and trailing   "]
-
-        import numpy as np
+        # RE2 cannot express `\s+(?!\S)`, and the `६` emulation in
+        # `_split_strings_tf` and `split_strings_for_bpe` does not cover
+        # every whitespace mix. One input per difference listed in the
+        # tokenizer docstring is pinned here so a fix shows up as a failure:
+        # trailing whitespace, a carriage return run, a non-ASCII space after
+        # a space, and the `६` marker itself.
+        tf_known_misses = [
+            "   leading spaces and trailing   ",
+            "x\r\r y",
+            "a \u2002b",
+            "x \u096c y",
+        ]
 
         saved_flag = kh_tok._allow_python_workflow
         try:
@@ -123,7 +163,7 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
                 path = "python" if python_workflow else "tf"
                 for text in corpus:
                     hf_ids = hf_tok.encode(text, add_special_tokens=False).ids
-                    kh_ids = np.asarray(kh_tok(text)).tolist()
+                    kh_ids = ops.convert_to_numpy(kh_tok(text)).tolist()
                     if not python_workflow and text in tf_known_misses:
                         self.assertNotEqual(
                             hf_ids, kh_ids, f"[{path}] now matches {text!r}"
@@ -135,11 +175,12 @@ class OpenAIPrivacyFilterTokenizerTest(TestCase):
         finally:
             kh_tok._allow_python_workflow = saved_flag
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in OpenAIPrivacyFilterTokenizer.presets:
-            self.run_preset_test(
-                cls=OpenAIPrivacyFilterTokenizer,
-                preset=preset,
-                input_data=["The quick brown fox jumps."],
-            )
+    @pytest.mark.large
+    def test_from_preset(self):
+        tokenizer = OpenAIPrivacyFilterTokenizer.from_preset(
+            "hf://yujiepan/openai-privacy-filter-tiny-random"
+        )
+        self.assertAllEqual(
+            tokenizer("My name is John Smith."),
+            [5444, 1308, 382, 5928, 16627, 13],
+        )

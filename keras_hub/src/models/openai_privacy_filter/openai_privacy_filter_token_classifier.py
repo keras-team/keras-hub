@@ -4,8 +4,8 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
-    OpenAIPrivacyFilterPreprocessor,
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier_preprocessor import (  # noqa: E501
+    OpenAIPrivacyFilterTokenClassifierPreprocessor,
 )
 from keras_hub.src.models.token_classifier import TokenClassifier
 
@@ -28,8 +28,9 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
         activation: Optional `str` or callable. The activation function to use
             on the model outputs. Set `activation="softmax"` to return output
             probabilities. Defaults to `None`.
-        preprocessor: A `OpenAIPrivacyFilterPreprocessor` or `None`. To change
-            the maximum sequence length, set `preprocessor.sequence_length`.
+        preprocessor: A `OpenAIPrivacyFilterTokenClassifierPreprocessor` or
+            `None`. To change the maximum sequence length, set
+            `preprocessor.sequence_length`.
 
     Example:
     ```python
@@ -47,7 +48,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
     """
 
     backbone_cls = OpenAIPrivacyFilterBackbone
-    preprocessor_cls = OpenAIPrivacyFilterPreprocessor
+    preprocessor_cls = OpenAIPrivacyFilterTokenClassifierPreprocessor
 
     def __init__(
         self,

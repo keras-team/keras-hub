@@ -121,7 +121,7 @@ def split_strings_for_bpe(
     # token "६" before leading space of non-space characters and after the
     # trailing space, e.g., " keras" will be "६ keras".
     inputs = tf.strings.regex_replace(
-        inputs, rf"( )([^\s{SPECIAL_WHITESPACES}])", r"६\1\2"
+        inputs, rf"( )([^\s६{SPECIAL_WHITESPACES}])", r"६\1\2"
     )
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"

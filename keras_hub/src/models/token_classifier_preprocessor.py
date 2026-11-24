@@ -5,12 +5,6 @@ from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
-    OpenAIPrivacyFilterBackbone,
-)
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
-    OpenAIPrivacyFilterTokenizer,
-)
 from keras_hub.src.models.preprocessor import Preprocessor
 from keras_hub.src.utils.tensor_utils import canonicalize_python_inputs
 from keras_hub.src.utils.tensor_utils import compute_padding_mask
@@ -47,57 +41,71 @@ def _single_segment(x):
     return x
 
 
-@keras_hub_export(
-    "keras_hub.models.OpenAIPrivacyFilterPreprocessor",
-)
-class OpenAIPrivacyFilterPreprocessor(Preprocessor):
-    """Preprocessor for OpenAI Privacy Filter token classification.
+@keras_hub_export("keras_hub.models.TokenClassifierPreprocessor")
+class TokenClassifierPreprocessor(Preprocessor):
+    """Base class for token classification preprocessing layers.
 
-    This preprocessing layer tokenizes and pads/truncates input text into
-    `token_ids` and `padding_mask` tensors suitable for the backbone. The
-    model uses no start or end tokens, so the packed ids are the raw token
-    ids followed only by padding.
+    `TokenClassifierPreprocessor` layers wrap a `keras_hub.tokenizers.Tokenizer`
+    to create a preprocessing layer for token-level classification tasks (such
+    as NER or PII detection). It is intended to be paired with a
+    `keras_hub.models.TokenClassifier` task.
 
-    When per-token labels `y` are passed, they are padded or truncated to the
-    same `sequence_length` (pad label `0`). A row of `y` with fewer labels than
-    its (truncated) token count is rejected, with a `ValueError` on the Python
-    workflow and an `InvalidArgumentError` inside `tf.data`, since the missing
+    All `TokenClassifierPreprocessor` layers take up to three inputs: `x`, `y`,
+    and `sample_weight`. `x`, the first input, should always be included and
+    can be a single string or a batch of strings. Multi-segment inputs are not
+    supported. No special start or end tokens are added when packing. A
+    subclass that adds them must also shift `y`, mask the special positions
+    in `sample_weight` and adjust the label length check, not only override
+    `build()`.
+
+    When per-token labels `y` are passed, they are padded (with pad label `0`)
+    or truncated to `sequence_length`. A row of `y` with fewer labels than its
+    (truncated) token count is rejected, raising a `ValueError` on the Python
+    workflow and an `InvalidArgumentError` inside `tf.data`, since missing
     positions would otherwise be trained toward label `0`. When `sample_weight`
     is not provided, it defaults to `padding_mask` so that padded positions do
     not contribute to the loss. When an explicit `sample_weight` is provided,
-    per-token weights are padded or truncated to `sequence_length`; a
-    per-sample weight is broadcast over tokens and multiplied by the padding
-    mask.
+    per-token weights are padded or truncated to `sequence_length`, while a
+    per-sample weight is broadcast over tokens and multiplied by `padding_mask`.
 
-    The pad token is `<|endoftext|>`, as in the Hugging Face checkpoint. A
-    literal `<|endoftext|>` inside the input text therefore receives the pad
-    id and is masked out.
+    All `TokenClassifierPreprocessor` tasks include a `from_preset()`
+    constructor which can be used to load a pre-trained config and
+    vocabularies. Calling `from_preset()` directly on this base class will
+    automatically instantiate the matching subclass for the preset.
 
     Examples:
 
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_hub.models.OpenAIPrivacyFilterPreprocessor.from_preset(
-        "hf://openai/privacy-filter"
+    preprocessor = keras_hub.models.TokenClassifierPreprocessor.from_preset(
+        "hf://openai/privacy-filter",
+        sequence_length=256,  # Optional.
     )
 
-    # Tokenize and pad/truncate a single input.
-    preprocessor("The quick brown fox jumped.")
+    # Tokenize and pad/truncate a single sentence.
+    x = preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and pad/truncate a batch of inputs.
-    preprocessor(["The quick brown fox jumped.", "The fox slept."])
+    # Tokenize and pad/truncate a batch of sentences.
+    x = preprocessor(["The quick brown fox jumped.", "The fox slept."])
+
+    # Tokenize and align per-token labels for a sentence.
+    x, y, sample_weight = preprocessor(
+        "The quick brown fox.", [0, 0, 0, 1, 0]
+    )
+
+    # Use with `tf.data.Dataset`.
+    texts = ["The quick brown fox.", "Call me Ishmael."]
+    labels = [[0, 0, 0, 1, 0], [0, 0, 1, 0, 0]]
+    ds = tf.data.Dataset.from_tensor_slices((texts, labels))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
 
     Args:
-        tokenizer: A `OpenAIPrivacyFilterTokenizer` instance.
+        tokenizer: A `keras_hub.tokenizers.Tokenizer` instance.
         sequence_length: int. The length of the packed inputs. Sequences
             longer than this will be truncated. Defaults to `512`.
         truncate: string. The algorithm to truncate a list of batched
             segments. Defaults to `"round_robin"`.
     """
-
-    backbone_cls = OpenAIPrivacyFilterBackbone
-    tokenizer_cls = OpenAIPrivacyFilterTokenizer
 
     def __init__(
         self,
@@ -115,9 +123,9 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
 
     def build(self, input_shape):
         super().build(input_shape)
-        # This encoder model uses no special start/end tokens (the HF
-        # tokenizer adds none), so pack the raw token ids and only pad.
-        # `MultiSegmentPacker` needs empty lists here; `None` raises.
+        # By default no special start/end tokens are added; pack the raw token
+        # ids and only pad. `MultiSegmentPacker` needs empty lists here; `None`
+        # raises.
         pad_id = self.tokenizer.pad_token_id
         self.packer = MultiSegmentPacker(
             start_value=[],
@@ -160,29 +168,26 @@ class OpenAIPrivacyFilterPreprocessor(Preprocessor):
                 return x
             return convert_to_numpy(x)
 
-        sample_weight = keras.tree.map_structure(
+        sw_np = keras.tree.map_structure(
             _convert_tensor_to_numpy, sample_weight
         )
         if not isinstance(padding_mask, (list, tuple)):
             padding_mask = keras.ops.convert_to_numpy(padding_mask)
         # A ragged list of lists has `np.ndim == 1`; detect it by its first
         # element instead.
-        is_nested = isinstance(sample_weight, (list, tuple)) and (
-            len(sample_weight) > 0
+        is_nested = isinstance(sw_np, (list, tuple)) and (
+            len(sw_np) > 0
             and (
-                isinstance(sample_weight[0], (list, tuple))
-                or (
-                    isinstance(sample_weight[0], np.ndarray)
-                    and np.ndim(sample_weight[0]) > 0
-                )
+                isinstance(sw_np[0], (list, tuple))
+                or (isinstance(sw_np[0], np.ndarray) and np.ndim(sw_np[0]) > 0)
             )
         )
-        rank = 2 if is_nested else np.ndim(sample_weight)
+        rank = 2 if is_nested else np.ndim(sw_np)
         if rank == padding_mask.ndim - 1:
-            sw = np.asarray(sample_weight, dtype="float32")
+            sw = np.asarray(sw_np, dtype="float32")
             sw = sw[..., None] * padding_mask.astype(sw.dtype)
             return convert_preprocessing_outputs_python(sw)
-        rows = [sample_weight] if padding_mask.ndim == 1 else sample_weight
+        rows = [sw_np] if padding_mask.ndim == 1 else sw_np
         padded = []
         for row in rows:
             row = list(row)[:sequence_length]

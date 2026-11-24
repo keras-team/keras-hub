@@ -224,12 +224,40 @@ class TestTask(TestCase):
             hf_state_dict["score.weight"].T,
         )
 
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_convert_tiny_preset(self):
+        text = "My name is John Smith."
         model = OpenAIPrivacyFilterTokenClassifier.from_preset(TINY_PRESET)
-        logits = model.predict(["My name is John Smith."])
+        logits = model.predict([text])
         # One logit per BIOES label in the checkpoint's `id2label`.
-        self.assertEqual(logits.shape[-1], 33)
+        self.assertEqual(logits.shape, (1, 512, 33))
+
+        torch = pytest.importorskip("torch")
+        transformers = pytest.importorskip("transformers")
+        if not hasattr(transformers, "OpenAIPrivacyFilterConfig"):
+            pytest.skip(
+                "Needs OpenAIPrivacyFilterConfig, installed "
+                f"transformers={transformers.__version__} does not have it."
+            )
+        hf_repo = TINY_PRESET.removeprefix("hf://")
+        hf_model = (
+            transformers.AutoModelForTokenClassification.from_pretrained(
+                hf_repo
+            )
+            .to(device="cpu", dtype=torch.float32)
+            .eval()
+        )
+        ids = ops.convert_to_numpy(model.preprocessor.tokenizer(text)).tolist()
+        with torch.no_grad():
+            hf_logits = (
+                hf_model(input_ids=torch.tensor([ids], device="cpu"))
+                .logits.cpu()
+                .numpy()
+            )
+        atol = 2e-2 if running_on_gpu() else 1e-4
+        self.assertAllClose(
+            logits[0, : len(ids)], hf_logits[0, : len(ids)], atol=atol
+        )
 
     @pytest.mark.large
     def test_class_detection(self):

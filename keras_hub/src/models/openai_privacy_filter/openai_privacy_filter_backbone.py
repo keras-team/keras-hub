@@ -39,8 +39,8 @@ class OpenAIPrivacyFilterBackbone(Backbone):
         num_key_value_heads: int. Number of KV heads (GQA).
         hidden_dim: int. Hidden dimension size.
         intermediate_dim: int. FFN intermediate dimension.
-        head_dim: int. Per-head dimension. Defaults to `64`.
-        num_experts: int. Number of MoE experts. Defaults to `128`.
+        head_dim: int. Per-head dimension.
+        num_experts: int. Number of MoE experts.
         top_k: int. Number of active experts per token. Defaults to `4`.
         rope_max_wavelength: float. RoPE base theta. Defaults to `150000.0`.
         rope_scaling_factor: float. YaRN scaling factor. Defaults to `1.0`.
@@ -62,7 +62,9 @@ class OpenAIPrivacyFilterBackbone(Backbone):
     import numpy as np
     import keras_hub
 
-    model = keras_hub.models.OpenAIPrivacyFilterBackbone.from_preset("hf://openai/privacy-filter")
+    model = keras_hub.models.OpenAIPrivacyFilterBackbone.from_preset(
+        "hf://openai/privacy-filter"
+    )
 
     model = keras_hub.models.OpenAIPrivacyFilterBackbone(
         vocabulary_size=200064,
@@ -71,6 +73,8 @@ class OpenAIPrivacyFilterBackbone(Backbone):
         num_key_value_heads=2,
         hidden_dim=640,
         intermediate_dim=640,
+        head_dim=64,
+        num_experts=128,
     )
     input_data = {
         "token_ids": np.ones((1, 12), dtype="int32"),
@@ -88,8 +92,8 @@ class OpenAIPrivacyFilterBackbone(Backbone):
         num_key_value_heads,
         hidden_dim,
         intermediate_dim,
-        head_dim=64,
-        num_experts=128,
+        head_dim,
+        num_experts,
         top_k=4,
         rope_max_wavelength=150000.0,
         rope_scaling_factor=1.0,

@@ -4,23 +4,24 @@ import pytest
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_backbone import (  # noqa: E501
     OpenAIPrivacyFilterBackbone,
 )
-from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_preprocessor import (  # noqa: E501
-    OpenAIPrivacyFilterPreprocessor,
-)
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier import (  # noqa: E501
     OpenAIPrivacyFilterTokenClassifier,
+)
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_token_classifier_preprocessor import (  # noqa: E501
+    OpenAIPrivacyFilterTokenClassifierPreprocessor,
 )
 from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
     OpenAIPrivacyFilterTokenizer,
 )
 from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
 class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
     def setUp(self):
         self.vocab, self.merges = get_bpe_fixture()
-        self.preprocessor = OpenAIPrivacyFilterPreprocessor(
+        self.preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor(
             OpenAIPrivacyFilterTokenizer(
                 vocabulary=self.vocab, merges=self.merges
             ),
@@ -65,6 +66,15 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
             input_data=self.preprocessor(self.train_data[0]),
         )
 
+    def test_litert_export(self):
+        self.run_litert_export_test(
+            cls=OpenAIPrivacyFilterTokenClassifier,
+            init_kwargs=self.init_kwargs,
+            input_data=self.preprocessor(self.train_data[0]),
+            comparison_mode="statistical",
+            output_thresholds={"*": {"max": 1e-4, "mean": 1e-5}},
+        )
+
     def test_missing_num_classes(self):
         with self.assertRaises(TypeError):
             OpenAIPrivacyFilterTokenClassifier(backbone=self.backbone)
@@ -84,11 +94,16 @@ class OpenAIPrivacyFilterTokenClassifierTest(TestCase):
         model_softmax.compile(optimizer="adam", loss="auto")
         self.assertFalse(model_softmax.loss.get_config()["from_logits"])
 
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in OpenAIPrivacyFilterTokenClassifier.presets:
-            self.run_preset_test(
-                cls=OpenAIPrivacyFilterTokenClassifier,
-                preset=preset,
-                input_data=["The quick brown fox jumps."],
-            )
+    @pytest.mark.large
+    def test_from_preset(self):
+        model = OpenAIPrivacyFilterTokenClassifier.from_preset(
+            "hf://yujiepan/openai-privacy-filter-tiny-random"
+        )
+        logits = model.predict(["My name is John Smith."])
+        self.assertEqual(logits.shape, (1, 512, 33))
+        atol = 5e-3 if running_on_gpu() else 1e-4
+        self.assertAllClose(
+            logits[0, 0, :5],
+            [0.571173, 2.729258, 0.409495, -0.488001, 0.259987],
+            atol=atol,
+        )

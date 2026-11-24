@@ -1,14 +1,16 @@
 """
 Conversion and numerical parity script for OpenAI Privacy Filter.
 
-Downloads the openai/privacy-filter model from HuggingFace,
-converts it to KerasHub format, and verifies numerical parity.
+Downloads the openai/privacy-filter model from HuggingFace, verifies numerical
+parity in float32, and saves the converted KerasHub preset in `--dtype`
+(default `bfloat16`).
 
 Usage:
 python convert_openai_privacy_filter_checkpoints.py
     --preset openai_privacy_filter_en
 """
 
+import gc
 import os
 
 os.environ["KERAS_BACKEND"] = "torch"
@@ -37,7 +39,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "dtype",
     "bfloat16",
-    "The dtype for the Keras model and the saved preset.",
+    "The dtype for the saved preset. Numerical parity is always verified "
+    "in float32.",
 )
 
 
@@ -54,6 +57,46 @@ def compute_hf_output(hf_model, hf_tokenizer, text):
     )
 
 
+def verify_classifier_parity(
+    classifier, hf_results, test_texts, dtype_label, check_logits
+):
+    """Compare KerasHub classifier predictions against HF float32 outputs."""
+    for i, (text, (hf_logits, _)) in enumerate(zip(test_texts, hf_results)):
+        hf_preds = np.argmax(hf_logits, axis=-1)[0]
+        valid_len = len(hf_preds)
+        print(f"\n  Text {i + 1} length: {valid_len} tokens")
+
+        keras_logits = classifier.predict([text], verbose=0)
+        # We only care about unpadded tokens.
+        keras_valid_logits = keras_logits[0][:valid_len]
+        keras_preds = np.argmax(keras_valid_logits, axis=-1)
+        hf_valid_logits = hf_logits[0][:valid_len]
+
+        max_diff = np.max(np.abs(keras_valid_logits - hf_valid_logits))
+        mean_diff = np.mean(np.abs(keras_valid_logits - hf_valid_logits))
+        if check_logits:
+            print(f"    Max absolute diff ({dtype_label}): {max_diff:.6f}")
+            print(f"    Mean absolute diff ({dtype_label}): {mean_diff:.6f}")
+            np.testing.assert_allclose(
+                keras_valid_logits, hf_valid_logits, atol=1e-4, rtol=1e-4
+            )
+        else:
+            print(
+                f"    Max absolute diff ({dtype_label}, informational): "
+                f"{max_diff:.6f}"
+            )
+            print(
+                f"    Mean absolute diff ({dtype_label}, informational): "
+                f"{mean_diff:.6f}"
+            )
+
+        if not np.array_equal(keras_preds, hf_preds):
+            raise ValueError(
+                f"Prediction mismatch ({dtype_label}) for text length "
+                f"{valid_len}"
+            )
+
+
 def main(_):
     if FLAGS.preset not in PRESET_MAP:
         raise ValueError(
@@ -62,9 +105,13 @@ def main(_):
         )
     preset = FLAGS.preset
     hf_preset = PRESET_MAP[preset]
-    test_text = "My name is John Smith and my email is john@example.com"
+    test_texts = [
+        "My name is John Smith and my email is john@example.com",
+        "John Smith works at Example Corp. " * 30,  # ~210 tokens
+        "Here is another much longer sentence to test. " * 68,  # ~610 tokens
+    ]
 
-    # === Load HF model ===
+    # === Load HF model and compute float32 reference outputs ===
     print("\n→ Loading HuggingFace model...")
     hf_model = AutoModelForTokenClassification.from_pretrained(
         hf_preset, device_map=device, dtype=torch.float32
@@ -73,18 +120,18 @@ def main(_):
     hf_model.eval()
     print("  ✅ HF model loaded")
 
-    # === Compute HF outputs ===
-    hf_logits, hf_token_ids = compute_hf_output(
-        hf_model, hf_tokenizer, test_text
-    )
-    print(f"  HF output shape: {hf_logits.shape}")
-    print(f"  HF token IDs: {hf_token_ids.tolist()}")
+    hf_results = [
+        compute_hf_output(hf_model, hf_tokenizer, text) for text in test_texts
+    ]
+    hf_logits_0, hf_token_ids_0 = hf_results[0]
+    print(f"  HF output shape: {hf_logits_0.shape}")
+    print(f"  HF token IDs: {hf_token_ids_0.tolist()}")
 
     # === Get HF predictions ===
-    hf_preds = np.argmax(hf_logits, axis=-1)[0]
+    hf_preds_0 = np.argmax(hf_logits_0, axis=-1)[0]
     id2label = hf_model.config.id2label
-    hf_labels = [id2label[p] for p in hf_preds]
-    hf_tokens = hf_tokenizer.convert_ids_to_tokens(hf_token_ids[0])
+    hf_labels = [id2label[p] for p in hf_preds_0]
+    hf_tokens = hf_tokenizer.convert_ids_to_tokens(hf_token_ids_0[0])
     print("\n  HF predictions:")
     for tok, label in zip(hf_tokens, hf_labels):
         if label != "O":
@@ -93,13 +140,19 @@ def main(_):
     hf_params = hf_model.num_parameters()
     print(f"\n  HF params: {hf_params:,}")
 
+    # Free the HF model now that float32 reference logits are computed.
+    del hf_model
+    gc.collect()
+
     # === Load KerasHub tokenizer and preprocessor ===
     print("\n→ Loading KerasHub tokenizer and preprocessor...")
     keras_tokenizer = keras_hub.models.OpenAIPrivacyFilterTokenizer.from_preset(
         f"hf://{hf_preset}"
     )
-    preprocessor = keras_hub.models.OpenAIPrivacyFilterPreprocessor(
-        keras_tokenizer
+    preprocessor = (
+        keras_hub.models.OpenAIPrivacyFilterTokenClassifierPreprocessor(
+            keras_tokenizer
+        )
     )
     print("  ✅ KerasHub tokenizer and preprocessor loaded")
 
@@ -138,14 +191,14 @@ def main(_):
         )
     print("  ✅ Preprocessor parity verified")
 
-    # === Load KerasHub classifier ===
-    print("\n→ Loading KerasHub token classifier...")
+    # === Load KerasHub classifier in float32 and verify numerical parity ===
+    print("\n→ Loading KerasHub token classifier in dtype=float32...")
     keras_classifier = (
         keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
-            f"hf://{hf_preset}", dtype=FLAGS.dtype
+            f"hf://{hf_preset}", dtype="float32"
         )
     )
-    print("  ✅ KerasHub classifier loaded")
+    print("  ✅ KerasHub float32 classifier loaded")
 
     keras_backbone_params = keras_classifier.backbone.count_params()
     keras_total_params = keras_classifier.count_params()
@@ -162,55 +215,56 @@ def main(_):
         )
     print("  ✅ Parameter count matches")
 
-    # === Check predictions match on varying lengths ===
-    print("\n→ Checking predict([text]) parity...")
-    keras_classifier.preprocessor = preprocessor
-    # The check is about parity; increase sequence_length so we do not truncate.
+    print("\n→ Checking predict([text]) parity in float32...")
     orig_sequence_length = preprocessor.sequence_length
+    keras_classifier.preprocessor = preprocessor
     keras_classifier.preprocessor.sequence_length = 1024
+    verify_classifier_parity(
+        keras_classifier,
+        hf_results,
+        test_texts,
+        dtype_label="float32",
+        check_logits=True,
+    )
+    print("  ✅ Float32 logit and label parity verified for all lengths")
 
-    test_texts = [
-        "My name is John Smith and my email is john@example.com",
-        "John Smith works at Example Corp. " * 30,  # ~210 tokens
-        "Here is another much longer sentence to test. " * 68,  # ~610 tokens
-    ]
-
-    for i, text in enumerate(test_texts):
-        hf_logits, hf_token_ids = compute_hf_output(
-            hf_model, hf_tokenizer, text
+    # === Optionally reload in FLAGS.dtype for saving ===
+    if FLAGS.dtype != "float32":
+        del keras_classifier
+        gc.collect()
+        print(
+            f"\n→ Loading KerasHub token classifier in dtype={FLAGS.dtype}..."
         )
-        hf_preds = np.argmax(hf_logits, axis=-1)[0]
-        valid_len = len(hf_preds)
-        print(f"\n  Text {i + 1} length: {valid_len} tokens")
-
-        keras_logits = keras_classifier.predict([text], verbose=0)
-        # We only care about unpadded tokens.
-        keras_valid_logits = keras_logits[0][:valid_len]
-        keras_preds = np.argmax(keras_valid_logits, axis=-1)
-        hf_valid_logits = hf_logits[0][:valid_len]
-
-        max_diff = np.max(np.abs(keras_valid_logits - hf_valid_logits))
-        mean_diff = np.mean(np.abs(keras_valid_logits - hf_valid_logits))
-        print(f"    Max absolute diff: {max_diff:.6f}")
-        print(f"    Mean absolute diff: {mean_diff:.6f}")
-
-        if FLAGS.dtype == "float32":
-            np.testing.assert_allclose(
-                keras_valid_logits, hf_valid_logits, atol=1e-4, rtol=1e-4
+        keras_classifier = (
+            keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
+                f"hf://{hf_preset}", dtype=FLAGS.dtype
             )
-
-        if not np.array_equal(keras_preds, hf_preds):
-            raise ValueError(f"Prediction mismatch for text length {valid_len}")
-
-    print(f"  Parity measured at dtype={FLAGS.dtype}")
-    print("  ✅ Prediction parity verified for all lengths")
+        )
+        print(f"  ✅ KerasHub {FLAGS.dtype} classifier loaded")
+        keras_classifier.preprocessor = preprocessor
+        keras_classifier.preprocessor.sequence_length = 1024
+        print(
+            f"\n→ Checking predict([text]) labels in dtype={FLAGS.dtype} "
+            "(logit diffs informational)..."
+        )
+        verify_classifier_parity(
+            keras_classifier,
+            hf_results,
+            test_texts,
+            dtype_label=FLAGS.dtype,
+            check_logits=False,
+        )
+        print(f"  ✅ {FLAGS.dtype} label parity verified for all lengths")
 
     # === Save preset ===
-    print(f"\n→ Saving preset to ./{preset}/")
+    print(f"\n→ Saving preset to ./{preset}/ (dtype={FLAGS.dtype})")
     # Restore the default so the saved preset does not carry the parity
     # override.
     keras_classifier.preprocessor.sequence_length = orig_sequence_length
     keras_classifier.save_to_preset(f"./{preset}")
+    keras_logits_0 = keras_classifier.predict([test_texts[0]], verbose=0)
+    del keras_classifier
+    gc.collect()
     print("  ✅ Preset saved")
 
     # === Verify saved preset ===
@@ -224,7 +278,6 @@ def main(_):
         loaded_classifier.preprocessor.sequence_length == orig_sequence_length
     ), loaded_classifier.preprocessor.sequence_length
     loaded_logits = loaded_classifier.predict([test_texts[0]], verbose=0)
-    keras_logits_0 = keras_classifier.predict([test_texts[0]], verbose=0)
 
     np.testing.assert_allclose(
         keras_logits_0, loaded_logits, atol=1e-5, rtol=1e-5

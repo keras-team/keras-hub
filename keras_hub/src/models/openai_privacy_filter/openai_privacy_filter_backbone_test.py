@@ -383,3 +383,10 @@ class OpenAIPrivacyFilterBackboneTest(TestCase):
         self.assertEqual(restored.truncate, True)
         self.assertEqual(restored.swiglu_alpha, 1.5)
         self.assertEqual(restored.swiglu_limit, 5.0)
+
+    def test_missing_required_args(self):
+        for missing_arg in ("head_dim", "num_experts"):
+            kwargs = dict(self.init_kwargs)
+            del kwargs[missing_arg]
+            with self.assertRaises(TypeError):
+                OpenAIPrivacyFilterBackbone(**kwargs)
