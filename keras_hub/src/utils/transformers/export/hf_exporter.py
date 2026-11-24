@@ -122,14 +122,9 @@ MODEL_TOKENIZER_CONFIGS = {
 
 def _to_numpy_dict(weights_dict):
     """Convert a weight dict to a plain numpy dict for safetensors."""
-    import numpy as np
-
     result = {}
     for k, v in weights_dict.items():
-        tensor = v.value if hasattr(v, "value") else v
-        result[k] = np.array(
-            tensor.numpy() if hasattr(tensor, "numpy") else tensor
-        )
+        result[k] = keras.ops.convert_to_numpy(v)
     return result
 
 

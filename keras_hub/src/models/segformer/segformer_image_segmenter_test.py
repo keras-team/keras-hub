@@ -40,6 +40,7 @@ class SegFormerTest(TestCase):
             "backbone": self.backbone,
             "num_classes": 4,
             "preprocessor": self.preprocessor,
+            "dropout": 0.2,
         }
 
     def test_task(self):
@@ -49,6 +50,24 @@ class SegFormerTest(TestCase):
             train_data=(self.input_data, self.label_data),
             expected_output_shape=(2, 32, 32, 4),
         )
+
+    def test_dropout_serialization(self):
+        default_model = SegFormerImageSegmenter(
+            backbone=self.backbone, num_classes=4
+        )
+        self.assertEqual(default_model.dropout, 0.1)
+        self.assertEqual(default_model.output_dropout.rate, 0.1)
+
+        model = SegFormerImageSegmenter(**self.init_kwargs)
+        self.assertEqual(model.dropout, 0.2)
+        self.assertEqual(model.output_dropout.rate, 0.2)
+        self.assertIn(model.output_dropout, model.layers)
+
+        restored = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(model)
+        )
+        self.assertEqual(restored.dropout, 0.2)
+        self.assertEqual(restored.output_dropout.rate, 0.2)
 
     @pytest.mark.large
     def test_saved_model(self):
