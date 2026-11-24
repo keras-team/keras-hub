@@ -30,7 +30,8 @@ class TextEmbedder(Task):
         "Venus is often called Earth's twin.",
     ]
     q_emb = embedder.encode_text(query)
-    d_embs = embedder.encode_text(documents)
+    d_embs = embedder.encode_documents(documents)
+    sims = embedder.similarity(q_emb, d_embs)
     ```
     """
 
@@ -103,7 +104,7 @@ class TextEmbedder(Task):
             **kwargs: Additional keyword arguments passed to `predict()`.
 
         Returns:
-            A tensor of shape `(batch_size, embedding_dim)`.
+            A NumPy array of shape `(batch_size, embedding_dim)`.
         """
         if isinstance(documents, str):
             documents = [documents]
