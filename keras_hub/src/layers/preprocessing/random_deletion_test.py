@@ -5,15 +5,16 @@ import grain
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl import flags
 
 from keras_hub.src.layers.preprocessing.random_deletion import RandomDeletion
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class RandomDeletionTest(TestCase):
+    @pytest.mark.requires_tf
     def test_layer_basics(self):
         # `rate=1.0` always deletes every token, so the result doesn't
         # depend on the random draw. Int dtype avoids a numpy
@@ -26,6 +27,7 @@ class RandomDeletionTest(TestCase):
             expected_output=[[], []],
         )
 
+    @pytest.mark.requires_tf
     def test_shape_and_output_from_word_deletion(self):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -40,6 +42,7 @@ class RandomDeletionTest(TestCase):
         for row, augmented_row in zip(split.to_list(), augmented):
             self.assertLen(augmented_row, len(row) - 1)
 
+    @pytest.mark.requires_tf
     def test_shape_and_output_from_character_swaps(self):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
@@ -49,6 +52,7 @@ class RandomDeletionTest(TestCase):
         exp_output = ["He I like", "Keras and Tensorflw"]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_with_integer_tokens(self):
         inputs = tf.constant([[1, 2], [3, 4]])
         augmenter = RandomDeletion(rate=0.4, max_deletions=4, seed=13)
@@ -56,6 +60,7 @@ class RandomDeletionTest(TestCase):
         exp_output = [[2], [3]]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomDeletion(
@@ -88,6 +93,7 @@ class RandomDeletionTest(TestCase):
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_augment_first_batch_second(self):
         # Only skip_fn/skip_py_fn are covered; the no-skip path is already
         # covered by test_layer_basics.
@@ -121,6 +127,7 @@ class RandomDeletionTest(TestCase):
         exp_output = [["Hey", "I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
@@ -220,6 +227,7 @@ class RandomDeletionTest(TestCase):
             augmenter([np.int64(value) for value in values]), expected
         )
 
+    @pytest.mark.requires_tf
     def test_rng_rejected_on_tf_path(self):
         def skip_fn(word):
             return tf.strings.regex_full_match(word, r"\pP")
@@ -228,6 +236,7 @@ class RandomDeletionTest(TestCase):
         with self.assertRaisesRegex(ValueError, "`rng` is only supported"):
             augmenter(["a", "b"], rng=np.random.default_rng(0))
 
+    @pytest.mark.requires_tf
     def test_python_and_tf_paths_agree_on_structure(self):
         inputs = [["Hey", "I", "like"], ["Keras", "and", "Tensorflow"]]
         python_layer = RandomDeletion(rate=0.5, max_deletions=1, seed=42)

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
@@ -80,6 +81,7 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_with_videos(self):
         tokenizer = Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges)
 
@@ -124,6 +126,7 @@ class Qwen3_5CausalLMPreprocessorTest(TestCase):
         # position ids should have 4 channels: [4, 16]
         self.assertEqual(tuple(out["position_ids"].shape), (4, 16))
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess_with_videos_no_start_token(self):
         tokenizer = Qwen3_5Tokenizer(vocabulary=self.vocab, merges=self.merges)
 

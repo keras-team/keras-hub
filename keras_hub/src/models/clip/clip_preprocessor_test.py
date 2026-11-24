@@ -7,6 +7,7 @@ from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class CLIPPreprocessorTest(TestCase):
     def setUp(self):
         merges = ["a i", "p l", "n e</w>", "p o", "r t</w>", "ai r", "pl a"]

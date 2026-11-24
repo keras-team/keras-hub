@@ -2,6 +2,7 @@ import os
 
 import keras.ops as ops
 import numpy as np
+import pytest
 import torch
 from transformers import AutoModel
 from transformers import AutoModelForCausalLM
@@ -23,6 +24,7 @@ from keras_hub.src.tests.test_case import TestCase
 
 
 class TestGemma3Export(TestCase):
+    @pytest.mark.requires_tf
     def test_export_to_hf(self):
         proto = os.path.join(self.get_test_data_dir(), "gemma3_test_vocab.spm")
         tokenizer = Gemma3Tokenizer(proto=proto)
@@ -172,6 +174,7 @@ class TestGemma3Export(TestCase):
             "Generated outputs do not match (slow)",
         )
 
+    @pytest.mark.requires_tf
     def test_export_vision_model_to_hf(self):
         """Test exporting vision-enabled Gemma3 model to HuggingFace format."""
         import json
@@ -328,6 +331,7 @@ class TestGemma3Export(TestCase):
         self.assertIn("eos_token", config)
         self.assertIn("pad_token", config)
 
+    @pytest.mark.requires_tf
     def test_exported_files_completeness(self):
         """Test that all required HuggingFace files are generated."""
         import json

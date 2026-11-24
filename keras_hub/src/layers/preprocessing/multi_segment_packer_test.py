@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from keras_hub.src.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
@@ -461,6 +462,7 @@ class MultiSegmentPackerTest(TestCase):
         self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1, 1])
 
 
+@pytest.mark.requires_tf
 class MultiSegmentPackerTFTest(MultiSegmentPackerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

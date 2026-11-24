@@ -1,7 +1,7 @@
 import os
 import re
 
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
@@ -10,8 +10,10 @@ from keras_hub.src.tokenizers.sentence_piece_tokenizer import (
 from keras_hub.src.tokenizers.sentence_piece_tokenizer_trainer import (
     compute_sentence_piece_proto,
 )
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class SentencePieceTokenizerTrainerTest(TestCase):
     def test_dataset_input(self):
         test_text = ["Ninjas and Samurais"]

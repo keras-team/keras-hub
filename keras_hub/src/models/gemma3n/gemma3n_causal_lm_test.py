@@ -2,6 +2,7 @@ import copy
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -32,6 +33,7 @@ from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
 
 
+@pytest.mark.requires_tf
 class Gemma3nCausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.tokenizer = MockGemma3nTokenizer()

@@ -5,15 +5,16 @@ import grain
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl import flags
 
 from keras_hub.src.layers.preprocessing.random_swap import RandomSwap
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils import tensor_utils
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class RandomSwapTest(TestCase):
+    @pytest.mark.requires_tf
     def test_layer_basics(self):
         # `rate=0.0` never swaps, so the result doesn't depend on the
         # random draw. Int dtype avoids a numpy dtype-promotion crash in
@@ -25,6 +26,7 @@ class RandomSwapTest(TestCase):
             expected_output=[[1, 2, 3], [4, 5, 6]],
         )
 
+    @pytest.mark.requires_tf
     def test_shape_and_output_from_word_swap(self):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -41,6 +43,7 @@ class RandomSwapTest(TestCase):
                 sorted(t.decode("utf-8") for t in row), sorted(augmented_row)
             )
 
+    @pytest.mark.requires_tf
     def test_shape_and_output_from_character_swap(self):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
@@ -50,6 +53,7 @@ class RandomSwapTest(TestCase):
         exp_output = ["H leIkyi e", "Kerasnanf eTosor ldw"]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_with_integer_tokens(self):
         inputs = tf.constant([[1, 2, 3], [4, 5, 6]])
         augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=1)
@@ -57,6 +61,7 @@ class RandomSwapTest(TestCase):
         exp_output = [[1, 3, 2], [5, 4, 6]]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_skip_options(self):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -98,6 +103,7 @@ class RandomSwapTest(TestCase):
         exp_output = ["I Hey like", "and Keras Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_augment_first_batch_second(self):
         # Only skip_fn/skip_py_fn are covered; the no-skip path is already
         # covered by test_layer_basics.
@@ -136,6 +142,7 @@ class RandomSwapTest(TestCase):
         ]
         self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.requires_tf
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
@@ -240,6 +247,7 @@ class RandomSwapTest(TestCase):
             augmenter([np.int64(value) for value in values]), expected
         )
 
+    @pytest.mark.requires_tf
     def test_rng_rejected_on_tf_path(self):
         def skip_fn(word):
             return tf.strings.regex_full_match(word, r"\pP")
@@ -248,6 +256,7 @@ class RandomSwapTest(TestCase):
         with self.assertRaisesRegex(ValueError, "`rng` is only supported"):
             augmenter(["a", "b"], rng=np.random.default_rng(0))
 
+    @pytest.mark.requires_tf
     def test_python_and_tf_paths_agree_on_structure(self):
         inputs = [["Hey", "I", "like"], ["Keras", "and", "Tensorflow"]]
         python_layer = RandomSwap(rate=0.5, max_swaps=2, seed=42)

@@ -1,18 +1,15 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_tokenizer import ByteTokenizer
+from keras_hub.src.utils.tensor_utils import tf
+from keras_hub.src.utils.tensor_utils import tf_text
 
 try:
     import grain
 except ImportError:
     grain = None
-try:
-    import tensorflow_text as tf_text
-except ImportError:
-    tf_text = None
 
 
 class ByteTokenizerTest(TestCase):
@@ -121,6 +118,7 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(output[0], [[104, 105, 0, 0], [121, 111, 0, 0]])
         self.assertAllEqual(output[1], [[104, 101, 121, 0]])
 
+    @pytest.mark.requires_tf
     def test_tokenize_ragged_tf(self):
         if not self._allow_python_workflow:
             self.skipTest("tf.RaggedTensor only supported on Python path.")
@@ -223,11 +221,16 @@ class ByteTokenizerTest(TestCase):
         expected = [[104, 101, 108, 108, 111], [102, 117, 110]]
         self.assertAllEqual(tokenizer([b"hello", b"fun"]), expected)
         self.assertAllEqual(tokenizer(np.array(["hello", "fun"])), expected)
-        self.assertAllEqual(tokenizer(tf.constant(["hello", "fun"])), expected)
         self.assertAllEqual(tokenizer(b"hello"), expected[0])
-        self.assertAllEqual(tokenizer(tf.constant("hello")), expected[0])
         # Invalid utf-8 bytes are passed through.
         self.assertAllEqual(tokenizer(b"h\xffi"), [104, 255, 105])
+
+    @pytest.mark.requires_tf
+    def test_bytes_and_tensor_inputs_tf(self):
+        tokenizer = self.make_tokenizer()
+        expected = [[104, 101, 108, 108, 111], [102, 117, 110]]
+        self.assertAllEqual(tokenizer(tf.constant(["hello", "fun"])), expected)
+        self.assertAllEqual(tokenizer(tf.constant("hello")), expected[0])
 
     def test_detokenize_inputs(self):
         if not self._allow_python_workflow:
@@ -238,11 +241,16 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(
             tokenizer.detokenize(np.array(ids)), ["hello", "fun"]
         )
+        self.assertAllEqual(tokenizer.detokenize(ids[0]), "hello")
+        self.assertAllEqual(tokenizer.detokenize(np.array(ids[0])), "hello")
+
+    @pytest.mark.requires_tf
+    def test_detokenize_inputs_tf(self):
+        tokenizer = self.make_tokenizer()
+        ids = [[104, 101, 108, 108, 111, 0, 0], [102, 117, 110, 0, 0, 0, 0]]
         self.assertAllEqual(
             tokenizer.detokenize(tf.constant(ids)), ["hello", "fun"]
         )
-        self.assertAllEqual(tokenizer.detokenize(ids[0]), "hello")
-        self.assertAllEqual(tokenizer.detokenize(np.array(ids[0])), "hello")
 
     @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_outputs_numpy(self):
@@ -265,6 +273,7 @@ class ByteTokenizerTest(TestCase):
         )
         self.assertAllEqual(batch, tokenizer(input_data))
 
+    @pytest.mark.requires_tf
     @pytest.mark.skipif(tf_text is None, reason="tensorflow-text not installed")
     def test_python_path_matches_tf_path(self):
         if not self._allow_python_workflow:
@@ -308,6 +317,7 @@ class ByteTokenizerTest(TestCase):
             )
 
 
+@pytest.mark.requires_tf
 class ByteTokenizerTFTest(ByteTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

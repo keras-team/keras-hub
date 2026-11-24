@@ -48,6 +48,7 @@ class FluxTextToImagePreprocessorTest(TestCase):
             ),
         )
 
+    @pytest.mark.requires_tf
     def test_generate_preprocess(self):
         preprocessor = FluxTextToImagePreprocessor(**self.init_kwargs)
         x = preprocessor.generate_preprocess(self.input_data)

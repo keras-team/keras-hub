@@ -80,9 +80,16 @@ def pytest_configure(config):
         "markers",
         "kaggle_key_required: mark test needing a kaggle key",
     )
+    config.addinivalue_line(
+        "markers",
+        "requires_tf: mark test as needing TensorFlow to be installed",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
+    # Imported here so that loading conftest.py does not import keras_hub.
+    from keras_hub.src.utils import tensor_utils
+
     run_extra_large_tests = config.getoption("--run_extra_large")
     run_large_tests = config.getoption("--run_large")
 
@@ -98,6 +105,10 @@ def pytest_collection_modifyitems(config, items):
     tf_only = pytest.mark.skipif(
         not keras.config.backend() == "tensorflow",
         reason="tests only run on tf backend",
+    )
+    requires_tf = pytest.mark.skipif(
+        tensor_utils.tf is None,
+        reason="TensorFlow is not installed.",
     )
     found_kaggle_key = all(
         [
@@ -122,6 +133,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_extra_large)
         if "tf_only" in item.keywords:
             item.add_marker(tf_only)
+        if "requires_tf" in item.keywords:
+            item.add_marker(requires_tf)
         if "kaggle_key_required" in item.keywords:
             item.add_marker(kaggle_key_required)
 

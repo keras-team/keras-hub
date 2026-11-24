@@ -19,15 +19,11 @@ def _imported_packages(node):
 
 class ImportTest(TestCase):
     def test_no_module_level_optional_imports(self):
-        # `import keras_hub` must work without TensorFlow installed, so an
-        # optional package may only be imported inside the function that needs
-        # it, or behind a `try` that falls back to `None`. Tests are exempt.
+        # `import keras_hub` and test collection must work without TensorFlow
+        # installed, so an optional package may only be imported inside the
+        # function that needs it, or via `keras_hub.src.utils.tensor_utils`.
         offenders = []
         for path in sorted(SRC_ROOT.rglob("*.py")):
-            if path.name.endswith("_test.py"):
-                continue
-            if "tests" in path.relative_to(SRC_ROOT).parts:
-                continue
             source = path.read_text(encoding="utf-8")
             for node in ast.parse(source).body:
                 packages = _imported_packages(node)

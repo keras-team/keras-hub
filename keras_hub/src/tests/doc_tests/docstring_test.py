@@ -8,7 +8,6 @@ import keras
 import numpy as np
 import pytest
 import sentencepiece
-import tensorflow as tf
 
 import keras_hub
 from keras_hub.src.tests.doc_tests import docstring_lib
@@ -16,6 +15,7 @@ from keras_hub.src.tests.doc_tests import fenced_docstring_lib
 from keras_hub.src.tests.doc_tests.fenced_docstring_lib import (
     astor,  # For checking conditional import.
 )
+from keras_hub.src.utils.tensor_utils import tf
 
 PACKAGE = "keras_hub."
 

@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import pytest
 
 from keras_hub.src.models.gemma3n.gemma3n_audio_converter import (
     Gemma3nAudioConverter,
@@ -18,6 +19,7 @@ from keras_hub.src.tests.mocks.mock_gemma3n_tokenizer import (
 from keras_hub.src.tests.test_case import TestCase
 
 
+@pytest.mark.requires_tf
 class Gemma3nCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         # Easier to use a mock here, instead of trying to figure out why

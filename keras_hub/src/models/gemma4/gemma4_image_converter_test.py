@@ -1,13 +1,13 @@
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from keras_hub.src.models.gemma4.gemma4_image_converter import (
     Gemma4ImageConverter,
 )
+from keras_hub.src.tests.test_case import TestCase
 
 
-class Gemma4ImageConverterTest(tf.test.TestCase):
+class Gemma4ImageConverterTest(TestCase):
     def test_image_converter_range(self):
         converter = Gemma4ImageConverter(
             patch_size=4,
@@ -41,7 +41,3 @@ class Gemma4ImageConverterTest(tf.test.TestCase):
         # Here we just verify it runs and outputs expected keys
         self.assertIn("pixel_values", outputs)
         self.assertIn("pixel_position_ids", outputs)
-
-
-if __name__ == "__main__":
-    tf.test.main()

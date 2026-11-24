@@ -1,12 +1,13 @@
 import grain
 import keras
 import numpy as np
-import tensorflow as tf
+import pytest
 
 from keras_hub.src.models.moonshine.moonshine_audio_converter import (
     MoonshineAudioConverter,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class MoonshineAudioConverterTest(TestCase):
@@ -131,6 +132,7 @@ class MoonshineAudioConverterTest(TestCase):
         self.assertIsInstance(batch, np.ndarray)
         self.assertEqual(batch.shape, (2, 1, self.sampling_rate, 1))
 
+    @pytest.mark.requires_tf
     def test_tf_data_pipeline(self):
         # Inside `tf.data` the converter runs in graph mode, where its input
         # is a *symbolic* `tf.Tensor` that cannot be converted to a jax or

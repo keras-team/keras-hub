@@ -1,18 +1,18 @@
 import grain
 import numpy as np
-import tensorflow as tf
-from absl.testing import parameterized
+import pytest
 
 from keras_hub.src.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class StartEndPackerTest(TestCase):
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_layer_basics(self, allow_python_workflow):
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = True
+
+    def test_layer_basics(self):
         self.run_preprocessing_layer_test(
             cls=StartEndPacker,
             init_kwargs={
@@ -20,21 +20,33 @@ class StartEndPackerTest(TestCase):
                 "start_value": 1,
                 "end_value": 2,
                 "pad_value": 3,
-                "_allow_python_workflow": allow_python_workflow,
+                "_allow_python_workflow": self._allow_python_workflow,
+            },
+            input_data=[[5, 6, 7], [8, 9, 10]],
+            expected_output=[[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 2, 3, 3]],
+        )
+
+    @pytest.mark.requires_tf
+    def test_ragged_tensor_input(self):
+        self.run_preprocessing_layer_test(
+            cls=StartEndPacker,
+            init_kwargs={
+                "sequence_length": 7,
+                "start_value": 1,
+                "end_value": 2,
+                "pad_value": 3,
+                "_allow_python_workflow": self._allow_python_workflow,
             },
             input_data=tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]]),
             expected_output=[[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]],
         )
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_dense_input(self, allow_python_workflow):
+    def test_dense_input(self):
         # right padding
         input_data = [5, 6, 7]
         start_end_packer = StartEndPacker(
-            sequence_length=5, _allow_python_workflow=allow_python_workflow
+            sequence_length=5,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [5, 6, 7, 0, 0]
@@ -43,7 +55,7 @@ class StartEndPackerTest(TestCase):
         start_end_packer = StartEndPacker(
             sequence_length=5,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [0, 0, 5, 6, 7]
@@ -53,19 +65,20 @@ class StartEndPackerTest(TestCase):
         # Core Keras has a strange bug where it converts int to floats in
         # ops.convert_to_tensor only with jax and bfloat16.
         input_data = [5, 6, 7]
-        start_end_packer = StartEndPacker(sequence_length=5, dtype="bfloat16")
+        start_end_packer = StartEndPacker(
+            sequence_length=5,
+            dtype="bfloat16",
+            _allow_python_workflow=self._allow_python_workflow,
+        )
         output = start_end_packer(input_data)
         self.assertDTypeEqual(output, "int32")
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_dense_2D_input(self, allow_python_workflow):
+    def test_dense_2D_input(self):
         # right padding
         input_data = [[5, 6, 7]]
         start_end_packer = StartEndPacker(
-            sequence_length=5, _allow_python_workflow=allow_python_workflow
+            sequence_length=5,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[5, 6, 7, 0, 0]]
@@ -74,21 +87,18 @@ class StartEndPackerTest(TestCase):
         start_end_packer = StartEndPacker(
             sequence_length=5,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[0, 0, 5, 6, 7]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_ragged_input(self, allow_python_workflow):
+    def test_ragged_input(self):
         # right padding
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
-            sequence_length=5, _allow_python_workflow=allow_python_workflow
+            sequence_length=5,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[5, 6, 7, 0, 0], [8, 9, 10, 11, 0]]
@@ -97,24 +107,20 @@ class StartEndPackerTest(TestCase):
         start_end_packer = StartEndPacker(
             sequence_length=5,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[0, 0, 5, 6, 7], [0, 8, 9, 10, 11]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_start_end_token(self, allow_python_workflow):
+    def test_start_end_token(self):
         # right padding
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
             start_value=1,
             end_value=2,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[1, 5, 6, 7, 2, 0], [1, 8, 9, 10, 11, 2]]
@@ -125,17 +131,13 @@ class StartEndPackerTest(TestCase):
             start_value=1,
             end_value=2,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[0, 1, 5, 6, 7, 2], [1, 8, 9, 10, 11, 2]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_multiple_start_end_tokens(self, allow_python_workflow):
+    def test_multiple_start_end_tokens(self):
         # right padding
         input_data = [[5, 6, 7], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
@@ -143,7 +145,7 @@ class StartEndPackerTest(TestCase):
             start_value=[1, 2],
             end_value=[3, 4],
             pad_value=0,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[1, 2, 5, 6, 7, 3, 4, 0], [1, 2, 8, 9, 10, 11, 3, 4]]
@@ -156,17 +158,13 @@ class StartEndPackerTest(TestCase):
             end_value=[3, 4],
             pad_value=0,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[0, 1, 2, 5, 6, 7, 3, 4], [1, 2, 8, 9, 10, 11, 3, 4]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_start_end_padding_value(self, allow_python_workflow):
+    def test_start_end_padding_value(self):
         # right padding
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
@@ -174,7 +172,7 @@ class StartEndPackerTest(TestCase):
             start_value=1,
             end_value=2,
             pad_value=3,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
@@ -187,24 +185,20 @@ class StartEndPackerTest(TestCase):
             end_value=2,
             pad_value=3,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[3, 3, 1, 5, 6, 7, 2], [3, 1, 8, 9, 10, 11, 2]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_truncation(self, allow_python_workflow):
+    def test_truncation(self):
         # right padding
         input_data = list(range(10))
         packer = StartEndPacker(
             sequence_length=7,
             start_value=98,
             end_value=99,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         expected_output = [98, 0, 1, 2, 3, 4, 99]
         self.assertAllEqual(packer(input_data), expected_output)
@@ -215,21 +209,17 @@ class StartEndPackerTest(TestCase):
             start_value=98,
             end_value=99,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         self.assertAllEqual(packer(input_data), expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_truncation_wo_endvalue(self, allow_python_workflow):
+    def test_truncation_wo_endvalue(self):
         # right padding
         input_data = list(range(10))
         packer = StartEndPacker(
             sequence_length=7,
             start_value=98,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         expected_output = [98, 0, 1, 2, 3, 4, 5]
         self.assertAllEqual(packer(input_data), expected_output)
@@ -239,15 +229,11 @@ class StartEndPackerTest(TestCase):
             sequence_length=7,
             start_value=98,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         self.assertAllEqual(packer(input_data), expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_end_token_value_during_truncation(self, allow_python_workflow):
+    def test_end_token_value_during_truncation(self):
         # right padding
         input_data = [[5, 6], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
@@ -255,7 +241,7 @@ class StartEndPackerTest(TestCase):
             start_value=1,
             end_value=2,
             pad_value=0,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[1, 5, 6, 2, 0], [1, 8, 9, 10, 2]]
@@ -268,17 +254,13 @@ class StartEndPackerTest(TestCase):
             end_value=2,
             pad_value=0,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [[0, 1, 5, 6, 2], [1, 8, 9, 10, 2]]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_string_input(self, allow_python_workflow):
+    def test_string_input(self):
         # right padding
         input_data = [["KerasHub", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
@@ -286,7 +268,7 @@ class StartEndPackerTest(TestCase):
             start_value="[START]",
             end_value="[END]",
             pad_value="[PAD]",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [
@@ -302,7 +284,7 @@ class StartEndPackerTest(TestCase):
             end_value="[END]",
             pad_value="[PAD]",
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [
@@ -311,13 +293,7 @@ class StartEndPackerTest(TestCase):
         ]
         self.assertAllEqual(output, expected_output)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_string_input_with_multiple_special_values(
-        self, allow_python_workflow
-    ):
+    def test_string_input_with_multiple_special_values(self):
         # right padding
         input_data = [["KerasHub", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
@@ -325,7 +301,7 @@ class StartEndPackerTest(TestCase):
             start_value=["[END]", "[START]"],
             end_value="[END]",
             pad_value="[PAD]",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [
@@ -341,7 +317,7 @@ class StartEndPackerTest(TestCase):
             end_value="[END]",
             pad_value="[PAD]",
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output = start_end_packer(input_data)
         expected_output = [
@@ -354,35 +330,27 @@ class StartEndPackerTest(TestCase):
         with self.assertRaises(ValueError):
             StartEndPacker(sequence_length=5, start_value=1.0)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_call_overrides(self, allow_python_workflow):
+    def test_call_overrides(self):
         x = [5, 6, 7]
         packer = StartEndPacker(
             start_value=1,
             end_value=2,
             sequence_length=4,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         self.assertAllEqual(packer(x), [1, 5, 6, 2])
         self.assertAllEqual(packer(x, add_start_value=False), [5, 6, 7, 2])
         self.assertAllEqual(packer(x, add_end_value=False), [1, 5, 6, 7])
         self.assertAllEqual(packer(x, sequence_length=2), [1, 2])
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_get_config(self, allow_python_workflow):
+    def test_get_config(self):
         start_end_packer = StartEndPacker(
             sequence_length=512,
             start_value=10,
             end_value=20,
             pad_value=100,
             name="start_end_packer_test",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
 
         config = start_end_packer.get_config()
@@ -395,11 +363,7 @@ class StartEndPackerTest(TestCase):
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_return_padding_mask(self, allow_python_workflow):
+    def test_return_padding_mask(self):
         # right_padding
         input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
@@ -407,7 +371,7 @@ class StartEndPackerTest(TestCase):
             start_value=1,
             end_value=2,
             return_padding_mask=True,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output, padding_mask = start_end_packer(input_data)
         expected_output = [[1, 5, 6, 7, 2, 0], [1, 8, 9, 10, 11, 2]]
@@ -425,7 +389,7 @@ class StartEndPackerTest(TestCase):
             end_value=2,
             return_padding_mask=True,
             padding_side="left",
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         output, padding_mask = start_end_packer(input_data)
         expected_output = [[0, 1, 5, 6, 7, 2], [1, 8, 9, 10, 11, 2]]
@@ -436,17 +400,13 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
         self.assertAllEqual(padding_mask, expected_padding_mask)
 
-    @parameterized.named_parameters(
-        ("allow_python_workflow", True),
-        ("disallow_python_workflow", False),
-    )
-    def test_grain_outputs_numpy(self, allow_python_workflow):
+    def test_grain_outputs_numpy(self):
         layer = StartEndPacker(
             sequence_length=5,
             start_value=1,
             end_value=2,
             return_padding_mask=True,
-            _allow_python_workflow=allow_python_workflow,
+            _allow_python_workflow=self._allow_python_workflow,
         )
         # Direct call returns backend tensors.
         token_ids, padding_mask = layer([5, 6, 7])
@@ -462,3 +422,10 @@ class StartEndPackerTest(TestCase):
             padding_mask,
             [[1, 1, 1, 1, 1], [1, 1, 1, 1, 0]],
         )
+
+
+@pytest.mark.requires_tf
+class StartEndPackerTFTest(StartEndPackerTest):
+    def setUp(self):
+        super().setUp()
+        self._allow_python_workflow = False

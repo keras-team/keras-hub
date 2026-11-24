@@ -261,6 +261,7 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(outputs[1], ops.ones((4, 4, 3)) * (128.0 / 255.0))
 
 
+@pytest.mark.requires_tf
 class ImageConverterTFTest(ImageConverterTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 

@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from keras_hub.src.models.gemma4.gemma4_causal_lm_preprocessor import (
     Gemma4CausalLMPreprocessor,
@@ -16,8 +15,10 @@ from keras_hub.src.models.gemma4.gemma4_video_converter import (
 )
 from keras_hub.src.tests.mocks.mock_gemma4_tokenizer import MockGemma4Tokenizer
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class Gemma4CausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = MockGemma4Tokenizer()

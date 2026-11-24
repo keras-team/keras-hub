@@ -117,6 +117,7 @@ class StableDiffusion3TextToImageTest(TestCase):
             },
         )
 
+    @pytest.mark.requires_tf
     def test_generate(self):
         text_to_image = StableDiffusion3TextToImage(**self.init_kwargs)
         seed = 42
@@ -145,6 +146,7 @@ class StableDiffusion3TextToImageTest(TestCase):
         )
         self.assertAllClose(output, output2)
 
+    @pytest.mark.requires_tf
     def test_generate_with_lower_precision(self):
         original_floatx = keras.config.floatx()
         try:
@@ -181,6 +183,7 @@ class StableDiffusion3TextToImageTest(TestCase):
             # tests even if there is an exception.
             keras.config.set_floatx(original_floatx)
 
+    @pytest.mark.requires_tf
     def test_generate_compilation(self):
         text_to_image = StableDiffusion3TextToImage(**self.init_kwargs)
         # Assert we do not recompile with successive calls.

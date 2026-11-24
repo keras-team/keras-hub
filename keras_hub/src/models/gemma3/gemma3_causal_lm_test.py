@@ -4,7 +4,6 @@ from unittest.mock import patch
 import keras
 import numpy as np
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 from keras import ops
 
@@ -25,8 +24,10 @@ from keras_hub.src.tests.mocks.mock_gemma3_tokenizer import MockGemma3Tokenizer
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
 from keras_hub.src.utils.keras_utils import gpu_supports_fused_attention_op
+from keras_hub.src.utils.tensor_utils import tf
 
 
+@pytest.mark.requires_tf
 class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
     def setUp(self):
         self.tokenizer = MockGemma3Tokenizer()

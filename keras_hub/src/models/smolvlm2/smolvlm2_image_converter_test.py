@@ -1,6 +1,7 @@
 import grain
 import keras
 import numpy as np
+import pytest
 from absl.testing import parameterized
 from keras import ops
 
@@ -9,6 +10,7 @@ from keras_hub.src.models.smolvlm2.smolvlm2_image_converter import (
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.tensor_utils import tf
 
 # `tf.image.resize(method=<name>, antialias=True)` on the (1, 8, 12, 3)
 # hard-edge image in `test_lanczos_resize_matches_reference`, resized to
@@ -321,10 +323,9 @@ class SmolVLM2ImageConverterTest(TestCase):
         with self.assertRaisesRegex(ValueError, "image_size"):
             converter(image)
 
+    @pytest.mark.requires_tf
     def test_tf_data_map_jax_torch(self):
         """Map over tf.data works on all backends for training inputs."""
-        import tensorflow as tf
-
         converter = SmolVLM2ImageConverter(
             max_image_size=16,
             size=32,
@@ -335,14 +336,13 @@ class SmolVLM2ImageConverterTest(TestCase):
         for batch in ds:
             self.assertEqual(batch["pixel_values"].shape, (2, 16, 16, 3))
 
+    @pytest.mark.requires_tf
     def test_dynamic_sizing_matches_static(self):
         """The `tf.data` dynamic-shape sizing equals the Python helper.
 
         Covers both orientations, odd sizes (the even bump), tiny inputs
         and the 4096 cap, which only engages when `size` exceeds it.
         """
-        import tensorflow as tf
-
         cases = [
             (480, 640),
             (640, 480),
@@ -422,6 +422,7 @@ class SmolVLM2ImageConverterTest(TestCase):
         actual = ops.convert_to_numpy(converter(image)["pixel_values"])
         self.assertAllEqual(actual, expected[None])
 
+    @pytest.mark.requires_tf
     def test_batch_paths_match_per_image_path(self):
         """`_resize_batch` and `_call_tf` equal `_convert_image` exactly.
 
