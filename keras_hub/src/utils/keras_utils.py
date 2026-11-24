@@ -3,7 +3,6 @@ import sys
 
 import keras
 from absl import logging
-from keras.src.utils.module_utils import get_pluggable_backend_module
 
 try:
     import tensorflow as tf
@@ -206,6 +205,8 @@ def make_pluggable_backend_generate_function(
     Returns:
         A callable with the same call signature as `generate_step`.
     """
+    from keras.src.utils.module_utils import get_pluggable_backend_module
+
     backend_keras_hub_module = get_pluggable_backend_module(
         "src.keras_hub", allow_missing=True
     )

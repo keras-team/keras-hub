@@ -7,6 +7,7 @@ from unittest import mock
 import keras
 import numpy as np
 from absl.testing import parameterized
+from keras.src.utils import module_utils
 
 from keras_hub.src.models.block_diffusion_lm import BlockDiffusionLM
 from keras_hub.src.models.causal_lm import CausalLM
@@ -94,13 +95,22 @@ def backend_name(name, unofficial=True):
         yield
 
 
-class BackendGenerateFunctionTest(TestCase):
+class _BackendGenerateFunctionTestCase(TestCase):
     def setUp(self):
         super().setUp()
         built_in_backends = ("jax", "numpy", "tensorflow", "torch")
         if keras.config.backend() not in built_in_backends:
             self.skipTest("Simulates a pluggable backend on a built-in one.")
         self.hook = mock.Mock(return_value=fake_generate_function)
+
+
+class PluggableBackendGenerateFunctionTest(_BackendGenerateFunctionTestCase):
+    def setUp(self):
+        super().setUp()
+        if not hasattr(module_utils, "get_pluggable_backend_module"):
+            self.skipTest(
+                "`get_pluggable_backend_module` requires Keras >= 3.16."
+            )
 
     @parameterized.named_parameters(*GENERATE_TASKS)
     def test_backend_hook_is_used(self, cls, static_argnames):
@@ -201,6 +211,34 @@ class BackendGenerateFunctionTest(TestCase):
             generate_function = model.make_generate_function()
             self.assertEqual(generate_function, model.generate_step)
 
+    def test_helper_returns_without_mutating_model(self):
+        model = CausalLM()
+        custom_step = mock.Mock()
+        with (
+            backend_package("fakebackend", make_generate_function=self.hook),
+            backend_name("fakebackend"),
+        ):
+            result = make_pluggable_backend_generate_function(
+                model, custom_step, static_argnames=("stop_token_ids",)
+            )
+        self.assertIs(result, fake_generate_function)
+        self.assertIsNone(model.generate_function)
+        self.hook.assert_called_once_with(
+            model, custom_step, static_argnames=("stop_token_ids",)
+        )
+
+        with backend_package("fakebackend"), backend_name("fakebackend"):
+            result = make_pluggable_backend_generate_function(
+                model, custom_step
+            )
+        self.assertIs(result, custom_step)
+        self.assertIsNone(model.generate_function)
+
+        with self.assertRaises(ValueError):
+            make_pluggable_backend_generate_function(model, custom_step)
+
+
+class BackendGenerateFunctionTest(_BackendGenerateFunctionTestCase):
     @parameterized.named_parameters(*GENERATE_TASKS)
     def test_built_in_backend_ignores_backend_package(
         self, cls, static_argnames
@@ -237,29 +275,3 @@ class BackendGenerateFunctionTest(TestCase):
         else:
             self.assertTrue(callable(generate_function))
             self.assertIs(model.generate_function, generate_function)
-
-    def test_helper_returns_without_mutating_model(self):
-        model = CausalLM()
-        custom_step = mock.Mock()
-        with (
-            backend_package("fakebackend", make_generate_function=self.hook),
-            backend_name("fakebackend"),
-        ):
-            result = make_pluggable_backend_generate_function(
-                model, custom_step, static_argnames=("stop_token_ids",)
-            )
-        self.assertIs(result, fake_generate_function)
-        self.assertIsNone(model.generate_function)
-        self.hook.assert_called_once_with(
-            model, custom_step, static_argnames=("stop_token_ids",)
-        )
-
-        with backend_package("fakebackend"), backend_name("fakebackend"):
-            result = make_pluggable_backend_generate_function(
-                model, custom_step
-            )
-        self.assertIs(result, custom_step)
-        self.assertIsNone(model.generate_function)
-
-        with self.assertRaises(ValueError):
-            make_pluggable_backend_generate_function(model, custom_step)

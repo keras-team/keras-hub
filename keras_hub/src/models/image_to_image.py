@@ -7,9 +7,6 @@ from keras import random
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.task import Task
-from keras_hub.src.utils.keras_utils import (
-    make_pluggable_backend_generate_function,
-)
 from keras_hub.src.utils.keras_utils import standardize_data_format
 
 try:
@@ -190,6 +187,10 @@ class ImageToImage(Task):
         elif keras.config.backend() == "numpy":
             self.generate_function = self.generate_step
         else:  # pluggable backend
+            from keras_hub.src.utils.keras_utils import (
+                make_pluggable_backend_generate_function,
+            )
+
             self.generate_function = make_pluggable_backend_generate_function(
                 self, self.generate_step
             )
