@@ -75,6 +75,43 @@ class SafetensorLoader(contextlib.ExitStack):
         self.prefix = ""
         return hf_weight_key
 
+    def _get_safetensor_file(self, fname):
+        if fname not in self.safetensor_files:
+            path = get_file(self.preset, fname)
+            file = self.enter_context(
+                safetensors.safe_open(path, framework="np")
+            )
+            self.safetensor_files[fname] = file
+            self.safetensor_keys[fname] = dict.fromkeys(file.keys())
+        return self.safetensor_files[fname], self.safetensor_keys[fname]
+
+    def has_tensor(self, hf_weight_key):
+        saved_prefix = self.prefix
+        try:
+            if self.safetensor_config is None:
+                fname = (
+                    self.fname if self.fname is not None else SAFETENSOR_FILE
+                )
+            else:
+                weight_map = self.safetensor_config["weight_map"]
+                full_key = self.get_prefixed_key(hf_weight_key, weight_map)
+                if full_key not in weight_map:
+                    return False
+                fname = weight_map[full_key]
+
+            try:
+                _, stored_keys = self._get_safetensor_file(fname)
+            except FileNotFoundError:
+                return False
+
+            full_key = self.get_prefixed_key(hf_weight_key, stored_keys)
+            if full_key in stored_keys:
+                return True
+            self.prefix = saved_prefix
+            return self.get_tied_key(hf_weight_key, fname) in stored_keys
+        finally:
+            self.prefix = saved_prefix
+
     def get_tensor(self, hf_weight_key):
         if self.safetensor_config is None:
             fname = self.fname if self.fname is not None else SAFETENSOR_FILE
@@ -84,17 +121,7 @@ class SafetensorLoader(contextlib.ExitStack):
             )
             fname = self.safetensor_config["weight_map"][full_key]
 
-        if fname in self.safetensor_files:
-            file = self.safetensor_files[fname]
-        else:
-            path = get_file(self.preset, fname)
-            file = self.enter_context(
-                safetensors.safe_open(path, framework="np")
-            )
-            self.safetensor_files[fname] = file
-            self.safetensor_keys[fname] = dict.fromkeys(file.keys())
-
-        stored_keys = self.safetensor_keys[fname]
+        file, stored_keys = self._get_safetensor_file(fname)
         full_key = self.get_prefixed_key(hf_weight_key, stored_keys)
         if full_key not in stored_keys:
             full_key = self.get_tied_key(hf_weight_key, fname)

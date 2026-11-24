@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
@@ -12,14 +14,12 @@ from keras_hub.src.models.text_embedder_preprocessor import (
     TextEmbedderPreprocessor,
 )
 from keras_hub.src.utils.preset_utils import HF_TOKENIZER_CONFIG_FILE
-from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import get_file
 from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers.convert_modern_bert import (
     _read_pooling_mode,
 )
-from keras_hub.src.utils.transformers.safetensor_utils import safetensors
 
 backbone_cls = MobileBertBackbone
 
@@ -48,58 +48,44 @@ def _hf_architecture(transformers_config):
 
 def _hf_has_pooler(transformers_config):
     return (
-        transformers_config["classifier_activation"]
+        transformers_config.get("classifier_activation", True)
         and _hf_architecture(transformers_config)
         not in _HF_ARCHITECTURES_WITHOUT_POOLER
     )
 
 
-def _has_hf_weight(loader, hf_weight_key):
-    if hasattr(loader, "state_dict"):
-        keys = loader.state_dict.keys()
-    elif loader.safetensor_config is not None:
-        keys = loader.safetensor_config["weight_map"].keys()
-    else:
-        fname = loader.fname if loader.fname is not None else SAFETENSOR_FILE
-        if fname not in loader.safetensor_files:
-            if safetensors is None or not check_file_exists(
-                loader.preset, fname
-            ):
-                return False
-            path = get_file(loader.preset, fname)
-            loader.safetensor_files[fname] = loader.enter_context(
-                safetensors.safe_open(path, framework="np")
-            )
-        keys = loader.safetensor_files[fname].keys()
-    return hf_weight_key in keys or f"mobilebert.{hf_weight_key}" in keys
-
-
 def convert_backbone_config(transformers_config):
-    if not transformers_config["trigram_input"]:
+    if not transformers_config.get("trigram_input", True):
         raise ValueError("MobileBERT requires trigram_input=True")
-    if not transformers_config["use_bottleneck"]:
+    if not transformers_config.get("use_bottleneck", True):
         raise ValueError("MobileBERT requires use_bottleneck=True")
-    if not transformers_config["key_query_shared_bottleneck"]:
+    if not transformers_config.get("key_query_shared_bottleneck", True):
         raise ValueError("MobileBERT requires key_query_shared_bottleneck=True")
-    if transformers_config["use_bottleneck_attention"]:
+    if transformers_config.get("use_bottleneck_attention", False):
         raise ValueError("MobileBERT requires use_bottleneck_attention=False")
+    intra_bottleneck_size = transformers_config["intra_bottleneck_size"]
     if (
-        transformers_config["true_hidden_size"]
-        != transformers_config["intra_bottleneck_size"]
+        transformers_config.get("true_hidden_size", intra_bottleneck_size)
+        != intra_bottleneck_size
     ):
         raise ValueError(
             "MobileBERT requires true_hidden_size == intra_bottleneck_size"
         )
-    if transformers_config["normalization_type"] not in NORMALIZATION_TYPES:
+    normalization_type = transformers_config.get(
+        "normalization_type", "no_norm"
+    )
+    if normalization_type not in NORMALIZATION_TYPES:
         raise ValueError(
             f"MobileBERT requires normalization_type in {NORMALIZATION_TYPES}, "
-            f"got {transformers_config['normalization_type']!r}"
+            f"got {normalization_type!r}"
         )
-    if transformers_config["num_feedforward_networks"] < 1:
+    num_feedforward_networks = transformers_config.get(
+        "num_feedforward_networks", 4
+    )
+    if num_feedforward_networks < 1:
         raise ValueError(
             "`num_feedforward_networks` must be >= 1. Received: "
-            "num_feedforward_networks="
-            f"{transformers_config['num_feedforward_networks']}."
+            f"num_feedforward_networks={num_feedforward_networks}."
         )
 
     return {
@@ -108,23 +94,21 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "embedding_dim": transformers_config["embedding_size"],
-        "intra_bottleneck_dim": transformers_config["intra_bottleneck_size"],
+        "intra_bottleneck_dim": intra_bottleneck_size,
         "intermediate_dim": transformers_config["intermediate_size"],
-        "num_feedforward_networks": transformers_config[
-            "num_feedforward_networks"
-        ],
-        "activation": transformers_config["hidden_act"],
-        "normalization_type": transformers_config["normalization_type"],
+        "num_feedforward_networks": num_feedforward_networks,
+        "activation": transformers_config.get("hidden_act", "relu"),
+        "normalization_type": normalization_type,
         # HF uses 1e-5 for emb and output norm by default. KerasHub uses
         # layer_norm_epsilon uniformly.
-        "layer_norm_epsilon": transformers_config["layer_norm_eps"],
+        "layer_norm_epsilon": transformers_config.get("layer_norm_eps", 1e-12),
         "use_pooler_dense": _hf_has_pooler(transformers_config),
-        "dropout": transformers_config["hidden_dropout_prob"],
-        "attention_dropout": transformers_config[
-            "attention_probs_dropout_prob"
-        ],
+        "dropout": transformers_config.get("hidden_dropout_prob", 0.0),
+        "attention_dropout": transformers_config.get(
+            "attention_probs_dropout_prob", 0.1
+        ),
         "max_sequence_length": transformers_config["max_position_embeddings"],
-        "num_segments": transformers_config["type_vocab_size"],
+        "num_segments": transformers_config.get("type_vocab_size", 2),
     }
 
 
@@ -255,65 +239,38 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"{hf_prefix}attention.output.LayerNorm.bias",
         )
 
-        # FFNs (j=0..2 are ffn.j)
+        # FFNs
         num_ffn = backbone.num_feedforward_networks
-        for j in range(num_ffn - 1):
-            ffn = block.ffn_layers[j]
+        for j, ffn in enumerate(block.ffn_layers):
+            ffn_prefix = (
+                f"{hf_prefix}ffn.{j}." if j < num_ffn - 1 else hf_prefix
+            )
             loader.port_weight(
                 keras_variable=ffn.intermediate_dense.kernel,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.intermediate.dense.weight",
+                hf_weight_key=f"{ffn_prefix}intermediate.dense.weight",
                 hook_fn=transpose_and_reshape,
             )
             loader.port_weight(
                 keras_variable=ffn.intermediate_dense.bias,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.intermediate.dense.bias",
+                hf_weight_key=f"{ffn_prefix}intermediate.dense.bias",
             )
             loader.port_weight(
                 keras_variable=ffn.output_dense.kernel,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.output.dense.weight",
+                hf_weight_key=f"{ffn_prefix}output.dense.weight",
                 hook_fn=transpose_and_reshape,
             )
             loader.port_weight(
                 keras_variable=ffn.output_dense.bias,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.output.dense.bias",
+                hf_weight_key=f"{ffn_prefix}output.dense.bias",
             )
             loader.port_weight(
                 keras_variable=ffn.output_layer_norm.gamma,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.output.LayerNorm.weight",
+                hf_weight_key=f"{ffn_prefix}output.LayerNorm.weight",
             )
             loader.port_weight(
                 keras_variable=ffn.output_layer_norm.beta,
-                hf_weight_key=f"{hf_prefix}ffn.{j}.output.LayerNorm.bias",
+                hf_weight_key=f"{ffn_prefix}output.LayerNorm.bias",
             )
-
-        # FFN_3 (intermediate + output)
-        ffn_last = block.ffn_layers[-1]
-        loader.port_weight(
-            keras_variable=ffn_last.intermediate_dense.kernel,
-            hf_weight_key=f"{hf_prefix}intermediate.dense.weight",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
-            keras_variable=ffn_last.intermediate_dense.bias,
-            hf_weight_key=f"{hf_prefix}intermediate.dense.bias",
-        )
-        loader.port_weight(
-            keras_variable=ffn_last.output_dense.kernel,
-            hf_weight_key=f"{hf_prefix}output.dense.weight",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
-            keras_variable=ffn_last.output_dense.bias,
-            hf_weight_key=f"{hf_prefix}output.dense.bias",
-        )
-        loader.port_weight(
-            keras_variable=ffn_last.output_layer_norm.gamma,
-            hf_weight_key=f"{hf_prefix}output.LayerNorm.weight",
-        )
-        loader.port_weight(
-            keras_variable=ffn_last.output_layer_norm.beta,
-            hf_weight_key=f"{hf_prefix}output.LayerNorm.bias",
-        )
 
         # Output Bottleneck
         loader.port_weight(
@@ -334,20 +291,26 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"{hf_prefix}output.bottleneck.LayerNorm.bias",
         )
 
-    if (
-        backbone.pooled_dense is not None
-        and _hf_has_pooler(transformers_config)
-        and _has_hf_weight(loader, "pooler.dense.weight")
+    if backbone.pooled_dense is not None and _hf_has_pooler(
+        transformers_config
     ):
-        loader.port_weight(
-            keras_variable=backbone.get_layer("pooled_dense").kernel,
-            hf_weight_key="pooler.dense.weight",
-            hook_fn=transpose_and_reshape,
-        )
-        loader.port_weight(
-            keras_variable=backbone.get_layer("pooled_dense").bias,
-            hf_weight_key="pooler.dense.bias",
-        )
+        if loader.has_tensor("pooler.dense.weight"):
+            loader.port_weight(
+                keras_variable=backbone.get_layer("pooled_dense").kernel,
+                hf_weight_key="pooler.dense.weight",
+                hook_fn=transpose_and_reshape,
+            )
+            loader.port_weight(
+                keras_variable=backbone.get_layer("pooled_dense").bias,
+                hf_weight_key="pooler.dense.bias",
+            )
+        else:
+            warnings.warn(
+                "Checkpoint has no `pooler.dense.weight`; skipping pooler "
+                "weights and leaving `backbone.pooled_dense` randomly "
+                "initialized.",
+                stacklevel=2,
+            )
 
 
 def convert_head(task, loader, transformers_config):
@@ -356,7 +319,7 @@ def convert_head(task, loader, transformers_config):
         # e.g. `MobileBertForSequenceClassification`: the backbone is ported,
         # the MLM head keeps its fresh initialization.
         return
-    if arch is None and not _has_hf_weight(loader, "cls.predictions.bias"):
+    if arch is None and not loader.has_tensor("cls.predictions.bias"):
         return
 
     loader.port_weight(

@@ -71,12 +71,15 @@ class HfWeightLoader:
         self.state_dict = state_dict
         self.consumed = set()
 
+    def _resolve_key(self, hf_weight_key):
+        prefixed = f"mobilebert.{hf_weight_key}"
+        return prefixed if prefixed in self.state_dict else hf_weight_key
+
+    def has_tensor(self, hf_weight_key):
+        return self._resolve_key(hf_weight_key) in self.state_dict
+
     def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
-        key = (
-            "mobilebert." + hf_weight_key
-            if "mobilebert." + hf_weight_key in self.state_dict
-            else hf_weight_key
-        )
+        key = self._resolve_key(hf_weight_key)
         if key not in self.state_dict:
             raise KeyError(f"Key '{key}' not found in state_dict")
         self.consumed.add(key)

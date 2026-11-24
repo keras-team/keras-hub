@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import warnings
 
 import keras
 import numpy as np
@@ -788,6 +789,37 @@ class ConvertMobileBertTest(TestCase):
         with self.assertRaisesRegex(ValueError, field):
             convert_backbone_config(self._tiny_hf_config(**overrides))
 
+    def test_backbone_config_optional_defaults(self):
+        optional_fields = (
+            "trigram_input",
+            "use_bottleneck",
+            "key_query_shared_bottleneck",
+            "use_bottleneck_attention",
+            "true_hidden_size",
+            "normalization_type",
+            "num_feedforward_networks",
+            "hidden_act",
+            "layer_norm_eps",
+            "classifier_activation",
+            "hidden_dropout_prob",
+            "attention_probs_dropout_prob",
+            "type_vocab_size",
+        )
+        full_default = self._tiny_hf_config(num_feedforward_networks=4)
+        minimal = {
+            k: v for k, v in full_default.items() if k not in optional_fields
+        }
+        try:
+            got = convert_backbone_config(minimal)
+        except KeyError as e:
+            self.fail(f"Unexpected KeyError on optional field: {e}")
+        self.assertEqual(got, convert_backbone_config(full_default))
+
+        missing_vocab = dict(minimal)
+        del missing_vocab["vocab_size"]
+        with self.assertRaises(KeyError):
+            convert_backbone_config(missing_vocab)
+
     def test_backbone_config_pooler_follows_architecture(self):
         # (architectures, classifier_activation, expected use_pooler_dense).
         cases = (
@@ -859,12 +891,35 @@ class ConvertMobileBertTest(TestCase):
                     include_mlm=False,
                     prefix=prefix,
                 )
-                model = MobileBertBackbone.from_preset(tmp_dir)
+                with self.assertWarnsRegex(UserWarning, "pooler"):
+                    model = MobileBertBackbone.from_preset(tmp_dir)
             self.assertIsInstance(model.pooled_dense, keras.layers.Dense)
             ported = self._assert_ported_weights_equal(
                 model, hf_weights, prefix=prefix
             )
             self.assertEqual(ported, set(hf_weights))
+
+        for quiet_cfg, inc_pooler in (
+            (config, True),
+            (
+                self._tiny_hf_config(architectures=["MobileBertForMaskedLM"]),
+                False,
+            ),
+        ):
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                self._write_synthetic_checkpoint(
+                    tmp_dir,
+                    quiet_cfg,
+                    include_pooler=inc_pooler,
+                    include_mlm=False,
+                )
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    MobileBertBackbone.from_preset(tmp_dir)
+            pooler_warnings = [
+                w for w in caught if "pooler" in str(w.message).lower()
+            ]
+            self.assertEqual(pooler_warnings, [])
 
     def test_classifier_checkpoint_without_mlm_head(self):
         config = self._tiny_hf_config(
@@ -1010,3 +1065,35 @@ class ConvertMobileBertTest(TestCase):
             )
         self.assertEqual(ft_pre.sequence_length, 10)
         self.assertTrue(ft_emb.normalize)
+
+        # 4. With `256 < max_position_embeddings < 512`, `cls` forwarding to
+        # `load_preprocessor_config` keeps the embedder preprocessor at 256
+        # while clamping the classifier preprocessor to 384, and `cls`
+        # forwarding to `load_task_config` loads `TextClassifier` cleanly on a
+        # Sentence-Transformers preset.
+        mid_config = self._tiny_hf_config(
+            architectures=["MobileBertModel"],
+            max_position_embeddings=384,
+            classifier_dropout=0.25,
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._write_minimal_preset(tmp_dir, config=mid_config)
+            mid_emb_pre = MobileBertTextEmbedderPreprocessor.from_preset(
+                tmp_dir
+            )
+            mid_clf_pre = MobileBertTextClassifierPreprocessor.from_preset(
+                tmp_dir
+            )
+        self.assertEqual(mid_emb_pre.sequence_length, 256)
+        self.assertEqual(mid_clf_pre.sequence_length, 384)
+
+        with tempfile.TemporaryDirectory() as st_dir:
+            self._write_minimal_preset(
+                st_dir, files=st_files, config=mid_config
+            )
+            st_clf = MobileBertTextClassifier.from_preset(
+                st_dir, num_classes=2, load_weights=False
+            )
+        self.assertEqual(st_clf.dropout, 0.25)
+        self.assertFalse(hasattr(st_clf, "normalize"))
+        self.assertFalse(hasattr(st_clf, "pooling_mode"))

@@ -276,7 +276,9 @@ class MobileBertBackbone(Backbone):
                 "intra_bottleneck_dim": self.intra_bottleneck_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "num_feedforward_networks": self.num_feedforward_networks,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(
+                    keras.activations.get(self.activation)
+                ),
                 "normalization_type": self.normalization_type,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "use_pooler_dense": self.use_pooler_dense,

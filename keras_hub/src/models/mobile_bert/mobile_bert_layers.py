@@ -191,6 +191,7 @@ class MobileBertAttention(keras.layers.Layer):
             )
         self.num_heads = num_heads
         self.intra_bottleneck_dim = intra_bottleneck_dim
+        self._scale = (intra_bottleneck_dim // num_heads) ** -0.5
         self.dropout = dropout
         self.normalization_type = normalization_type
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -229,6 +230,15 @@ class MobileBertAttention(keras.layers.Layer):
         )
 
     def build(self, query_shape, value_shape, residual_shape=None, **kwargs):
+        if (
+            residual_shape is not None
+            and residual_shape[-1] != self.intra_bottleneck_dim
+        ):
+            raise ValueError(
+                "`residual_shape[-1]` must equal `intra_bottleneck_dim` "
+                f"({self.intra_bottleneck_dim}). Received: "
+                f"residual_shape={residual_shape}."
+            )
         self.query_dense.build(query_shape)
         self.key_dense.build(query_shape)
         self.value_dense.build(value_shape)
@@ -238,12 +248,7 @@ class MobileBertAttention(keras.layers.Layer):
             self.intra_bottleneck_dim,
         )
         self.output_dense.build(bottleneck_out_shape)
-        target_shape = (
-            residual_shape
-            if residual_shape is not None
-            else bottleneck_out_shape
-        )
-        self.output_layer_norm.build(target_shape)
+        self.output_layer_norm.build(bottleneck_out_shape)
         self.built = True
 
     def call(self, query, value, residual, padding_mask=None, training=None):
@@ -264,9 +269,7 @@ class MobileBertAttention(keras.layers.Layer):
         v = ops.transpose(v, (0, 2, 1, 3))
 
         scores = ops.matmul(q, ops.transpose(k, (0, 1, 3, 2)))
-        scores = scores / ops.cast(
-            ops.sqrt(ops.cast(head_dim, q.dtype)), q.dtype
-        )
+        scores = scores * ops.cast(self._scale, q.dtype)
 
         if padding_mask is not None:
             mask = ops.cast(padding_mask, "bool")
@@ -296,8 +299,6 @@ class MobileBertAttention(keras.layers.Layer):
     def compute_output_shape(
         self, query_shape, value_shape, residual_shape=None, **kwargs
     ):
-        if residual_shape is not None:
-            return residual_shape
         return (query_shape[0], query_shape[1], self.intra_bottleneck_dim)
 
     def get_config(self):

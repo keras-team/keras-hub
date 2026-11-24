@@ -1,3 +1,5 @@
+import json
+
 import keras
 import numpy as np
 import pytest
@@ -158,6 +160,21 @@ class MobileBertBackboneTest(TestCase):
     def test_rejects_indivisible_heads(self):
         with self.assertRaisesRegex(ValueError, "divisible"):
             MobileBertBackbone(**{**self.init_kwargs, "num_heads": 3})
+
+    def test_callable_activation_serialization(self):
+        backbone = MobileBertBackbone(
+            **{**self.init_kwargs, "activation": keras.activations.gelu}
+        )
+        config = backbone.get_config()
+        self.assertEqual(config["activation"], "gelu")
+        self.assertTrue(json.dumps(config))
+        restored = MobileBertBackbone.from_config(config)
+        self.assertEqual(restored.get_config()["activation"], "gelu")
+        restored.set_weights(backbone.get_weights())
+        self.assertAllClose(
+            restored(self.input_data)["sequence_output"],
+            backbone(self.input_data)["sequence_output"],
+        )
 
     def test_preset_metadata_path(self):
         # keras.io links presets under `/api/models/<path>/`, which must match

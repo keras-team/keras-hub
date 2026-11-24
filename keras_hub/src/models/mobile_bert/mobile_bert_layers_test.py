@@ -1,3 +1,4 @@
+import inspect
 import json
 
 import keras
@@ -118,12 +119,80 @@ class MobileBertLayersTest(TestCase):
             intra_bottleneck_dim=8,
             normalization_type="layer_norm",
         )
-        attn.build((2, 4, 8), (2, 4, 16), (2, 4, 16))
-        self.assertEqual(tuple(attn.output_layer_norm.gamma.shape), (16,))
-        self.assertEqual(
-            attn.compute_output_shape((2, 4, 8), (2, 4, 16), (2, 4, 16)),
-            (2, 4, 16),
+        with self.assertRaisesRegex(ValueError, "intra_bottleneck_dim"):
+            attn.build((2, 4, 8), (2, 4, 16), (2, 4, 16))
+
+        valid = MobileBertAttention(
+            num_heads=2,
+            intra_bottleneck_dim=8,
+            normalization_type="layer_norm",
         )
+        valid.build((2, 4, 8), (2, 4, 16), (2, 4, 8))
+        self.assertEqual(tuple(valid.output_layer_norm.gamma.shape), (8,))
+        self.assertEqual(
+            valid.compute_output_shape((2, 4, 8), (2, 4, 16), (2, 4, 8)),
+            (2, 4, 8),
+        )
+        out = valid(
+            query=ops.ones((2, 4, 8), dtype=self.compute_dtype),
+            value=ops.ones((2, 4, 16), dtype=self.compute_dtype),
+            residual=ops.ones((2, 4, 8), dtype=self.compute_dtype),
+        )
+        self.assertEqual(tuple(out.shape), (2, 4, 8))
+
+    def test_attention_precomputed_scale(self):
+        attn = MobileBertAttention(num_heads=2, intra_bottleneck_dim=8)
+        self.assertTrue(hasattr(attn, "_scale"))
+        self.assertEqual(attn._scale, 0.5)
+        self.assertNotIn("sqrt", inspect.getsource(MobileBertAttention.call))
+
+        q_np = np.zeros((1, 2, 8), dtype="float32")
+        q_np[0, 0, 0] = 2.0
+        q_np[0, 0, 4] = 2.0
+        v_np = np.zeros((1, 2, 8), dtype="float32")
+        v_np[0, 0, :] = 1.0
+        res_np = np.zeros((1, 2, 8), dtype="float32")
+        expected_scaled = float(np.exp(2.0) / (np.exp(2.0) + 1.0))
+
+        for dtype in ("float32", "float16"):
+            layer = MobileBertAttention(
+                num_heads=2,
+                intra_bottleneck_dim=8,
+                dropout=0.0,
+                normalization_type="no_norm",
+                dtype=dtype,
+            )
+            layer.build((1, 2, 8), (1, 2, 8), (1, 2, 8))
+            eye = np.eye(8, dtype="float32")
+            zeros = np.zeros(8, dtype="float32")
+            for dense in (
+                layer.query_dense,
+                layer.key_dense,
+                layer.value_dense,
+                layer.output_dense,
+            ):
+                dense.set_weights([eye, zeros])
+            layer.output_layer_norm.set_weights(
+                [np.ones(8, dtype="float32"), zeros]
+            )
+
+            query = ops.convert_to_tensor(q_np, dtype=dtype)
+            value = ops.convert_to_tensor(v_np, dtype=dtype)
+            residual = ops.convert_to_tensor(res_np, dtype=dtype)
+            out_scaled = layer(query=query, value=value, residual=residual)
+            self.assertAllClose(
+                out_scaled[0, 0],
+                np.full(8, expected_scaled, dtype="float32"),
+                atol=2e-3,
+            )
+
+            layer._scale = 0.0
+            out_uniform = layer(query=query, value=value, residual=residual)
+            self.assertAllClose(
+                out_uniform[0, 0],
+                np.full(8, 0.5, dtype="float32"),
+                atol=2e-3,
+            )
 
     def test_invalid_num_ffn(self):
         with self.assertRaisesRegex(ValueError, "num_feedforward_networks"):
