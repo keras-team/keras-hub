@@ -53,6 +53,25 @@ TOKENIZER_CASES = (
 )
 
 
+def write_hf_preset(preset_dir, config, weights=None, extra_files=None):
+    with open(os.path.join(preset_dir, "config.json"), "w") as f:
+        json.dump(config, f)
+    for name, content in (extra_files or {}).items():
+        full_path = os.path.join(preset_dir, name)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "w") as f:
+            if isinstance(content, str):
+                f.write(content)
+            else:
+                json.dump(content, f)
+    if weights is not None:
+        safetensors_np = pytest.importorskip("safetensors.numpy")
+        safetensors_np.save_file(
+            weights, os.path.join(preset_dir, "model.safetensors")
+        )
+    return preset_dir
+
+
 class ConvertMobileBertTest(TestCase):
     @pytest.mark.large
     def test_convert_mnli_preset(self):
@@ -123,22 +142,15 @@ class ConvertMobileBertTest(TestCase):
         weights=None,
         write_vocab=True,
     ):
+        extra_files = {}
         if write_vocab:
-            with open(os.path.join(tmp_dir, "vocab.txt"), "w") as f:
-                f.write("\n".join(self.vocab) + "\n")
+            extra_files["vocab.txt"] = "\n".join(self.vocab) + "\n"
+        if files:
+            extra_files.update(files)
         cfg_payload = {"model_type": "mobilebert"} if config is None else config
-        with open(os.path.join(tmp_dir, "config.json"), "w") as f:
-            json.dump(cfg_payload, f)
-        for filename, payload in (files or {}).items():
-            full_path = os.path.join(tmp_dir, filename)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "w") as f:
-                json.dump(payload, f)
-        if weights is not None:
-            safetensors = pytest.importorskip("safetensors.numpy")
-            safetensors.save_file(
-                weights, os.path.join(tmp_dir, "model.safetensors")
-            )
+        write_hf_preset(
+            tmp_dir, cfg_payload, weights=weights, extra_files=extra_files
+        )
 
     def _tiny_hf_config(self, **overrides):
         # Use distinct non-square dimensions (vocab=11, emb=6, bottleneck=8,
@@ -789,8 +801,9 @@ class ConvertMobileBertTest(TestCase):
         with self.assertRaisesRegex(ValueError, field):
             convert_backbone_config(self._tiny_hf_config(**overrides))
 
-    def test_backbone_config_optional_defaults(self):
-        optional_fields = (
+    def test_backbone_config_requires_all_fields(self):
+        required_fields = (
+            "classifier_activation",
             "trigram_input",
             "use_bottleneck",
             "key_query_shared_bottleneck",
@@ -800,25 +813,25 @@ class ConvertMobileBertTest(TestCase):
             "num_feedforward_networks",
             "hidden_act",
             "layer_norm_eps",
-            "classifier_activation",
             "hidden_dropout_prob",
             "attention_probs_dropout_prob",
             "type_vocab_size",
+            "vocab_size",
+            "num_hidden_layers",
+            "num_attention_heads",
+            "hidden_size",
+            "embedding_size",
+            "intra_bottleneck_size",
+            "intermediate_size",
+            "max_position_embeddings",
         )
-        full_default = self._tiny_hf_config(num_feedforward_networks=4)
-        minimal = {
-            k: v for k, v in full_default.items() if k not in optional_fields
-        }
-        try:
-            got = convert_backbone_config(minimal)
-        except KeyError as e:
-            self.fail(f"Unexpected KeyError on optional field: {e}")
-        self.assertEqual(got, convert_backbone_config(full_default))
-
-        missing_vocab = dict(minimal)
-        del missing_vocab["vocab_size"]
-        with self.assertRaises(KeyError):
-            convert_backbone_config(missing_vocab)
+        full_config = self._tiny_hf_config()
+        convert_backbone_config(full_config)
+        for field in required_fields:
+            incomplete = dict(full_config)
+            del incomplete[field]
+            with self.assertRaisesRegex(KeyError, rf"^'{field}'$"):
+                convert_backbone_config(incomplete)
 
     def test_backbone_config_pooler_follows_architecture(self):
         # (architectures, classifier_activation, expected use_pooler_dense).
@@ -828,6 +841,9 @@ class ConvertMobileBertTest(TestCase):
             (["MobileBertForSequenceClassification"], True, True),
             (["MobileBertForPreTraining"], True, True),
             (["MobileBertForPreTraining"], False, False),
+            (["MobileBertForPreTraining"], None, False),
+            (["MobileBertForPreTraining"], 0, False),
+            (["MobileBertForPreTraining"], "", False),
             (None, True, True),
             ([], True, True),
             ("absent", True, True),
@@ -840,10 +856,10 @@ class ConvertMobileBertTest(TestCase):
                 del config["architectures"]
             else:
                 config["architectures"] = architectures
-            self.assertEqual(
+            self.assertIs(
                 convert_backbone_config(config)["use_pooler_dense"],
                 expected,
-                msg=f"{architectures} {classifier_activation}",
+                msg=f"{architectures} {classifier_activation!r}",
             )
 
     def test_round_trip_for_pretraining_checkpoint(self):
@@ -920,6 +936,41 @@ class ConvertMobileBertTest(TestCase):
                 w for w in caught if "pooler" in str(w.message).lower()
             ]
             self.assertEqual(pooler_warnings, [])
+
+    def test_backbone_pooler_override_on_poolerless_architecture(self):
+        config = self._tiny_hf_config(architectures=["MobileBertForMaskedLM"])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            hf_weights = self._write_synthetic_checkpoint(
+                tmp_dir,
+                config,
+                include_pooler=True,
+                include_mlm=False,
+            )
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                model = MobileBertBackbone.from_preset(
+                    tmp_dir, use_pooler_dense=True
+                )
+        pooler_warnings = [
+            w for w in caught if "pooler" in str(w.message).lower()
+        ]
+        self.assertEqual(pooler_warnings, [])
+        self.assertIsInstance(model.pooled_dense, keras.layers.Dense)
+        ported = self._assert_ported_weights_equal(model, hf_weights)
+        self.assertEqual(ported, set(hf_weights))
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._write_synthetic_checkpoint(
+                tmp_dir,
+                config,
+                include_pooler=False,
+                include_mlm=False,
+            )
+            with self.assertWarnsRegex(UserWarning, "pooler"):
+                model_no_weights = MobileBertBackbone.from_preset(
+                    tmp_dir, use_pooler_dense=True
+                )
+        self.assertIsInstance(model_no_weights.pooled_dense, keras.layers.Dense)
 
     def test_classifier_checkpoint_without_mlm_head(self):
         config = self._tiny_hf_config(

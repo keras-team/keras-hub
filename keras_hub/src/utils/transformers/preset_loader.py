@@ -180,6 +180,34 @@ class TransformersPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
+    def _call_config_hook(self, hook, cls):
+        """Call a converter config hook, forwarding `cls` when accepted.
+
+        Passes `cls` positionally when `hook` accepts 3+ positional arguments
+        or `*args`, by keyword when `cls` is keyword-only, and omits `cls`
+        otherwise.
+        """
+        sig = inspect.signature(hook)
+        params = sig.parameters.values()
+        pos_count = sum(
+            p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+            for p in params
+        )
+        if pos_count >= 3:
+            return hook(self.preset, self.config, cls)
+        if (
+            "cls" in sig.parameters
+            and sig.parameters["cls"].kind == inspect.Parameter.KEYWORD_ONLY
+        ):
+            return hook(self.preset, self.config, cls=cls)
+        if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params):
+            return hook(self.preset, self.config, cls)
+        return hook(self.preset, self.config)
+
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architectures = self.config.get("architectures")
         architecture = architectures[0] if architectures else None
@@ -200,15 +228,7 @@ class TransformersPresetLoader(PresetLoader):
             kwargs = {**task_config, **kwargs}
 
         if hasattr(self.converter, "load_task_config"):
-            sig = inspect.signature(self.converter.load_task_config)
-            if len(sig.parameters) >= 3:
-                extra = self.converter.load_task_config(
-                    self.preset, self.config, cls
-                )
-            else:
-                extra = self.converter.load_task_config(
-                    self.preset, self.config
-                )
+            extra = self._call_config_hook(self.converter.load_task_config, cls)
             if extra:
                 kwargs = {**extra, **kwargs}
 
@@ -263,15 +283,9 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
-            sig = inspect.signature(self.converter.load_preprocessor_config)
-            if len(sig.parameters) >= 3:
-                extra = self.converter.load_preprocessor_config(
-                    self.preset, self.config, cls
-                )
-            else:
-                extra = self.converter.load_preprocessor_config(
-                    self.preset, self.config
-                )
+            extra = self._call_config_hook(
+                self.converter.load_preprocessor_config, cls
+            )
             if extra:
                 kwargs = {**extra, **kwargs}
         if config_file is not None:

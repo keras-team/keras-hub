@@ -86,6 +86,20 @@ class SafetensorLoader(contextlib.ExitStack):
         return self.safetensor_files[fname], self.safetensor_keys[fname]
 
     def has_tensor(self, hf_weight_key):
+        """Check whether a weight exists in the safetensors checkpoint.
+
+        Checks stored tensor keys and single-file metadata aliases while
+        leaving `self.prefix` unchanged. Returns `False` when the default
+        unindexed `model.safetensors` file is absent, and propagates
+        `FileNotFoundError` when an explicit `fname` or an index-mapped shard
+        file is missing.
+
+        Args:
+            hf_weight_key (str): The hf weight key to look up.
+
+        Returns:
+            bool: `True` if the tensor is present, `False` otherwise.
+        """
         saved_prefix = self.prefix
         try:
             if self.safetensor_config is None:
@@ -102,7 +116,9 @@ class SafetensorLoader(contextlib.ExitStack):
             try:
                 _, stored_keys = self._get_safetensor_file(fname)
             except FileNotFoundError:
-                return False
+                if self.safetensor_config is None and self.fname is None:
+                    return False
+                raise
 
             full_key = self.get_prefixed_key(hf_weight_key, stored_keys)
             if full_key in stored_keys:

@@ -1,10 +1,7 @@
-import json
-import os
 import tempfile
 import types
 
 import numpy as np
-from safetensors.numpy import save_file
 
 from keras_hub.src.models.bert.bert_text_classifier_preprocessor import (
     BertTextClassifierPreprocessor,
@@ -16,6 +13,9 @@ from keras_hub.src.models.vit.vit_image_classifier import ViTImageClassifier
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.transformers import convert_bert
 from keras_hub.src.utils.transformers import convert_vit
+from keras_hub.src.utils.transformers.convert_mobile_bert_test import (
+    write_hf_preset,
+)
 from keras_hub.src.utils.transformers.preset_loader import (
     TransformersPresetLoader,
 )
@@ -42,19 +42,9 @@ class TransformersPresetLoaderTest(TestCase):
 
     def _write_preset(self, config, weights=None, extra_files=None):
         preset_dir = tempfile.mkdtemp(dir=self.get_temp_dir())
-        with open(os.path.join(preset_dir, "config.json"), "w") as f:
-            json.dump(config, f)
-        for name, content in (extra_files or {}).items():
-            full_path = os.path.join(preset_dir, name)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "w") as f:
-                if isinstance(content, str):
-                    f.write(content)
-                else:
-                    json.dump(content, f)
-        if weights is not None:
-            save_file(weights, os.path.join(preset_dir, "model.safetensors"))
-        return preset_dir
+        return write_hf_preset(
+            preset_dir, config, weights=weights, extra_files=extra_files
+        )
 
     def test_load_task_skips_convert_head_when_load_weights_false(self):
         vit_config = self._tiny_vit_config()
@@ -81,51 +71,98 @@ class TransformersPresetLoaderTest(TestCase):
             )
         self.assertIsInstance(task_no_file, ViTImageClassifier)
 
+    def _assert_config_hook_signatures(
+        self,
+        preset_dir,
+        model_type,
+        run_hook,
+        expected_cls,
+        hook_return,
+        attr_name,
+        expected_val,
+    ):
+        seen = []
+
+        def hook_2(preset, config):
+            seen.append(("2pos", preset, config["model_type"]))
+            return dict(hook_return)
+
+        def hook_3_default(preset, config, cls=None):
+            seen.append(("3default", preset, config["model_type"], cls))
+            return dict(hook_return)
+
+        def hook_3_req(preset, config, cls):
+            seen.append(("3req", preset, config["model_type"], cls))
+            return dict(hook_return)
+
+        def hook_varargs(preset, config, *args):
+            seen.append(("varargs", preset, config["model_type"], args))
+            return dict(hook_return)
+
+        def hook_varkw(preset, config, **kwargs):
+            seen.append(("varkw", preset, config["model_type"], kwargs))
+            return dict(hook_return)
+
+        def hook_kwonly(preset, config, *, cls=None):
+            seen.append(("kwonly", preset, config["model_type"], cls))
+            return dict(hook_return)
+
+        for hook in (
+            hook_2,
+            hook_3_default,
+            hook_3_req,
+            hook_varargs,
+            hook_varkw,
+            hook_kwonly,
+        ):
+            try:
+                built = run_hook(hook)
+            except TypeError as e:
+                self.fail(f"Unexpected TypeError for {hook.__name__}: {e}")
+            self.assertIsInstance(built, expected_cls)
+            self.assertEqual(
+                getattr(built, attr_name), expected_val, msg=hook.__name__
+            )
+
+        self.assertEqual(
+            seen,
+            [
+                ("2pos", preset_dir, model_type),
+                ("3default", preset_dir, model_type, expected_cls),
+                ("3req", preset_dir, model_type, expected_cls),
+                ("varargs", preset_dir, model_type, (expected_cls,)),
+                ("varkw", preset_dir, model_type, {}),
+                ("kwonly", preset_dir, model_type, expected_cls),
+            ],
+        )
+
     def test_load_task_config_forwards_cls_by_arity(self):
         vit_config = self._tiny_vit_config()
         preset_dir = self._write_preset(vit_config)
 
-        seen_cls = []
+        def run_task_hook(hook):
+            loader = TransformersPresetLoader(preset_dir, vit_config)
+            loader.converter = types.SimpleNamespace(
+                backbone_cls=convert_vit.backbone_cls,
+                convert_backbone_config=convert_vit.convert_backbone_config,
+                load_task_config=hook,
+            )
+            return loader.load_task(
+                ViTImageClassifier,
+                load_weights=False,
+                load_task_weights=False,
+                num_classes=2,
+            )
 
-        def load_task_config_3(preset, config, cls=None):
-            seen_cls.append(cls)
-            return {}
-
-        loader_3 = TransformersPresetLoader(preset_dir, vit_config)
-        loader_3.converter = types.SimpleNamespace(
-            backbone_cls=convert_vit.backbone_cls,
-            convert_backbone_config=convert_vit.convert_backbone_config,
-            load_task_config=load_task_config_3,
-        )
-        task_3 = loader_3.load_task(
+        self._assert_config_hook_signatures(
+            preset_dir,
+            "vit",
+            run_task_hook,
             ViTImageClassifier,
-            load_weights=False,
-            load_task_weights=False,
-            num_classes=2,
+            {"dropout": 0.25},
+            "dropout",
+            0.25,
         )
-        self.assertIsInstance(task_3, ViTImageClassifier)
-        self.assertEqual(seen_cls, [ViTImageClassifier])
-
-        seen_2 = []
-
-        def load_task_config_2(preset, config):
-            seen_2.append((preset, config["model_type"]))
-            return {"dropout": 0.25}
-
-        loader_2 = TransformersPresetLoader(preset_dir, vit_config)
-        loader_2.converter = types.SimpleNamespace(
-            backbone_cls=convert_vit.backbone_cls,
-            convert_backbone_config=convert_vit.convert_backbone_config,
-            load_task_config=load_task_config_2,
-        )
-        task_2 = loader_2.load_task(
-            ViTImageClassifier,
-            load_weights=False,
-            load_task_weights=False,
-            num_classes=2,
-        )
-        self.assertEqual(seen_2, [(preset_dir, "vit")])
-        self.assertEqual(task_2.dropout, 0.25)
 
     def test_load_preprocessor_config_forwards_cls_by_arity(self):
         bert_config = {
@@ -145,38 +182,24 @@ class TransformersPresetLoaderTest(TestCase):
             },
         )
 
-        seen_cls = []
+        def run_preprocessor_hook(hook):
+            loader = TransformersPresetLoader(preset_dir, bert_config)
+            loader.converter = types.SimpleNamespace(
+                backbone_cls=convert_bert.backbone_cls,
+                convert_tokenizer=convert_bert.convert_tokenizer,
+                load_preprocessor_config=hook,
+            )
+            return loader.load_preprocessor(BertTextClassifierPreprocessor)
 
-        def load_preprocessor_config_3(preset, config, cls=None):
-            seen_cls.append(cls)
-            return {"sequence_length": 12}
-
-        loader_3 = TransformersPresetLoader(preset_dir, bert_config)
-        loader_3.converter = types.SimpleNamespace(
-            backbone_cls=convert_bert.backbone_cls,
-            convert_tokenizer=convert_bert.convert_tokenizer,
-            load_preprocessor_config=load_preprocessor_config_3,
+        self._assert_config_hook_signatures(
+            preset_dir,
+            "bert",
+            run_preprocessor_hook,
+            BertTextClassifierPreprocessor,
+            {"sequence_length": 12},
+            "sequence_length",
+            12,
         )
-        pre_3 = loader_3.load_preprocessor(BertTextClassifierPreprocessor)
-        self.assertIsInstance(pre_3, BertTextClassifierPreprocessor)
-        self.assertEqual(seen_cls, [BertTextClassifierPreprocessor])
-        self.assertEqual(pre_3.sequence_length, 12)
-
-        seen_2 = []
-
-        def load_preprocessor_config_2(preset, config):
-            seen_2.append((preset, config["model_type"]))
-            return {"sequence_length": 10}
-
-        loader_2 = TransformersPresetLoader(preset_dir, bert_config)
-        loader_2.converter = types.SimpleNamespace(
-            backbone_cls=convert_bert.backbone_cls,
-            convert_tokenizer=convert_bert.convert_tokenizer,
-            load_preprocessor_config=load_preprocessor_config_2,
-        )
-        pre_2 = loader_2.load_preprocessor(BertTextClassifierPreprocessor)
-        self.assertEqual(seen_2, [(preset_dir, "bert")])
-        self.assertEqual(pre_2.sequence_length, 10)
 
     def test_load_task_handles_missing_or_empty_architectures(self):
         base_modern_bert = {
@@ -207,6 +230,14 @@ class TransformersPresetLoaderTest(TestCase):
                 vit_task = ViTImageClassifier.from_preset(
                     vit_dir, num_classes=2, load_weights=False
                 )
+                vit_loader_task = TransformersPresetLoader(
+                    vit_dir, vit_cfg
+                ).load_task(
+                    ViTImageClassifier,
+                    load_weights=False,
+                    load_task_weights=True,
+                    num_classes=2,
+                )
                 mb_task = ModernBertMaskedLM.from_preset(
                     mb_dir, preprocessor=None, load_weights=False
                 )
@@ -215,4 +246,5 @@ class TransformersPresetLoaderTest(TestCase):
                     f"Unexpected error for architectures={arch_variant!r}: {e}"
                 )
             self.assertIsInstance(vit_task, ViTImageClassifier)
+            self.assertIsInstance(vit_loader_task, ViTImageClassifier)
             self.assertIsInstance(mb_task, ModernBertMaskedLM)

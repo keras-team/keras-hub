@@ -190,3 +190,31 @@ class SafetensorLoaderTest(TestCase):
                 loader.get_tensor("layer0.weight"), self.embedding
             )
             self.assertAllEqual(loader.get_tensor("head.bias"), self.layer_norm)
+
+    def test_has_tensor_missing_shard_or_explicit_fname_raises(self):
+        shard_dir = tempfile.mkdtemp(dir=self.get_temp_dir())
+        with open(
+            os.path.join(shard_dir, "model.safetensors.index.json"), "w"
+        ) as f:
+            json.dump(
+                {
+                    "weight_map": {
+                        "aux.pooler.dense.weight": (
+                            "model-00001-of-00002.safetensors"
+                        )
+                    }
+                },
+                f,
+            )
+        with SafetensorLoader(shard_dir, prefix="model.") as loader:
+            with self.assertRaises(FileNotFoundError):
+                loader.has_tensor("pooler.dense.weight")
+            self.assertEqual(loader.prefix, "model.")
+
+        explicit_dir = tempfile.mkdtemp(dir=self.get_temp_dir())
+        with SafetensorLoader(
+            explicit_dir, prefix="model.", fname="missing.safetensors"
+        ) as loader:
+            with self.assertRaises(FileNotFoundError):
+                loader.has_tensor("pooler.dense.weight")
+            self.assertEqual(loader.prefix, "model.")

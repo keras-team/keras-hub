@@ -47,45 +47,39 @@ def _hf_architecture(transformers_config):
 
 
 def _hf_has_pooler(transformers_config):
-    return (
-        transformers_config.get("classifier_activation", True)
+    return bool(
+        transformers_config["classifier_activation"]
         and _hf_architecture(transformers_config)
         not in _HF_ARCHITECTURES_WITHOUT_POOLER
     )
 
 
 def convert_backbone_config(transformers_config):
-    if not transformers_config.get("trigram_input", True):
+    if not transformers_config["trigram_input"]:
         raise ValueError("MobileBERT requires trigram_input=True")
-    if not transformers_config.get("use_bottleneck", True):
+    if not transformers_config["use_bottleneck"]:
         raise ValueError("MobileBERT requires use_bottleneck=True")
-    if not transformers_config.get("key_query_shared_bottleneck", True):
+    if not transformers_config["key_query_shared_bottleneck"]:
         raise ValueError("MobileBERT requires key_query_shared_bottleneck=True")
-    if transformers_config.get("use_bottleneck_attention", False):
+    if transformers_config["use_bottleneck_attention"]:
         raise ValueError("MobileBERT requires use_bottleneck_attention=False")
-    intra_bottleneck_size = transformers_config["intra_bottleneck_size"]
     if (
-        transformers_config.get("true_hidden_size", intra_bottleneck_size)
-        != intra_bottleneck_size
+        transformers_config["true_hidden_size"]
+        != transformers_config["intra_bottleneck_size"]
     ):
         raise ValueError(
             "MobileBERT requires true_hidden_size == intra_bottleneck_size"
         )
-    normalization_type = transformers_config.get(
-        "normalization_type", "no_norm"
-    )
-    if normalization_type not in NORMALIZATION_TYPES:
+    if transformers_config["normalization_type"] not in NORMALIZATION_TYPES:
         raise ValueError(
             f"MobileBERT requires normalization_type in {NORMALIZATION_TYPES}, "
-            f"got {normalization_type!r}"
+            f"got {transformers_config['normalization_type']!r}"
         )
-    num_feedforward_networks = transformers_config.get(
-        "num_feedforward_networks", 4
-    )
-    if num_feedforward_networks < 1:
+    if transformers_config["num_feedforward_networks"] < 1:
         raise ValueError(
             "`num_feedforward_networks` must be >= 1. Received: "
-            f"num_feedforward_networks={num_feedforward_networks}."
+            "num_feedforward_networks="
+            f"{transformers_config['num_feedforward_networks']}."
         )
 
     return {
@@ -94,21 +88,23 @@ def convert_backbone_config(transformers_config):
         "num_heads": transformers_config["num_attention_heads"],
         "hidden_dim": transformers_config["hidden_size"],
         "embedding_dim": transformers_config["embedding_size"],
-        "intra_bottleneck_dim": intra_bottleneck_size,
+        "intra_bottleneck_dim": transformers_config["intra_bottleneck_size"],
         "intermediate_dim": transformers_config["intermediate_size"],
-        "num_feedforward_networks": num_feedforward_networks,
-        "activation": transformers_config.get("hidden_act", "relu"),
-        "normalization_type": normalization_type,
+        "num_feedforward_networks": transformers_config[
+            "num_feedforward_networks"
+        ],
+        "activation": transformers_config["hidden_act"],
+        "normalization_type": transformers_config["normalization_type"],
         # HF uses 1e-5 for emb and output norm by default. KerasHub uses
         # layer_norm_epsilon uniformly.
-        "layer_norm_epsilon": transformers_config.get("layer_norm_eps", 1e-12),
+        "layer_norm_epsilon": transformers_config["layer_norm_eps"],
         "use_pooler_dense": _hf_has_pooler(transformers_config),
-        "dropout": transformers_config.get("hidden_dropout_prob", 0.0),
-        "attention_dropout": transformers_config.get(
-            "attention_probs_dropout_prob", 0.1
-        ),
+        "dropout": transformers_config["hidden_dropout_prob"],
+        "attention_dropout": transformers_config[
+            "attention_probs_dropout_prob"
+        ],
         "max_sequence_length": transformers_config["max_position_embeddings"],
-        "num_segments": transformers_config.get("type_vocab_size", 2),
+        "num_segments": transformers_config["type_vocab_size"],
     }
 
 
@@ -291,9 +287,7 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"{hf_prefix}output.bottleneck.LayerNorm.bias",
         )
 
-    if backbone.pooled_dense is not None and _hf_has_pooler(
-        transformers_config
-    ):
+    if backbone.pooled_dense is not None:
         if loader.has_tensor("pooler.dense.weight"):
             loader.port_weight(
                 keras_variable=backbone.get_layer("pooled_dense").kernel,

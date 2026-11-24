@@ -8,6 +8,15 @@ def mobile_bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+def _validate_heads_and_bottleneck_dim(num_heads, intra_bottleneck_dim):
+    if num_heads < 1 or intra_bottleneck_dim < 1:
+        raise ValueError(
+            "`num_heads` and `intra_bottleneck_dim` must both be >= 1. "
+            f"Received: num_heads={num_heads}, "
+            f"intra_bottleneck_dim={intra_bottleneck_dim}."
+        )
+
+
 class NoNorm(keras.layers.Layer):
     """Elementwise trainable scale and shift without normalization.
 
@@ -184,6 +193,7 @@ class MobileBertAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(dtype=dtype, **kwargs)
+        _validate_heads_and_bottleneck_dim(num_heads, intra_bottleneck_dim)
         if intra_bottleneck_dim % num_heads != 0:
             raise ValueError(
                 f"`intra_bottleneck_dim` ({intra_bottleneck_dim}) must be "
@@ -444,6 +454,7 @@ class MobileBertEncoderLayer(keras.layers.Layer):
                 "`num_feedforward_networks` must be >= 1. Received: "
                 f"num_feedforward_networks={num_feedforward_networks}."
             )
+        _validate_heads_and_bottleneck_dim(num_heads, intra_bottleneck_dim)
         self.hidden_dim = hidden_dim
         self.intra_bottleneck_dim = intra_bottleneck_dim
         self.intermediate_dim = intermediate_dim

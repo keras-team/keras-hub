@@ -14,6 +14,9 @@ from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
     _build_norm_layer,
 )
 from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
+    _validate_heads_and_bottleneck_dim,
+)
+from keras_hub.src.models.mobile_bert.mobile_bert_layers import (
     mobile_bert_kernel_initializer,
 )
 
@@ -131,6 +134,9 @@ class MobileBertBackbone(Backbone):
                 "`num_feedforward_networks` must be >= 1. Received: "
                 f"num_feedforward_networks={num_feedforward_networks}."
             )
+        _validate_heads_and_bottleneck_dim(num_heads, intra_bottleneck_dim)
+        if isinstance(activation, dict):
+            activation = keras.activations.deserialize(activation)
 
         # === Layers ===
         self.token_embedding = ReversibleEmbedding(

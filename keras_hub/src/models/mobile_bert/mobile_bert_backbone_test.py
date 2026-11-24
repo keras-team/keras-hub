@@ -11,6 +11,11 @@ from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
 from keras_hub.src.tests.test_case import TestCase
 
 
+@keras.saving.register_keras_serializable(package="MobileBertTest")
+def _custom_activation(x):
+    return ops.relu(x) * 2.0
+
+
 class MobileBertBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
@@ -161,6 +166,23 @@ class MobileBertBackboneTest(TestCase):
         with self.assertRaisesRegex(ValueError, "divisible"):
             MobileBertBackbone(**{**self.init_kwargs, "num_heads": 3})
 
+    def test_rejects_non_positive_heads_or_bottleneck_dim(self):
+        for overrides in (
+            {"num_heads": -2},
+            {"num_heads": 0},
+            {"intra_bottleneck_dim": 0},
+            {"intra_bottleneck_dim": -8},
+            {"num_layers": 0, "intra_bottleneck_dim": 0},
+        ):
+            kwargs = {**self.init_kwargs, **overrides}
+            expected_msg = (
+                r"must both be >= 1\. Received: "
+                f"num_heads={kwargs['num_heads']}, "
+                f"intra_bottleneck_dim={kwargs['intra_bottleneck_dim']}"
+            )
+            with self.assertRaisesRegex(ValueError, expected_msg):
+                MobileBertBackbone(**kwargs)
+
     def test_callable_activation_serialization(self):
         backbone = MobileBertBackbone(
             **{**self.init_kwargs, "activation": keras.activations.gelu}
@@ -174,6 +196,39 @@ class MobileBertBackboneTest(TestCase):
         self.assertAllClose(
             restored(self.input_data)["sequence_output"],
             backbone(self.input_data)["sequence_output"],
+        )
+
+    def test_custom_serializable_activation_round_trip(self):
+        backbone = MobileBertBackbone(
+            **{**self.init_kwargs, "activation": _custom_activation}
+        )
+        cfg1 = backbone.get_config()
+        self.assertIsInstance(cfg1["activation"], dict)
+        cfg1 = json.loads(json.dumps(cfg1))
+
+        restored = MobileBertBackbone.from_config(cfg1)
+        self.assertTrue(callable(restored.activation))
+        self.assertIs(restored.activation, _custom_activation)
+        restored.set_weights(backbone.get_weights())
+        self.assertAllClose(
+            restored(self.input_data)["sequence_output"],
+            backbone(self.input_data)["sequence_output"],
+        )
+
+        cfg2 = json.loads(json.dumps(restored.get_config()))
+        restored2 = MobileBertBackbone.from_config(cfg2)
+        self.assertTrue(callable(restored2.activation))
+        self.assertIs(restored2.activation, _custom_activation)
+        self.assertEqual(cfg2["activation"], cfg1["activation"])
+
+        self.assertEqual(
+            MobileBertBackbone(**self.init_kwargs).activation, "relu"
+        )
+        self.assertIs(
+            MobileBertBackbone(
+                **{**self.init_kwargs, "activation": keras.activations.gelu}
+            ).activation,
+            keras.activations.gelu,
         )
 
     def test_preset_metadata_path(self):

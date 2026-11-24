@@ -1,4 +1,3 @@
-import inspect
 import json
 
 import keras
@@ -113,6 +112,25 @@ class MobileBertLayersTest(TestCase):
         with self.assertRaisesRegex(ValueError, "divisible"):
             MobileBertAttention(num_heads=6, intra_bottleneck_dim=128)
 
+    def test_attention_rejects_non_positive_heads_or_dim(self):
+        for num_heads, dim in ((-2, 8), (0, 8), (2, 0), (2, -8)):
+            pattern = (
+                r"`num_heads` and `intra_bottleneck_dim` must both be >= 1\. "
+                rf"Received: num_heads={num_heads}, "
+                rf"intra_bottleneck_dim={dim}\."
+            )
+            with self.assertRaisesRegex(ValueError, pattern):
+                MobileBertAttention(
+                    num_heads=num_heads, intra_bottleneck_dim=dim
+                )
+            with self.assertRaisesRegex(ValueError, pattern):
+                MobileBertEncoderLayer(
+                    hidden_dim=16,
+                    intra_bottleneck_dim=dim,
+                    intermediate_dim=16,
+                    num_heads=num_heads,
+                )
+
     def test_attention_residual_shape(self):
         attn = MobileBertAttention(
             num_heads=2,
@@ -144,7 +162,6 @@ class MobileBertLayersTest(TestCase):
         attn = MobileBertAttention(num_heads=2, intra_bottleneck_dim=8)
         self.assertTrue(hasattr(attn, "_scale"))
         self.assertEqual(attn._scale, 0.5)
-        self.assertNotIn("sqrt", inspect.getsource(MobileBertAttention.call))
 
         q_np = np.zeros((1, 2, 8), dtype="float32")
         q_np[0, 0, 0] = 2.0

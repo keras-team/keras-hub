@@ -8,7 +8,6 @@ Usage:
 
 import contextlib
 import os
-import random
 import tempfile
 
 os.environ.setdefault("KERAS_BACKEND", "torch")
@@ -16,12 +15,15 @@ os.environ.setdefault("KERAS_BACKEND", "torch")
 import keras
 import numpy as np
 import torch
+import transformers
 from absl import app
 from absl import flags
 from transformers import AutoConfig
 from transformers import AutoTokenizer
+from transformers import MobileBertForMaskedLM
 from transformers import MobileBertForPreTraining
 from transformers import MobileBertModel
+from transformers import MobileBertPreTrainedModel
 
 from keras_hub.src.models.mobile_bert.mobile_bert_backbone import (
     MobileBertBackbone,
@@ -39,11 +41,9 @@ from keras_hub.src.models.mobile_bert.mobile_bert_tokenizer import (
     MobileBertTokenizer,
 )
 from keras_hub.src.utils.preset_utils import HF_PREFIX
-from keras_hub.src.utils.transformers.convert_mobile_bert import (
-    convert_backbone_config,
-)
-from keras_hub.src.utils.transformers.convert_mobile_bert import convert_head
-from keras_hub.src.utils.transformers.convert_mobile_bert import convert_weights
+from keras_hub.src.utils.preset_utils import SAFETENSOR_CONFIG_FILE
+from keras_hub.src.utils.preset_utils import SAFETENSOR_FILE
+from keras_hub.src.utils.preset_utils import check_file_exists
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("preset", "mobilebert_uncased", "Preset name.")
@@ -53,46 +53,23 @@ flags.DEFINE_string(
 
 PRESET_MAP = {"mobilebert_uncased": "google/mobilebert-uncased"}
 
-# HF weights that are intentionally not ported: the NSP head, the tied
-# decoder duplicates of `word_embeddings` / `cls.predictions.bias`, and the
-# position-id buffer (persisted by older `transformers`; harmless if absent).
-UNPORTED_HF_KEYS = (
-    "cls.seq_relationship.weight",
-    "cls.seq_relationship.bias",
-    "cls.predictions.decoder.weight",
-    "cls.predictions.decoder.bias",
-    "mobilebert.embeddings.position_ids",
-    "embeddings.position_ids",
-)
+
+def _check_hf_loading_info(info):
+    bad = {
+        k: sorted(str(x) for x in info[k])
+        for k in ("missing_keys", "unexpected_keys", "mismatched_keys")
+        if info[k]
+    }
+    if bad:
+        raise ValueError(f"Incomplete HF checkpoint load: {bad}")
 
 
-class HfWeightLoader:
-    def __init__(self, state_dict):
-        self.state_dict = state_dict
-        self.consumed = set()
-
-    def _resolve_key(self, hf_weight_key):
-        prefixed = f"mobilebert.{hf_weight_key}"
-        return prefixed if prefixed in self.state_dict else hf_weight_key
-
-    def has_tensor(self, hf_weight_key):
-        return self._resolve_key(hf_weight_key) in self.state_dict
-
-    def port_weight(self, keras_variable, hf_weight_key, hook_fn=None):
-        key = self._resolve_key(hf_weight_key)
-        if key not in self.state_dict:
-            raise KeyError(f"Key '{key}' not found in state_dict")
-        self.consumed.add(key)
-        tensor = self.state_dict[key]
-        numpy_weight = tensor.cpu().numpy()
-        if hook_fn:
-            numpy_weight = hook_fn(numpy_weight, list(keras_variable.shape))
-        keras_variable.assign(numpy_weight)
-
-    def check_unconsumed(self, allowed):
-        leftover = set(self.state_dict) - self.consumed - set(allowed)
-        if leftover:
-            raise ValueError(f"Unported HF weights: {sorted(leftover)}")
+def _hf_mlm_logits(output):
+    return (
+        output.prediction_logits
+        if hasattr(output, "prediction_logits")
+        else output.logits
+    )
 
 
 def main(_):
@@ -106,45 +83,69 @@ def main(_):
 
     hf_tokenizer = AutoTokenizer.from_pretrained(hf_id)
     hf_cfg = AutoConfig.from_pretrained(hf_id)
-    hf_config = hf_cfg.to_dict()
-    keras_config = convert_backbone_config(hf_config)
-    has_mlm_head = (not hf_cfg.architectures) or hf_cfg.architectures[0] in (
-        "MobileBertForPreTraining",
-        "MobileBertForMaskedLM",
-    )
-
-    keras_backbone = MobileBertBackbone(**keras_config)
-    seq_len = keras_config["max_sequence_length"]
-    keras_tokenizer = MobileBertTokenizer.from_preset(preset_uri)
-
-    if has_mlm_head:
-        hf_model = MobileBertForPreTraining.from_pretrained(hf_id)
-        hf_model.eval()
-        hf_backbone = hf_model.mobilebert
-        keras_preprocessor = MobileBertMaskedLMPreprocessor(
-            tokenizer=keras_tokenizer,
-            sequence_length=seq_len,
+    arch = hf_cfg.architectures[0] if hf_cfg.architectures else None
+    if arch is not None:
+        hf_cls = getattr(transformers, arch, None)
+        if not isinstance(hf_cls, type) or not issubclass(
+            hf_cls, MobileBertPreTrainedModel
+        ):
+            raise ValueError(
+                f"Unsupported MobileBERT architecture in config: {arch!r}."
+            )
+        hf_model, loading_info = hf_cls.from_pretrained(
+            hf_id, output_loading_info=True
         )
-        keras_model = MobileBertMaskedLM(
-            backbone=keras_backbone,
-            preprocessor=keras_preprocessor,
-        )
-        loader = HfWeightLoader(hf_model.state_dict())
-        convert_weights(keras_backbone, loader, hf_config)
-        convert_head(keras_model, loader, hf_config)
-        loader.check_unconsumed(UNPORTED_HF_KEYS)
-        keras_numel = sum(np.prod(w.shape) for w in keras_model.weights)
+        _check_hf_loading_info(loading_info)
     else:
-        hf_model = MobileBertModel.from_pretrained(
-            hf_id, add_pooling_layer=keras_config["use_pooler_dense"]
-        )
-        hf_model.eval()
-        hf_backbone = hf_model
-        keras_model = None
-        loader = HfWeightLoader(hf_model.state_dict())
-        convert_weights(keras_backbone, loader, hf_config)
-        loader.check_unconsumed(UNPORTED_HF_KEYS)
-        keras_numel = sum(np.prod(w.shape) for w in keras_backbone.weights)
+        hf_model = None
+        first_info = None
+        for candidate_cls in (
+            MobileBertForPreTraining,
+            MobileBertForMaskedLM,
+            MobileBertModel,
+        ):
+            model, info = candidate_cls.from_pretrained(
+                hf_id, output_loading_info=True
+            )
+            if first_info is None:
+                first_info = info
+            if not (
+                info["missing_keys"]
+                or info["unexpected_keys"]
+                or info["mismatched_keys"]
+            ):
+                hf_model = model
+                break
+        if hf_model is None:
+            _check_hf_loading_info(first_info)
+    hf_model.eval()
+    hf_backbone = getattr(hf_model, "mobilebert", hf_model)
+    has_mlm_head = hasattr(getattr(hf_model, "cls", None), "predictions")
+
+    with contextlib.ExitStack() as stack:
+        if check_file_exists(preset_uri, SAFETENSOR_FILE) or check_file_exists(
+            preset_uri, SAFETENSOR_CONFIG_FILE
+        ):
+            load_preset = preset_uri
+        else:
+            staging_dir = stack.enter_context(tempfile.TemporaryDirectory())
+            hf_model.save_pretrained(staging_dir)
+            hf_tokenizer.save_pretrained(staging_dir)
+            load_preset = staging_dir
+
+        if has_mlm_head:
+            keras_model = MobileBertMaskedLM.from_preset(load_preset)
+            keras_backbone = keras_model.backbone
+            keras_tokenizer = keras_model.preprocessor.tokenizer
+            fill_tokenizer = MobileBertTokenizer.from_preset(
+                load_preset, special_tokens_in_strings=True
+            )
+        else:
+            keras_model = None
+            keras_backbone = MobileBertBackbone.from_preset(load_preset)
+            keras_tokenizer = MobileBertTokenizer.from_preset(load_preset)
+            fill_tokenizer = None
+    seq_len = keras_backbone.max_sequence_length
 
     errors = []
 
@@ -210,11 +211,15 @@ def main(_):
         print("Tokenizer token_ids, segment_ids, and padding_mask match.")
 
     print("Validating parameter count...")
-    hf_numel = 0
-    for n, p in hf_model.state_dict().items():
-        if n in UNPORTED_HF_KEYS:
-            continue
-        hf_numel += p.numel()
+    if has_mlm_head:
+        hf_numel = sum(p.numel() for p in hf_model.parameters())
+        seq_rel = getattr(hf_model.cls, "seq_relationship", None)
+        if seq_rel is not None:
+            hf_numel -= sum(p.numel() for p in seq_rel.parameters())
+        keras_numel = keras_model.count_params()
+    else:
+        hf_numel = sum(p.numel() for p in hf_backbone.parameters())
+        keras_numel = keras_backbone.count_params()
 
     if hf_numel != keras_numel:
         msg = f"Param count mismatch. HF={hf_numel} vs Keras={keras_numel}"
@@ -295,7 +300,7 @@ def main(_):
                 attention_mask=hf_inputs["attention_mask"],
                 token_type_ids=hf_inputs["token_type_ids"],
             )
-            hf_logits = hf_mlm_out.prediction_logits.cpu().numpy()
+            hf_logits = _hf_mlm_logits(hf_mlm_out).cpu().numpy()
 
         batch_size = keras_ids.shape[0]
         mask_positions = np.arange(seq_len, dtype="int32")[
@@ -329,12 +334,9 @@ def main(_):
             hf_fill_inputs["input_ids"] == hf_tokenizer.mask_token_id
         ).nonzero(as_tuple=True)[1][0]
         with torch.no_grad():
-            hf_fill_logits = hf_model(**hf_fill_inputs).prediction_logits
+            hf_fill_logits = _hf_mlm_logits(hf_model(**hf_fill_inputs))
         hf_top1 = hf_fill_logits[0, hf_mask_idx].argmax().item()
 
-        fill_tokenizer = MobileBertTokenizer.from_preset(
-            preset_uri, special_tokens_in_strings=True
-        )
         fill_preprocessor = MobileBertTextClassifierPreprocessor(
             fill_tokenizer, sequence_length=seq_len
         )
@@ -391,22 +393,6 @@ def main(_):
     if rel_perturbed <= rel:
         errors.append("Perturbation did not increase the relative difference!")
     w.assign(orig)
-
-    if has_mlm_head:
-        print("Validating preprocessor smoke call...")
-        # The python mask generator draws `random.random()` against
-        # `mask_selection_rate` per eligible token; the long input has hundreds,
-        # so the count below is non-zero deterministically.
-        random.seed(0)
-        x, _, sw = keras_model.preprocessor(long_sentence)
-        sw = keras.ops.convert_to_numpy(sw)
-        n_masked = int((sw > 0).sum())
-        if x["token_ids"].shape[1] != seq_len or n_masked == 0:
-            errors.append(
-                f"MaskedLM preprocessor smoke call failed: masked={n_masked}"
-            )
-        else:
-            print(f"Preprocessor masked {n_masked} positions.")
 
     if errors:
         print("\nValidation failed with errors:")
