@@ -112,8 +112,6 @@ class BlockDiffusionLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        self.generate_function = self.generate_step
-
         if keras.config.backend() == "torch":
             import torch
 
@@ -132,83 +130,102 @@ class BlockDiffusionLM(Task):
                     )
 
             self.generate_function = wrapped_generate_function
+        elif keras.config.backend() == "tensorflow":
+            if not self.run_eagerly:
+                jit_compile = getattr(self, "jit_compile", True)
+                self.generate_function = tf.function(
+                    self.generate_step, jit_compile=jit_compile
+                )
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "jax":
+            if not self.run_eagerly:
+                import jax
 
-        elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
-            jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
-            )
+                def compiled_generate_function(
+                    inputs, state, max_length, stop_token_ids, **kwargs
+                ):
+                    (
+                        sampler_variables,
+                        trainable_variables,
+                        non_trainable_variables,
+                    ) = state
+                    mapping = itertools.chain(
+                        zip(self.sampler.variables, sampler_variables),
+                        zip(self.trainable_variables, trainable_variables),
+                        zip(
+                            self.non_trainable_variables,
+                            non_trainable_variables,
+                        ),
+                    )
 
-        elif keras.config.backend() == "jax" and not self.run_eagerly:
-            import jax
+                    with keras.StatelessScope(state_mapping=mapping) as scope:
+                        outputs = self.generate_step(
+                            inputs,
+                            max_length=max_length,
+                            stop_token_ids=stop_token_ids,
+                            **kwargs,
+                        )
 
-            def compiled_generate_function(
-                inputs, state, max_length, stop_token_ids, **kwargs
-            ):
-                (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self.sampler.variables, sampler_variables),
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
+                    sampler_variables = []
+                    for variable in self.sampler.variables:
+                        new_value = scope.get_current_value(variable)
+                        sampler_variables.append(
+                            new_value if new_value is not None else variable
+                        )
+                    return outputs, sampler_variables
+
+                # Keep shape-affecting arguments static for JAX compilation.
+                compiled_generate_function = jax.jit(
+                    compiled_generate_function,
+                    static_argnames=(
+                        "max_length",
+                        "stop_token_ids",
+                    ),
                 )
 
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(
+                def wrapped_generate_function(
+                    inputs,
+                    max_length=None,
+                    stop_token_ids=None,
+                    **kwargs,
+                ):
+                    if isinstance(stop_token_ids, list):
+                        stop_token_ids = tuple(stop_token_ids)
+                    state = (
+                        [v.value for v in self.sampler.variables],
+                        [v.value for v in self.trainable_variables],
+                        [v.value for v in self.non_trainable_variables],
+                    )
+                    inputs = tree.map_structure(ops.convert_to_tensor, inputs)
+                    outputs, sampler_variables = compiled_generate_function(
                         inputs,
-                        max_length=max_length,
-                        stop_token_ids=stop_token_ids,
+                        state,
+                        max_length,
+                        stop_token_ids,
                         **kwargs,
                     )
+                    for reference, variable in zip(
+                        self.sampler.variables, sampler_variables
+                    ):
+                        reference.assign(variable)
+                    return outputs
 
-                sampler_variables = []
-                for variable in self.sampler.variables:
-                    new_value = scope.get_current_value(variable)
-                    sampler_variables.append(
-                        new_value if new_value is not None else variable
-                    )
-                return outputs, sampler_variables
-
-            # Keep shape-affecting arguments static for JAX compilation.
-            compiled_generate_function = jax.jit(
-                compiled_generate_function,
-                static_argnames=(
-                    "max_length",
-                    "stop_token_ids",
-                ),
+                self.generate_function = wrapped_generate_function
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "numpy":
+            self.generate_function = self.generate_step
+        else:  # pluggable backend
+            from keras_hub.src.utils.keras_utils import (
+                make_pluggable_backend_generate_function,
             )
 
-            def wrapped_generate_function(
-                inputs,
-                max_length=None,
-                stop_token_ids=None,
-                **kwargs,
-            ):
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
-                state = (
-                    [v.value for v in self.sampler.variables],
-                    [v.value for v in self.trainable_variables],
-                    [v.value for v in self.non_trainable_variables],
-                )
-                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                outputs, sampler_variables = compiled_generate_function(
-                    inputs,
-                    state,
-                    max_length,
-                    stop_token_ids,
-                    **kwargs,
-                )
-                for reference, variable in zip(
-                    self.sampler.variables, sampler_variables
-                ):
-                    reference.assign(variable)
-                return outputs
-
-            self.generate_function = wrapped_generate_function
+            self.generate_function = make_pluggable_backend_generate_function(
+                self,
+                self.generate_step,
+                static_argnames=("max_length", "stop_token_ids"),
+            )
 
         return self.generate_function
 

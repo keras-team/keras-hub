@@ -132,7 +132,6 @@ class CausalLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        self.generate_function = self.generate_step
         if keras.config.backend() == "torch":
             import torch
 
@@ -144,67 +143,90 @@ class CausalLM(Task):
                     return self.generate_step(inputs, stop_token_ids)
 
             self.generate_function = wrapped_generate_function
-        elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
-            # `jit_compile` is a property of keras.Model after TF 2.12.
-            # Use `getattr()` for backwards compatibility.
-            jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
-            )
-        elif keras.config.backend() == "jax" and not self.run_eagerly:
-            import jax
-
-            @partial(jax.jit, static_argnames=["stop_token_ids"])
-            def compiled_generate_function(inputs, stop_token_ids, state):
-                (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self.sampler.variables, sampler_variables),
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
+        elif keras.config.backend() == "tensorflow":
+            if not self.run_eagerly:
+                # `jit_compile` is a property of keras.Model after TF 2.12.
+                # Use `getattr()` for backwards compatibility.
+                jit_compile = getattr(self, "jit_compile", True)
+                self.generate_function = tf.function(
+                    self.generate_step, jit_compile=jit_compile
                 )
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "jax":
+            if not self.run_eagerly:
+                import jax
 
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(inputs, stop_token_ids)
+                @partial(jax.jit, static_argnames=["stop_token_ids"])
+                def compiled_generate_function(inputs, stop_token_ids, state):
+                    (
+                        sampler_variables,
+                        trainable_variables,
+                        non_trainable_variables,
+                    ) = state
+                    mapping = itertools.chain(
+                        zip(self.sampler.variables, sampler_variables),
+                        zip(self.trainable_variables, trainable_variables),
+                        zip(
+                            self.non_trainable_variables,
+                            non_trainable_variables,
+                        ),
+                    )
 
-                # Get updated sampler variables from the stateless scope.
-                sampler_variables = []
-                for v in self.sampler.variables:
-                    new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                return outputs, sampler_variables
+                    with keras.StatelessScope(state_mapping=mapping) as scope:
+                        outputs = self.generate_step(inputs, stop_token_ids)
 
-            def wrapped_generate_function(
-                inputs,
-                stop_token_ids=None,
-            ):
-                if isinstance(stop_token_ids, list):
-                    stop_token_ids = tuple(stop_token_ids)
+                    # Get updated sampler variables from the stateless scope.
+                    sampler_variables = []
+                    for v in self.sampler.variables:
+                        new_v = scope.get_current_value(v)
+                        sampler_variables.append(
+                            new_v if new_v is not None else v
+                        )
+                    return outputs, sampler_variables
 
-                # Create an explicit tuple of all variable state.
-                state = (
-                    [v.value for v in self.sampler.variables],
-                    # Use the explicit variable.value to preserve the
-                    # sharding spec of distribution.
-                    [v.value for v in self.trainable_variables],
-                    [v.value for v in self.non_trainable_variables],
-                )
-                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                outputs, sampler_variables = compiled_generate_function(
+                def wrapped_generate_function(
                     inputs,
-                    stop_token_ids,
-                    state,
-                )
-                # Only assign the sampler variables (random seeds), as other
-                # model variables should never be updated in generation.
-                for ref_v, v in zip(self.sampler.variables, sampler_variables):
-                    ref_v.assign(v)
-                return outputs
+                    stop_token_ids=None,
+                ):
+                    if isinstance(stop_token_ids, list):
+                        stop_token_ids = tuple(stop_token_ids)
 
-            self.generate_function = wrapped_generate_function
+                    # Create an explicit tuple of all variable state.
+                    state = (
+                        [v.value for v in self.sampler.variables],
+                        # Use the explicit variable.value to preserve the
+                        # sharding spec of distribution.
+                        [v.value for v in self.trainable_variables],
+                        [v.value for v in self.non_trainable_variables],
+                    )
+                    inputs = tree.map_structure(ops.convert_to_tensor, inputs)
+                    outputs, sampler_variables = compiled_generate_function(
+                        inputs,
+                        stop_token_ids,
+                        state,
+                    )
+                    # Only assign the sampler variables (random seeds), as other
+                    # model variables should never be updated in generation.
+                    for ref_v, v in zip(
+                        self.sampler.variables, sampler_variables
+                    ):
+                        ref_v.assign(v)
+                    return outputs
+
+                self.generate_function = wrapped_generate_function
+            else:
+                self.generate_function = self.generate_step
+        elif keras.config.backend() == "numpy":
+            self.generate_function = self.generate_step
+        else:  # pluggable backend
+            from keras_hub.src.utils.keras_utils import (
+                make_pluggable_backend_generate_function,
+            )
+
+            self.generate_function = make_pluggable_backend_generate_function(
+                self, self.generate_step, static_argnames=("stop_token_ids",)
+            )
 
         return self.generate_function
 
