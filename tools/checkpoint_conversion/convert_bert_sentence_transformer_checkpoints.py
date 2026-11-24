@@ -100,6 +100,13 @@ SENTENCE_TRANSFORMER_PRESET_MAP = {
     "thenlper_gte_small": "thenlper/gte-small",
     "thenlper_gte_base": "thenlper/gte-base",
     "thenlper_gte_large": "thenlper/gte-large",
+    # E5 Models
+    "e5_small_v2": "intfloat/e5-small-v2",
+    "e5_base_v2": "intfloat/e5-base-v2",
+    "e5_large_v2": "intfloat/e5-large-v2",
+    "e5_small_v1": "intfloat/e5-small",
+    "e5_base_v1": "intfloat/e5-base",
+    "e5_large_v1": "intfloat/e5-large",
 }
 
 # Combined map for --preset lookup.

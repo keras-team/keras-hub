@@ -468,4 +468,83 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/gte/keras/thenlper_gte_large/1",
     },
+    # E5 family: English text embedding models by intfloat (v2 and v1).
+    "e5_small_v2": {
+        "metadata": {
+            "description": (
+                "12-layer E5 small v2 English text embedding model "
+                "(intfloat/e5-small-v2). Maps text to 384-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_small_v2/1",
+    },
+    "e5_base_v2": {
+        "metadata": {
+            "description": (
+                "12-layer E5 base v2 English text embedding model "
+                "(intfloat/e5-base-v2). Maps text to 768-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_base_v2/1",
+    },
+    "e5_large_v2": {
+        "metadata": {
+            "description": (
+                "24-layer E5 large v2 English text embedding model "
+                "(intfloat/e5-large-v2). Maps text to 1024-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_large_v2/1",
+    },
+    "e5_small_v1": {
+        "metadata": {
+            "description": (
+                "12-layer E5 small v1 English text embedding model "
+                "(intfloat/e5-small). Maps text to 384-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 33360000,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_small_v1/1",
+    },
+    "e5_base_v1": {
+        "metadata": {
+            "description": (
+                "12-layer E5 base v1 English text embedding model "
+                "(intfloat/e5-base). Maps text to 768-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 109482240,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_base_v1/1",
+    },
+    "e5_large_v1": {
+        "metadata": {
+            "description": (
+                "24-layer E5 large v1 English text embedding model "
+                "(intfloat/e5-large). Maps text to 1024-dimensional "
+                "L2-normalized mean-pooled dense vectors. Prefix inputs "
+                "with 'query: ' for queries and 'passage: ' for documents."
+            ),
+            "params": 335141888,
+            "path": "bert",
+        },
+        "kaggle_handle": "kaggle://keras/intfloat/keras/e5_large_v1/1",
+    },
 }
