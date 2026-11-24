@@ -18,6 +18,7 @@ from keras_hub.src.utils.tensor_utils import check_bounding_box_support
 from keras_hub.src.utils.tensor_utils import convert_preprocessing_outputs_grain
 from keras_hub.src.utils.tensor_utils import in_grain_data_pipeline
 from keras_hub.src.utils.tensor_utils import in_tf_function
+from keras_hub.src.utils.tensor_utils import is_float_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 
 
@@ -216,7 +217,12 @@ class ImageConverter(PreprocessingLayer):
             x = x * scale
         if self.offset is not None:
             offset = self._expand_non_channel_dims(self.offset, x)
-            x, offset = self._convert_types(x, offset, x.dtype)
+            # Integer images would truncate a fractional offset, and unsigned
+            # ones wrap, so sum in the compute dtype like the scale path.
+            add_dtype = (
+                x.dtype if is_float_dtype(x.dtype) else self.compute_dtype
+            )
+            x, offset = self._convert_types(x, offset, add_dtype)
             x = x + offset
         if isinstance(inputs, dict):
             inputs["images"] = x
