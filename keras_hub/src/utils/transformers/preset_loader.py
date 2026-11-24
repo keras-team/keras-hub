@@ -29,6 +29,7 @@ from keras_hub.src.utils.transformers import convert_metaclip_2
 from keras_hub.src.utils.transformers import convert_mistral
 from keras_hub.src.utils.transformers import convert_mistral3
 from keras_hub.src.utils.transformers import convert_mixtral
+from keras_hub.src.utils.transformers import convert_mobile_bert
 from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_mpnet
 from keras_hub.src.utils.transformers import convert_muse_glimmer
@@ -123,6 +124,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_qwen2_vl
         elif model_type == "mixtral":
             self.converter = convert_mixtral
+        elif model_type == "mobilebert":
+            self.converter = convert_mobile_bert
         elif model_type == "qwen2_moe":
             self.converter = convert_qwen_moe
         elif model_type == "qwen3_moe":
@@ -177,8 +180,37 @@ class TransformersPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
+    def _call_config_hook(self, hook, cls):
+        """Call a converter config hook, forwarding `cls` when accepted.
+
+        Passes `cls` positionally when `hook` accepts 3+ positional arguments
+        or `*args`, by keyword when `cls` is keyword-only, and omits `cls`
+        otherwise.
+        """
+        sig = inspect.signature(hook)
+        params = sig.parameters.values()
+        pos_count = sum(
+            p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+            for p in params
+        )
+        if pos_count >= 3:
+            return hook(self.preset, self.config, cls)
+        if (
+            "cls" in sig.parameters
+            and sig.parameters["cls"].kind == inspect.Parameter.KEYWORD_ONLY
+        ):
+            return hook(self.preset, self.config, cls=cls)
+        if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params):
+            return hook(self.preset, self.config, cls)
+        return hook(self.preset, self.config)
+
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
-        architecture = self.config["architectures"][0]
+        architectures = self.config.get("architectures")
+        architecture = architectures[0] if architectures else None
         is_classifier = issubclass(cls, ImageClassifier)
         is_assistant = architecture == "Gemma4AssistantForCausalLM"
         # `convert_head` is only defined for task-specific heads (e.g.
@@ -196,7 +228,7 @@ class TransformersPresetLoader(PresetLoader):
             kwargs = {**task_config, **kwargs}
 
         if hasattr(self.converter, "load_task_config"):
-            extra = self.converter.load_task_config(self.preset, self.config)
+            extra = self._call_config_hook(self.converter.load_task_config, cls)
             if extra:
                 kwargs = {**extra, **kwargs}
 
@@ -210,10 +242,10 @@ class TransformersPresetLoader(PresetLoader):
                 cls, load_weights, load_task_weights, **kwargs
             )
         # Support loading the classification head for classifier models.
-        if "ForImageClassification" in architecture:
+        if "ForImageClassification" in (architecture or ""):
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights:
+        if load_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task
@@ -251,8 +283,8 @@ class TransformersPresetLoader(PresetLoader):
 
     def load_preprocessor(self, cls, config_file=None, **kwargs):
         if hasattr(self.converter, "load_preprocessor_config"):
-            extra = self.converter.load_preprocessor_config(
-                self.preset, self.config
+            extra = self._call_config_hook(
+                self.converter.load_preprocessor_config, cls
             )
             if extra:
                 kwargs = {**extra, **kwargs}
