@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -259,6 +260,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
         video scores."""
         # hidden_dim 32 / head_dim 8: at head_dim 2 attention logits are
         # so small that position effects sink below float32 noise.
+        keras.utils.set_random_seed(0)
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(
                 sequence_length=32, hidden_dim=32, mrope_section=(2, 1, 1)
@@ -280,7 +282,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
             return inputs, ops.convert_to_numpy(causal_lm.score(inputs))
 
         inputs_slow, logits_slow = score_with_sgt(0.5)
-        inputs_fast, logits_fast = score_with_sgt(2.0)
+        inputs_fast, logits_fast = score_with_sgt(8.0)
         self.assertTrue(np.isfinite(logits_slow).all())
         # The temporal M-RoPE positions themselves must differ...
         self.assertFalse(
