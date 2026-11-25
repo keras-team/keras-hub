@@ -150,37 +150,39 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         # vision_end at index 5 → pos 1+2=3.
         self.assertEqual(list(pos_ids[:, 5]), [3, 3, 3])
 
-    def test_generate_preprocess_pixel_values_match_hf(self):
-        """Pin `pixel_values` against HF-equivalent preprocessing output.
+    def _structured_image(self):
+        """Structured non-uniform image (smooth gradient + dark edge), so
+        the bicubic+antialias kernel exercises non-trivial weights."""
+        xx, yy = np.meshgrid(np.linspace(0, 255, 9), np.linspace(0, 255, 12))
+        image = np.stack([xx + yy * 0.3, yy, 255 - xx], -1)
+        image[:, :3] *= 0.4
+        return np.clip(image, 0, 255)
 
-        Expected values were computed offline with
-        `torch.nn.functional.interpolate(mode="bicubic", antialias=True)` —
-        the op HF's Qwen2_5VLImageProcessor resizes through — followed by
-        1/255 rescale and CLIP normalization.
-        """
+    def _pixel_values(self, image):
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             image_converter=self._image_converter(),
             sequence_length=32,
         )
-
-        # Structured non-uniform image (smooth gradient + dark edge), so
-        # the bicubic+antialias kernel exercises non-trivial weights.
-        xx, yy = np.meshgrid(np.linspace(0, 255, 9), np.linspace(0, 255, 12))
-        image = np.stack([xx + yy * 0.3, yy, 255 - xx], -1).astype("float32")
-        image[:, :3] *= 0.4
-        image = np.clip(image, 0, 255)
-
         out = preprocessor.generate_preprocess(
             {
                 "prompts": "<|vision_start|><|image_pad|><|vision_end|> air",
                 "images": [image],
             }
         )
+        return ops.convert_to_numpy(out["pixel_values"])
 
+    def test_generate_preprocess_pixel_values_match_hf(self):
+        """Pin `pixel_values` against HF-equivalent preprocessing output.
+
+        Expected values were computed offline with HF's
+        `Qwen2VLImageProcessorFast` (torchvision bicubic+antialias resize,
+        1/255 rescale, CLIP normalization).
+        """
+        image = self._structured_image().astype("float32")
         # First patch of the resized grid (top-left 2x2), first temporal
         # frame — HF-equivalent values, atol 1e-3.
-        patch0 = ops.convert_to_numpy(out["pixel_values"])[0, 0]
+        patch0 = self._pixel_values(image)[0, 0]
         expected = np.array(
             [
                 [
@@ -195,6 +197,56 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
             dtype="float32",
         )
         self.assertAllClose(patch0, expected, atol=1e-3)
+
+    def test_generate_preprocess_pixel_values_uint8_match_hf(self):
+        """uint8 inputs take torchvision's quantized integer resize path.
+
+        Expected values computed offline with HF's
+        `Qwen2VLImageProcessorFast` on the uint8 array — HF quantizes
+        only uint8 inputs, and its uint8/float32 paths genuinely diverge
+        (~0.15 on this fixture), so the dtype dispatch is load-bearing.
+        """
+        image = self._structured_image().astype("uint8")
+        patch0 = self._pixel_values(image)[0, 0]
+        expected = np.array(
+            [
+                [
+                    [-1.7776642, -1.752097, -0.04399312],
+                    [-1.6170814, -1.752097, -0.29995432],
+                ],
+                [
+                    [-1.7484673, -1.6170272, -0.04399312],
+                    [-1.5732862, -1.6320349, -0.29995432],
+                ],
+            ],
+            dtype="float32",
+        )
+        self.assertAllClose(patch0, expected, atol=1e-5)
+
+    def test_generate_preprocess_pixel_values_int_float32_match_hf(self):
+        """Integer-valued float32 inputs take the floating-point path.
+
+        HF quantizes only uint8 dtype inputs, so the same pixel values as
+        float32 must NOT go through the integer-quantized resize.
+        Expected values computed offline with HF's
+        `Qwen2VLImageProcessorFast` on `img_u8.astype("float32")`.
+        """
+        image = self._structured_image().astype("uint8").astype("float32")
+        patch0 = self._pixel_values(image)[0, 0]
+        expected = np.array(
+            [
+                [
+                    [-1.7804581, -1.752097, -0.04262114],
+                    [-1.6189507, -1.752097, -0.30228978],
+                ],
+                [
+                    [-1.7498758, -1.6170272, -0.04262114],
+                    [-1.5772278, -1.6256379, -0.30228978],
+                ],
+            ],
+            dtype="float32",
+        )
+        self.assertAllClose(patch0, expected, atol=1e-5)
 
     def test_generate_preprocess_with_multiple_images(self):
         """Two image markers each expand independently."""

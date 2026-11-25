@@ -53,7 +53,7 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
 
     def setUp(self):
         self.vision_encoder = Qwen2_5VLVisionEncoder(
-            patch_size=14,
+            patch_size=2,
             temporal_patch_size=2,
             in_channels=3,
             embed_dim=64,
@@ -62,6 +62,7 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
             num_heads=4,
             intermediate_dim=256,
             spatial_merge_size=2,
+            window_size=8,
             fullatt_block_indexes=[1],
         )
         self.init_kwargs = {
@@ -80,17 +81,18 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
             "padding_mask": np.array([[1, 1, 1, 1, 1]]),
         }
 
-    def _vision_inputs(self, seq_len=5):
-        """2 merged vision tokens from grid [2, 2, 2] at positions 1, 2."""
-        grid_thw = np.array([[[2, 2, 2]]], dtype="int32")
-        pixel_values = np.random.rand(1, 8, 2, 14, 14, 3).astype("float32")
-        vision_indices = np.array([[1, 2]], dtype="int32")
+    def _vision_inputs(self, seq_len=8):
+        """6 merged vision tokens from grid [1, 4, 6] at positions 1-6."""
+        grid_thw = np.array([[[1, 4, 6]]], dtype="int32")
+        pixel_values = np.random.rand(1, 24, 2, 2, 2, 3).astype("float32")
+        vision_indices = np.array([list(range(1, 7))], dtype="int32")
         # Sequential positions (equivalent to 1-D RoPE).
         position_ids = np.broadcast_to(
             np.arange(seq_len)[None, None, :], (1, 3, seq_len)
         ).astype("int32")
         token_ids = np.full((1, seq_len), 5, dtype="int32")
-        token_ids[0, :3] = [1, 999, 999]
+        token_ids[0, 0] = 1
+        token_ids[0, 1:7] = 999
         return {
             "token_ids": token_ids,
             "padding_mask": np.ones((1, seq_len), dtype="int32"),
@@ -105,9 +107,9 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
             cls=Qwen2_5VLBackbone,
             init_kwargs=self.init_kwargs,
             input_data=self._vision_inputs(),
-            expected_output_shape=(1, 5, 128),
+            expected_output_shape=(1, 8, 128),
             variable_length_data=[
-                self._vision_inputs(seq_len) for seq_len in (3, 4)
+                self._vision_inputs(seq_len) for seq_len in (9, 10)
             ],
             run_mixed_precision_check=False,
             run_quantization_check=False,
@@ -141,7 +143,7 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
     def test_multimodal_backbone_forward(self):
         backbone = Qwen2_5VLBackbone(**self.init_kwargs)
         output = backbone(self._vision_inputs())
-        self.assertEqual(tuple(output.shape), (1, 5, 128))
+        self.assertEqual(tuple(output.shape), (1, 8, 128))
 
     def test_backbone_text_only_injection(self):
         """Multimodal backbone accepts text-only inputs via __call__."""
@@ -155,14 +157,14 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
         inputs = self._vision_inputs()
         out_flat = backbone(inputs)
 
-        # The two vision tokens occupy frames t=1 and t=2 (grid t=2),
-        # with h=w=1; text continues from 1 + max(1, 1) = 2.
+        # Vision tokens follow the merged 2x3 grid at t=0: height/width
+        # channels index the (r, c) coords, text continues at 3.
         pos_mrope = np.array(
             [
                 [
-                    [0, 1, 2, 2, 3],
-                    [0, 1, 1, 2, 3],
-                    [0, 1, 1, 2, 3],
+                    [0, 0, 0, 0, 0, 0, 0, 3],
+                    [0, 0, 0, 0, 1, 1, 1, 3],
+                    [0, 0, 1, 2, 0, 1, 2, 3],
                 ]
             ],
             dtype="int32",
@@ -171,15 +173,39 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
         self.assertNotAllClose(out_flat, out_mrope)
 
     def test_backbone_mrope_sequential_equals_1d(self):
-        """Fixed expected output: sequential M-RoPE ids == 1-D RoPE path.
+        """Sequential M-RoPE positions reproduce the plain 1-D RoPE path.
 
-        With all three position channels set to the sequence index, the
-        recomposition produces identical frequencies to plain 1-D RoPE, so
-        the outputs must match exactly.
+        A multimodal backbone fed text-only inputs gets sequential
+        position ids injected, so its M-RoPE recomposition must match a
+        text-only backbone (``mrope_section=None``) with shared weights —
+        the branch that actually executes ``rotary_embedding_layer``.
         """
-        backbone = Qwen2_5VLBackbone(**self.init_kwargs)
-        inputs = self._vision_inputs()  # sequential (1,3,seq) position_ids
-        out_mrope = backbone(inputs)
-        inputs_1d = {k: v for k, v in inputs.items() if k != "position_ids"}
-        out_1d = backbone(inputs_1d)
-        self.assertAllClose(out_mrope, out_1d, atol=0.0, rtol=0.0)
+        text_inputs = {
+            "token_ids": np.array([[1, 2, 3, 4, 5]]),
+            "padding_mask": np.ones((1, 5), dtype="int32"),
+        }
+        seq_len = 5
+        seq_ids = np.broadcast_to(
+            np.arange(seq_len)[None, None, :], (1, 3, seq_len)
+        ).astype("int32")
+        multimodal = Qwen2_5VLBackbone(**self.init_kwargs)
+        out_mrope = multimodal({**text_inputs, "position_ids": seq_ids})
+
+        text_only_kwargs = {
+            k: v
+            for k, v in self.init_kwargs.items()
+            if k not in ("vision_encoder", "mrope_section")
+        }
+        text_only = Qwen2_5VLBackbone(**text_only_kwargs, mrope_section=None)
+        text_only(text_inputs)  # build before weight sharing
+        text_only.token_embedding.set_weights(
+            multimodal.token_embedding.get_weights()
+        )
+        for text_layer, mm_layer in zip(
+            text_only.transformer_layers, multimodal.transformer_layers
+        ):
+            text_layer.set_weights(mm_layer.get_weights())
+        text_only.layer_norm.set_weights(multimodal.layer_norm.get_weights())
+
+        out_1d = text_only(text_inputs)
+        self.assertAllClose(out_mrope, out_1d, atol=1e-5)

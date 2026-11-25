@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -197,32 +198,45 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         self.assertAllClose(out, ref, atol=tol, rtol=tol)
 
     def test_windowed_attention_finite_gradients(self):
-        """Backward through windowed attention stays finite when
-        `seq_len % window_cap != 0` (padded query rows used to NaN)."""
+        """A `fit` step through windowed attention keeps weights finite
+        when `seq_len % window_cap != 0` — padded query rows used to
+        NaN-poison backward through softmax."""
         rng = np.random.default_rng(0)
         embed_dim, num_heads = 32, 4
         head_dim = embed_dim // num_heads
         cap = 16
         seq_len = 20  # 20 % 16 != 0 → 4 padded query rows.
-        x = rng.random((seq_len, embed_dim)).astype("float32")
-        window_ids = np.zeros(seq_len, dtype="int32")
         cos = np.ones((seq_len, head_dim), dtype="float32")
         sin = np.zeros((seq_len, head_dim), dtype="float32")
+        window_ids = np.zeros(seq_len, dtype="int32")
 
-        attn = Qwen2VLVisionAttention(embed_dim=embed_dim, num_heads=num_heads)
+        class AttentionFitModel(keras.Model):
+            def __init__(self):
+                super().__init__()
+                self.attn = Qwen2VLVisionAttention(
+                    embed_dim=embed_dim, num_heads=num_heads
+                )
 
-        def loss_fn(t):
-            out = attn(t, (cos, sin), window_ids=window_ids, window_cap=cap)
-            return ops.sum(out * out)
+            def call(self, x, training=False):
+                # The vision tower is unbatched; unwrap the unit batch.
+                out = self.attn(
+                    ops.squeeze(x, axis=0),
+                    (cos, sin),
+                    window_ids=window_ids,
+                    window_cap=cap,
+                )
+                return ops.expand_dims(out, axis=0)
 
-        # `ops.grad` needs the input as a backend tensor, and the NaN
-        # softmax rows sit in the same backward `einsum` as weight grads.
-        grad_fn = ops.grad(loss_fn)
-        grad_x = ops.convert_to_numpy(grad_fn(ops.convert_to_tensor(x)))
-        self.assertTrue(
-            bool(np.all(np.isfinite(grad_x))),
-            msg="non-finite gradient through windowed attention",
-        )
+        model = AttentionFitModel()
+        x = rng.random((1, seq_len, embed_dim)).astype("float32")
+        y = np.zeros((1, seq_len, embed_dim), dtype="float32")
+        model.compile(optimizer="sgd", loss="mse")
+        model.fit(x, y, epochs=1, verbose=0)
+        for w in model.trainable_weights:
+            self.assertTrue(
+                bool(np.all(np.isfinite(ops.convert_to_numpy(w)))),
+                msg=f"non-finite weight after fit: {w.path}",
+            )
 
     def test_empty_input(self):
         """Zero-patch input returns an empty output (text-only path)."""
