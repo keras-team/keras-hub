@@ -239,11 +239,11 @@ def validate_text_output(keras_model, hf_results):
         hf_text = extract_response(hf_results["text_generated"])
         print(f"  KerasHub: {keras_text}")
         print(f"  HF:       {hf_text}")
-        if keras_text != hf_text:
-            # Greedy diverges at near-tie logits.
-            print("  WARNING: greedy generation differs.")
-        else:
-            print("  Greedy generation matches.")
+        assert keras_text == hf_text, (
+            f"Greedy text generation mismatch:\n  keras: {keras_text}\n"
+            f"  hf:    {hf_text}"
+        )
+        print("  Greedy generation matches.")
 
 
 # ---------------------------------------------------------------
@@ -297,12 +297,27 @@ def _compare_media_parity(
     keras_real = keras_logits[:, :keras_valid]
     hf_real = hf_logits[:, :keras_valid]
     abs_diff = np.abs(keras_real - hf_real)
+    tok = keras_model.preprocessor.tokenizer
+    media_id = tok.image_token_id if label == "image" else tok.video_token_id
+    is_media = hf_input_ids[:, :keras_valid] == media_id
+    text_diff = abs_diff[~is_media]
+    media_diff = abs_diff[is_media]
     print(f"  {label} logit mean absolute diff: {abs_diff.mean():.6f}")
-    print(f"  {label} logit max absolute diff:  {abs_diff.max():.6f}")
-    # HF sdpa vs eager vision features differ ~6e-3 on identical input;
-    # Qwen2.5-VL-3B logit max diffs: image 0.03, video 0.24.
-    np.testing.assert_allclose(keras_real, hf_real, atol=logit_atol)
-    print(f"  {label} logits match within atol={logit_atol}.")
+    print(f"  max@text    logit diff: {text_diff.max():.6f}")
+    print(f"  max@<|{label}_pad|> logit diff: {media_diff.max():.6f}")
+    # Text positions hold ~1e-4 (exact embedding → LM path); media slots
+    # accumulate vision-tower fp drift (7B on A100: image 0.0059, video
+    # 0.37), so each class gets its own bound like the 2-VL script.
+    np.testing.assert_allclose(
+        keras_real[~is_media], hf_real[~is_media], atol=1e-3
+    )
+    np.testing.assert_allclose(
+        keras_real[is_media], hf_real[is_media], atol=logit_atol
+    )
+    print(
+        f"  {label} logits match over all real positions "
+        f"(text atol=1e-3, media atol={logit_atol})."
+    )
 
 
 def validate_multimodal_output(keras_model, hf_results):
@@ -367,11 +382,11 @@ def validate_multimodal_output(keras_model, hf_results):
         hf_text = extract_response(hf_results["mm_generated"])
         print(f"  KerasHub output: {keras_text}")
         print(f"  HF output:       {hf_text}")
-        if keras_text != hf_text:
-            # Greedy diverges at near-tie logits.
-            print("  WARNING: greedy generation differs.")
-        else:
-            print("  Greedy generation matches.")
+        assert keras_text == hf_text, (
+            f"Greedy multimodal generation mismatch:\n  keras: {keras_text}\n"
+            f"  hf:    {hf_text}"
+        )
+        print("  Greedy generation matches.")
 
 
 # ---------------------------------------------------------------

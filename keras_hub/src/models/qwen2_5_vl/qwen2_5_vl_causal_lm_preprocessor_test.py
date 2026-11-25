@@ -224,44 +224,12 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         self.assertEqual(tuple(out["image_grid_thw"].shape), (2, 3))
 
     def test_generate_preprocess_with_video(self):
-        """Video input: temporal grid produces t*h*w tokens."""
+        """Video input: temporal grid produces t*h*w tokens; videos work
+        with `image_converter=None` (merge size comes from the video
+        converter's inner image converter)."""
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             video_converter=self._video_converter(),
-            sequence_length=32,
-        )
-
-        video = np.ones((8, 2, 2, 3), dtype="float32")
-        prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
-
-        out = preprocessor.generate_preprocess(
-            {"prompts": prompt, "videos": [video]}
-        )
-
-        token_ids = ops.convert_to_numpy(out["token_ids"])
-        video_id = self.tokenizer.video_token_id
-        self.assertEqual(int(np.sum(token_ids == video_id)), 16)
-        self.assertEqual(
-            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
-        )
-
-        # Temporal channel steps by `tokens_per_second` per merged frame
-        # (4 tokens each) — HF's default when no fps metadata is given.
-        pos_ids = ops.convert_to_numpy(out["position_ids"])
-        self.assertEqual(
-            list(pos_ids[0, 1:17]),
-            [1] * 4 + [5] * 4 + [9] * 4 + [13] * 4,
-        )
-        self.assertEqual(list(pos_ids[:, 17]), [3, 3, 3])
-        self.assertEqual(list(pos_ids[:, 18]), [4, 4, 4])
-
-    def test_generate_preprocess_with_video_converter_only(self):
-        """Videos work with `image_converter=None`; merge size comes from
-        the video converter's inner image converter."""
-        video_converter = self._video_converter()
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            video_converter=video_converter,
             sequence_length=32,
         )
 
@@ -285,11 +253,15 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
             list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
         )
 
+        # Temporal channel steps by `tokens_per_second` per merged frame
+        # (4 tokens each) — HF's default when no fps metadata is given.
         pos_ids = ops.convert_to_numpy(out["position_ids"])
         self.assertEqual(
             list(pos_ids[0, 1:17]),
             [1] * 4 + [5] * 4 + [9] * 4 + [13] * 4,
         )
+        self.assertEqual(list(pos_ids[:, 17]), [3, 3, 3])
+        self.assertEqual(list(pos_ids[:, 18]), [4, 4, 4])
 
     def test_generate_preprocess_video_decode_position_base(self):
         """Pad/decode positions rebase to `llm_positions.max() + 1`.
@@ -395,6 +367,104 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
             [1] * 4 + [3] * 4 + [5] * 4 + [7] * 4,
         )
 
+    def test_second_per_grid_ts_multi_video(self):
+        """`second_per_grid_ts` applies per video in prompt order, on
+        both the training (`__call__`) and generate paths."""
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=self._video_converter(),
+            sequence_length=64,
+        )
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+            + tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+        )
+        sgt = [0.5, 2.0]
+        out = preprocessor.generate_preprocess(
+            {
+                "prompts": prompt,
+                "videos": [video, video],
+                "second_per_grid_ts": sgt,
+            }
+        )
+        pos_ids = ops.convert_to_numpy(out["position_ids"])
+        # Video 1 (interval = 4*0.5 = 2): pads at 1..16, t steps by 2.
+        self.assertEqual(
+            list(pos_ids[0, 1:17]), [1] * 4 + [3] * 4 + [5] * 4 + [7] * 4
+        )
+        # Interleaved text/vision_start continue from the spatial max.
+        self.assertEqual(list(pos_ids[:, 17]), [3, 3, 3])
+        self.assertEqual(list(pos_ids[:, 18]), [4, 4, 4])
+        self.assertEqual(list(pos_ids[:, 19]), [5, 5, 5])
+        # Video 2 (interval = 4*2 = 8): pads at 20..35, base offset 6.
+        self.assertEqual(
+            list(pos_ids[0, 20:36]),
+            [6] * 4 + [14] * 4 + [22] * 4 + [30] * 4,
+        )
+        # Trailing vision_end keeps the spatial continuation; pad
+        # positions rebase to llm max + 1 = 31.
+        self.assertEqual(list(pos_ids[:, 36]), [8, 8, 8])
+        self.assertEqual(list(pos_ids[:, 37]), [31, 31, 31])
+
+        # float64 arrays are accepted and produce identical positions.
+        out64 = preprocessor.generate_preprocess(
+            {
+                "prompts": prompt,
+                "videos": [video, video],
+                "second_per_grid_ts": np.asarray(sgt, dtype=np.float64),
+            }
+        )
+        self.assertAllEqual(out64["position_ids"], out["position_ids"])
+
+        # The training path (`__call__`) computes the same positions for
+        # the real tokens. It additionally appends the end token at
+        # index 37, which takes the spatial continuation before the
+        # llm-max pad rebase.
+        x, _, _ = preprocessor(
+            {
+                "prompts": [prompt],
+                "videos": [video, video],
+                "second_per_grid_ts": sgt,
+            }
+        )
+        train_pos = ops.convert_to_numpy(x["position_ids"])[0]
+        self.assertAllEqual(train_pos[:, :37], pos_ids[:, :37])
+        self.assertAllEqual(train_pos[:, 37], [9, 9, 9])
+        self.assertAllEqual(train_pos[:, 38], [31, 31, 31])
+
+    def test_second_per_grid_ts_count_mismatch(self):
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            video_converter=self._video_converter(),
+            sequence_length=64,
+        )
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+            + tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+        )
+        with self.assertRaisesRegex(ValueError, "second_per_grid_ts"):
+            preprocessor.generate_preprocess(
+                {
+                    "prompts": prompt,
+                    "videos": [video, video],
+                    "second_per_grid_ts": [0.5],
+                }
+            )
+
     def test_batched_call_with_images(self):
         """Two prompts with two images: each row expands its own span."""
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
@@ -438,23 +508,69 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
             preprocessor({"prompts": [pad + " air"], "images": []})
 
-    def test_video_converter_autowrap(self):
-        """An image-converter-only preprocessor auto-wraps a video
-        converter so videos get video bounds, not image bounds."""
+    def test_video_falls_back_to_image_converter(self):
+        """`video_converter=None` stays None: videos defer to the shared
+        `image_converter` (HF's image-processor fallback for videos)."""
         image_converter = self._image_converter()
         preprocessor = Qwen2_5VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             image_converter=image_converter,
             sequence_length=32,
         )
-        video_converter = preprocessor.video_converter
-        self.assertIsNotNone(video_converter)
-        self.assertIsInstance(video_converter, Qwen2_5VLVideoConverter)
-        self.assertIs(video_converter.image_converter, image_converter)
-        # Qwen2.5-VL inherits per-frame video bounds from the image
-        # converter, matching HF's image-processor fallback for videos.
-        self.assertEqual(video_converter.min_pixels, image_converter.min_pixels)
-        self.assertEqual(video_converter.max_pixels, image_converter.max_pixels)
+        self.assertIsNone(preprocessor.video_converter)
+
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+        )
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+        self.assertEqual(
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
+        )
+
+    def test_video_converter_identity_after_from_config(self):
+        """A serialized explicit video converter shares the deserialized
+        `image_converter` — bounds mutations propagate to videos."""
+        image_converter = self._image_converter()
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            # `None` bounds delegate to the shared image converter, so a
+            # mutation on it propagates to video processing.
+            video_converter=Qwen2_5VLVideoConverter(
+                image_converter=image_converter,
+            ),
+            sequence_length=32,
+        )
+        revived = Qwen2_5VLCausalLMPreprocessor.from_config(
+            preprocessor.get_config()
+        )
+        self.assertIsNotNone(revived.video_converter)
+        self.assertIs(
+            revived.video_converter.image_converter,
+            revived.image_converter,
+        )
+        revived.image_converter.max_pixels = 42
+        self.assertEqual(revived.video_converter.max_pixels, 42)
+
+    def test_serialization(self):
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            tokens_per_second=2,
+            sequence_length=32,
+        )
+        self.run_serialization_test(preprocessor)
+        revived = Qwen2_5VLCausalLMPreprocessor.from_config(
+            preprocessor.get_config()
+        )
+        self.assertEqual(revived.tokens_per_second, 2)
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2_5VLCausalLMPreprocessor(

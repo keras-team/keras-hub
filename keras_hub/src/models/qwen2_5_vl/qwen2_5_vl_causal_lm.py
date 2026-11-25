@@ -25,7 +25,27 @@ class Qwen2_5VLCausalLM(Qwen2VLCausalLM):
         preprocessor: A ``keras_hub.models.Qwen2_5VLCausalLMPreprocessor``
             instance or ``None``. If ``None``, this model will not apply
             preprocessing, and inputs should be preprocessed before
-            calling the model.
+            calling the model. Defaults to ``None``.
+
+    Examples:
+
+    ```python
+    # Load a preset with a greedy sampler and generate text.
+    qwen2_5_vl_lm = keras_hub.models.Qwen2_5VLCausalLM.from_preset(
+        "qwen2_5_vl_3b_instruct",
+    )
+    qwen2_5_vl_lm.generate("What is Keras?", max_length=32)
+
+    # Multimodal prompt: describe an image.
+    qwen2_5_vl_lm.generate(
+        {
+            "prompts": ["<|vision_start|><|image_pad|><|vision_end|>"
+                        "Describe this image.<|im_end|>"],
+            "images": [image],  # (H, W, 3) array
+        },
+        max_length=128,
+    )
+    ```
     """
 
     backbone_cls = Qwen2_5VLBackbone

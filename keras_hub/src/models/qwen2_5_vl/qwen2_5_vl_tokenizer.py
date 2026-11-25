@@ -19,8 +19,29 @@ class Qwen2_5VLTokenizer(Qwen2VLTokenizer):
     preset resolution.
 
     Args:
-        vocabulary: string or dict, maps token to integer ids.
-        merges: string or list, contains the merge rules.
+        vocabulary: string or dict, maps token to integer ids. If it is a
+            string, it should be the file path to a json file. Defaults to
+            ``None``.
+        merges: string or list, contains the merge rules as "a b" strings.
+            If it is a string, it should be the file path to merge rules.
+            Checkpoints storing ``["a", "b"]`` pairs (e.g. 32B) are
+            normalized to strings during conversion. Defaults to ``None``.
+
+    Examples:
+
+    ```python
+    # Unbatched input.
+    tokenizer = keras_hub.models.Qwen2_5VLTokenizer.from_preset(
+        "qwen2_5_vl_3b_instruct",
+    )
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize([[151643, 791, 4320, 14198]])
+    ```
     """
 
     backbone_cls = Qwen2_5VLBackbone

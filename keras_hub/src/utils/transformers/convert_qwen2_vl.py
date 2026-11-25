@@ -108,13 +108,21 @@ def load_video_converter_config(preset, transformers_config):
     return {"image_converter": Qwen2VLImageConverter(**image_kwargs)}
 
 
-def convert_weights(backbone, loader, transformers_config):
-    # ── helpers ──────────────────────────────────────────────────────
+def _transpose_2d(x, _):
+    return np.transpose(x, axes=(1, 0))
+
+
+def _port_text_weights(backbone, loader):
+    """Port embeddings, decoder layers, and the final norm.
+
+    The Qwen2-VL and Qwen2.5-VL text towers are identical, so this is
+    shared between both converters.
+    """
+
     def transpose_and_reshape(x, shape):
         return np.reshape(np.transpose(x), shape)
 
-    def transpose_2d(x, _):
-        return np.transpose(x, axes=(1, 0))
+    transpose_2d = _transpose_2d
 
     # ── token embeddings ────────────────────────────────────────────
     loader.port_weight(
@@ -208,16 +216,68 @@ def convert_weights(backbone, loader, transformers_config):
         hf_weight_key="model.norm.weight",
     )
 
-    # ── vision encoder ──────────────────────────────────────────────
-    vision = backbone.vision_encoder
 
-    # Patch embedding (Conv3D)
+def _port_patch_embed(vision, loader):
     # HF: (embed_dim, C, T, kH, kW) → Keras: (T, kH, kW, C, embed_dim)
     loader.port_weight(
         keras_variable=vision.patch_embed.kernel,
         hf_weight_key="visual.patch_embed.proj.weight",
         hook_fn=lambda x, _: np.transpose(x, (2, 3, 4, 1, 0)),
     )
+
+
+def _port_vision_attention_weights(block, prefix, loader):
+    """Port a vision block's fused QKV and output projection."""
+    loader.port_weight(
+        keras_variable=block.attn.qkv.kernel,
+        hf_weight_key=f"{prefix}.attn.qkv.weight",
+        hook_fn=_transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=block.attn.qkv.bias,
+        hf_weight_key=f"{prefix}.attn.qkv.bias",
+    )
+    loader.port_weight(
+        keras_variable=block.attn.proj.kernel,
+        hf_weight_key=f"{prefix}.attn.proj.weight",
+        hook_fn=_transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=block.attn.proj.bias,
+        hf_weight_key=f"{prefix}.attn.proj.bias",
+    )
+
+
+def _port_merger_mlp_weights(merger, loader):
+    """Port the merger MLP (fc1/fc2); ``ln_q`` differs per model."""
+    # HF merger MLP is nn.Sequential(Linear, GELU, Linear)
+    # sub-indices: .0 = fc1, .1 = GELU (no weights), .2 = fc2
+    loader.port_weight(
+        keras_variable=merger.mlp_fc1.kernel,
+        hf_weight_key="visual.merger.mlp.0.weight",
+        hook_fn=_transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc1.bias,
+        hf_weight_key="visual.merger.mlp.0.bias",
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc2.kernel,
+        hf_weight_key="visual.merger.mlp.2.weight",
+        hook_fn=_transpose_2d,
+    )
+    loader.port_weight(
+        keras_variable=merger.mlp_fc2.bias,
+        hf_weight_key="visual.merger.mlp.2.bias",
+    )
+
+
+def convert_weights(backbone, loader, transformers_config):
+    _port_text_weights(backbone, loader)
+
+    # ── vision encoder ──────────────────────────────────────────────
+    vision = backbone.vision_encoder
+    _port_patch_embed(vision, loader)
 
     # Vision blocks
     for i in range(vision.depth):
@@ -234,27 +294,7 @@ def convert_weights(backbone, loader, transformers_config):
             hf_weight_key=f"{prefix}.norm1.bias",
         )
 
-        # Fused QKV attention
-        loader.port_weight(
-            keras_variable=block.attn.qkv.kernel,
-            hf_weight_key=f"{prefix}.attn.qkv.weight",
-            hook_fn=transpose_2d,
-        )
-        loader.port_weight(
-            keras_variable=block.attn.qkv.bias,
-            hf_weight_key=f"{prefix}.attn.qkv.bias",
-        )
-
-        # Output projection
-        loader.port_weight(
-            keras_variable=block.attn.proj.kernel,
-            hf_weight_key=f"{prefix}.attn.proj.weight",
-            hook_fn=transpose_2d,
-        )
-        loader.port_weight(
-            keras_variable=block.attn.proj.bias,
-            hf_weight_key=f"{prefix}.attn.proj.bias",
-        )
+        _port_vision_attention_weights(block, prefix, loader)
 
         # LayerNorm 2
         loader.port_weight(
@@ -270,7 +310,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=block.mlp.fc1.kernel,
             hf_weight_key=f"{prefix}.mlp.fc1.weight",
-            hook_fn=transpose_2d,
+            hook_fn=_transpose_2d,
         )
         loader.port_weight(
             keras_variable=block.mlp.fc1.bias,
@@ -279,7 +319,7 @@ def convert_weights(backbone, loader, transformers_config):
         loader.port_weight(
             keras_variable=block.mlp.fc2.kernel,
             hf_weight_key=f"{prefix}.mlp.fc2.weight",
-            hook_fn=transpose_2d,
+            hook_fn=_transpose_2d,
         )
         loader.port_weight(
             keras_variable=block.mlp.fc2.bias,
@@ -296,26 +336,7 @@ def convert_weights(backbone, loader, transformers_config):
         keras_variable=merger.ln_q.beta,
         hf_weight_key="visual.merger.ln_q.bias",
     )
-    # HF merger MLP is nn.Sequential(Linear, GELU, Linear)
-    # sub-indices: .0 = fc1, .1 = GELU (no weights), .2 = fc2
-    loader.port_weight(
-        keras_variable=merger.mlp_fc1.kernel,
-        hf_weight_key="visual.merger.mlp.0.weight",
-        hook_fn=transpose_2d,
-    )
-    loader.port_weight(
-        keras_variable=merger.mlp_fc1.bias,
-        hf_weight_key="visual.merger.mlp.0.bias",
-    )
-    loader.port_weight(
-        keras_variable=merger.mlp_fc2.kernel,
-        hf_weight_key="visual.merger.mlp.2.weight",
-        hook_fn=transpose_2d,
-    )
-    loader.port_weight(
-        keras_variable=merger.mlp_fc2.bias,
-        hf_weight_key="visual.merger.mlp.2.bias",
-    )
+    _port_merger_mlp_weights(merger, loader)
 
     return backbone
 
@@ -324,6 +345,11 @@ def convert_tokenizer(cls, preset, **kwargs):
     tokenizer_config = load_json(preset, "tokenizer.json")
     vocab = tokenizer_config["model"]["vocab"]
     merges = tokenizer_config["model"]["merges"]
+    # Some checkpoints (e.g. Qwen2.5-VL-32B) store merges as ["a", "b"]
+    # pairs rather than "a b" strings; normalize to strings.
+    merges = [
+        " ".join(m) if isinstance(m, (list, tuple)) else m for m in merges
+    ]
 
     # Load all special tokens except reserved placeholders.
     special_tokens = set()
@@ -346,7 +372,7 @@ def convert_tokenizer(cls, preset, **kwargs):
 
     kwargs.update(
         {
-            "unsplittable_tokens": list(special_tokens),
+            "unsplittable_tokens": sorted(special_tokens),
         }
     )
 

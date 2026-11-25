@@ -73,6 +73,20 @@ def _flatten_media(node, leaf_ndim):
     return [leaf for elem in node for leaf in _flatten_media(elem, leaf_ndim)]
 
 
+def _empty_media(media):
+    # Empty collections behave like absent media, so placeholder
+    # counts get the descriptive mismatch error downstream.
+    if isinstance(media, (list, tuple)):
+        return len(media) == 0
+    shape = getattr(media, "shape", None)
+    return shape is not None and len(shape) > 0 and shape[0] == 0
+
+
+def _has_media_markers(prompts_list, image_token, video_token):
+    """True when any flattened string prompt carries a media marker."""
+    return any(image_token in p or video_token in p for p in prompts_list)
+
+
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
 class Qwen2VLCausalLMPreprocessor(
     QwenVLSpecialTokenMixin, CausalLMPreprocessor
@@ -100,8 +114,8 @@ class Qwen2VLCausalLMPreprocessor(
         image_converter: A ``Qwen2VLImageConverter`` instance, or ``None``
             for text-only mode.
         video_converter: A ``Qwen2VLVideoConverter`` instance, or ``None``.
-            When unset, one is auto-built around ``image_converter``,
-            inheriting its pixel bounds unless overridden.
+            When unset, video preprocessing falls back to
+            ``image_converter`` (shared, so bounds mutations propagate).
         sequence_length: int. Total padded sequence length. Default 1024.
         add_start_token: bool. Prepend BOS token. Default ``False``.
         add_end_token: bool. Append EOS token. Default ``True``.
@@ -130,10 +144,9 @@ class Qwen2VLCausalLMPreprocessor(
             **kwargs,
         )
         self.image_converter = image_converter
-        if video_converter is None and image_converter is not None:
-            video_converter = self.video_converter_cls(
-                image_converter=image_converter
-            )
+        # `None` defers to `self.image_converter` at use sites, so the
+        # two media paths share one converter object and serialization
+        # round-trips keep that identity.
         self.video_converter = video_converter
 
         # Token strings — these are static.
@@ -201,6 +214,21 @@ class Qwen2VLCausalLMPreprocessor(
             p.numpy().decode("utf-8") if hasattr(p, "numpy") else str(p)
             for p in prompts
         ], True
+
+    def _carries_media_markers(self, x):
+        """True when the prompts still carry media markers.
+
+        Symbolic tensors under `tf.data` tracing cannot be decoded;
+        they report no markers so the text-only path stays traceable.
+        """
+        prompts = x["prompts"] if isinstance(x, dict) else x
+        try:
+            prompts_list, _ = self._flatten_prompts(prompts)
+        except (AttributeError, TypeError):
+            prompts_list = []
+        return _has_media_markers(
+            prompts_list, self.image_token, self.video_token
+        )
 
     def _merge_size(self):
         """Spatial merge factor from whichever converter is configured."""
@@ -583,17 +611,24 @@ class Qwen2VLCausalLMPreprocessor(
         if isinstance(x, dict):
             images = x.get("images", None)
             videos = x.get("videos", None)
+        if _empty_media(images):
+            images = None
+        if _empty_media(videos):
+            videos = None
 
         # Text-only fast path: media-free inputs delegate to the base
         # class, whose tokenizer/packer path is safe under `tf.data`
         # tracing. A dict carrying "responses" keeps the eager multimodal
-        # path so labels are packed, since the base path cannot.
+        # path so labels are packed, since the base path cannot. Prompts
+        # that still carry media markers after empty-media normalization
+        # also take the multimodal path, where `_expand_prompts` raises
+        # the descriptive placeholder/media count mismatch.
         if images is None and videos is None:
             responses = (
                 x.get("responses", None) if isinstance(x, dict) else None
             )
-            if responses is None:
-                prompts = x["prompts"] if isinstance(x, dict) else x
+            prompts = x["prompts"] if isinstance(x, dict) else x
+            if responses is None and not self._carries_media_markers(x):
                 return super().call(
                     prompts,
                     y=y,
@@ -604,18 +639,6 @@ class Qwen2VLCausalLMPreprocessor(
         if not self.built:
             self.build(None)
 
-        def _empty(media):
-            # Empty collections behave like absent media, so placeholder
-            # counts get the descriptive mismatch error downstream.
-            if isinstance(media, (list, tuple)):
-                return len(media) == 0
-            shape = getattr(media, "shape", None)
-            return shape is not None and len(shape) > 0 and shape[0] == 0
-
-        if _empty(images):
-            images = None
-        if _empty(videos):
-            videos = None
         self._check_converters(images, videos)
         prompts_list, batched = self._flatten_prompts(x["prompts"])
         responses_text = x.get("responses", None)
@@ -734,20 +757,28 @@ class Qwen2VLCausalLMPreprocessor(
             inputs, ``pixel_values``, ``image_grid_thw``,
             ``vision_indices``, ``position_ids``.
         """
-        # Check whether the input has images/videos.
+        # Check whether the input has images/videos. Empty collections
+        # normalize to absent media, same as `_call`.
         images = None
         videos = None
         if isinstance(x, dict):
             images = x.get("images", None)
             videos = x.get("videos", None)
+        if _empty_media(images):
+            images = None
+        if _empty_media(videos):
+            videos = None
 
         # Text-only: delegate to the base class entirely. The base class
         # expects bare strings, so unwrap a `{"prompts": ...}` dict first.
+        # Prompts carrying media markers take the multimodal path so the
+        # count mismatch surfaces instead of silent literal placeholders.
         if images is None and videos is None:
             prompts = x["prompts"] if isinstance(x, dict) else x
-            return super().generate_preprocess(
-                prompts, sequence_length=sequence_length
-            )
+            if not self._carries_media_markers(x):
+                return super().generate_preprocess(
+                    prompts, sequence_length=sequence_length
+                )
 
         # Multimodal path.
         if not self.built:
@@ -869,3 +900,36 @@ class Qwen2VLCausalLMPreprocessor(
         # `image_converter` and `video_converter` are serialized by the base
         # `Preprocessor.get_config`.
         return super().get_config()
+
+    @staticmethod
+    def _share_image_converter(video_converter, image_converter):
+        """Point ``video_converter.image_converter`` at the shared one.
+
+        A deserialized ``Qwen2VLVideoConverter`` carries its own copy of
+        the image converter, so mutating the canonical
+        ``preprocessor.image_converter`` (e.g. ``max_pixels``) would not
+        reach the video path. Rewire when the two configs match, which
+        is always true for converters loaded from the same preset.
+        """
+        if video_converter is None or image_converter is None:
+            return
+        nested = video_converter.image_converter
+        if nested is image_converter:
+            return
+        if nested.get_config() == image_converter.get_config():
+            video_converter.image_converter = image_converter
+
+    @classmethod
+    def from_config(cls, config):
+        preprocessor = super().from_config(config)
+        cls._share_image_converter(
+            preprocessor.video_converter, preprocessor.image_converter
+        )
+        return preprocessor
+
+    @classmethod
+    def _add_missing_kwargs(cls, loader, kwargs):
+        super()._add_missing_kwargs(loader, kwargs)
+        cls._share_image_converter(
+            kwargs.get("video_converter"), kwargs.get("image_converter")
+        )

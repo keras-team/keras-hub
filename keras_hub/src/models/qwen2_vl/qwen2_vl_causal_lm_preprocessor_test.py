@@ -362,23 +362,31 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
             preprocessor({"prompts": [pad + " air"], "images": []})
 
-    def test_video_converter_autowrap(self):
-        """An image-converter-only preprocessor auto-wraps a video
-        converter so videos get video bounds, not image bounds."""
+    def test_video_falls_back_to_image_converter(self):
+        """`video_converter=None` stays None: videos defer to the shared
+        `image_converter` (HF's image-processor fallback for videos)."""
         image_converter = self._image_converter()
         preprocessor = Qwen2VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             image_converter=image_converter,
             sequence_length=32,
         )
-        video_converter = preprocessor.video_converter
-        self.assertIsNotNone(video_converter)
-        self.assertIsInstance(video_converter, Qwen2VLVideoConverter)
-        self.assertIs(video_converter.image_converter, image_converter)
-        # Per-frame video bounds inherit the image converter's bounds,
-        # matching HF's `from_pretrained` image-config fallback.
-        self.assertEqual(video_converter.min_pixels, image_converter.min_pixels)
-        self.assertEqual(video_converter.max_pixels, image_converter.max_pixels)
+        self.assertIsNone(preprocessor.video_converter)
+
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+        )
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+        self.assertEqual(
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
+        )
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2VLCausalLMPreprocessor(

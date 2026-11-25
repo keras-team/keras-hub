@@ -24,7 +24,7 @@ class Qwen2_5VLBackbone(Qwen2VLBackbone):
         hidden_dim: int. LLM hidden dimension.
         intermediate_dim: int. Feed-forward intermediate dimension.
         vision_encoder: A ``Qwen2_5VLVisionEncoder`` instance, or ``None``
-            for a text-only model.
+            for a text-only model. Defaults to ``None``.
         mrope_section: list of int or None. M-RoPE section sizes
             ``[s_t, s_h, s_w]`` in rotary pairs, summing to
             ``head_dim // 2``. Defaults to ``[16, 24, 24]`` (the value
@@ -41,5 +41,36 @@ class Qwen2_5VLBackbone(Qwen2VLBackbone):
         use_sliding_window_attention: bool. Whether to use sliding window
             attention. Defaults to ``False``.
         sliding_window_size: int. Sliding window size. Defaults to ``32768``.
-        dtype: string or ``keras.mixed_precision.DTypePolicy``.
+        dtype: string or ``keras.mixed_precision.DTypePolicy``. Defaults to
+            ``None``.
+
+    Examples:
+
+    ```python
+    # Randomly initialized backbone with a tiny vision encoder.
+    vision_encoder = keras_hub.models.Qwen2_5VLVisionEncoder(
+        embed_dim=64,
+        out_dim=64,
+        depth=2,
+        num_heads=4,
+    )
+    backbone = keras_hub.models.Qwen2_5VLBackbone(
+        vocabulary_size=32000,
+        num_layers=2,
+        num_query_heads=4,
+        num_key_value_heads=4,
+        hidden_dim=64,
+        intermediate_dim=128,
+        vision_encoder=vision_encoder,
+    )
+
+    # Forward on token ids; vision inputs and M-RoPE positions are
+    # auto-filled when absent.
+    backbone(
+        {
+            "token_ids": np.ones((1, 8), dtype="int32"),
+            "padding_mask": np.ones((1, 8), dtype="int32"),
+        }
+    )
+    ```
     """

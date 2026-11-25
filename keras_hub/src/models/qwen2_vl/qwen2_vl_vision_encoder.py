@@ -130,6 +130,14 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
             same = ops.equal(
                 ops.expand_dims(win_q, 2), ops.expand_dims(win_k, 1)
             ) & ops.reshape(key_in_range, (nseg, 1, 3 * cap))
+            # Padded queries (window_id -1) match no key: all -inf logits
+            # give a NaN softmax, which NaNs grads on backward. Unmask
+            # in-range keys on those rows; the outputs are sliced away.
+            padded_q = ops.equal(win_q, -1)
+            same = same | (
+                ops.expand_dims(padded_q, axis=2)
+                & ops.reshape(key_in_range, (nseg, 1, 3 * cap))
+            )
             sc = ops.where(ops.expand_dims(same, axis=0), sc, float("-inf"))
             sc = ops.softmax(sc, axis=-1)
             sc = ops.cast(sc, self.compute_dtype)
@@ -252,6 +260,10 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
     Uses standard ``LayerNormalization`` (with bias) and QuickGELU MLP.
     """
 
+    # Subclasses (Qwen2.5-VL) swap these implementations.
+    norm_cls = keras.layers.LayerNormalization
+    mlp_cls = Qwen2VLVisionMLP
+
     def __init__(self, embed_dim, num_heads, mlp_dim, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.embed_dim = embed_dim
@@ -260,7 +272,7 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
         self.epsilon = epsilon
 
     def build(self, input_shape):
-        self.norm1 = keras.layers.LayerNormalization(
+        self.norm1 = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="norm1"
         )
         self.norm1.build(input_shape)
@@ -271,11 +283,11 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
             name="attn",
         )
         self.attn.build(input_shape)
-        self.norm2 = keras.layers.LayerNormalization(
+        self.norm2 = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="norm2"
         )
         self.norm2.build(input_shape)
-        self.mlp = Qwen2VLVisionMLP(
+        self.mlp = self.mlp_cls(
             embed_dim=self.embed_dim,
             mlp_dim=self.mlp_dim,
             dtype=self.dtype_policy,
@@ -346,8 +358,11 @@ class Qwen2VLPatchMerger(keras.layers.Layer):
         self.epsilon = epsilon
         self.merged_dim = embed_dim * spatial_merge_size * spatial_merge_size
 
+    # Subclasses (Qwen2.5-VL) swap the normalization implementation.
+    norm_cls = keras.layers.LayerNormalization
+
     def build(self, input_shape):
-        self.ln_q = keras.layers.LayerNormalization(
+        self.ln_q = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="ln_q"
         )
         self.ln_q.build((None, self.embed_dim))
@@ -614,6 +629,25 @@ class Qwen2VLVisionEncoder(keras.Model):
         _, _, segment_ids = self._per_patch_layout(grid_thw, seq_len)
         return segment_ids
 
+    def _encode_tokens(self, hidden_states, grid_thw):
+        """Run the ViT blocks and patch merger over embedded patches.
+
+        ``hidden_states`` is ``(seq_len, embed_dim)`` from ``patch_embed``
+        where ``seq_len`` includes the appended dummy merge group;
+        ``grid_thw`` includes the dummy grid row. Subclasses override to
+        change the attention layout (Qwen2.5-VL windowed attention).
+
+        Returns ``(seq_len // merge_size**2, out_dim)`` merged tokens in
+        the original patch order; ``call`` slices off the dummy group.
+        """
+        seq_len = ops.shape(hidden_states)[0]
+        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
+        segment_ids = self._segment_ids(grid_thw, seq_len)
+
+        for blk in self.blocks:
+            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
+        return self.merger(hidden_states)
+
     def call(self, pixel_values, grid_thw):
         """Forward pass through the vision encoder.
 
@@ -678,14 +712,7 @@ class Qwen2VLVisionEncoder(keras.Model):
         )
         hidden_states = ops.cast(hidden_states, "float32")
 
-        seq_len = ops.shape(hidden_states)[0]
-        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
-        segment_ids = self._segment_ids(grid_thw, seq_len)
-
-        for blk in self.blocks:
-            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
-
-        merged = self.merger(hidden_states)
+        merged = self._encode_tokens(hidden_states, grid_thw)
         merged = ops.take(merged, ops.arange(num_merged), axis=0)
 
         if batched:

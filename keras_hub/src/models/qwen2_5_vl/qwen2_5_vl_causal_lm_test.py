@@ -59,6 +59,44 @@ class Qwen2_5VLCausalLMTest(TestCase):
         self.train_data = ([" airplane at airport", " airplane at airport"],)
         self.input_data = self.preprocessor(*self.train_data)[0]
 
+    def _multimodal_init_kwargs(self, sequence_length=16):
+        """Small image-capable preprocessor + backbone for media tests."""
+        image_converter = Qwen2_5VLImageConverter(
+            patch_size=2,
+            temporal_patch_size=2,
+            merge_size=1,
+            min_pixels=16,
+            max_pixels=100,
+        )
+        preprocessor = Qwen2_5VLCausalLMPreprocessor(
+            Qwen2_5VLTokenizer(vocabulary=self.vocab, merges=self.merges),
+            image_converter=image_converter,
+            sequence_length=sequence_length,
+        )
+        backbone = Qwen2_5VLBackbone(
+            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_query_heads=4,
+            num_key_value_heads=2,
+            hidden_dim=8,
+            intermediate_dim=16,
+            # head_dim = 8/4 = 2 → mrope sections must sum to 1.
+            mrope_section=[1, 0, 0],
+            vision_encoder=Qwen2_5VLVisionEncoder(
+                patch_size=2,
+                temporal_patch_size=2,
+                in_channels=3,
+                embed_dim=16,
+                out_dim=8,
+                depth=2,
+                num_heads=2,
+                intermediate_dim=256,
+                spatial_merge_size=1,
+                fullatt_block_indexes=[1],
+            ),
+        )
+        return {"preprocessor": preprocessor, "backbone": backbone}
+
     def test_causal_lm_basics(self):
         self.run_task_test(
             cls=Qwen2_5VLCausalLM,
@@ -88,42 +126,8 @@ class Qwen2_5VLCausalLMTest(TestCase):
 
     def test_generate_with_image(self):
         """Multimodal generate: image embeddings interleave into prefill."""
-        image_converter = Qwen2_5VLImageConverter(
-            patch_size=2,
-            temporal_patch_size=2,
-            merge_size=1,
-            min_pixels=16,
-            max_pixels=100,
-        )
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            Qwen2_5VLTokenizer(vocabulary=self.vocab, merges=self.merges),
-            image_converter=image_converter,
-            sequence_length=16,
-        )
-        backbone = Qwen2_5VLBackbone(
-            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            # head_dim = 8/4 = 2 → mrope sections must sum to 1.
-            mrope_section=[1, 0, 0],
-            vision_encoder=Qwen2_5VLVisionEncoder(
-                patch_size=2,
-                temporal_patch_size=2,
-                in_channels=3,
-                embed_dim=16,
-                out_dim=8,
-                depth=2,
-                num_heads=2,
-                intermediate_dim=256,
-                spatial_merge_size=1,
-                fullatt_block_indexes=[1],
-            ),
-        )
         causal_lm = Qwen2_5VLCausalLM(
-            backbone=backbone, preprocessor=preprocessor
+            **self._multimodal_init_kwargs(sequence_length=16)
         )
         image = np.ones((4, 4, 3), dtype="float32")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
@@ -134,43 +138,31 @@ class Qwen2_5VLCausalLMTest(TestCase):
         self.assertTrue(isinstance(output, str))
         self.assertIn(" air", output)
 
-    def test_fit_with_image(self):
-        """fit() trains through the multimodal preprocessor path."""
-        image_converter = Qwen2_5VLImageConverter(
-            patch_size=2,
-            temporal_patch_size=2,
-            merge_size=1,
-            min_pixels=16,
-            max_pixels=100,
-        )
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            Qwen2_5VLTokenizer(vocabulary=self.vocab, merges=self.merges),
-            image_converter=image_converter,
-            sequence_length=32,
-        )
-        backbone = Qwen2_5VLBackbone(
-            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            mrope_section=[1, 0, 0],
-            vision_encoder=Qwen2_5VLVisionEncoder(
-                patch_size=2,
-                temporal_patch_size=2,
-                in_channels=3,
-                embed_dim=16,
-                out_dim=8,
-                depth=2,
-                num_heads=2,
-                intermediate_dim=256,
-                spatial_merge_size=1,
-                fullatt_block_indexes=[1],
-            ),
-        )
+    def test_generate_with_video(self):
+        """Video inputs flow through the shared image converter, with
+        `second_per_grid_ts` scaling the temporal M-RoPE positions."""
         causal_lm = Qwen2_5VLCausalLM(
-            backbone=backbone, preprocessor=preprocessor
+            **self._multimodal_init_kwargs(sequence_length=32)
+        )
+        self.assertIsNone(causal_lm.preprocessor.video_converter)
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
+        output = causal_lm.generate(
+            {
+                "prompts": prompt,
+                "videos": [video],
+                "second_per_grid_ts": [0.5],
+            },
+            max_length=32,
+        )
+        self.assertTrue(isinstance(output, str))
+        self.assertIn(" air", output)
+
+    def test_fit_with_image(self):
+        """fit() trains through the multimodal preprocessor path; all
+        weights — including the vision tower — stay finite and update."""
+        causal_lm = Qwen2_5VLCausalLM(
+            **self._multimodal_init_kwargs(sequence_length=32)
         )
         images = np.ones((2, 4, 4, 3), dtype="float32")
         x = {
@@ -182,9 +174,19 @@ class Qwen2_5VLCausalLMTest(TestCase):
             "images": images,
         }
         embedding = causal_lm.backbone.token_embedding.embeddings
-        old_weight = ops.convert_to_numpy(embedding)
-        causal_lm.fit(x=x, batch_size=2, epochs=1, verbose=0)
-        self.assertNotAllClose(old_weight, ops.convert_to_numpy(embedding))
+        vision_kernel = causal_lm.backbone.vision_encoder.merger.mlp_fc1.kernel
+        old_embedding = ops.convert_to_numpy(embedding)
+        old_vision = ops.convert_to_numpy(vision_kernel)
+        causal_lm.fit(x=x, batch_size=2, epochs=2, verbose=0)
+        self.assertNotAllClose(old_embedding, ops.convert_to_numpy(embedding))
+        self.assertNotAllClose(old_vision, ops.convert_to_numpy(vision_kernel))
+        # NaN/inf weights would pass `assertNotAllClose` silently — check
+        # finiteness explicitly across the whole model.
+        for w in causal_lm.trainable_weights:
+            self.assertTrue(
+                np.isfinite(ops.convert_to_numpy(w)).all(),
+                msg=f"non-finite weight after fit: {w.path}",
+            )
 
     def test_generate_strip_prompt(self):
         causal_lm = Qwen2_5VLCausalLM(**self.init_kwargs)
@@ -238,43 +240,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
     @pytest.mark.large
     def test_saved_model_multimodal(self):
         """Save/reload a model whose preprocessor emits image inputs."""
-        image_converter = Qwen2_5VLImageConverter(
-            patch_size=2,
-            temporal_patch_size=2,
-            merge_size=1,
-            min_pixels=16,
-            max_pixels=100,
-        )
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            Qwen2_5VLTokenizer(vocabulary=self.vocab, merges=self.merges),
-            image_converter=image_converter,
-            sequence_length=32,
-        )
-        backbone = Qwen2_5VLBackbone(
-            vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
-            num_layers=2,
-            num_query_heads=4,
-            num_key_value_heads=2,
-            hidden_dim=8,
-            intermediate_dim=16,
-            mrope_section=[1, 0, 0],
-            vision_encoder=Qwen2_5VLVisionEncoder(
-                patch_size=2,
-                temporal_patch_size=2,
-                in_channels=3,
-                embed_dim=16,
-                out_dim=8,
-                depth=2,
-                num_heads=2,
-                intermediate_dim=256,
-                spatial_merge_size=1,
-                fullatt_block_indexes=[1],
-            ),
-        )
-        init_kwargs = {
-            "preprocessor": preprocessor,
-            "backbone": backbone,
-        }
+        init_kwargs = self._multimodal_init_kwargs(sequence_length=32)
         train_data = (
             {
                 "prompts": [
@@ -285,7 +251,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
                 "images": np.ones((2, 4, 4, 3), dtype="float32"),
             },
         )
-        input_data = preprocessor(*train_data)[0]
+        input_data = init_kwargs["preprocessor"](*train_data)[0]
         self.run_model_saving_test(
             cls=Qwen2_5VLCausalLM,
             init_kwargs=init_kwargs,

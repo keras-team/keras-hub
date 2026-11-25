@@ -7,9 +7,6 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLPatchMerger,
 )
 from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
-    Qwen2VLVisionAttention,
-)
-from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
     Qwen2VLVisionBlock,
 )
 from keras_hub.src.models.qwen2_vl.qwen2_vl_vision_encoder import (
@@ -70,55 +67,14 @@ class Qwen2_5VLVisionBlock(Qwen2VLVisionBlock):
     attention submodule are unchanged.
     """
 
-    def build(self, input_shape):
-        self.norm1 = QwenLayerNorm(
-            epsilon=self.epsilon, dtype="float32", name="norm1"
-        )
-        self.norm1.build(input_shape)
-        self.attn = Qwen2VLVisionAttention(
-            embed_dim=self.embed_dim,
-            num_heads=self.num_heads,
-            dtype=self.dtype_policy,
-            name="attn",
-        )
-        self.attn.build(input_shape)
-        self.norm2 = QwenLayerNorm(
-            epsilon=self.epsilon, dtype="float32", name="norm2"
-        )
-        self.norm2.build(input_shape)
-        self.mlp = Qwen2_5VLVisionMLP(
-            embed_dim=self.embed_dim,
-            mlp_dim=self.mlp_dim,
-            dtype=self.dtype_policy,
-            name="mlp",
-        )
-        self.mlp.build(input_shape)
-        self.built = True
+    norm_cls = QwenLayerNorm
+    mlp_cls = Qwen2_5VLVisionMLP
 
 
 class Qwen2_5VLPatchMerger(Qwen2VLPatchMerger):
     """Patch merger with RMSNorm ``ln_q`` (Qwen2.5-VL)."""
 
-    def build(self, input_shape):
-        self.ln_q = QwenLayerNorm(
-            epsilon=self.epsilon, dtype="float32", name="ln_q"
-        )
-        self.ln_q.build((None, self.embed_dim))
-        self.mlp_fc1 = keras.layers.Dense(
-            self.merged_dim,
-            use_bias=True,
-            dtype=self.dtype_policy,
-            name="mlp_fc1",
-        )
-        self.mlp_fc1.build((None, self.merged_dim))
-        self.mlp_fc2 = keras.layers.Dense(
-            self.out_dim,
-            use_bias=True,
-            dtype=self.dtype_policy,
-            name="mlp_fc2",
-        )
-        self.mlp_fc2.build((None, self.merged_dim))
-        self.built = True
+    norm_cls = QwenLayerNorm
 
 
 @keras_hub_export("keras_hub.models.Qwen2_5VLVisionEncoder")
@@ -136,23 +92,48 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
     the returned tokens keep the original block-major layout.
 
     Args:
-        patch_size: int. Spatial patch size in pixels.
-        temporal_patch_size: int. Temporal patch size.
-        in_channels: int. Input channels (typically 3).
-        embed_dim: int. Vision hidden dimension.
-        out_dim: int. Output dimension (= text backbone ``hidden_dim``).
-        depth: int. Number of ViT blocks.
-        num_heads: int. Attention heads per ViT block.
+        patch_size: int. Spatial patch size in pixels. Defaults to ``14``.
+        temporal_patch_size: int. Temporal patch size. Defaults to ``2``.
+        in_channels: int. Input channels (typically 3). Defaults to ``3``.
+        embed_dim: int. Vision hidden dimension. Defaults to ``1280``.
+        out_dim: int. Output dimension (= text backbone ``hidden_dim``);
+            ``None`` uses ``embed_dim``. Defaults to ``None``.
+        depth: int. Number of ViT blocks. Defaults to ``32``.
+        num_heads: int. Attention heads per ViT block. Defaults to ``16``.
         intermediate_dim: int. Vision MLP intermediate dimension
-            (HF ``vision_config.intermediate_size``). Defaults to ``3420``,
-            the HF ``Qwen2_5_VLVisionConfig`` default.
-        spatial_merge_size: int. Spatial merge factor.
-        window_size: int. Window attention size in pixels.
+            (HF ``vision_config.intermediate_size``). ``None`` defaults to
+            ``3420``, the HF ``Qwen2_5_VLVisionConfig`` default.
+        spatial_merge_size: int. Spatial merge factor. Defaults to ``2``.
+        window_size: int. Window attention size in pixels. Defaults to
+            ``112``.
         fullatt_block_indexes: list of int. Block indexes that use
             per-(image, frame) attention instead of windowed attention.
-        theta: float. RoPE base frequency.
-        epsilon: float. RMSNorm epsilon.
+            Defaults to ``(7, 15, 23, 31)``.
+        theta: float. RoPE base frequency. Defaults to ``10000.0``.
+        epsilon: float. RMSNorm epsilon. Defaults to ``1e-6``.
         dtype: compute dtype; the vision tower always runs in float32.
+            Defaults to ``None``.
+
+    Examples:
+
+    ```python
+    # Tiny encoder; one 4x4-patch image grid.
+    encoder = keras_hub.models.Qwen2_5VLVisionEncoder(
+        patch_size=2,
+        temporal_patch_size=2,
+        embed_dim=16,
+        out_dim=8,
+        depth=2,
+        num_heads=4,
+        intermediate_dim=32,
+        window_size=4,
+    )
+    encoder.build()
+    # (total_patches, T, pH, pW, C) patches + (num_images, 3) grid.
+    pixel_values = np.random.rand(16, 2, 2, 2, 3).astype("float32")
+    grid_thw = np.array([[1, 4, 4]], dtype="int32")
+    merged = encoder(pixel_values, grid_thw)  # (4, 8) merged tokens
+    ```
     """
 
     vision_block_cls = Qwen2_5VLVisionBlock
@@ -295,70 +276,11 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
             ops.cast(unit_window, "int32"),
         )
 
-    def call(self, pixel_values, grid_thw):
-        """Forward pass through the vision encoder.
-
-        Args:
-            pixel_values: patches ``(total_patches, T, pH, pW, C)`` or
-                batched ``(batch, total_patches, T, pH, pW, C)``.
-            grid_thw: int tensor ``(num_images, 3)`` or batched
-                ``(batch, num_images, 3)`` with [T, H, W] per image.
-        Returns:
-            Unbatched: ``(total_merged_tokens, out_dim)``.
-            Batched: ``(batch, total_merged_tokens, out_dim)``.
-        """
-        batched = len(ops.shape(pixel_values)) == 6
-        if batched:
-            # Collapse batch: (B, N, T, pH, pW, C) -> (B*N, T, pH, pW, C).
-            pixel_values = ops.reshape(
-                pixel_values,
-                (
-                    -1,
-                    self.temporal_patch_size,
-                    self.patch_size,
-                    self.patch_size,
-                    self.in_channels,
-                ),
-            )
-            grid_thw = ops.reshape(grid_thw, (-1, 3))
-
-        # Text-only calls feed a zero-sized pixel_values tensor. When the
-        # patch count is statically zero, skip the transformer entirely.
-        if pixel_values.shape[0] == 0:
-            merged = ops.zeros((0, self.out_dim), dtype="float32")
-            if batched:
-                merged = ops.expand_dims(merged, axis=0)
-            return merged
-
-        # `ops.cond` can't branch on 0-vs-N patches under jit (equal
-        # branch shapes required); encode a dummy group and gather back.
-        num_patches = ops.shape(pixel_values)[0]
-        ms2 = self.spatial_merge_size * self.spatial_merge_size
-        num_merged = num_patches // ms2
-        pad_shape = (ms2,) + (tuple(ops.shape(pixel_values)[1:]))
-        pixel_values = ops.concatenate(
-            [
-                pixel_values,
-                ops.zeros(pad_shape, dtype=pixel_values.dtype),
-            ],
-            axis=0,
-        )
-        pad_grid = ops.cast(
-            ops.array([[1, self.spatial_merge_size, self.spatial_merge_size]]),
-            grid_thw.dtype,
-        )
-        grid_thw = ops.concatenate([grid_thw, pad_grid], axis=0)
-
-        # Patch embedding: each patch is one Conv3D "sample".
-        hidden_states = self.patch_embed(pixel_values)  # (N,1,1,1,E)
-        hidden_states = ops.reshape(
-            hidden_states, (ops.shape(hidden_states)[0], self.embed_dim)
-        )
-        hidden_states = ops.cast(hidden_states, "float32")
-
+    def _encode_tokens(self, hidden_states, grid_thw):
         seq_len = ops.shape(hidden_states)[0]
         cos_emb, sin_emb = self._rot_pos_emb(grid_thw, seq_len)
         frame_segs = self._segment_ids(grid_thw, seq_len)
+        ms2 = self.spatial_merge_size * self.spatial_merge_size
 
         # Regroup merge units window-major and permute tokens, rotary
         # embeddings and segment ids together.
@@ -404,14 +326,9 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
                 )
 
         merged = self.merger(hidden_states)  # (num_units, out_dim)
-        # Undo the window permutation (HF `reverse_indices`), then drop
-        # the appended dummy unit.
-        merged = ops.take(merged, ops.argsort(window_index), axis=0)
-        merged = ops.take(merged, ops.arange(num_merged), axis=0)
-
-        if batched:
-            merged = ops.expand_dims(merged, axis=0)
-        return merged
+        # Undo the window permutation (HF `reverse_indices`); the base
+        # `call` then drops the appended dummy unit.
+        return ops.take(merged, ops.argsort(window_index), axis=0)
 
     def get_config(self):
         config = super().get_config()

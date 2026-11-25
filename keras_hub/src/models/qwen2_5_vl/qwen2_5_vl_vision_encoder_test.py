@@ -83,28 +83,28 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         )
 
     def test_vision_encoder_config_roundtrip(self):
-        encoder = Qwen2_5VLVisionEncoder(**self.init_kwargs)
-        config = encoder.get_config()
-        new_encoder = Qwen2_5VLVisionEncoder.from_config(config)
+        # Non-default window_size/theta/epsilon must survive the
+        # serialize/deserialize roundtrip.
+        encoder = Qwen2_5VLVisionEncoder(
+            **dict(
+                self.init_kwargs,
+                window_size=56,
+                theta=50000.0,
+                epsilon=1e-5,
+            )
+        )
+        self.run_serialization_test(encoder)
 
-        # Verify config values match
-        self.assertEqual(encoder.patch_size, new_encoder.patch_size)
-        self.assertEqual(
-            encoder.temporal_patch_size, new_encoder.temporal_patch_size
-        )
-        self.assertEqual(encoder.in_channels, new_encoder.in_channels)
-        self.assertEqual(encoder.embed_dim, new_encoder.embed_dim)
-        self.assertEqual(encoder.out_dim, new_encoder.out_dim)
-        self.assertEqual(encoder.depth, new_encoder.depth)
-        self.assertEqual(encoder.num_heads, new_encoder.num_heads)
-        self.assertEqual(encoder.intermediate_dim, new_encoder.intermediate_dim)
-        self.assertEqual(
-            encoder.spatial_merge_size, new_encoder.spatial_merge_size
-        )
-        self.assertEqual(encoder.window_size, new_encoder.window_size)
-        self.assertEqual(
-            encoder.fullatt_block_indexes, new_encoder.fullatt_block_indexes
-        )
+    def test_fullatt_block_indexes_validation(self):
+        # depth=2 in init_kwargs → valid indexes are 0 and 1 only.
+        with self.assertRaises(ValueError):
+            Qwen2_5VLVisionEncoder(
+                **dict(self.init_kwargs, fullatt_block_indexes=[2])
+            )
+        with self.assertRaises(ValueError):
+            Qwen2_5VLVisionEncoder(
+                **dict(self.init_kwargs, fullatt_block_indexes=[-1])
+            )
 
     def test_vision_encoder_with_multiple_images(self):
         encoder = Qwen2_5VLVisionEncoder(**self.init_kwargs)
@@ -127,6 +127,11 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         images must produce the same per-image outputs as processing them
         separately."""
         encoder = Qwen2_5VLVisionEncoder(**self.init_kwargs)
+        # Deterministic weights — init order varies across backends.
+        rng = np.random.default_rng(0)
+        encoder.build()
+        for w in encoder.weights:
+            w.assign(rng.normal(0.0, 0.05, size=w.shape).astype("float32"))
 
         grid_a = np.array([[1, 2, 2]], dtype="int32")
         grid_b = np.array([[1, 4, 4]], dtype="int32")
@@ -143,34 +148,43 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         joint = ops.convert_to_numpy(joint)
 
         n_a = out_a.shape[0]
-        tol = 2e-3 if running_on_gpu() else 1e-5
-        np.testing.assert_allclose(joint[:n_a], out_a, atol=tol, rtol=tol)
-        np.testing.assert_allclose(joint[n_a:], out_b, atol=tol, rtol=tol)
+        # fp32 runs as tf32 on gpu; observed drift ~1.1e-3 on A100.
+        tol = 5e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(joint[:n_a], out_a, atol=tol, rtol=tol)
+        self.assertAllClose(joint[n_a:], out_b, atol=tol, rtol=tol)
 
-    def test_chunked_attention_matches_reference(self):
-        """seq_len > 1024 takes the chunked path; its output must equal a
-        plain per-segment softmax attention computed in numpy."""
+    def test_windowed_attention_matches_reference(self):
+        """The block-sparse `window_ids` path must equal per-window
+        softmax attention, including windows that straddle a
+        `window_cap` block boundary (the 3*cap key gather)."""
         rng = np.random.default_rng(0)
         embed_dim, num_heads = 32, 4
         head_dim = embed_dim // num_heads
-        seq_len = 1030  # > chunk → also exercises the clamped tail chunk.
+        cap = 16
+        seq_len = 56  # 56 % 16 != 0 → also exercises padded queries.
         x = rng.random((seq_len, embed_dim)).astype("float32")
-        # Two segments, so the mask is exercised across chunk boundaries.
-        seg = np.repeat([0, 1], [600, seq_len - 600]).astype("int32")
+        # Windows 1..3 each straddle a cap boundary: block 1 queries need
+        # block 0 keys, etc.
+        window_ids = np.array(
+            [0] * 4 + [1] * 16 + [2] * 16 + [3] * 16 + [4] * 4,
+            dtype="int32",
+        )
 
         attn = Qwen2VLVisionAttention(embed_dim=embed_dim, num_heads=num_heads)
         # Identity RoPE (cos=1, sin=0) keeps the reference simple.
         cos = np.ones((seq_len, head_dim), dtype="float32")
         sin = np.zeros((seq_len, head_dim), dtype="float32")
-        out = ops.convert_to_numpy(attn(x, (cos, sin), seg))
+        out = ops.convert_to_numpy(
+            attn(x, (cos, sin), window_ids=window_ids, window_cap=cap)
+        )
 
-        # Numpy reference: fused qkv → per-segment softmax → proj.
+        # Numpy reference: fused qkv → per-window softmax → proj.
         qkv = x @ ops.convert_to_numpy(attn.qkv.kernel)
         qkv += ops.convert_to_numpy(attn.qkv.bias)
         qkv = qkv.reshape(seq_len, 3, num_heads, head_dim)
         q, k, v = (qkv[:, i].transpose(1, 0, 2) for i in range(3))
         sc = np.einsum("hid,hjd->hij", q, k) * head_dim**-0.5
-        same = seg[:, None] == seg[None, :]
+        same = window_ids[:, None] == window_ids[None, :]
         sc = np.where(same[None], sc, -np.inf)
         sc = np.exp(sc - sc.max(axis=-1, keepdims=True))
         sc /= sc.sum(axis=-1, keepdims=True)
@@ -180,7 +194,35 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         ref += ops.convert_to_numpy(attn.proj.bias)
 
         tol = 1e-3 if running_on_gpu() else 1e-4
-        np.testing.assert_allclose(out, ref, atol=tol, rtol=tol)
+        self.assertAllClose(out, ref, atol=tol, rtol=tol)
+
+    def test_windowed_attention_finite_gradients(self):
+        """Backward through windowed attention stays finite when
+        `seq_len % window_cap != 0` (padded query rows used to NaN)."""
+        rng = np.random.default_rng(0)
+        embed_dim, num_heads = 32, 4
+        head_dim = embed_dim // num_heads
+        cap = 16
+        seq_len = 20  # 20 % 16 != 0 → 4 padded query rows.
+        x = rng.random((seq_len, embed_dim)).astype("float32")
+        window_ids = np.zeros(seq_len, dtype="int32")
+        cos = np.ones((seq_len, head_dim), dtype="float32")
+        sin = np.zeros((seq_len, head_dim), dtype="float32")
+
+        attn = Qwen2VLVisionAttention(embed_dim=embed_dim, num_heads=num_heads)
+
+        def loss_fn(t):
+            out = attn(t, (cos, sin), window_ids=window_ids, window_cap=cap)
+            return ops.sum(out * out)
+
+        # `ops.grad` needs the input as a backend tensor, and the NaN
+        # softmax rows sit in the same backward `einsum` as weight grads.
+        grad_fn = ops.grad(loss_fn)
+        grad_x = ops.convert_to_numpy(grad_fn(ops.convert_to_tensor(x)))
+        self.assertTrue(
+            bool(np.all(np.isfinite(grad_x))),
+            msg="non-finite gradient through windowed attention",
+        )
 
     def test_empty_input(self):
         """Zero-patch input returns an empty output (text-only path)."""
@@ -250,16 +292,84 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
             [0] * 4 + [1] + [0] * 4 + [1] + [0] * 4 + [1] + [0] * 4 + [1],
         )
 
-    def test_window_unpermute_roundtrip(self):
-        """argsort(window_index) restores the original merge-unit order."""
-        encoder = Qwen2_5VLVisionEncoder(**self.init_kwargs)
-        window_index, _ = encoder._window_layout(
-            np.array([[1, 8, 10], [2, 6, 8]], dtype="int32"), num_units=32
+        # Multi-row grid [[1, 12, 10]]: merge grid 6x5, ws=4 → windows at
+        # wr=0 and wr=1, exercising multiple window rows.
+        # Window 0 (r<4,c<4): units {0-3,5-8,10-13,15-18}, window 1
+        # (r<4,c=4): {4,9,14,19}, window 2 (r>=4,c<4): {20-23,25-28},
+        # window 3 (r>=4,c=4): {24,29}.
+        window_index, unit_window = encoder._window_layout(
+            np.array([[1, 12, 10]], dtype="int32"), num_units=30
         )
-        units = ops.arange(32, dtype="int32")
+        self.assertAllEqual(
+            window_index,
+            [
+                0,
+                1,
+                2,
+                3,
+                5,
+                6,
+                7,
+                8,
+                10,
+                11,
+                12,
+                13,
+                15,
+                16,
+                17,
+                18,
+                4,
+                9,
+                14,
+                19,
+                20,
+                21,
+                22,
+                23,
+                25,
+                26,
+                27,
+                28,
+                24,
+                29,
+            ],
+        )
+        self.assertAllEqual(
+            unit_window,
+            [0] * 4
+            + [1]
+            + [0] * 4
+            + [1]
+            + [0] * 4
+            + [1]
+            + [0] * 4
+            + [1]
+            + [2] * 4
+            + [3]
+            + [2] * 4
+            + [3],
+        )
+
+    def test_window_unpermute_roundtrip(self):
+        """argsort(window_index) restores the original merge-unit order,
+        and permuted units sit in non-decreasing window order."""
+        encoder = Qwen2_5VLVisionEncoder(**self.init_kwargs)
+        # [[1,8,10],[2,6,8]] → merge grids 4x5 + 2x(3x4) = 20+24 = 44
+        # units total.
+        window_index, unit_window = encoder._window_layout(
+            np.array([[1, 8, 10], [2, 6, 8]], dtype="int32"), num_units=44
+        )
+        units = ops.arange(44, dtype="int32")
         permuted = ops.take(units, window_index, axis=0)
         restored = ops.take(permuted, ops.argsort(window_index), axis=0)
         self.assertAllEqual(restored, units)
+
+        # Windows must be contiguous in permuted order.
+        permuted_windows = ops.convert_to_numpy(
+            ops.take(unit_window, window_index, axis=0)
+        )
+        self.assertTrue(bool(np.all(np.diff(permuted_windows) >= 0)))
 
     def test_window_vs_full_attention(self):
         """Windowed and full-attention blocks produce different segment
@@ -272,9 +382,10 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         """
         rng = np.random.default_rng(0)
         kw = dict(self.init_kwargs, depth=1)
-        patches = rng.random((64, kw["temporal_patch_size"], 14, 14, 3)).astype(
-            "float32"
-        )
+        # Grid [1, 8, 16] → 128 patches (T is already temporal patches).
+        patches = rng.random(
+            (128, kw["temporal_patch_size"], 14, 14, 3)
+        ).astype("float32")
 
         grid_two_windows = np.array([[1, 8, 16]], dtype="int32")
         windowed = Qwen2_5VLVisionEncoder(**dict(kw, fullatt_block_indexes=[]))
@@ -287,9 +398,10 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         out_f = ops.convert_to_numpy(full(patches, grid_two_windows))
         self.assertGreater(float(np.max(np.abs(out_w - out_f))), 1e-3)
 
-        # Single-window grid: both segment choices are the same mask.
+        # Single-window grid [1, 8, 8] → 64 patches; both segment
+        # choices are the same mask.
         grid_one_window = np.array([[1, 8, 8]], dtype="int32")
-        out_w = ops.convert_to_numpy(windowed(patches[:32], grid_one_window))
-        out_f = ops.convert_to_numpy(full(patches[:32], grid_one_window))
+        out_w = ops.convert_to_numpy(windowed(patches[:64], grid_one_window))
+        out_f = ops.convert_to_numpy(full(patches[:64], grid_one_window))
         tol = 2e-3 if running_on_gpu() else 1e-5
-        np.testing.assert_allclose(out_w, out_f, atol=tol, rtol=tol)
+        self.assertAllClose(out_w, out_f, atol=tol, rtol=tol)

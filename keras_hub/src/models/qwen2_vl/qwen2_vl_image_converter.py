@@ -93,7 +93,8 @@ def _resize_axis(image, axis, size_out, quantized):
     image = np.moveaxis(image, 0, axis)
     if quantized:
         image = np.floor((image + 2.0 ** (precision - 1)) / 2.0**precision)
-    return np.clip(image, 0, 255)
+        image = np.clip(image, 0, 255)
+    return image
 
 
 def smart_resize(
@@ -242,7 +243,11 @@ class Qwen2VLImageConverter(ImageConverter):
         """
         # Handle a list of separate images by processing each one
         # independently and concatenating the results.
-        if isinstance(image, list):
+        if isinstance(image, (list, tuple)):
+            if len(image) == 0:
+                raise ValueError(
+                    "Expected at least one image, got an empty collection."
+                )
             all_patches = []
             all_grids = []
             for img in image:
@@ -256,6 +261,9 @@ class Qwen2VLImageConverter(ImageConverter):
                 "grid_thw": np.concatenate(all_grids, axis=0),
             }
 
+        # Torchvision takes the quantized integer resize path only for
+        # `uint8` inputs; float32 always uses the floating-point path.
+        quantized = np.asarray(ops.convert_to_numpy(image)).dtype == np.uint8
         image = np.asarray(ops.convert_to_numpy(image), dtype="float32")
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
@@ -278,13 +286,14 @@ class Qwen2VLImageConverter(ImageConverter):
         )
 
         if resized_h != height or resized_w != width:
-            # Separable bicubic, width then height. Integer-valued
-            # pixels use the quantized `uint8` path.
-            quantized = bool(np.all(image == np.floor(image)))
+            # Separable bicubic, width then height. `uint8` inputs use
+            # the quantized path with per-pass rounding and clipping.
             image = image.astype("float64")
             image = _resize_axis(image, 2, resized_w, quantized)
             image = _resize_axis(image, 1, resized_h, quantized)
-            image = np.clip(image.astype("float32"), 0.0, 255.0)
+            image = image.astype("float32")
+            if quantized:
+                image = np.clip(image, 0.0, 255.0)
         patches = image
 
         patches = patches / np.float32(255.0)

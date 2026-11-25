@@ -40,16 +40,42 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
     Args:
         tokenizer: A ``Qwen2_5VLTokenizer`` instance.
         image_converter: A ``Qwen2_5VLImageConverter`` instance, or ``None``
-            for text-only mode.
+            for text-only mode. Defaults to ``None``.
         video_converter: A ``Qwen2_5VLVideoConverter`` instance, or
-            ``None``. When unset, one is auto-built around
-            ``image_converter``, inheriting its pixel bounds unless
-            overridden.
+            ``None``. When unset, video preprocessing falls back to
+            ``image_converter`` (shared, so bounds mutations propagate).
+            Defaults to ``None``.
         tokens_per_second: int. Temporal position scale per second of
-            video (HF ``vision_config.tokens_per_second``). Default 4.
-        sequence_length: int. Total padded sequence length. Default 1024.
-        add_start_token: bool. Prepend BOS token. Default ``False``.
-        add_end_token: bool. Append EOS token. Default ``True``.
+            video (HF ``vision_config.tokens_per_second``). Defaults to
+            ``4``.
+        sequence_length: int. Total padded sequence length. Defaults to
+            ``1024``.
+        add_start_token: bool. Prepend BOS token. Defaults to ``False``.
+        add_end_token: bool. Append EOS token. Defaults to ``True``.
+
+    Examples:
+
+    ```python
+    # Load the preprocessor from a preset.
+    preprocessor = keras_hub.models.Qwen2_5VLCausalLMPreprocessor.from_preset(
+        "qwen2_5_vl_3b_instruct",
+    )
+
+    # Tokenize and pad a single sequence.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and pad a batch of sequences.
+    preprocessor(["The quick brown fox jumped.", "The fox slept."])
+
+    # Multimodal input: image plus chat prompt with a vision placeholder.
+    preprocessor(
+        {
+            "prompts": ["<|vision_start|><|image_pad|><|vision_end|>"
+                        "Describe this image.<|im_end|>"],
+            "images": [np.random.randint(0, 256, size=(224, 224, 3))],
+        }
+    )
+    ```
     """
 
     backbone_cls = Qwen2_5VLBackbone
