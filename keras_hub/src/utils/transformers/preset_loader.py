@@ -4,6 +4,7 @@ import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.token_classifier import TokenClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.transformers import convert_albert
 from keras_hub.src.utils.transformers import convert_bart
@@ -33,6 +34,7 @@ from keras_hub.src.utils.transformers import convert_modern_bert
 from keras_hub.src.utils.transformers import convert_mpnet
 from keras_hub.src.utils.transformers import convert_muse_glimmer
 from keras_hub.src.utils.transformers import convert_muse_glimmer_assistant
+from keras_hub.src.utils.transformers import convert_openai_privacy_filter
 from keras_hub.src.utils.transformers import convert_pali_gemma
 from keras_hub.src.utils.transformers import convert_qwen
 from keras_hub.src.utils.transformers import convert_qwen2_vl
@@ -100,6 +102,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_gpt_oss
         elif model_type == "gpt_neox":
             self.converter = convert_gpt_neo_x
+        elif model_type == "openai_privacy_filter":
+            self.converter = convert_openai_privacy_filter
         elif model_type == "llama":
             # TODO: handle other llama versions.
             self.converter = convert_llama3
@@ -189,7 +193,7 @@ class TransformersPresetLoader(PresetLoader):
         # into a `convert_head` written for a different task class.
         has_matching_convert_head = hasattr(
             self.converter, "convert_head"
-        ) and issubclass(cls, MaskedLM)
+        ) and issubclass(cls, (MaskedLM, TokenClassifier))
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -213,7 +217,7 @@ class TransformersPresetLoader(PresetLoader):
         if "ForImageClassification" in architecture:
             kwargs["num_classes"] = len(self.config["id2label"])
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
-        if load_task_weights:
+        if load_weights and load_task_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:
                 self.converter.convert_head(task, loader, self.config)
         return task

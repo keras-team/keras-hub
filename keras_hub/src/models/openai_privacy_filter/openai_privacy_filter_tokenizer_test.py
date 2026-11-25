@@ -1,0 +1,202 @@
+import json
+
+import pytest
+from keras import ops
+
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (  # noqa: E501
+    OpenAIPrivacyFilterTokenizer,
+)
+from keras_hub.src.tests.mocks.mock_bpe_vocabulary import get_bpe_fixture
+from keras_hub.src.tests.test_case import TestCase
+
+
+class OpenAIPrivacyFilterTokenizerTest(TestCase):
+    def setUp(self):
+        self.vocab, self.merges = get_bpe_fixture()
+
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=OpenAIPrivacyFilterTokenizer,
+            init_kwargs={"vocabulary": self.vocab, "merges": self.merges},
+            input_data=["airplane at airport"],
+            expected_output=[[4, 16, 26, 25, 18]],
+            expected_detokenize_output=["airplane at airport"],
+        )
+
+    def test_pad_token_comes_from_vocabulary(self):
+        tokenizer = OpenAIPrivacyFilterTokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
+        self.assertEqual(tokenizer.pad_token_id, self.vocab["<|endoftext|>"])
+        self.assertIsNone(tokenizer.start_token_id)
+
+    def test_errors_missing_special_tokens(self):
+        vocab = dict(self.vocab)
+        del vocab["<|endoftext|>"]
+        with self.assertRaises(ValueError):
+            OpenAIPrivacyFilterTokenizer(vocabulary=vocab, merges=self.merges)
+
+    def test_add_prefix_space_is_rejected(self):
+        # The o200k split runs before the prefix space is added, so the
+        # Python and TensorFlow workflows would return different ids.
+        with self.assertRaisesRegex(ValueError, "add_prefix_space"):
+            OpenAIPrivacyFilterTokenizer(
+                vocabulary=self.vocab, merges=self.merges, add_prefix_space=True
+            )
+
+    def test_python_workflow_uses_o200k_split(self):
+        # The o200k pattern splits digit runs into groups of at most three
+        # and keeps a run of spaces before a word separate from the word.
+        # Neither holds for the GPT-2 split, and neither holds when the
+        # pattern is not applied at all.
+        tokenizer = OpenAIPrivacyFilterTokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
+        pre_tokenizer = tokenizer._tokenizer.pre_tokenizer
+        pieces = [p for p, _ in pre_tokenizer.pre_tokenize_str("4111  air")]
+        self.assertEqual(pieces, ["411", "1", "Ġ", "Ġair"])
+
+    def test_tf_workflow_uses_o200k_split(self):
+        # `\p{N}{1,3}` splits "4111" into "411" + "1" before BPE, so with
+        # these merge ranks it encodes as `4 11 | 1`; the GPT-2 split keeps
+        # "4111" whole and BPE gives `4 111`. The TensorFlow path must agree
+        # with the Python path, not with GPT-2.
+        merges = self.merges + [
+            "1 1",
+            "4 1",
+            "11 1",
+            "Ġ Ġ",
+            "ĉ a",
+            "ĉa i",
+            "ĉai r",
+            "ĉ air",
+        ]
+        vocab = dict(self.vocab)
+        for piece in [
+            "1",
+            "11",
+            "4",
+            "41",
+            "111",
+            "ĠĠ",
+            "ĉ",
+            "ĉa",
+            "ĉai",
+            "ĉair",
+        ]:
+            vocab.setdefault(piece, len(vocab))
+        tokenizer = OpenAIPrivacyFilterTokenizer(
+            vocabulary=vocab, merges=merges
+        )
+        cases = [
+            ("4111  air", ["4", "11", "1", "Ġ", "Ġair"]),
+            ("  \tair", ["ĠĠ", "ĉair"]),
+            (" \tair", ["Ġ", "ĉair"]),
+            ("a\t\tair", ["a", "ĉ", "ĉair"]),
+        ]
+        for text, pieces in cases:
+            expected = [vocab[p] for p in pieces]
+            tokenizer._allow_python_workflow = True
+            self.assertAllEqual(tokenizer(text), expected)
+            tokenizer._allow_python_workflow = False
+            self.assertAllEqual(tokenizer(text), expected)
+
+    @pytest.mark.large
+    def test_hf_tokenizer_parity(self):
+        try:
+            from huggingface_hub import hf_hub_download
+            from tokenizers import Tokenizer
+        except ImportError:
+            self.skipTest("Requires tokenizers and huggingface_hub")
+
+        hf_repo = "yujiepan/openai-privacy-filter-tiny-random"
+        tok_path = hf_hub_download(hf_repo, "tokenizer.json")
+        hf_tok = Tokenizer.from_file(tok_path)
+
+        kh_tok = OpenAIPrivacyFilterTokenizer.from_preset(f"hf://{hf_repo}")
+
+        corpus = [
+            "My name is John Smith and my email is john@example.com",
+            "John Smith\t\tjohn@example.com",
+            " \tword",
+            "  \tword",
+            "  \vword",
+            "card 4111 1111 1111 1111",
+            "Contact me at jane.doe+work@sub.example.co.uk today.",
+            "See https://example.com/path?user=bob&id=12345 for details",
+            "ftp://files.internal:8080/share",
+            "Call +1 (555) 123-4567 or 555.987.6543",
+            "SSN 123-45-6789, account 00012345678, routing 021000021",
+            "Order #987654321 shipped 2024-03-15 at 14:32:07",
+            "pi is 3.14159265358979 and e is 2.718281828",
+            "1234567890123456789012345678901234567890",
+            "Born 12/25/1990, moved on March 3rd, 2015.",
+            "tabs\there\tand  double  spaces   triple",
+            "line one\nline two\r\nline three",
+            "   leading spaces and trailing   ",
+            "a\n\n\nb",
+            "I'm sure it's O'Brien's; don't you think?",
+            "Mr. J. R. R. Tolkien, Ph.D.",
+            "Zoë Müller lives at Straße 12, 80331 München",
+            "名前は山田太郎です。電話は090-1234-5678",
+            "emoji 😀 test 🚀🚀 end",
+            "123 Main St., Apt 4B, Springfield, IL 62704",
+            "IP 192.168.1.254 and MAC 00:1A:2B:3C:4D:5E",
+            "IBAN DE89 3704 0044 0532 0130 00",
+            "Password: hunter2!  Token: ghp_ABCdef123456",
+            "HELLO World ÉCOLE École naïve CAFÉ",
+            "",
+            " ",
+            "x",
+            "<|endoftext|>",
+            "x\r\r y",
+            "a \u2002b",
+            "x \u096c y",
+        ]
+        # Every HF added token must stay a single id on both workflows. From
+        # the eleventh one on, their TensorFlow placeholders share a prefix
+        # with an earlier one.
+        with open(tok_path, encoding="utf-8") as f:
+            added_tokens = [t["content"] for t in json.load(f)["added_tokens"]]
+        corpus += added_tokens + ["a<|startoftext|>b"]
+        # RE2 cannot express `\s+(?!\S)`, and the `६` emulation in
+        # `_split_strings_tf` and `split_strings_for_bpe` does not cover
+        # every whitespace mix. One input per difference listed in the
+        # tokenizer docstring is pinned here so a fix shows up as a failure:
+        # trailing whitespace, a carriage return run, a non-ASCII space after
+        # a space, and the `६` marker itself.
+        tf_known_misses = [
+            "   leading spaces and trailing   ",
+            "x\r\r y",
+            "a \u2002b",
+            "x \u096c y",
+        ]
+
+        saved_flag = kh_tok._allow_python_workflow
+        try:
+            for python_workflow in (True, False):
+                kh_tok._allow_python_workflow = python_workflow
+                path = "python" if python_workflow else "tf"
+                for text in corpus:
+                    hf_ids = hf_tok.encode(text, add_special_tokens=False).ids
+                    kh_ids = ops.convert_to_numpy(kh_tok(text)).tolist()
+                    if not python_workflow and text in tf_known_misses:
+                        self.assertNotEqual(
+                            hf_ids, kh_ids, f"[{path}] now matches {text!r}"
+                        )
+                        continue
+                    self.assertEqual(
+                        hf_ids, kh_ids, f"[{path}] mismatch on {text!r}"
+                    )
+        finally:
+            kh_tok._allow_python_workflow = saved_flag
+
+    @pytest.mark.large
+    def test_from_preset(self):
+        tokenizer = OpenAIPrivacyFilterTokenizer.from_preset(
+            "hf://yujiepan/openai-privacy-filter-tiny-random"
+        )
+        self.assertAllEqual(
+            tokenizer("My name is John Smith."),
+            [5444, 1308, 382, 5928, 16627, 13],
+        )
