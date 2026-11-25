@@ -26,6 +26,31 @@ class XLMRobertaTokenizerTest(TestCase):
             expected_output=[[6, 11, 7, 9], [6, 8, 10, 12]],
         )
 
+    def test_detokenize_special_tokens(self):
+        # `xlm_roberta_test_vocab.spm` has no `"<s>"` and `"</s>"` pieces, so
+        # use a proto with the same layout as the presets.
+        # Generated using create_xlm_roberta_real_layout_test_proto.py
+        proto = os.path.join(
+            self.get_test_data_dir(), "xlm_roberta_real_layout_test_vocab.spm"
+        )
+        tokenizer = XLMRobertaTokenizer(**{**self.init_kwargs, "proto": proto})
+        input_data = [
+            [
+                tokenizer.start_token_id,
+                *[4, 9],
+                tokenizer.mask_token_id,
+                *[5, 7],
+                tokenizer.unk_token_id,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+                tokenizer.pad_token_id,
+            ]
+        ]
+        output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(
+            output, ["<s> the quick<mask> brown fox ⁇ </s><pad><pad>"]
+        )
+
     @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
