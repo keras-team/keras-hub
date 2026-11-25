@@ -14,10 +14,11 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
 class Qwen2_5VLVideoConverter(Qwen2VLVideoConverter):
     """Qwen2.5-VL video converter.
 
-    Same frame preprocessing as Qwen2-VL — this subclass only defaults to
-    a ``Qwen2_5VLImageConverter`` for preset resolution. Video fps
-    metadata does not flow through converters; pass per-video
-    ``second_per_grid_ts`` in preprocessor inputs instead.
+    Frame preprocessing matches Qwen2-VL. The only difference is the
+    default nested converter: when ``image_converter`` is ``None``, a
+    ``Qwen2_5VLImageConverter`` is built. Temporal scaling is not part of
+    conversion; pass per-video ``second_per_grid_ts`` in preprocessor
+    inputs instead.
 
     Args:
         image_converter: ``Qwen2_5VLImageConverter`` instance, or ``None``

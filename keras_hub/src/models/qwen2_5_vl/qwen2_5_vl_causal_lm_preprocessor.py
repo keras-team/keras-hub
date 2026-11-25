@@ -26,9 +26,8 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
     addition: videos use time-aware temporal M-RoPE positions. Each video
     gets ``time_interval = tokens_per_second * second_per_grid_ts`` and a
     token in temporal patch ``f`` receives temporal position
-    ``int(f * time_interval)`` (matching HF ``get_rope_index`` — note the
-    truncation happens per-frame, so fractional intervals produce
-    non-uniform steps).
+    ``int(f * time_interval)`` — the truncation happens per-frame, so
+    fractional intervals produce non-uniform steps.
 
     ``second_per_grid_ts`` is supplied per video (in prompt order, matching
     the video grids) via the optional ``"second_per_grid_ts"`` key in the
@@ -46,7 +45,7 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
             ``image_converter`` (shared, so bounds mutations propagate).
             Default ``None``.
         tokens_per_second: int. Temporal position scale per second of
-            video (HF ``vision_config.tokens_per_second``). Default ``4``.
+            video. Default ``4``.
         sequence_length: int. Total padded sequence length. Default
             ``1024``.
         add_start_token: bool. Prepend BOS token. Default ``False``.

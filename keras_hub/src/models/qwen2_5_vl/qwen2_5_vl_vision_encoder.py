@@ -83,13 +83,13 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
 
     Unlike Qwen2-VL, which always attends within a single (image, temporal
     frame) segment, Qwen2.5-VL regroups merge units into
-    ``window_size``-sized spatial windows (``vit_merger_window_size =
-    window_size // spatial_merge_size // patch_size`` units per side) and
-    runs windowed attention in most blocks. Blocks listed in
+    ``window_size``-sized spatial windows
+    (``window_size // spatial_merge_size // patch_size`` merge units per
+    side) and runs windowed attention in most blocks. Blocks listed in
     ``fullatt_block_indexes`` keep per-(image, frame) attention. Tokens are
-    permuted into window order before the blocks (matching HF
-    ``get_vision_window_index``) and the merger output is unpermuted, so
-    the returned tokens keep the original block-major layout.
+    permuted into window order before the blocks, and the merger output is
+    unpermuted, so the returned tokens keep the original block-major
+    layout.
 
     Args:
         patch_size: int. Spatial patch size in pixels. Defaults to ``14``.
@@ -100,9 +100,8 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
             ``None`` uses ``embed_dim``. Defaults to ``None``.
         depth: int. Number of ViT blocks. Defaults to ``32``.
         num_heads: int. Attention heads per ViT block. Defaults to ``16``.
-        intermediate_dim: int. Vision MLP intermediate dimension
-            (HF ``vision_config.intermediate_size``). ``None`` defaults to
-            ``3420``, the HF ``Qwen2_5_VLVisionConfig`` default.
+        intermediate_dim: int. Vision MLP intermediate dimension;
+            ``None`` uses ``3420``. Defaults to ``None``.
         spatial_merge_size: int. Spatial merge factor. Defaults to ``2``.
         window_size: int. Window attention size in pixels. Defaults to
             ``112``.
@@ -215,7 +214,7 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
 
         grid_thw = ops.cast(grid_thw, "int32")
         t = grid_thw[:, 0]
-        lh = grid_thw[:, 1] // ms  # merge-grid dims (HF `llm_grid`)
+        lh = grid_thw[:, 1] // ms  # merge-grid dims
         lw = grid_thw[:, 2] // ms
         units_per_img = t * lh * lw
 
@@ -326,8 +325,8 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
                 )
 
         merged = self.merger(hidden_states)  # (num_units, out_dim)
-        # Undo the window permutation (HF `reverse_indices`); the base
-        # `call` then drops the appended dummy unit.
+        # Undo the window permutation; the base `call` then drops the
+        # appended dummy unit.
         return ops.take(merged, ops.argsort(window_index), axis=0)
 
     def get_config(self):

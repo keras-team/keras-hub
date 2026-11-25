@@ -258,16 +258,12 @@ class Qwen2_5VLCausalLMTest(TestCase):
     def test_score_with_video_second_per_grid_ts(self):
         """`second_per_grid_ts` scales temporal positions enough to move
         video scores."""
-        # hidden_dim 32 / head_dim 8: at head_dim 2 attention logits are
-        # so small that position effects sink below float32 noise.
         keras.utils.set_random_seed(0)
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(
                 sequence_length=32, hidden_dim=32, mrope_section=(2, 1, 1)
             )
         )
-        # Non-constant frames: identical value vectors would make
-        # attention outputs invariant to the position shift.
         video = np.random.default_rng(0).random((8, 2, 2, 3)).astype("float32")
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
 

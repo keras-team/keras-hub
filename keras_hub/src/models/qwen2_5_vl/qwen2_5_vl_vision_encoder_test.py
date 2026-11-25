@@ -162,7 +162,7 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         embed_dim, num_heads = 32, 4
         head_dim = embed_dim // num_heads
         cap = 16
-        seq_len = 56  # 56 % 16 != 0 → also exercises padded queries.
+        seq_len = 56
         x = rng.random((seq_len, embed_dim)).astype("float32")
         # Windows 1..3 each straddle a cap boundary: block 1 queries need
         # block 0 keys, etc.
@@ -267,7 +267,7 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         self.assertEqual(tuple(sin.shape), (4, 16))
 
     def test_window_layout_matches_hf(self):
-        """`_window_layout` reproduces HF `get_vision_window_index`.
+        """`_window_layout` reproduces the reference window layout.
 
         Grid [1, 8, 10]: merge grid 4x5, window = 4 merge units per side
         → two windows: 4x4 block (16 units) + trailing column (4 units).
@@ -276,35 +276,11 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         window_index, unit_window = encoder._window_layout(
             np.array([[1, 8, 10]], dtype="int32"), num_units=20
         )
-        self.assertAllEqual(
-            window_index,
-            [
-                0,
-                1,
-                2,
-                3,
-                5,
-                6,
-                7,
-                8,
-                10,
-                11,
-                12,
-                13,
-                15,
-                16,
-                17,
-                18,
-                4,
-                9,
-                14,
-                19,
-            ],
-        )
-        self.assertAllEqual(
-            unit_window,
-            [0] * 4 + [1] + [0] * 4 + [1] + [0] * 4 + [1] + [0] * 4 + [1],
-        )
+        # 4x4 raster block first, then the trailing column.
+        block = [r * 5 + c for r in range(4) for c in range(4)]
+        column = [r * 5 + 4 for r in range(4)]
+        self.assertAllEqual(window_index, block + column)
+        self.assertAllEqual(unit_window, ([0] * 4 + [1]) * 4)
 
         # Multi-row grid [[1, 12, 10]]: merge grid 6x5, ws=4 → windows at
         # wr=0 and wr=1, exercising multiple window rows.
@@ -314,55 +290,13 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         window_index, unit_window = encoder._window_layout(
             np.array([[1, 12, 10]], dtype="int32"), num_units=30
         )
+        w0 = [r * 5 + c for r in range(4) for c in range(4)]
+        w1 = [r * 5 + 4 for r in range(4)]
+        w2 = [r * 5 + c for r in range(4, 6) for c in range(4)]
+        w3 = [r * 5 + 4 for r in range(4, 6)]
+        self.assertAllEqual(window_index, w0 + w1 + w2 + w3)
         self.assertAllEqual(
-            window_index,
-            [
-                0,
-                1,
-                2,
-                3,
-                5,
-                6,
-                7,
-                8,
-                10,
-                11,
-                12,
-                13,
-                15,
-                16,
-                17,
-                18,
-                4,
-                9,
-                14,
-                19,
-                20,
-                21,
-                22,
-                23,
-                25,
-                26,
-                27,
-                28,
-                24,
-                29,
-            ],
-        )
-        self.assertAllEqual(
-            unit_window,
-            [0] * 4
-            + [1]
-            + [0] * 4
-            + [1]
-            + [0] * 4
-            + [1]
-            + [0] * 4
-            + [1]
-            + [2] * 4
-            + [3]
-            + [2] * 4
-            + [3],
+            unit_window, ([0] * 4 + [1]) * 4 + ([2] * 4 + [3]) * 2
         )
 
     def test_window_unpermute_roundtrip(self):
