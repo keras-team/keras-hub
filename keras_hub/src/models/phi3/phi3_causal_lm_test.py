@@ -68,6 +68,12 @@ class Phi3CausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :5],
         )
 
+    def test_generate_strip_prompt(self):
+        causal_lm = Phi3CausalLM(**self.init_kwargs)
+        prompt = "the fox"
+        output = causal_lm.generate(prompt, strip_prompt=True)
+        self.assertFalse(output.startswith(prompt))
+
     def test_early_stopping(self):
         causal_lm = Phi3CausalLM(**self.init_kwargs)
         call_with_cache = causal_lm.call_with_cache

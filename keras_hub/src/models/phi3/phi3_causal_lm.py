@@ -187,7 +187,13 @@ class Phi3CausalLM(CausalLM):
             "padding_mask": padding_mask,
         }
 
-    def generate(self, inputs, max_length=None, stop_token_ids="auto"):
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+        strip_prompt=False,
+    ):
         if self.preprocessor and stop_token_ids == "auto":
             # Stop at:
             # `<|endoftext|>` (end of sequence token).
@@ -198,4 +204,6 @@ class Phi3CausalLM(CausalLM):
                 # If `<|end|>` exists in the vocabulary.
                 stop_token_ids.append(end_of_turn_id)
 
-        return super().generate(inputs, max_length, stop_token_ids)
+        return super().generate(
+            inputs, max_length, stop_token_ids, strip_prompt
+        )
