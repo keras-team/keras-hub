@@ -66,6 +66,15 @@ class WhisperTokenizerTest(TestCase):
         self.assertEqual(tokenizer.no_timestamps_token_id, 33)
         self.assertEqual(tokenizer.transcribe_token_id, 34)
         self.assertEqual(tokenizer.translate_token_id, 35)
+        # Aliases used by `CausalLM.generate` and the seq2seq preprocessors.
+        self.assertEqual(tokenizer.start_token, "<|startoftranscript|>")
+        self.assertEqual(tokenizer.start_token_id, 31)
+        self.assertEqual(tokenizer.end_token, "<|endoftext|>")
+        self.assertEqual(tokenizer.end_token_id, 32)
+
+    def test_language_tokens_are_atomic(self):
+        tokenizer = WhisperTokenizer(**self.init_kwargs)
+        self.assertAllEqual(tokenizer(["<|fr|> airport"]), [[37, 23, 16]])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):

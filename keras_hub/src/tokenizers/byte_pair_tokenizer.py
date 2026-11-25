@@ -112,6 +112,13 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
+def _merge_to_rank_2(tensor):
+    """Merge the inner ragged dimensions into one, giving `(batch, None)`."""
+    while tensor.shape.rank > 2:
+        tensor = tensor.merge_dims(1, 2)
+    return tensor
+
+
 def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
@@ -126,24 +133,33 @@ def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     )
     if unsplittable_tokens:
         alts = create_alts_for_unsplittable_tokens(unsplittable_tokens)
+        # Split out every unsplittable token in one pass. Splitting once per
+        # token adds a ragged dimension each time, and graph tracing (e.g.
+        # under `tf.data.Dataset.map`) then slows down superlinearly with the
+        # number of unsplittable tokens.
+        pattern = "|".join(re.escape(token) for token in unsplittable_tokens)
+        inputs = tf_text.regex_split(inputs, pattern, pattern)
+        inputs = _merge_to_rank_2(inputs)
+        # After the split, each unsplittable token is a whole element, so
+        # match whole elements only.
         for token, alt in zip(unsplittable_tokens, alts):
-            escaped_token = re.escape(token)
-            inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
-            inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
+            inputs = tf.strings.regex_replace(
+                inputs, f"^{re.escape(token)}$", alt
+            )
     raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
     if unsplittable_tokens:
-        # Replace special tokens alternate with originals.
+        # Replace special tokens alternate with originals. Match whole
+        # elements only: an alternate such as "ĴC" is a prefix of "ĴCG", so
+        # an unanchored match would corrupt tokens from the eleventh on.
         for token, alt in zip(unsplittable_tokens, alts):
-            escaped_alt = re.escape(alt)
             raw_tokens = tf.strings.regex_replace(
-                raw_tokens, escaped_alt, token
+                raw_tokens, f"^{re.escape(alt)}$", token
             )
-    while raw_tokens.shape.rank > 2:
-        raw_tokens = raw_tokens.merge_dims(1, 2)
+    raw_tokens = _merge_to_rank_2(raw_tokens)
     return remove_strings_from_inputs(raw_tokens, "६")
 
 

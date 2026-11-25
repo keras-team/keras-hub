@@ -42,13 +42,15 @@ class WhisperBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer encoder layers and
-            transformer decoder layers.
+        num_layers: int. The number of transformer encoder layers. Also used
+            for the decoder unless `decoder_num_layers` is set.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
+            Also used for the decoder unless `decoder_num_heads` is set.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for each transformer.
+            a two-layer feedforward network for each transformer. Also used for
+            the decoder unless `decoder_intermediate_dim` is set.
         num_mels: int. The number of mel-frequency filters. Defaults to `80`.
         dropout: float. Dropout probability for the Transformer encoder.
         max_encoder_sequence_length: int. The maximum sequence length that the
@@ -58,6 +60,14 @@ class WhisperBackbone(Backbone):
             the positional embedding layer.
         max_decoder_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
+        decoder_num_layers: int. The number of transformer decoder layers.
+            Defaults to `None`, which uses `num_layers`. Checkpoints such as
+            `openai/whisper-large-v3-turbo` use fewer decoder layers than
+            encoder layers.
+        decoder_num_heads: int. The number of attention heads in each decoder
+            layer. Defaults to `None`, which uses `num_heads`.
+        decoder_intermediate_dim: int. The feedforward dimension of each decoder
+            layer. Defaults to `None`, which uses `intermediate_dim`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -99,9 +109,19 @@ class WhisperBackbone(Backbone):
         dropout=0.0,
         max_encoder_sequence_length=3000,
         max_decoder_sequence_length=448,
+        decoder_num_layers=None,
+        decoder_num_heads=None,
+        decoder_intermediate_dim=None,
         dtype=None,
         **kwargs,
     ):
+        if decoder_num_layers is None:
+            decoder_num_layers = num_layers
+        if decoder_num_heads is None:
+            decoder_num_heads = num_heads
+        if decoder_intermediate_dim is None:
+            decoder_intermediate_dim = intermediate_dim
+
         # === Layers ===
         self.encoder_conv_layer_1 = keras.layers.Conv1D(
             filters=hidden_dim,
@@ -174,10 +194,10 @@ class WhisperBackbone(Backbone):
             name="decoder_embeddings_dropout",
         )
         self.decoder_transformer_layers = []
-        for i in range(num_layers):
+        for i in range(decoder_num_layers):
             layer = WhisperDecoder(
-                intermediate_dim=intermediate_dim,
-                num_heads=num_heads,
+                intermediate_dim=decoder_intermediate_dim,
+                num_heads=decoder_num_heads,
                 dropout=dropout,
                 activation=keras.activations.gelu,
                 layer_norm_epsilon=1e-5,
@@ -269,6 +289,9 @@ class WhisperBackbone(Backbone):
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
+        self.decoder_num_layers = decoder_num_layers
+        self.decoder_num_heads = decoder_num_heads
+        self.decoder_intermediate_dim = decoder_intermediate_dim
 
     def get_config(self):
         config = super().get_config()
@@ -283,6 +306,9 @@ class WhisperBackbone(Backbone):
                 "dropout": self.dropout,
                 "max_encoder_sequence_length": self.max_encoder_sequence_length,
                 "max_decoder_sequence_length": self.max_decoder_sequence_length,
+                "decoder_num_layers": self.decoder_num_layers,
+                "decoder_num_heads": self.decoder_num_heads,
+                "decoder_intermediate_dim": self.decoder_intermediate_dim,
             }
         )
         return config
