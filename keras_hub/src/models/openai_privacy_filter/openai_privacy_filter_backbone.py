@@ -63,7 +63,7 @@ class OpenAIPrivacyFilterBackbone(Backbone):
     import keras_hub
 
     model = keras_hub.models.OpenAIPrivacyFilterBackbone.from_preset(
-        "hf://openai/privacy-filter"
+        "openai_privacy_filter_en"
     )
 
     # Randomly initialized backbone with a small custom config.

@@ -39,7 +39,7 @@ class OpenAIPrivacyFilterTokenClassifier(TokenClassifier):
     # Load pre-trained classifier.
     classifier = (
         keras_hub.models.OpenAIPrivacyFilterTokenClassifier.from_preset(
-            "hf://openai/privacy-filter",
+            "openai_privacy_filter_en",
         )
     )
     # Predict PII labels.

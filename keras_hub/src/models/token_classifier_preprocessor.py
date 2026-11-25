@@ -90,7 +90,7 @@ class TokenClassifierPreprocessor(Preprocessor):
 
     ```python
     preprocessor = keras_hub.models.TokenClassifierPreprocessor.from_preset(
-        "hf://openai/privacy-filter",
+        "openai_privacy_filter_en",
         sequence_length=256,  # Optional.
     )
 

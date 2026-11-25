@@ -30,7 +30,7 @@ class TokenClassifier(Task):
     ```python
     # Load a pre-trained token classifier.
     classifier = keras_hub.models.TokenClassifier.from_preset(
-        "hf://openai/privacy-filter",
+        "openai_privacy_filter_en",
     )
     # Predict PII labels for a batch of sentences.
     classifier.predict(["My name is John and I live in Paris."])

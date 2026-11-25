@@ -45,7 +45,7 @@ class OpenAIPrivacyFilterTokenClassifierPreprocessor(
 
     # Load the preprocessor from a preset.
     preprocessor = OpenAIPrivacyFilterTokenClassifierPreprocessor.from_preset(
-        "hf://openai/privacy-filter"
+        "openai_privacy_filter_en"
     )
 
     # Tokenize and pad/truncate a single input.

@@ -74,7 +74,7 @@ class OpenAIPrivacyFilterTokenizer(BytePairTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.OpenAIPrivacyFilterTokenizer.from_preset(
-        "hf://openai/privacy-filter"
+        "openai_privacy_filter_en"
     )
     tokenizer("The quick brown fox jumped.")
 
