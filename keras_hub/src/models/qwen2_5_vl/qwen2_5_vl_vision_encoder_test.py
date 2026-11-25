@@ -219,8 +219,10 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
 
             def call(self, x, training=False):
                 # The vision tower is unbatched; unwrap the unit batch.
+                # `x[0]` rather than squeeze: keras<=3.14 squeeze rejects
+                # a dynamic (None) batch dim at trace time.
                 out = self.attn(
-                    ops.squeeze(x, axis=0),
+                    x[0],
                     (cos, sin),
                     window_ids=window_ids,
                     window_cap=cap,
