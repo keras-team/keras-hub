@@ -771,8 +771,6 @@ class Qwen2VLCausalLMPreprocessor(
 
         # Text-only: delegate to the base class entirely. The base class
         # expects bare strings, so unwrap a `{"prompts": ...}` dict first.
-        # Prompts carrying media markers take the multimodal path so the
-        # count mismatch surfaces instead of silent literal placeholders.
         if images is None and videos is None:
             prompts = x["prompts"] if isinstance(x, dict) else x
             if not self._carries_media_markers(x):

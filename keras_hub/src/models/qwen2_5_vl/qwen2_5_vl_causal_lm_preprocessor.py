@@ -40,18 +40,17 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
     Args:
         tokenizer: A ``Qwen2_5VLTokenizer`` instance.
         image_converter: A ``Qwen2_5VLImageConverter`` instance, or ``None``
-            for text-only mode. Defaults to ``None``.
+            for text-only mode. Default ``None``.
         video_converter: A ``Qwen2_5VLVideoConverter`` instance, or
             ``None``. When unset, video preprocessing falls back to
             ``image_converter`` (shared, so bounds mutations propagate).
-            Defaults to ``None``.
+            Default ``None``.
         tokens_per_second: int. Temporal position scale per second of
-            video (HF ``vision_config.tokens_per_second``). Defaults to
-            ``4``.
-        sequence_length: int. Total padded sequence length. Defaults to
+            video (HF ``vision_config.tokens_per_second``). Default ``4``.
+        sequence_length: int. Total padded sequence length. Default
             ``1024``.
-        add_start_token: bool. Prepend BOS token. Defaults to ``False``.
-        add_end_token: bool. Append EOS token. Defaults to ``True``.
+        add_start_token: bool. Prepend BOS token. Default ``False``.
+        add_end_token: bool. Append EOS token. Default ``True``.
 
     Examples:
 
