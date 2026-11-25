@@ -29,9 +29,7 @@ import keras_hub  # noqa: E402
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
     extract_response,
 )
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
-    save_preset,
-)
+from tools.checkpoint_conversion.checkpoint_conversion_utils import save_preset  # noqa: E402
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
     test_parameter_count,
 )
