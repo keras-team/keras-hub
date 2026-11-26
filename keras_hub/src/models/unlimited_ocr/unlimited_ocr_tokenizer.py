@@ -1,3 +1,4 @@
+import numpy as np
 import tokenizers
 from tokenizers import pre_tokenizers
 
@@ -7,6 +8,7 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
@@ -129,25 +131,64 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
             ]
         )
 
+    def _encode_strings(self, strings):
+        """Encode a flat list of strings to one list of ids or tokens each."""
+        strings = [
+            s.decode("utf-8") if isinstance(s, bytes) else s for s in strings
+        ]
+        encodings = self._tokenizer.encode_batch(
+            strings, add_special_tokens=False
+        )
+        if is_string_dtype(self.compute_dtype):
+            return [e.tokens for e in encodings]
+        return [e.ids for e in encodings]
+
+    def _tokenize_tokenizers(self, inputs):
+        # The base class reads each row of a rank 2 input as a sentence pair.
+        # This method encodes each string of a rank 2 or higher input alone.
+        if tf is not None and isinstance(inputs, tf.Tensor):
+            array = inputs.numpy()
+        else:
+            array = np.asarray(inputs, dtype=object)
+        if array.ndim < 2:
+            return super()._tokenize_tokenizers(inputs)
+        self._maybe_initialized_tokenizers()
+        rows = self._encode_strings(array.reshape(-1).tolist())
+        if self.sequence_length:
+            length = self.sequence_length
+            pad_value = self._get_pad_value()
+            rows = [
+                row[:length] + [pad_value] * (length - len(row)) for row in rows
+            ]
+            if is_int_dtype(self.compute_dtype):
+                return np.array(rows, dtype=self.compute_dtype).reshape(
+                    array.shape + (length,)
+                )
+        # Restore the leading shape of the input as nested lists.
+        flat_rows = np.empty(len(rows), dtype=object)
+        for i, row in enumerate(rows):
+            flat_rows[i] = row
+        return flat_rows.reshape(array.shape).tolist()
+
     @preprocessing_function
     def _tokenize_tf(self, inputs):
         # The base class splits text with the GPT-2 pattern in the graph. That
         # gives other ids for this checkpoint. This method calls the
         # `tokenizers` backend from the graph instead.
         self._maybe_initialized_tokenizers()
-        as_string = is_string_dtype(self.compute_dtype)
 
         def _encode(string_tensor):
-            values = string_tensor.numpy().tolist()
-            strings = [v.decode("utf-8") for v in values]
-            encodings = self._tokenizer.encode_batch(
-                strings, add_special_tokens=False
+            rows = self._encode_strings(string_tensor.numpy().tolist())
+            # `tf.ragged.constant([])` gives a dense tensor, so build the
+            # ragged tensor from the row lengths.
+            return tf.RaggedTensor.from_row_lengths(
+                tf.constant(
+                    [t for row in rows for t in row],
+                    dtype=self.compute_dtype,
+                    shape=[sum(len(row) for row in rows)],
+                ),
+                tf.constant([len(row) for row in rows], dtype="int64"),
             )
-            if as_string:
-                rows = [e.tokens for e in encodings]
-            else:
-                rows = [e.ids for e in encodings]
-            return tf.ragged.constant(rows, dtype=self.compute_dtype)
 
         inputs = tf.convert_to_tensor(inputs)
         rank = inputs.shape.rank

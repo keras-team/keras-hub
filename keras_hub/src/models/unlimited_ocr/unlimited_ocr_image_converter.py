@@ -365,7 +365,17 @@ class UnlimitedOCRImageConverter(ImageConverter):
             view = canvas
         return self._normalize(view), tiles, grid
 
+    def _empty_outputs(self):
+        """Returns the outputs for no images, as NumPy arrays."""
+        return (
+            np.zeros((0, self.global_size, self.global_size, 3), "float32"),
+            np.zeros((0, self.tile_size, self.tile_size, 3), "float32"),
+            np.zeros((0, 2), "int32"),
+        )
+
     def _convert_images(self, images):
+        if not images:
+            return self._empty_outputs()
         views, tiles, grids = [], [], []
         for image in images:
             view, image_tiles, grid = self._convert_one(image)
@@ -494,9 +504,14 @@ class UnlimitedOCRImageConverter(ImageConverter):
         images = tf.cast(inputs, "float32")
         if images.shape.rank == 3:
             images = tf.expand_dims(images, 0)
-        pixel_values, pixel_values_local, patches_grid = self._convert_batch_tf(
-            images
-        )
+        if images.shape.rank == 1 and images.shape[0] == 0:
+            # A bare `[]` holds no images.
+            outputs = [tf.constant(x) for x in self._empty_outputs()]
+            pixel_values, pixel_values_local, patches_grid = outputs
+        else:
+            pixel_values, pixel_values_local, patches_grid = (
+                self._convert_batch_tf(images)
+            )
         return {
             "pixel_values": pixel_values,
             "pixel_values_local": pixel_values_local,

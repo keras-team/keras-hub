@@ -109,6 +109,24 @@ class UnlimitedOCRImageConverterTest(TestCase):
         self.assertAllEqual(outputs["patches_grid"], [[2, 1], [0, 0], [1, 2]])
         self.assertEqual(outputs["pixel_values_local"].shape, (4, 16, 16, 3))
 
+    def _assert_empty_outputs(self, outputs):
+        self.assertEqual(tuple(outputs["pixel_values"].shape), (0, 32, 32, 3))
+        shape = tuple(outputs["pixel_values_local"].shape)
+        self.assertEqual(shape, (0, 16, 16, 3))
+        self.assertEqual(tuple(outputs["patches_grid"].shape), (0, 2))
+        self.assertEqual(
+            ops.convert_to_numpy(outputs["patches_grid"]).dtype, "int32"
+        )
+
+    def test_empty_input_gives_empty_outputs(self):
+        for inputs in ([], (), np.zeros((0, 20, 20, 3), "uint8")):
+            self._assert_empty_outputs(self.converter(inputs))
+
+    @pytest.mark.skipif(tf is None, reason="TensorFlow is not installed.")
+    def test_tf_path_empty_input_gives_empty_outputs(self):
+        for inputs in ([], tf.zeros((0, 20, 20, 3))):
+            self._assert_empty_outputs(self.converter._call_tf(inputs))
+
     def test_number_of_image_tokens(self):
         converter = UnlimitedOCRImageConverter()
         # The global view has 16 rows of 16 tokens and a newline each, then

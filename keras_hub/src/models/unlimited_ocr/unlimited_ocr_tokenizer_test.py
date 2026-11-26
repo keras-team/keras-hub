@@ -159,6 +159,40 @@ class UnlimitedOCRTokenizerTest(TestCase):
         # The padding token is a string, not an id.
         self.assertIn(tokenizer.pad_token, expected[1])
 
+    def test_empty_batch_on_tf_path(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        for dtype in ("int32", "string"):
+            for sequence_length in (None, 4):
+                tokenizer = UnlimitedOCRTokenizer(
+                    **self.init_kwargs,
+                    dtype=dtype,
+                    sequence_length=sequence_length,
+                )
+                for shape in ((0,), (0, 2)):
+                    inputs = tf.zeros(shape, dtype="string")
+                    output = tf.function(tokenizer)(inputs)
+                    if sequence_length:
+                        self.assertEqual(
+                            tuple(output.shape), shape + (sequence_length,)
+                        )
+                    else:
+                        self.assertIsInstance(output, tf.RaggedTensor)
+                        self.assertEqual(output.shape[0], 0)
+                        self.assertEqual(output.shape.rank, len(shape) + 1)
+                    self.assertEqual(output.dtype, dtype)
+                # The python path gives the same result.
+                inputs = tf.zeros((0,), dtype="string")
+                self.assertEqual(
+                    self._to_lists(tf.function(tokenizer)(inputs)),
+                    self._to_lists(tokenizer([])),
+                )
+                inputs = tf.zeros((0, 2), dtype="string")
+                eager = tokenizer(inputs)
+                self.assertEqual(self._to_lists(eager), [])
+                if sequence_length and dtype == "int32":
+                    self.assertEqual(tuple(eager.shape), (0, 2, 4))
+
     def test_rank_two_input_in_tf_data(self):
         if tf is None:
             self.skipTest("TensorFlow is not installed.")
@@ -177,3 +211,14 @@ class UnlimitedOCRTokenizerTest(TestCase):
                 )
                 expected = [self._to_lists(tokenizer(row)) for row in data]
                 self.assertEqual(self._to_lists(output), expected)
+                # The python path encodes each string alone, as the TF
+                # path does, and does not read a row as a sentence pair.
+                inputs = tf.constant(data)
+                eager = tokenizer(inputs)
+                self.assertEqual(self._to_lists(eager), expected)
+                self.assertEqual(
+                    self._to_lists(tf.function(tokenizer)(inputs)), expected
+                )
+                self.assertEqual(self._to_lists(tokenizer(data)), expected)
+                if sequence_length and dtype == "int32":
+                    self.assertEqual(tuple(eager.shape), (2, 2, 10))

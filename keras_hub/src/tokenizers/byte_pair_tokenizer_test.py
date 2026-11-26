@@ -88,6 +88,18 @@ class BytePairTokenizerTest(TestCase):
         dataset = tf.data.Dataset.from_tensor_slices(data).batch(2)
         self.assertAllEqual(next(iter(dataset.map(tokenizer))), expected)
 
+    def test_int_output_empty_batch_with_sequence_length(self):
+        tokenizer = BytePairTokenizer(
+            vocabulary={"a": 0, "b": 1, "Ġ": 2, "ab": 3, "Ġab": 4},
+            merges=["a b", "Ġ ab"],
+            sequence_length=4,
+            _allow_python_workflow=True,
+        )
+        python_output = tokenizer([])
+        self.assertEqual(tuple(python_output.shape), (0, 4))
+        tf_output = tf.function(tokenizer)(tf.constant([], dtype=tf.string))
+        self.assertEqual(tuple(tf_output.shape), tuple(python_output.shape))
+
     def _check_padding_with_pad_token(self, dtype, expected):
         class PadTokenizer(BytePairTokenizer):
             def __init__(self, **kwargs):

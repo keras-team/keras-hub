@@ -854,10 +854,14 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         # images provide. The check runs only with concrete values. It does
         # not run under tracing.
         try:
-            placeholders = ops.convert_to_numpy(
-                ops.sum(ops.cast(is_image, "int32"), axis=1)
+            placeholders, provided = ops.convert_to_numpy(
+                ops.stack(
+                    [
+                        ops.sum(ops.cast(is_image, "int32"), axis=1),
+                        ops.sum(image_tokens, axis=1),
+                    ]
+                )
             )
-            provided = ops.convert_to_numpy(ops.sum(image_tokens, axis=1))
         except Exception:
             return
         for row, (count, available) in enumerate(zip(placeholders, provided)):

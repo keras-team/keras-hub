@@ -831,9 +831,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             if is_int_dtype(self.compute_dtype):
                 # Dense int outputs are arrays, so that direct calls return
                 # backend tensors and Grain pipelines return NumPy.
+                # The reshape gives an empty batch the TF path shape.
                 batched_tokens = np.array(
                     batched_tokens, dtype=self.compute_dtype
-                )
+                ).reshape(-1, self.sequence_length)
 
         if not batched:
             batched_tokens = batched_tokens[0]

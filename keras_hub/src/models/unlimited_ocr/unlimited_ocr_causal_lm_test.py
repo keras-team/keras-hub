@@ -119,6 +119,33 @@ class UnlimitedOCRCausalLMTest(TestCase):
             expected_output_shape=(2, 40, self.vocabulary_size),
         )
 
+    def test_score_matches_forward_pass(self):
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        expected = causal_lm(self.input_data)
+        self.assertAllClose(causal_lm.score(self.input_data), expected)
+
+    def test_score_loss_and_intercept(self):
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        token_ids = self.input_data["token_ids"]
+        seen = []
+
+        def intercept(x, i):
+            seen.append(i)
+            return x
+
+        loss = causal_lm.score(
+            self.input_data,
+            scoring_mode="loss",
+            target_ids=token_ids,
+            layer_intercept_fn=intercept,
+        )
+        self.assertEqual(tuple(loss.shape), tuple(token_ids.shape))
+        self.assertEqual(seen, [-1, *range(self.backbone.num_layers)])
+        with self.assertRaises(ValueError):
+            causal_lm.score(self.input_data, scoring_mode="loss")
+        with self.assertRaises(ValueError):
+            causal_lm.score(self.input_data, scoring_mode="bad")
+
     def test_generate_with_images(self):
         causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
         image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
@@ -479,6 +506,41 @@ class UnlimitedOCRCausalLMTest(TestCase):
         for prefill_length in calls[1:]:
             self.assertIsNotNone(prefill_length)
             self.assertEqual(len(prefill_length.shape), 1)
+
+    def test_generate_runs_the_lm_head_once_per_decode_step(self):
+        # The prefill pass does not project to logits. Each decode step
+        # projects one hidden state per row.
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        embedding = causal_lm.backbone.token_embedding
+        embedding_call = embedding.call
+        call_with_cache = causal_lm.call_with_cache
+        head_ranks = []
+        decode_steps = []
+
+        def embedding_wrapper(inputs, reverse=False):
+            if reverse:
+                head_ranks.append(len(inputs.shape))
+            return embedding_call(inputs, reverse=reverse)
+
+        def cache_wrapper(*args, **kwargs):
+            if kwargs.get("prefill_length") is not None:
+                decode_steps.append(True)
+            return call_with_cache(*args, **kwargs)
+
+        image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
+        inputs = self.preprocessor.generate_preprocess(
+            {"prompts": ["airplane", "<image>airplane"], "images": [image]}
+        )
+        causal_lm.preprocessor = None
+        causal_lm.run_eagerly = True
+        causal_lm.generate_function = None
+        with (
+            patch.object(embedding, "call", wraps=embedding_wrapper),
+            patch.object(causal_lm, "call_with_cache", wraps=cache_wrapper),
+        ):
+            causal_lm.generate(inputs, stop_token_ids=None)
+        self.assertGreater(len(decode_steps), 0)
+        self.assertEqual(head_ranks, [2] * len(decode_steps))
 
     def test_early_stopping(self):
         causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
