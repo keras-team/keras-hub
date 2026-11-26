@@ -4,6 +4,7 @@ import inspect
 
 from keras_hub.src.models.image_classifier import ImageClassifier
 from keras_hub.src.models.masked_lm import MaskedLM
+from keras_hub.src.models.text_classifier import TextClassifier
 from keras_hub.src.models.token_classifier import TokenClassifier
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.transformers import convert_albert
@@ -181,19 +182,47 @@ class TransformersPresetLoader(PresetLoader):
                 self.converter.convert_weights(backbone, loader, self.config)
         return backbone
 
+    def _get_head_converter(self, cls, architecture):
+        """Return the converter function that ports the head of `cls`.
+
+        The head converter is picked by task class. Gate on the task class
+        itself, not just on whether the converter happens to define a hook,
+        otherwise a head converter written for one task (e.g. ModernBERT's
+        MaskedLM `convert_head`) would be applied to another task sharing
+        the same converter. Returns `None` if this checkpoint has no head
+        that KerasHub can convert for `cls`.
+        """
+        if issubclass(cls, TextClassifier):
+            # Text classifiers restore a `*ForSequenceClassification` head
+            # through a dedicated hook instead of `convert_head`.
+            if not architecture.endswith("ForSequenceClassification"):
+                return None
+            return getattr(self.converter, "convert_text_classifier_head", None)
+        if issubclass(
+            cls, (ImageClassifier, MaskedLM, TokenClassifier)
+        ) or architecture in (
+            "Gemma4AssistantForCausalLM",
+            "ViTModel",
+        ):
+            return getattr(self.converter, "convert_head", None)
+        return None
+
+    def _get_num_classes(self):
+        """Infer the number of classes of a classification checkpoint."""
+        id2label = self.config.get("id2label")
+        if id2label:
+            return len(id2label)
+        # `config.json` omits `id2label` for the default two-label setup.
+        # A config can also give the label count without `id2label`, as
+        # `num_labels` or as the legacy `_num_labels` key.
+        for key in ("num_labels", "_num_labels"):
+            if self.config.get(key) is not None:
+                return self.config[key]
+        return 2
+
     def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         architecture = self.config["architectures"][0]
-        is_classifier = issubclass(cls, ImageClassifier)
-        is_assistant = architecture == "Gemma4AssistantForCausalLM"
-        # `convert_head` is only defined for task-specific heads (e.g.
-        # ModernBERT's MaskedLM prediction head). Gate on the task class
-        # itself, not just on whether the converter happens to define
-        # `convert_head` , otherwise any task sharing this converter
-        #  would incorrectly fall through
-        # into a `convert_head` written for a different task class.
-        has_matching_convert_head = hasattr(
-            self.converter, "convert_head"
-        ) and issubclass(cls, (MaskedLM, TokenClassifier))
+        head_converter = self._get_head_converter(cls, architecture)
 
         if hasattr(self.converter, "convert_task_config"):
             task_config = self.converter.convert_task_config(self.config)
@@ -204,22 +233,42 @@ class TransformersPresetLoader(PresetLoader):
             if extra:
                 kwargs = {**extra, **kwargs}
 
-        if not load_task_weights or (
-            not is_classifier
-            and not is_assistant
-            and architecture != "ViTModel"
-            and not has_matching_convert_head
+        if (
+            head_converter is None
+            and issubclass(cls, TextClassifier)
+            and "num_classes" not in kwargs
         ):
+            if architecture.endswith("ForSequenceClassification"):
+                reason = (
+                    "KerasHub cannot convert the classification head of "
+                    f"`{architecture}` checkpoints yet."
+                )
+            else:
+                reason = (
+                    f"`{architecture}` checkpoints have no sequence "
+                    "classification head."
+                )
+            raise ValueError(
+                f"Cannot load a classification head for `{cls.__name__}` from "
+                f"preset `{self.preset}`. {reason} Pass `num_classes` to "
+                "`from_preset()` to create a new, randomly initialized "
+                "classification head."
+            )
+
+        if not load_task_weights or head_converter is None:
             return super().load_task(
                 cls, load_weights, load_task_weights, **kwargs
             )
         # Support loading the classification head for classifier models.
-        if "ForImageClassification" in architecture:
-            kwargs["num_classes"] = len(self.config["id2label"])
+        if (
+            issubclass(cls, TextClassifier)
+            or "ForImageClassification" in architecture
+        ):
+            kwargs["num_classes"] = self._get_num_classes()
         task = super().load_task(cls, load_weights, load_task_weights, **kwargs)
         if load_weights and load_task_weights:
             with SafetensorLoader(self.preset, prefix="") as loader:
-                self.converter.convert_head(task, loader, self.config)
+                head_converter(task, loader, self.config)
         return task
 
     def load_tokenizer(self, cls, config_name="tokenizer.json", **kwargs):

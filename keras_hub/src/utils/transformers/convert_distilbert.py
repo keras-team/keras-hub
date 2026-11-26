@@ -152,6 +152,53 @@ def convert_weights(backbone, loader, transformers_config):
     )
 
 
+def convert_task_config(transformers_config):
+    """Map `config.json` to `DistilBertTextClassifier` kwargs.
+
+    Other DistilBERT tasks do not take these kwargs, and the Keras
+    functional model constructor drops them.
+    """
+    # Hand-written configs can omit `seq_classif_dropout`. The HF default
+    # (0.2) is the same as the `DistilBertTextClassifier` default.
+    if "seq_classif_dropout" not in transformers_config:
+        return {}
+    return {"dropout": transformers_config["seq_classif_dropout"]}
+
+
+def convert_text_classifier_head(task, loader, transformers_config):
+    """Port `DistilBertForSequenceClassification` head weights."""
+    # HF builds the head as `Linear(dim, dim)` -> `Linear(dim, num_labels)`,
+    # so a head with any other `hidden_dim` cannot hold these weights.
+    hf_hidden_dim = transformers_config["dim"]
+    if task.hidden_dim != hf_hidden_dim:
+        raise ValueError(
+            "Cannot load the classification head of this checkpoint with "
+            f"`hidden_dim={task.hidden_dim}`. The head of the checkpoint "
+            f"has `hidden_dim={hf_hidden_dim}`. Remove `hidden_dim` to load "
+            "the fine-tuned head, or pass `num_classes` to create a new, "
+            "randomly initialized classification head."
+        )
+
+    loader.port_weight(
+        keras_variable=task.pooled_dense.kernel,
+        hf_weight_key="pre_classifier.weight",
+        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor),
+    )
+    loader.port_weight(
+        keras_variable=task.pooled_dense.bias,
+        hf_weight_key="pre_classifier.bias",
+    )
+    loader.port_weight(
+        keras_variable=task.output_dense.kernel,
+        hf_weight_key="classifier.weight",
+        hook_fn=lambda hf_tensor, _: np.transpose(hf_tensor),
+    )
+    loader.port_weight(
+        keras_variable=task.output_dense.bias,
+        hf_weight_key="classifier.bias",
+    )
+
+
 def convert_tokenizer(cls, preset, **kwargs):
     transformers_config = load_json(preset, HF_TOKENIZER_CONFIG_FILE)
     return cls(
