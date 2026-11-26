@@ -6,12 +6,12 @@ from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_image_converter import (
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_video_converter import (
     Qwen2_5VLVideoConverter,
 )
-from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter_test import (
-    Qwen2VLVideoConverterTest,
-)
+from keras_hub.src.models.qwen2_vl import qwen2_vl_video_converter_test
 
 
-class Qwen2_5VLVideoConverterTest(Qwen2VLVideoConverterTest):
+class Qwen2_5VLVideoConverterTest(
+    qwen2_vl_video_converter_test.Qwen2VLVideoConverterTest,
+):
     """Qwen2.5-VL runs the shared video-converter suite against
     ``Qwen2_5VLVideoConverter``/``Qwen2_5VLImageConverter``, plus the
     delegation and serialization paths specific to this subclass."""

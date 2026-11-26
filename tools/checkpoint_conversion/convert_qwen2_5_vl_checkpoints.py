@@ -19,6 +19,10 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
+from checkpoint_conversion_utils import extract_response  # noqa: E402
+from checkpoint_conversion_utils import save_preset  # noqa: E402
+from checkpoint_conversion_utils import test_parameter_count  # noqa: E402
+from checkpoint_conversion_utils import validate_reloaded_preset  # noqa: E402
 from keras import ops  # noqa: E402
 from PIL import Image  # noqa: E402
 from transformers import AutoModelForImageTextToText  # noqa: E402
@@ -26,16 +30,6 @@ from transformers import AutoProcessor  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
 
 import keras_hub  # noqa: E402
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
-    extract_response,
-)
-from tools.checkpoint_conversion.checkpoint_conversion_utils import save_preset  # noqa: E402
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
-    test_parameter_count,
-)
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (  # noqa: E402
-    validate_reloaded_preset,
-)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -305,18 +299,26 @@ def _compare_media_parity(
     print(f"  {label} logit mean absolute diff: {abs_diff.mean():.6f}")
     print(f"  max@text    logit diff: {text_diff.max():.6f}")
     print(f"  max@<|{label}_pad|> logit diff: {media_diff.max():.6f}")
-    # Text positions hold ~1e-4 (exact embedding → LM path); media slots
-    # accumulate vision-tower fp drift (7B on A100: image 0.0059, video
-    # 0.37), so each class gets its own bound like the 2-VL script.
+    # Text positions hold ~1e-4 on CPU fp32 (exact embedding → LM path;
+    # 8e-5 measured on 7B even for video). Media slots accumulate
+    # vision-tower fp drift (7B on A100: image 0.0059, video 0.37), so each
+    # class gets its own bound like the 2-VL script. On GPU the attention
+    # kernels inflate position-independent noise with sequence length —
+    # 5.3e-4 for the image input and 2.1e-3 for the ~4.8k-token video
+    # input on A100, while the short text-only input stays at 7.8e-5 — so
+    # the text bound is looser there. GPU noise still sits orders of
+    # magnitude below any real conversion defect (rope/weight errors
+    # produce 1e-1+ diffs at text positions).
+    text_atol = 1e-3 if device == "cpu" else 5e-3
     np.testing.assert_allclose(
-        keras_real[~is_media], hf_real[~is_media], atol=1e-3
+        keras_real[~is_media], hf_real[~is_media], atol=text_atol
     )
     np.testing.assert_allclose(
         keras_real[is_media], hf_real[is_media], atol=logit_atol
     )
     print(
         f"  {label} logits match over all real positions "
-        f"(text atol=1e-3, media atol={logit_atol})."
+        f"(text atol={text_atol}, media atol={logit_atol})."
     )
 
 

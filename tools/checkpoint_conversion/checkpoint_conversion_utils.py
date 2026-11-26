@@ -5,7 +5,6 @@ import tarfile
 import zipfile
 
 import numpy as np
-from keras import ops
 
 
 def get_md5_checksum(file_path):
@@ -76,6 +75,8 @@ def extract_response(text):
 
 def count_keras_params(backbone):
     """Count unique parameters (handles tied weights)."""
+    from keras import ops
+
     unique = {id(w): w for w in backbone.weights}.values()
     return sum(ops.convert_to_numpy(w).size for w in unique)
 
@@ -107,6 +108,8 @@ def save_preset(keras_model, preset_name):
 
 def validate_reloaded_preset(model_cls, preset_path):
     """Reload the saved artifact and run a forward sanity check."""
+    from keras import ops
+
     print("\n" + "=" * 50)
     print("SAVE/RELOAD VALIDATION")
     print("=" * 50)

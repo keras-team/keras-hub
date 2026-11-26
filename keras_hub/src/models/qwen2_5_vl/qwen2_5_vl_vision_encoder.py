@@ -126,6 +126,7 @@ class Qwen2_5VLVisionEncoder(Qwen2VLVisionEncoder):
         num_heads=4,
         intermediate_dim=32,
         window_size=4,
+        fullatt_block_indexes=[1],
     )
     encoder.build()
     # (total_patches, T, pH, pW, C) patches + (num_images, 3) grid.

@@ -35,10 +35,19 @@ def convert_backbone_config(transformers_config):
     # transformers 5.x renames "rope_scaling" to "rope_parameters" and may
     # serialize it as null; neither key is guaranteed alongside the other.
     rope_params = tc.get("rope_parameters") or tc.get("rope_scaling") or {}
-    rope_theta = tc.get("rope_theta", rope_params.get("rope_theta", 1000000))
+    rope_theta = rope_params.get("rope_theta")
+    if rope_theta is None:
+        rope_theta = tc.get("rope_theta")
+    if rope_theta is None:
+        rope_theta = 1000000
     # M-RoPE section lives inside rope_parameters/rope_scaling in the HF
     # config; HF defaults to [16, 24, 24].
     mrope_section = rope_params.get("mrope_section", [16, 24, 24])
+    # Outer level in transformers 5.x; inside text_config in 4.x.
+    if "tie_word_embeddings" in transformers_config:
+        tie_word_embeddings = transformers_config["tie_word_embeddings"]
+    else:
+        tie_word_embeddings = tc["tie_word_embeddings"]
 
     vision_encoder = None
     if vision_config is not None:
@@ -73,15 +82,14 @@ def convert_backbone_config(transformers_config):
         "rope_max_wavelength": rope_theta,
         "mrope_section": mrope_section,
         "layer_norm_epsilon": tc["rms_norm_eps"],
-        # Outer level in transformers 5.x; inside text_config in 4.x.
-        "tie_word_embeddings": transformers_config.get(
-            "tie_word_embeddings", tc.get("tie_word_embeddings", False)
-        ),
+        "tie_word_embeddings": tie_word_embeddings,
         "use_sliding_window_attention": tc.get("use_sliding_window", False),
-        # transformers 5.x serializes `sliding_window` as null when unused.
-        "sliding_window_size": tc.get("sliding_window") or 32768,
-        "dropout": tc.get("attention_dropout", 0.0),
+        "dropout": tc["attention_dropout"],
     }
+    # transformers 5.x serializes `sliding_window` as null when unused.
+    # Omit it then so the backbone default applies.
+    if tc.get("sliding_window") is not None:
+        result["sliding_window_size"] = tc["sliding_window"]
     if vision_encoder is not None:
         result["vision_encoder"] = vision_encoder
     return result

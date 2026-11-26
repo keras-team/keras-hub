@@ -321,6 +321,28 @@ class Qwen2_5VLVisionEncoderTest(TestCase):
         )
         self.assertTrue(bool(np.all(np.diff(permuted_windows) >= 0)))
 
+    def test_window_permutation_roundtrip_full_attention(self):
+        """With only full-attention blocks, window permutation is a pure
+        roundtrip: outputs do not depend on `window_size`."""
+        rng = np.random.default_rng(0)
+        kw = dict(self.init_kwargs, depth=2, fullatt_block_indexes=[0, 1])
+        # Grid [1, 8, 16] → 128 patches. The default 112 window splits
+        # the 4x8 merge grid in two; a 224 window holds it whole.
+        patches = rng.random((128, 2, 14, 14, 3)).astype("float32")
+        grid = np.array([[1, 8, 16]], dtype="int32")
+        split = Qwen2_5VLVisionEncoder(**dict(kw, window_size=112))
+        whole = Qwen2_5VLVisionEncoder(**dict(kw, window_size=224))
+        split(patches, grid)
+        whole(patches, grid)
+        for w in split.weights:
+            w.assign(rng.normal(0.0, 0.05, size=w.shape).astype("float32"))
+        whole.set_weights(split.get_weights())
+
+        out_split = ops.convert_to_numpy(split(patches, grid))
+        out_whole = ops.convert_to_numpy(whole(patches, grid))
+        tol = 2e-3 if running_on_gpu() else 1e-5
+        self.assertAllClose(out_split, out_whole, atol=tol, rtol=tol)
+
     def test_window_vs_full_attention(self):
         """Windowed and full-attention blocks produce different segment
         masks on multi-window grids, and identical masks when the image

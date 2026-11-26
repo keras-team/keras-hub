@@ -75,11 +75,13 @@ def _flatten_media(node, leaf_ndim):
 
 def _empty_media(media):
     # Empty collections behave like absent media, so placeholder
-    # counts get the descriptive mismatch error downstream.
+    # counts get the descriptive mismatch error downstream. `generate()`
+    # wraps media lists one level deeper, so emptiness is recursive.
     if isinstance(media, (list, tuple)):
-        return len(media) == 0
+        return len(media) == 0 or all(_empty_media(item) for item in media)
+    # Tensorized nested empty lists have a zero elsewhere in their shape.
     shape = getattr(media, "shape", None)
-    return shape is not None and len(shape) > 0 and shape[0] == 0
+    return shape is not None and len(shape) > 0 and 0 in shape
 
 
 def _has_media_markers(prompts_list, image_token, video_token):
@@ -216,16 +218,18 @@ class Qwen2VLCausalLMPreprocessor(
         ], True
 
     def _carries_media_markers(self, x):
-        """True when the prompts still carry media markers.
+        """True when dict prompts still carry media markers.
 
-        Symbolic tensors under `tf.data` tracing cannot be decoded;
-        they report no markers so the text-only path stays traceable.
+        Plain strings always take the text-only path, matching the base
+        preprocessor. Symbolic tensors under `tf.data` tracing cannot be
+        decoded; they report no markers so that path stays traceable.
         """
-        prompts = x["prompts"] if isinstance(x, dict) else x
-        try:
-            prompts_list, _ = self._flatten_prompts(prompts)
-        except (AttributeError, TypeError):
-            prompts_list = []
+        if not isinstance(x, dict) or in_tf_function():
+            return False
+        prompts = x.get("prompts")
+        if prompts is None:
+            return False
+        prompts_list, _ = self._flatten_prompts(prompts)
         return _has_media_markers(
             prompts_list, self.image_token, self.video_token
         )
@@ -865,7 +869,13 @@ class Qwen2VLCausalLMPreprocessor(
         nested = video_converter.image_converter
         if nested is image_converter:
             return
-        if nested.get_config() == image_converter.get_config():
+        if type(nested) is not type(image_converter):
+            return
+        nested_config = nested.get_config()
+        image_config = image_converter.get_config()
+        nested_config.pop("name", None)
+        image_config.pop("name", None)
+        if nested_config == image_config:
             video_converter.image_converter = image_converter
 
     @classmethod
@@ -878,7 +888,8 @@ class Qwen2VLCausalLMPreprocessor(
 
     @classmethod
     def _add_missing_kwargs(cls, loader, kwargs):
-        super()._add_missing_kwargs(loader, kwargs)
+        kwargs = super()._add_missing_kwargs(loader, kwargs)
         cls._share_image_converter(
             kwargs.get("video_converter"), kwargs.get("image_converter")
         )
+        return kwargs

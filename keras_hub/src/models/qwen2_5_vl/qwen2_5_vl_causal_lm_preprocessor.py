@@ -56,7 +56,7 @@ class Qwen2_5VLCausalLMPreprocessor(Qwen2VLCausalLMPreprocessor):
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_hub.models.Qwen2_5VLCausalLMPreprocessor.from_preset(
-        "qwen2_5_vl_3b_instruct",
+        "qwen2_5_vl_7b_instruct",
     )
 
     # Tokenize and pad a single sequence.

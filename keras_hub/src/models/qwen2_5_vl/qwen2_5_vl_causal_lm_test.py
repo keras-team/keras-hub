@@ -129,37 +129,51 @@ class Qwen2_5VLCausalLMTest(TestCase):
 
     def test_generate_with_image(self):
         """Multimodal generate: image embeddings interleave into prefill."""
+        keras.utils.set_random_seed(0)
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(sequence_length=16)
         )
-        image = np.ones((4, 4, 3), dtype="float32")
+        causal_lm.compile(sampler="greedy")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
-        output = causal_lm.generate(
-            {"prompts": prompt, "images": image},
-            max_length=16,
-        )
-        self.assertTrue(isinstance(output, str))
-        self.assertIn(" air", output)
+        outputs = []
+        for value in (0.0, 255.0):
+            image = np.full((4, 4, 3), value, dtype="float32")
+            output = causal_lm.generate(
+                {"prompts": prompt, "images": image},
+                max_length=20,
+                strip_prompt=True,
+                stop_token_ids=None,
+            )
+            self.assertTrue(isinstance(output, str))
+            outputs.append(output)
+        self.assertNotEqual(outputs[0], outputs[1])
 
     def test_generate_with_video(self):
         """Video inputs flow through the shared image converter, with
         `second_per_grid_ts` scaling the temporal M-RoPE positions."""
+        keras.utils.set_random_seed(0)
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(sequence_length=32)
         )
+        causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.preprocessor.video_converter)
-        video = np.ones((8, 2, 2, 3), dtype="float32")
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
-        output = causal_lm.generate(
-            {
-                "prompts": prompt,
-                "videos": [video],
-                "second_per_grid_ts": [0.5],
-            },
-            max_length=32,
-        )
-        self.assertTrue(isinstance(output, str))
-        self.assertIn(" air", output)
+        outputs = []
+        for value in (0.0, 255.0):
+            video = np.full((8, 2, 2, 3), value, dtype="float32")
+            output = causal_lm.generate(
+                {
+                    "prompts": prompt,
+                    "videos": [video],
+                    "second_per_grid_ts": [0.5],
+                },
+                max_length=36,
+                strip_prompt=True,
+                stop_token_ids=None,
+            )
+            self.assertTrue(isinstance(output, str))
+            outputs.append(output)
+        self.assertNotEqual(outputs[0], outputs[1])
 
     def test_fit_with_image(self):
         """fit() trains through the multimodal preprocessor path; all

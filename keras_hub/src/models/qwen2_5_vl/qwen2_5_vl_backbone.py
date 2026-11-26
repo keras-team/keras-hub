@@ -53,6 +53,7 @@ class Qwen2_5VLBackbone(Qwen2VLBackbone):
         out_dim=64,
         depth=2,
         num_heads=4,
+        fullatt_block_indexes=[1],
     )
     backbone = keras_hub.models.Qwen2_5VLBackbone(
         vocabulary_size=32000,
@@ -62,6 +63,7 @@ class Qwen2_5VLBackbone(Qwen2VLBackbone):
         hidden_dim=64,
         intermediate_dim=128,
         vision_encoder=vision_encoder,
+        mrope_section=[2, 3, 3],
     )
 
     # Forward on token ids; vision inputs and M-RoPE positions are

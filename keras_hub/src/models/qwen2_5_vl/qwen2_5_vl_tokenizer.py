@@ -32,7 +32,7 @@ class Qwen2_5VLTokenizer(Qwen2VLTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_hub.models.Qwen2_5VLTokenizer.from_preset(
-        "qwen2_5_vl_3b_instruct",
+        "qwen2_5_vl_7b_instruct",
     )
     tokenizer("The quick brown fox jumped.")
 

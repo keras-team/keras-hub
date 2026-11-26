@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from keras import ops
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
@@ -100,6 +101,28 @@ class Qwen2VLVideoConverterTest(TestCase):
         result = converter(batched)
         self.assertEqual(result["patches"].shape[0], 32 + 32)
         self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [2, 4, 4]])
+
+    def test_5d_torch_tensor(self):
+        """A torch (B, T, H, W, C) tensor splits into B separate clips."""
+        torch = pytest.importorskip("torch")
+        converter = self._make_converter()
+        batched = np.stack(
+            [self._make_video(num_frames=4), self._make_video(num_frames=4)],
+            axis=0,
+        )
+        result = converter(torch.from_numpy(batched))
+        self.assertEqual(result["patches"].shape[0], 32 + 32)
+        self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [2, 4, 4]])
+
+    def test_list_of_single_frame_arrays_with_different_sizes(self):
+        """Ndarray frames are separate one-frame clips, even when ragged."""
+        converter = self._make_converter()
+        frames = [
+            self._make_video(num_frames=1, height=56, width=56)[0],
+            self._make_video(num_frames=1, height=84, width=84)[0],
+        ]
+        result = converter(frames)
+        self.assertAllEqual(result["grid_thw"], [[1, 4, 4], [1, 6, 6]])
 
     def test_nested_list_is_one_clip(self):
         """A nested Python list of frames is one clip, not a collection."""

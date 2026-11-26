@@ -32,7 +32,7 @@ class Qwen2_5VLCausalLM(Qwen2VLCausalLM):
     ```python
     # Load a preset with a greedy sampler and generate text.
     qwen2_5_vl_lm = keras_hub.models.Qwen2_5VLCausalLM.from_preset(
-        "qwen2_5_vl_3b_instruct",
+        "qwen2_5_vl_7b_instruct",
     )
     qwen2_5_vl_lm.generate("What is Keras?", max_length=32)
 

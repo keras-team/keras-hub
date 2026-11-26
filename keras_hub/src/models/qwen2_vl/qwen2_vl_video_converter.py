@@ -7,6 +7,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
     Qwen2VLImageConverter,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 
 
 @keras_hub_export("keras_hub.layers.Qwen2VLVideoConverter")
@@ -98,6 +99,8 @@ class Qwen2VLVideoConverter(VideoConverter):
     def call(self, video):
         # The per-frame budget depends on each video's own frame count,
         # so collections are processed clip-by-clip and concatenated.
+        if not isinstance(video, (list, tuple)):
+            video = convert_to_numpy(video)
         if isinstance(video, np.ndarray) and video.ndim == 5:
             # A batched `(B, T, H, W, C)` tensor is `B` separate clips.
             video = list(video)
@@ -106,9 +109,11 @@ class Qwen2VLVideoConverter(VideoConverter):
                 raise ValueError(
                     "Expected at least one video clip, got an empty collection."
                 )
-            # Elements with 3 dims are frames: the collection itself is
-            # one clip given as nested lists. 4-D elements are clips.
-            if np.asarray(video[0]).ndim == 3:
+            # A clip may be given as nested lists, whose first element is a
+            # list-like `(H, W, C)` frame. Bare ndarray frames instead form
+            # a collection of one-frame clips.
+            first = convert_to_numpy(video[0])
+            if isinstance(video[0], (list, tuple)) and first.ndim == 3:
                 return self._convert_clip(video)
             all_patches, all_grids = [], []
             for clip in video:
@@ -124,7 +129,7 @@ class Qwen2VLVideoConverter(VideoConverter):
     def _convert_clip(self, video):
         image_converter = self.image_converter
         max_pixels = self.max_pixels
-        video = np.asarray(video)
+        video = convert_to_numpy(video)
         if self.cap_pixels_per_frame:
             factor = image_converter.patch_size * image_converter.merge_size
             total_pixels = int(self.max_video_tokens * factor * factor * 0.9)

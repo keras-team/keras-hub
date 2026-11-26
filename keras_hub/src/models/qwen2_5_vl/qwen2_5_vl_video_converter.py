@@ -27,11 +27,13 @@ class Qwen2_5VLVideoConverter(Qwen2VLVideoConverter):
             inherits from ``image_converter``. Defaults to ``None``.
         max_pixels: int or ``None``. Per-frame pixel cap; ``None``
             inherits from ``image_converter``. Defaults to ``None``.
-        cap_pixels_per_frame: bool. When ``True``, apply the pixel bounds
-            per frame before concatenating the clip (HF behavior).
-            Defaults to ``False``.
-        max_video_tokens: int. Token budget cap for a video; longer
-            clips are downsampled temporally. Defaults to ``128000``.
+        cap_pixels_per_frame: bool. Whether to bound each frame's resized
+            pixel count so the whole video stays within an even share of
+            the ``max_video_tokens`` budget (90% of it), matching the
+            opt-in ``cap_pixels_per_frame`` flag in Hugging Face's
+            ``Qwen2VLVideoProcessor``. Defaults to ``False``.
+        max_video_tokens: int. Video token budget used when
+            ``cap_pixels_per_frame`` is enabled. Defaults to ``128000``.
 
     Examples:
 
