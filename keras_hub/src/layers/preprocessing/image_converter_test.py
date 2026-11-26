@@ -136,6 +136,21 @@ class ImageConverterTest(TestCase):
         self.assertAllClose(converter(int_image), np.ones((4, 4, 3)))
         self.assertAllClose(converter(float_image), np.ones((4, 4, 3)))
 
+    def test_integer_input_with_offset_and_no_scale(self):
+        converter = ImageConverter(
+            scale=None,
+            offset=-1.5,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        inputs = ops.convert_to_tensor(np.array([[[10, 200, 255]]], "uint8"))
+        self.assertAllClose(converter(inputs), [[[8.5, 198.5, 253.5]]])
+        converter = ImageConverter(
+            scale=None,
+            offset=-100.0,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        self.assertAllClose(converter(inputs), [[[-90.0, 100.0, 155.0]]])
+
     @parameterized.parameters(
         (True, False),
         (False, True),
