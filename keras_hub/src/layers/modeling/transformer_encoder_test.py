@@ -29,8 +29,24 @@ class TransformerEncoderTest(TestCase):
             },
             input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
-            expected_num_trainable_weights=16,
             expected_num_non_trainable_variables=3,  # dropout rng seeds
+        )
+
+    def test_regularizer_serialization(self):
+        self.run_layer_test(
+            cls=TransformerEncoder,
+            init_kwargs={
+                "intermediate_dim": 4,
+                "num_heads": 2,
+                "kernel_regularizer": "l2",
+                "bias_regularizer": "l1",
+                "activity_regularizer": "l2",
+            },
+            input_data=random.uniform(shape=(2, 4, 6)),
+            expected_output_shape=(2, 4, 6),
+            # 12 weight regularizers (4 kernels + 4 biases in attention,
+            # 2 kernels + 2 biases in the dense layers) + 1 activity loss.
+            expected_num_losses=13,
         )
 
     @parameterized.named_parameters(
