@@ -13,7 +13,13 @@ except ImportError:
 
 
 class SafetensorLoader(contextlib.ExitStack):
-    def __init__(self, preset, prefix=None, fname=None):
+    def __init__(
+        self,
+        preset,
+        prefix=None,
+        fname=None,
+        config_file=SAFETENSOR_CONFIG_FILE,
+    ):
         super().__init__()
 
         if safetensors is None:
@@ -24,8 +30,11 @@ class SafetensorLoader(contextlib.ExitStack):
             )
 
         self.preset = preset
-        if check_file_exists(preset, SAFETENSOR_CONFIG_FILE):
-            self.safetensor_config = load_json(preset, SAFETENSOR_CONFIG_FILE)
+        # `config_file` is the index of a sharded checkpoint, relative to
+        # `preset`. It defaults to the index at the root of the preset. Pass
+        # `None` for a single-file checkpoint that has no index to look for.
+        if config_file is not None and check_file_exists(preset, config_file):
+            self.safetensor_config = load_json(preset, config_file)
         else:
             self.safetensor_config = None
         self.safetensor_files = {}
@@ -37,7 +46,7 @@ class SafetensorLoader(contextlib.ExitStack):
 
         if fname is not None and self.safetensor_config is not None:
             raise ValueError(
-                f"Cannot specify `fname` if {SAFETENSOR_CONFIG_FILE} exists. "
+                f"Cannot specify `fname` if {config_file} exists. "
                 f"Received: fname={fname}"
             )
         self.fname = fname  # Specify the name of the safetensor file.

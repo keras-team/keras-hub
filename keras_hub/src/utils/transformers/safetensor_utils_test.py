@@ -1,3 +1,4 @@
+import json
 import os
 
 import numpy as np
@@ -84,6 +85,50 @@ class SafetensorLoaderTest(TestCase):
                 loader.safetensor_aliases["model.safetensors"],
                 {"model.shared.weight": "model.decoder.embed_tokens.weight"},
             )
+            self.assertAllEqual(
+                loader.get_tensor("encoder.layernorm_embedding.weight"),
+                self.layer_norm,
+            )
+
+    def write_index(self, name, weight_map):
+        with open(os.path.join(self.preset_dir, name), "w") as f:
+            json.dump({"metadata": {}, "weight_map": weight_map}, f)
+
+    def test_config_file_selects_the_index(self):
+        save_file(
+            {"model.norm.weight": self.layer_norm},
+            os.path.join(self.preset_dir, "shard.safetensors"),
+        )
+        self.write_index(
+            "other.safetensors.index.json",
+            {"model.norm.weight": "shard.safetensors"},
+        )
+        with SafetensorLoader(
+            self.preset_dir, config_file="other.safetensors.index.json"
+        ) as loader:
+            self.assertAllEqual(
+                loader.get_tensor("norm.weight"), self.layer_norm
+            )
+
+    def test_config_file_defaults_to_the_root_index(self):
+        self.write_index(
+            "model.safetensors.index.json",
+            {"model.decoder.embed_tokens.weight": "model.safetensors"},
+        )
+        with SafetensorLoader(self.preset_dir) as loader:
+            self.assertIsNotNone(loader.safetensor_config)
+        with self.assertRaisesRegex(ValueError, "Cannot specify `fname`"):
+            SafetensorLoader(self.preset_dir, fname="model.safetensors")
+
+    def test_config_file_none_ignores_the_root_index(self):
+        self.write_index(
+            "model.safetensors.index.json",
+            {"model.other.weight": "missing.safetensors"},
+        )
+        with SafetensorLoader(
+            self.preset_dir, fname="model.safetensors", config_file=None
+        ) as loader:
+            self.assertIsNone(loader.safetensor_config)
             self.assertAllEqual(
                 loader.get_tensor("encoder.layernorm_embedding.weight"),
                 self.layer_norm,
