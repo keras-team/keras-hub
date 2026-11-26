@@ -2,7 +2,6 @@ import keras
 from keras import layers
 from keras import ops
 
-from keras_hub.src.layers.modeling.rms_normalization import RMSNormalization
 from keras_hub.src.models.flux.flux_maths import FluxRoPEAttention
 from keras_hub.src.models.flux.flux_maths import rearrange_symbolic_tensors
 from keras_hub.src.models.flux.flux_maths import rope
@@ -49,6 +48,10 @@ class EmbedND(keras.layers.Layer):
     """
 
     def __init__(self, theta, axes_dim, **kwargs):
+        # The positions must reach `call` in their own dtype. Autocasting
+        # them to a low-precision compute dtype (e.g. bfloat16) would round
+        # positions above 256, so neighboring tokens would share a position.
+        kwargs["autocast"] = False
         super().__init__(**kwargs)
         self.theta = theta
         self.axes_dim = axes_dim
@@ -109,9 +112,13 @@ class MLPEmbedder(keras.layers.Layer):
     def __init__(self, hidden_dim, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
-        self.input_layer = layers.Dense(hidden_dim, use_bias=True)
-        self.silu = layers.Activation("silu")
-        self.output_layer = layers.Dense(hidden_dim, use_bias=True)
+        self.input_layer = layers.Dense(
+            hidden_dim, use_bias=True, dtype=self.dtype_policy
+        )
+        self.silu = layers.Activation("silu", dtype=self.dtype_policy)
+        self.output_layer = layers.Dense(
+            hidden_dim, use_bias=True, dtype=self.dtype_policy
+        )
 
     def build(self, input_shape):
         self.input_layer.build(input_shape)
@@ -152,8 +159,12 @@ class QKNorm(keras.layers.Layer):
     def __init__(self, input_dim, **kwargs):
         super().__init__(**kwargs)
         self.input_dim = input_dim
-        self.query_norm = RMSNormalization(input_dim)
-        self.key_norm = RMSNormalization(input_dim)
+        self.query_norm = layers.RMSNormalization(
+            axis=-1, epsilon=1e-6, dtype=self.dtype_policy, name="query_norm"
+        )
+        self.key_norm = layers.RMSNormalization(
+            axis=-1, epsilon=1e-6, dtype=self.dtype_policy, name="key_norm"
+        )
 
     def build(self, input_shape):
         self.query_norm.build(input_shape)
@@ -201,7 +212,7 @@ class Modulation(keras.layers.Layer):
         self.double = double
         self.multiplier = 6 if double else 3
         self.linear_projection = keras.layers.Dense(
-            self.multiplier * dim, use_bias=True
+            self.multiplier * dim, use_bias=True, dtype=self.dtype_policy
         )
 
     def build(self, input_shape):
@@ -275,66 +286,70 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.use_bias = use_bias
-        mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        self.mlp_hidden_dim = int(hidden_size * mlp_ratio)
         head_dim = hidden_size // num_heads
+        dtype = self.dtype_policy
 
         # Image stream layers
-        self.image_mod = Modulation(hidden_size, double=True)
+        self.image_mod = Modulation(hidden_size, double=True, dtype=dtype)
         self.image_norm1 = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=dtype
         )
         self.image_qkv = keras.layers.Dense(
-            3 * hidden_size, use_bias=use_bias, name="img_qkv"
+            3 * hidden_size, use_bias=use_bias, dtype=dtype, name="img_qkv"
         )
         # Maps to `double_blocks.{i}.img_attn.norm.*` in the reference
         # checkpoint. Without this the q/k RMS scales are silently dropped.
-        self.image_attn_norm = QKNorm(head_dim)
+        self.image_attn_norm = QKNorm(head_dim, dtype=dtype)
         self.image_attn_proj = keras.layers.Dense(
-            hidden_size, use_bias=use_bias, name="img_attn_proj"
+            hidden_size, use_bias=use_bias, dtype=dtype, name="img_attn_proj"
         )
 
         self.image_norm2 = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=dtype
         )
-        # FLUX uses `nn.GELU(approximate="tanh")` here, not the exact,
-        # erf-based GELU of `Activation("gelu")`.
-        self.image_mlp = keras.Sequential(
-            [
-                keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation(gelu_approximate),
-                keras.layers.Dense(hidden_size, use_bias=True),
-            ],
-            name="image_mlp",
+        # The MLP is `Dense -> GELU -> Dense`. FLUX uses
+        # `nn.GELU(approximate="tanh")` here, not the exact, erf-based GELU
+        # of `Activation("gelu")`; it is applied in `call`.
+        self.image_mlp_input = keras.layers.Dense(
+            self.mlp_hidden_dim,
+            use_bias=True,
+            dtype=dtype,
+            name="image_mlp_input",
+        )
+        self.image_mlp_output = keras.layers.Dense(
+            hidden_size, use_bias=True, dtype=dtype, name="image_mlp_output"
         )
 
         # Text stream layers
-        self.text_mod = Modulation(hidden_size, double=True)
+        self.text_mod = Modulation(hidden_size, double=True, dtype=dtype)
         self.text_norm1 = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=dtype
         )
         self.text_qkv = keras.layers.Dense(
-            3 * hidden_size, use_bias=use_bias, name="txt_qkv"
+            3 * hidden_size, use_bias=use_bias, dtype=dtype, name="txt_qkv"
         )
         # Maps to `double_blocks.{i}.txt_attn.norm.*`.
-        self.text_attn_norm = QKNorm(head_dim)
+        self.text_attn_norm = QKNorm(head_dim, dtype=dtype)
         self.text_attn_proj = keras.layers.Dense(
-            hidden_size, use_bias=use_bias, name="txt_attn_proj"
+            hidden_size, use_bias=use_bias, dtype=dtype, name="txt_attn_proj"
         )
 
         self.text_norm2 = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=dtype
         )
-        self.text_mlp = keras.Sequential(
-            [
-                keras.layers.Dense(mlp_hidden_dim, use_bias=True),
-                keras.layers.Activation(gelu_approximate),
-                keras.layers.Dense(hidden_size, use_bias=True),
-            ],
-            name="text_mlp",
+        self.text_mlp_input = keras.layers.Dense(
+            self.mlp_hidden_dim,
+            use_bias=True,
+            dtype=dtype,
+            name="text_mlp_input",
+        )
+        self.text_mlp_output = keras.layers.Dense(
+            hidden_size, use_bias=True, dtype=dtype, name="text_mlp_output"
         )
 
         # RoPE Attention
-        self.attention = FluxRoPEAttention()
+        self.attention = FluxRoPEAttention(dtype=dtype)
 
     def build(
         self,
@@ -372,7 +387,8 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.image_attn_norm.build(image_qk_shape)
         self.image_attn_proj.build(image_shape)
         self.image_norm2.build(image_shape)
-        self.image_mlp.build(image_shape)
+        self.image_mlp_input.build(image_shape)
+        self.image_mlp_output.build((*image_shape[:-1], self.mlp_hidden_dim))
 
         # Text stream.
         self.text_mod.build(modulation_encoding_shape)
@@ -381,7 +397,8 @@ class DoubleStreamBlock(keras.layers.Layer):
         self.text_attn_norm.build(text_qk_shape)
         self.text_attn_proj.build(text_shape)
         self.text_norm2.build(text_shape)
-        self.text_mlp.build(text_shape)
+        self.text_mlp_input.build(text_shape)
+        self.text_mlp_output.build((*text_shape[:-1], self.mlp_hidden_dim))
 
     def compute_output_spec(
         self, image, text, modulation_encoding, positional_encoding
@@ -464,8 +481,12 @@ class DoubleStreamBlock(keras.layers.Layer):
             self.text_norm2(text) * (1 + txt_mod2["scale"]) + txt_mod2["shift"]
         )
 
-        image = image + img_mod2["gate"] * self.image_mlp(img_normed_2)
-        text = text + txt_mod2["gate"] * self.text_mlp(txt_normed_2)
+        image = image + img_mod2["gate"] * self.image_mlp_output(
+            gelu_approximate(self.image_mlp_input(img_normed_2))
+        )
+        text = text + txt_mod2["gate"] * self.text_mlp_output(
+            gelu_approximate(self.text_mlp_input(txt_normed_2))
+        )
 
         return image, text
 
@@ -514,20 +535,23 @@ class SingleStreamBlock(keras.layers.Layer):
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         head_dim = hidden_size // num_heads
+        dtype = self.dtype_policy
 
         self.mlp_hidden_dim = int(hidden_size * mlp_ratio)
         # qkv and mlp_in
-        self.linear1 = keras.layers.Dense(hidden_size * 3 + self.mlp_hidden_dim)
+        self.linear1 = keras.layers.Dense(
+            hidden_size * 3 + self.mlp_hidden_dim, dtype=dtype
+        )
         # proj and mlp_out
-        self.linear2 = keras.layers.Dense(hidden_size)
+        self.linear2 = keras.layers.Dense(hidden_size, dtype=dtype)
 
-        self.norm = QKNorm(head_dim)
+        self.norm = QKNorm(head_dim, dtype=dtype)
 
         self.pre_norm = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=dtype
         )
-        self.modulation = Modulation(hidden_size, double=False)
-        self.attention = FluxRoPEAttention()
+        self.modulation = Modulation(hidden_size, double=False, dtype=dtype)
+        self.attention = FluxRoPEAttention(dtype=dtype)
 
     def build(
         self, x_shape, modulation_encoding_shape, positional_encoding_shape
@@ -628,16 +652,19 @@ class LastLayer(keras.layers.Layer):
         self.output_channels = output_channels
 
         self.norm_final = keras.layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False
+            epsilon=1e-6, scale=False, center=False, dtype=self.dtype_policy
         )
         self.linear = keras.layers.Dense(
-            patch_size * patch_size * output_channels, use_bias=True
+            patch_size * patch_size * output_channels,
+            use_bias=True,
+            dtype=self.dtype_policy,
         )
-        self.adaLN_modulation = keras.Sequential(
-            [
-                keras.layers.Activation("silu"),
-                keras.layers.Dense(2 * hidden_size, use_bias=True),
-            ]
+        # `SiLU -> Dense`; the SiLU is applied in `call`.
+        self.adaLN_modulation = keras.layers.Dense(
+            2 * hidden_size,
+            use_bias=True,
+            dtype=self.dtype_policy,
+            name="adaLN_modulation",
         )
 
     def build(self, x_shape, modulation_encoding_shape):
@@ -657,7 +684,9 @@ class LastLayer(keras.layers.Layer):
             KerasTensor: The output tensor after final processing.
         """
         shift, scale = ops.split(
-            self.adaLN_modulation(modulation_encoding), 2, axis=1
+            self.adaLN_modulation(keras.activations.silu(modulation_encoding)),
+            2,
+            axis=1,
         )
         x = (1 + scale[:, None, :]) * self.norm_final(x) + shift[:, None, :]
         x = self.linear(x)

@@ -124,7 +124,7 @@ class ConvertFluxConfigTest(TestCase):
         self.assertEqual(config["text_shape"], (None, 4096))
         self.assertEqual(config["y_shape"], (768,))
         # Sequence axes stay dynamic.
-        self.assertIsNone(config["image_shape"][0])
+        self.assertIsNone(config["latent_shape"][0])
         self.assertIsNone(config["text_shape"][0])
 
     def test_missing_key_raises(self):

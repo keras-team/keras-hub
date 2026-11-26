@@ -167,7 +167,11 @@ class Flux2VAE(Backbone):
             name="encoder",
         )
         self.quant_conv = keras.layers.Conv2D(
-            2 * latent_channels, 1, dtype=dtype, name="quant_conv"
+            2 * latent_channels,
+            1,
+            data_format="channels_last",
+            dtype=dtype,
+            name="quant_conv",
         )
         self.distribution_sampler = DiagonalGaussianDistributionSampler(
             method=sampler_method,
@@ -183,7 +187,11 @@ class Flux2VAE(Backbone):
             name="latent_normalization",
         )
         self.post_quant_conv = keras.layers.Conv2D(
-            latent_channels, 1, dtype=dtype, name="post_quant_conv"
+            latent_channels,
+            1,
+            data_format="channels_last",
+            dtype=dtype,
+            name="post_quant_conv",
         )
         self.decoder = VAEDecoder(
             decoder_num_filters,

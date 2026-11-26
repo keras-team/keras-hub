@@ -57,8 +57,8 @@ class Flux2Backbone(Backbone):
         guidance_embed: bool. Whether the model is guidance-distilled and
             takes a `guidance` input. Defaults to `False`.
         latent_shape: tuple. The shape of the `image` input (the packed
-            latent tokens), excluding the batch axis. Defaults to
-            `(None, 128)`.
+            latent tokens), excluding the batch axis. Its last axis must be
+            `input_channels`. Defaults to `(None, input_channels)`.
         text_shape: tuple. The shape of the `text` input, excluding the batch
             axis. Defaults to `(None, 7680)`.
         image_ids_shape: tuple. The shape of the `image_ids` input,
@@ -71,8 +71,10 @@ class Flux2Backbone(Backbone):
             tokens; as for Stable Diffusion 3, this is the generated image
             size, which `from_preset(..., image_shape=...)` overrides.
             Defaults to `(1024, 1024, 3)`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the model's computations and weights.
         **kwargs: other keyword arguments passed to `keras.Model`, including
-            `name`, `dtype` etc.
+            `name`, `trainable` etc.
 
     Call arguments:
         image: Tensor of shape `(batch_size, image_length, input_channels)`.
@@ -133,11 +135,12 @@ class Flux2Backbone(Backbone):
         axes_dim,
         theta,
         guidance_embed=False,
-        latent_shape=(None, 128),
+        latent_shape=None,
         text_shape=(None, 7680),
         image_ids_shape=(None, 4),
         text_ids_shape=(None, 4),
         image_shape=(1024, 1024, 3),
+        dtype=None,
         **kwargs,
     ):
         if hidden_size % num_heads != 0:
@@ -152,6 +155,14 @@ class Flux2Backbone(Backbone):
                 f"(`hidden_size // num_heads` = {head_dim}). Received: "
                 f"axes_dim={axes_dim} (sum {sum(axes_dim)})"
             )
+        if latent_shape is None:
+            latent_shape = (None, input_channels)
+        if latent_shape[-1] != input_channels:
+            raise ValueError(
+                "The last axis of `latent_shape` must equal `input_channels`. "
+                f"Received: latent_shape={latent_shape}, "
+                f"input_channels={input_channels}"
+            )
         for name, shape in (
             ("image_ids_shape", image_ids_shape),
             ("text_ids_shape", text_ids_shape),
@@ -165,39 +176,60 @@ class Flux2Backbone(Backbone):
 
         # === Layers ===
         self.positional_embedder = EmbedND(
-            theta=theta, axes_dim=axes_dim, name="positional_embedder"
+            theta=theta,
+            axes_dim=axes_dim,
+            dtype=dtype,
+            name="positional_embedder",
         )
         self.image_input_embedder = keras.layers.Dense(
-            hidden_size, use_bias=False, name="image_input_embedder"
+            hidden_size,
+            use_bias=False,
+            dtype=dtype,
+            name="image_input_embedder",
         )
         self.text_input_embedder = keras.layers.Dense(
-            hidden_size, use_bias=False, name="text_input_embedder"
+            hidden_size,
+            use_bias=False,
+            dtype=dtype,
+            name="text_input_embedder",
         )
         self.timestep_embedding = TimestepEmbedding(
-            dim=256, name="timestep_embedding"
+            dim=256, dtype=dtype, name="timestep_embedding"
         )
         self.time_input_embedder = Flux2MLPEmbedder(
-            hidden_size, name="time_input_embedder"
+            hidden_size, dtype=dtype, name="time_input_embedder"
         )
         self.guidance_input_embedder = (
-            Flux2MLPEmbedder(hidden_size, name="guidance_input_embedder")
+            Flux2MLPEmbedder(
+                hidden_size, dtype=dtype, name="guidance_input_embedder"
+            )
             if guidance_embed
             else None
         )
         self.double_stream_modulation_image = Flux2Modulation(
-            hidden_size, double=True, name="double_stream_modulation_image"
+            hidden_size,
+            double=True,
+            dtype=dtype,
+            name="double_stream_modulation_image",
         )
         self.double_stream_modulation_text = Flux2Modulation(
-            hidden_size, double=True, name="double_stream_modulation_text"
+            hidden_size,
+            double=True,
+            dtype=dtype,
+            name="double_stream_modulation_text",
         )
         self.single_stream_modulation = Flux2Modulation(
-            hidden_size, double=False, name="single_stream_modulation"
+            hidden_size,
+            double=False,
+            dtype=dtype,
+            name="single_stream_modulation",
         )
         self.double_blocks = [
             Flux2DoubleStreamBlock(
                 hidden_size,
                 num_heads,
                 mlp_ratio=mlp_ratio,
+                dtype=dtype,
                 name=f"double_block_{i}",
             )
             for i in range(depth)
@@ -207,13 +239,16 @@ class Flux2Backbone(Backbone):
                 hidden_size,
                 num_heads,
                 mlp_ratio=mlp_ratio,
+                dtype=dtype,
                 name=f"single_block_{i}",
             )
             for i in range(depth_single_blocks)
         ]
-        self.strip_text_tokens = StripTextTokens(name="strip_text_tokens")
+        self.strip_text_tokens = StripTextTokens(
+            dtype=dtype, name="strip_text_tokens"
+        )
         self.final_layer = Flux2LastLayer(
-            hidden_size, input_channels, name="final_layer"
+            hidden_size, input_channels, dtype=dtype, name="final_layer"
         )
 
         # === Functional Model ===
@@ -282,7 +317,7 @@ class Flux2Backbone(Backbone):
         if guidance_embed:
             inputs["guidance"] = guidance_input
 
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        super().__init__(inputs=inputs, outputs=outputs, dtype=dtype, **kwargs)
 
         # === Config ===
         self.input_channels = input_channels

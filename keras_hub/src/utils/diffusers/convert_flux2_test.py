@@ -457,19 +457,23 @@ class ConvertFlux2PipelineTest(TestCase):
 
 
 class ConvertFlux2PresetTest(TestCase):
-    @pytest.mark.extra_large
-    def test_klein_4b_matches_checkpoint_size(self):
-        """Built from the published config, the backbone must have exactly
-        as many parameters as `flux-2-klein-4b.safetensors`."""
-        backbone = Flux2Backbone(
-            **convert_flux2.convert_backbone_config(KLEIN_4B_CONFIG)
+    def test_matches_checkpoint_size(self):
+        """Built from the diffusers config, the backbone must have exactly
+        as many parameters as the checkpoint."""
+        preset_dir = self.get_temp_dir()
+        transformer = save_tiny_transformer(preset_dir)
+        backbone = Flux2Backbone.from_preset(preset_dir, load_weights=False)
+        self.assertEqual(
+            backbone.count_params(),
+            sum(param.numel() for param in transformer.parameters()),
         )
-        self.assertEqual(backbone.count_params(), 3_875_544_576)
 
-    @pytest.mark.extra_large
-    def test_klein_4b_from_hub(self):
-        # Public, unlike FLUX.1 [schnell].
+    @pytest.mark.large
+    def test_tiny_klein_from_hub(self):
+        # A public, tiny FLUX.2 [klein] diffusers repo.
         backbone = Flux2Backbone.from_preset(
-            "hf://black-forest-labs/FLUX.2-klein-4B"
+            "hf://optimum-intel-internal-testing/tiny-random-flux.2-klein"
         )
-        self.assertEqual(backbone.count_params(), 3_875_544_576)
+        self.assertIsInstance(backbone, Flux2Backbone)
+        self.assertEqual(backbone.depth, 2)
+        self.assertEqual(backbone.depth_single_blocks, 2)

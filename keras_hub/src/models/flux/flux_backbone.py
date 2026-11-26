@@ -36,16 +36,19 @@ class FluxBackbone(Backbone):
         use_bias: bool. Whether to apply bias to the query, key, and value
             projections.
         guidance_embed: bool. If True, applies guidance embedding in the model.
-        image_shape: tuple. Shape of the image input tensor. Defaults to
-            `(None, 768, 3072)`.
-        text_shape: tuple. Shape of the text input tensor. Defaults to
-            `(None, 768, 3072)`.
-        image_ids_shape: tuple. Shape of the image IDs input tensor. Defaults
-            to `(None, 768, 3072)`.
-        text_ids_shape: tuple. Shape of the text IDs input tensor. Defaults to
-            `(None, 768, 3072)`.
-        y_shape: tuple. Shape of the additional vector input tensor. Defaults
-            to `(None, 128)`.
+        latent_shape: tuple. The shape of the `image` input (the packed
+            latent tokens), excluding the batch axis. Its last axis must be
+            `input_channels`. Defaults to `(None, input_channels)`.
+        text_shape: tuple. The shape of the `text` input, excluding the batch
+            axis. Defaults to `(None, 4096)`.
+        image_ids_shape: tuple. The shape of the `image_ids` input, excluding
+            the batch axis. Defaults to `(None, 3)`.
+        text_ids_shape: tuple. The shape of the `text_ids` input, excluding
+            the batch axis. Defaults to `(None, 3)`.
+        y_shape: tuple. The shape of the `y` input, excluding the batch axis.
+            Defaults to `(768,)`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the model's computations and weights.
 
     Call arguments:
         image: KerasTensor. Image input tensor of shape (N, L, D) where N is the
@@ -78,28 +81,42 @@ class FluxBackbone(Backbone):
         theta,
         use_bias,
         guidance_embed=False,
-        # Defaults match FLUX.1: 64-channel packed latents, 4096-dim T5
-        # context, and a 768-dim pooled CLIP vector.
-        image_shape=(None, 64),
+        # Defaults match FLUX.1: 64-channel packed latents (`input_channels`),
+        # 4096-dim T5 context, and a 768-dim pooled CLIP vector.
+        latent_shape=None,
         text_shape=(None, 4096),
         image_ids_shape=(None, 3),
         text_ids_shape=(None, 3),
         y_shape=(768,),
+        dtype=None,
         **kwargs,
     ):
+        if latent_shape is None:
+            latent_shape = (None, input_channels)
+        if latent_shape[-1] != input_channels:
+            raise ValueError(
+                "The last axis of `latent_shape` must equal `input_channels`. "
+                f"Received: latent_shape={latent_shape}, "
+                f"input_channels={input_channels}"
+            )
+
         # === Layers ===
-        self.positional_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+        self.positional_embedder = EmbedND(
+            theta=theta, axes_dim=axes_dim, dtype=dtype
+        )
         self.image_input_embedder = keras.layers.Dense(
-            hidden_size, use_bias=True
+            hidden_size, use_bias=True, dtype=dtype
         )
-        self.time_input_embedder = MLPEmbedder(hidden_dim=hidden_size)
-        self.vector_embedder = MLPEmbedder(hidden_dim=hidden_size)
+        self.time_input_embedder = MLPEmbedder(
+            hidden_dim=hidden_size, dtype=dtype
+        )
+        self.vector_embedder = MLPEmbedder(hidden_dim=hidden_size, dtype=dtype)
         self.guidance_input_embedder = (
-            MLPEmbedder(hidden_dim=hidden_size)
+            MLPEmbedder(hidden_dim=hidden_size, dtype=dtype)
             if guidance_embed
-            else keras.layers.Identity()
+            else keras.layers.Identity(dtype=dtype)
         )
-        self.text_input_embedder = keras.layers.Dense(hidden_size)
+        self.text_input_embedder = keras.layers.Dense(hidden_size, dtype=dtype)
 
         self.double_blocks = [
             DoubleStreamBlock(
@@ -107,22 +124,27 @@ class FluxBackbone(Backbone):
                 num_heads,
                 mlp_ratio=mlp_ratio,
                 use_bias=use_bias,
+                dtype=dtype,
             )
             for _ in range(depth)
         ]
 
         self.single_blocks = [
-            SingleStreamBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio)
+            SingleStreamBlock(
+                hidden_size, num_heads, mlp_ratio=mlp_ratio, dtype=dtype
+            )
             for _ in range(depth_single_blocks)
         ]
 
-        self.final_layer = LastLayer(hidden_size, 1, input_channels)
-        self.strip_text_tokens = StripTextTokens()
-        self.timestep_embedding = TimestepEmbedding(dim=256)
+        self.final_layer = LastLayer(
+            hidden_size, 1, input_channels, dtype=dtype
+        )
+        self.strip_text_tokens = StripTextTokens(dtype=dtype)
+        self.timestep_embedding = TimestepEmbedding(dim=256, dtype=dtype)
         self.guidance_embed = guidance_embed
 
         # === Functional Model ===
-        image_input = keras.Input(shape=image_shape, name="image")
+        image_input = keras.Input(shape=latent_shape, name="image")
         image_ids = keras.Input(shape=image_ids_shape, name="image_ids")
         text_input = keras.Input(shape=text_shape, name="text")
         text_ids = keras.Input(shape=text_ids_shape, name="text_ids")
@@ -197,6 +219,7 @@ class FluxBackbone(Backbone):
         super().__init__(
             inputs=model_inputs,
             outputs=image,
+            dtype=dtype,
             **kwargs,
         )
 
@@ -205,7 +228,7 @@ class FluxBackbone(Backbone):
         self.output_channels = self.input_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
-        self.image_shape = image_shape
+        self.latent_shape = latent_shape
         self.text_shape = text_shape
         self.image_ids_shape = image_ids_shape
         self.text_ids_shape = text_ids_shape
@@ -231,7 +254,7 @@ class FluxBackbone(Backbone):
                 "theta": self.theta,
                 "use_bias": self.use_bias,
                 "guidance_embed": self.guidance_embed,
-                "image_shape": self.image_shape,
+                "latent_shape": self.latent_shape,
                 "text_shape": self.text_shape,
                 "image_ids_shape": self.image_ids_shape,
                 "text_ids_shape": self.text_ids_shape,

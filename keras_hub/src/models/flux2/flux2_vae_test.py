@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 from keras import ops
@@ -70,6 +71,18 @@ class Flux2VAETest(TestCase):
         latents = vae.encode(self.input_data)
         self.assertEqual(tuple(latents.shape), (2, 8, 8, 16))
         images = vae.decode(latents)
+        self.assertEqual(tuple(images.shape), (2, 32, 32, 3))
+
+    def test_channels_first_image_data_format(self):
+        # Every layer pins `channels_last`, so the global image data format
+        # must not change how the VAE is built.
+        original_data_format = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_first")
+        try:
+            vae = Flux2VAE(**self.init_kwargs)
+            images = vae(self.input_data)
+        finally:
+            keras.config.set_image_data_format(original_data_format)
         self.assertEqual(tuple(images.shape), (2, 32, 32, 3))
 
     @pytest.mark.large

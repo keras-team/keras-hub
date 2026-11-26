@@ -118,6 +118,16 @@ class Flux2TextToImageTest(TestCase):
         )
         self.assertAllClose(output, output2)
 
+    def test_distilled_model_rejects_negative_prompts(self):
+        # A step-distilled model has no classifier-free guidance, so a
+        # negative prompt must not be dropped silently.
+        text_to_image = Flux2TextToImage(**self.init_kwargs)
+        with self.assertRaisesRegex(ValueError, "negative_prompts"):
+            text_to_image.generate(
+                {"prompts": "airplane", "negative_prompts": "a user"},
+                num_steps=2,
+            )
+
     def test_generate_with_negative_prompts(self):
         text_to_image = Flux2TextToImage(**self.init_kwargs, is_distilled=False)
         self.assertTrue(text_to_image.support_negative_prompts)
@@ -196,18 +206,6 @@ class Flux2TextToImageTest(TestCase):
         self.assertAllClose(
             positive, ops.concatenate([final, embeddings], axis=-1)
         )
-
-    def test_text_encoder_qk_norm_epsilon(self):
-        # The Qwen3 query/key RMSNorms must use the checkpoint's
-        # `rms_norm_eps`, like `Qwen3ForCausalLM`.
-        Flux2TextToImage(**self.init_kwargs)
-        for layer in self.text_encoder.transformer_layers:
-            attention = layer._self_attention_layer
-            for norm in (
-                attention._query_dense_layer_norm,
-                attention._key_dense_layer_norm,
-            ):
-                self.assertEqual(norm.epsilon, layer.layer_norm_epsilon)
 
     def test_encode_text_step_matches_transformers(self):
         """Every position, padding included, matches `Qwen3ForCausalLM`.

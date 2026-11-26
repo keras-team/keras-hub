@@ -41,7 +41,7 @@ class FluxBackboneTest(TestCase):
             "theta": 10_000,
             "use_bias": True,
             "guidance_embed": True,
-            "image_shape": (16, 64),
+            "latent_shape": (16, 64),
             "text_shape": (16, 64),
             "image_ids_shape": (16, 3),
             "text_ids_shape": (16, 3),
@@ -73,9 +73,19 @@ class FluxBackboneTest(TestCase):
                 16,
                 64,
             ),
-            run_mixed_precision_check=False,
             run_quantization_check=False,
         )
+
+    def test_latent_shape_defaults_to_input_channels(self):
+        init_kwargs = {**self.init_kwargs, "input_channels": 32}
+        del init_kwargs["latent_shape"]
+        backbone = FluxBackbone(**init_kwargs)
+        self.assertEqual(tuple(backbone.latent_shape), (None, 32))
+        self.assertEqual(backbone.input["image"].shape, (None, None, 32))
+
+    def test_rejects_latent_shape_channel_mismatch(self):
+        with self.assertRaisesRegex(ValueError, "latent_shape"):
+            FluxBackbone(**{**self.init_kwargs, "latent_shape": (16, 32)})
 
     @pytest.mark.large
     def test_saved_model(self):
@@ -121,7 +131,7 @@ class FluxDynamicShapeTest(TestCase):
             theta=10_000,
             use_bias=True,
             guidance_embed=False,
-            image_shape=(None, 64),
+            latent_shape=(None, 64),
             text_shape=(None, 64),
             image_ids_shape=(None, 3),
             text_ids_shape=(None, 3),

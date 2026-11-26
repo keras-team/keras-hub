@@ -86,11 +86,17 @@ class Flux2FeedForward(layers.Layer):
         self.mlp_hidden_dim = mlp_hidden_dim
 
         self.input_layer = layers.Dense(
-            2 * mlp_hidden_dim, use_bias=False, name="input_layer"
+            2 * mlp_hidden_dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="input_layer",
         )
-        self.swiglu = Flux2SwiGLU(name="swiglu")
+        self.swiglu = Flux2SwiGLU(dtype=self.dtype_policy, name="swiglu")
         self.output_layer = layers.Dense(
-            hidden_size, use_bias=False, name="output_layer"
+            hidden_size,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="output_layer",
         )
 
     def build(self, input_shape):
@@ -132,10 +138,16 @@ class Flux2MLPEmbedder(layers.Layer):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.input_layer = layers.Dense(
-            hidden_dim, use_bias=False, name="input_layer"
+            hidden_dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="input_layer",
         )
         self.output_layer = layers.Dense(
-            hidden_dim, use_bias=False, name="output_layer"
+            hidden_dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="output_layer",
         )
 
     def build(self, input_shape):
@@ -180,7 +192,10 @@ class Flux2Modulation(layers.Layer):
         self.double = double
         self.multiplier = 6 if double else 3
         self.linear_projection = layers.Dense(
-            self.multiplier * dim, use_bias=False, name="linear_projection"
+            self.multiplier * dim,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="linear_projection",
         )
 
     def build(self, input_shape):
@@ -221,44 +236,65 @@ class Flux2DoubleStreamBlock(layers.Layer):
         self.mlp_ratio = mlp_ratio
         self.mlp_hidden_dim = int(hidden_size * mlp_ratio)
         head_dim = hidden_size // num_heads
+        dtype = self.dtype_policy
 
         # Image stream.
         self.image_norm1 = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="image_norm1"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=dtype,
+            name="image_norm1",
         )
         self.image_qkv = layers.Dense(
-            3 * hidden_size, use_bias=False, name="image_qkv"
+            3 * hidden_size, use_bias=False, dtype=dtype, name="image_qkv"
         )
-        self.image_attn_norm = QKNorm(head_dim, name="image_attn_norm")
+        self.image_attn_norm = QKNorm(
+            head_dim, dtype=dtype, name="image_attn_norm"
+        )
         self.image_attn_proj = layers.Dense(
-            hidden_size, use_bias=False, name="image_attn_proj"
+            hidden_size, use_bias=False, dtype=dtype, name="image_attn_proj"
         )
         self.image_norm2 = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="image_norm2"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=dtype,
+            name="image_norm2",
         )
         self.image_mlp = Flux2FeedForward(
-            hidden_size, self.mlp_hidden_dim, name="image_mlp"
+            hidden_size, self.mlp_hidden_dim, dtype=dtype, name="image_mlp"
         )
 
         # Text stream.
         self.text_norm1 = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="text_norm1"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=dtype,
+            name="text_norm1",
         )
         self.text_qkv = layers.Dense(
-            3 * hidden_size, use_bias=False, name="text_qkv"
+            3 * hidden_size, use_bias=False, dtype=dtype, name="text_qkv"
         )
-        self.text_attn_norm = QKNorm(head_dim, name="text_attn_norm")
+        self.text_attn_norm = QKNorm(
+            head_dim, dtype=dtype, name="text_attn_norm"
+        )
         self.text_attn_proj = layers.Dense(
-            hidden_size, use_bias=False, name="text_attn_proj"
+            hidden_size, use_bias=False, dtype=dtype, name="text_attn_proj"
         )
         self.text_norm2 = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="text_norm2"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=dtype,
+            name="text_norm2",
         )
         self.text_mlp = Flux2FeedForward(
-            hidden_size, self.mlp_hidden_dim, name="text_mlp"
+            hidden_size, self.mlp_hidden_dim, dtype=dtype, name="text_mlp"
         )
 
-        self.attention = FluxRoPEAttention(name="attention")
+        self.attention = FluxRoPEAttention(dtype=dtype, name="attention")
 
     def build(
         self,
@@ -393,21 +429,29 @@ class Flux2SingleStreamBlock(layers.Layer):
         self.mlp_ratio = mlp_ratio
         self.mlp_hidden_dim = int(hidden_size * mlp_ratio)
         head_dim = hidden_size // num_heads
+        dtype = self.dtype_policy
 
         self.pre_norm = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="pre_norm"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=dtype,
+            name="pre_norm",
         )
         # [q, k, v, mlp_gate, mlp_up].
         self.linear1 = layers.Dense(
             3 * hidden_size + 2 * self.mlp_hidden_dim,
             use_bias=False,
+            dtype=dtype,
             name="linear1",
         )
         # [attention, mlp] -> hidden.
-        self.linear2 = layers.Dense(hidden_size, use_bias=False, name="linear2")
-        self.norm = QKNorm(head_dim, name="norm")
-        self.mlp_activation = Flux2SwiGLU(name="mlp_activation")
-        self.attention = FluxRoPEAttention(name="attention")
+        self.linear2 = layers.Dense(
+            hidden_size, use_bias=False, dtype=dtype, name="linear2"
+        )
+        self.norm = QKNorm(head_dim, dtype=dtype, name="norm")
+        self.mlp_activation = Flux2SwiGLU(dtype=dtype, name="mlp_activation")
+        self.attention = FluxRoPEAttention(dtype=dtype, name="attention")
 
     def build(self, x_shape, modulation_shape, positional_encoding_shape):
         head_dim = self.hidden_size // self.num_heads
@@ -472,13 +516,23 @@ class Flux2LastLayer(layers.Layer):
         self.output_channels = output_channels
 
         self.norm_final = layers.LayerNormalization(
-            epsilon=1e-6, scale=False, center=False, name="norm_final"
+            epsilon=1e-6,
+            scale=False,
+            center=False,
+            dtype=self.dtype_policy,
+            name="norm_final",
         )
         self.adaLN_modulation = layers.Dense(
-            2 * hidden_size, use_bias=False, name="adaLN_modulation"
+            2 * hidden_size,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="adaLN_modulation",
         )
         self.linear = layers.Dense(
-            output_channels, use_bias=False, name="linear"
+            output_channels,
+            use_bias=False,
+            dtype=self.dtype_policy,
+            name="linear",
         )
 
     def build(self, x_shape, modulation_encoding_shape):

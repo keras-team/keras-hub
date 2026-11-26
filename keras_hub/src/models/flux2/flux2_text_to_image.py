@@ -20,23 +20,6 @@ from keras_hub.src.models.stable_diffusion_3.stable_diffusion_3_backbone import 
 from keras_hub.src.models.text_to_image import TextToImage
 
 
-def _match_qk_norm_epsilon(text_encoder):
-    """Give the Qwen3 query/key RMSNorms the checkpoint's `rms_norm_eps`.
-
-    `Qwen3TransformerDecoder` does not forward its `layer_norm_epsilon` to
-    `Qwen3Attention`, so the query/key RMSNorms keep the attention layer's
-    default of `1e-5` instead of the `rms_norm_eps` (`1e-6`) used by
-    `Qwen3ForCausalLM`. Real tokens barely notice, but the padded positions
-    drift away from the reference, and FLUX.2 feeds every text position,
-    padding included, to the transformer. Aligning the two epsilons makes
-    `encode_text_step` match the reference at every position.
-    """
-    for layer in text_encoder.transformer_layers:
-        attention = layer._self_attention_layer
-        attention._query_dense_layer_norm.epsilon = layer.layer_norm_epsilon
-        attention._key_dense_layer_norm.epsilon = layer.layer_norm_epsilon
-
-
 class Flux2PositionIds(layers.Layer):
     """Builds FLUX.2's 4-axis `(t, h, w, l)` RoPE positions for text-to-image.
 
@@ -199,7 +182,6 @@ class Flux2TextToImage(TextToImage):
         self._latent_shape = (latent_height, latent_width, latent_channels)
         self.text_encoder_layers = text_encoder_layers
         self.is_distilled = bool(is_distilled)
-        _match_qk_norm_epsilon(text_encoder)
 
         # === Layers ===
         self.backbone = backbone
@@ -431,6 +413,8 @@ class Flux2TextToImage(TextToImage):
         Args:
             inputs: A string, a list of strings, or (for non-distilled
                 models) a dict with `"prompts"` and `"negative_prompts"`.
+                Step-distilled models do not use classifier-free guidance,
+                so passing `"negative_prompts"` to one is an error.
             num_steps: int. Defaults to `4` for step-distilled models and
                 `50` otherwise.
             guidance_scale: float. The classifier-free guidance scale.
@@ -438,6 +422,19 @@ class Flux2TextToImage(TextToImage):
                 non-distilled models.
             seed: optional int. Used as a random seed.
         """
+        # A dict of prompts, or the element structure of a `tf.data.Dataset`.
+        structure = getattr(inputs, "element_spec", inputs)
+        if (
+            self.is_distilled
+            and isinstance(structure, dict)
+            and "negative_prompts" in structure
+        ):
+            raise ValueError(
+                "`negative_prompts` are not supported by step-distilled "
+                "FLUX.2 models (`is_distilled=True`), which do not use "
+                "classifier-free guidance. Remove `negative_prompts` from "
+                "`inputs`."
+            )
         if num_steps is None:
             num_steps = 4 if self.is_distilled else 50
         if self.is_distilled:

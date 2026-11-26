@@ -22,7 +22,6 @@ from keras_hub.src.utils.diffusers.convert_flux2_test import (
 from keras_hub.src.utils.diffusers.preset_loader import (
     DiffusersSafetensorLoader,
 )
-from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
 
 FLUX_TRANSFORMER_CONFIG = {
     "_class_name": "FluxTransformer2DModel",
@@ -206,21 +205,6 @@ class DiffusersSafetensorLoaderTest(TestCase):
     def test_missing_weights_raise(self):
         with self.assertRaisesRegex(FileNotFoundError, "`vae/`"):
             DiffusersSafetensorLoader(self.preset_dir, "vae")
-
-    def test_sets_all_safetensor_loader_attributes(self):
-        # `SafetensorLoader.__init__` is skipped, so every attribute it sets
-        # (and its methods read) must be set here too.
-        root_preset_dir = os.path.join(self.get_temp_dir(), "transformers")
-        os.makedirs(root_preset_dir)
-        save_file(
-            {"proj_out.weight": self.kernel},
-            os.path.join(root_preset_dir, "model.safetensors"),
-        )
-        with SafetensorLoader(root_preset_dir) as reference:
-            with DiffusersSafetensorLoader(
-                self.preset_dir, "transformer"
-            ) as loader:
-                self.assertEmpty(set(vars(reference)) - set(vars(loader)))
 
 
 class DiffusersPresetLoaderTest(TestCase):

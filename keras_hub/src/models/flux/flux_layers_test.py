@@ -209,11 +209,21 @@ class DoubleStreamBlockTest(TestCase):
 
         self.assertNotAllClose(before, after)
 
-    def _reference_forward(self, block, image, text, modulation, pos, order):
+    def _reference_forward(
+        self,
+        block,
+        image,
+        text,
+        modulation,
+        pos,
+        order,
+        activation=gelu_approximate,
+    ):
         """Recompute the block with an explicit q/k/v concatenation order.
 
         `order` is "text_first" (correct, matches the reference
-        implementation) or "image_first" (the regression).
+        implementation) or "image_first" (the regression). `activation` is
+        the activation of the two MLPs.
         """
         img_mod1, img_mod2 = block.image_mod(modulation)
         txt_mod1, txt_mod2 = block.text_mod(modulation)
@@ -252,14 +262,57 @@ class DoubleStreamBlockTest(TestCase):
         image = image + img_mod1["gate"] * block.image_attn_proj(img_attn)
         text = text + txt_mod1["gate"] * block.text_attn_proj(txt_attn)
 
-        image = image + img_mod2["gate"] * block.image_mlp(
-            block.image_norm2(image) * (1 + img_mod2["scale"])
-            + img_mod2["shift"]
+        image = image + img_mod2["gate"] * block.image_mlp_output(
+            activation(
+                block.image_mlp_input(
+                    block.image_norm2(image) * (1 + img_mod2["scale"])
+                    + img_mod2["shift"]
+                )
+            )
         )
-        text = text + txt_mod2["gate"] * block.text_mlp(
-            block.text_norm2(text) * (1 + txt_mod2["scale"]) + txt_mod2["shift"]
+        text = text + txt_mod2["gate"] * block.text_mlp_output(
+            activation(
+                block.text_mlp_input(
+                    block.text_norm2(text) * (1 + txt_mod2["scale"])
+                    + txt_mod2["shift"]
+                )
+            )
         )
         return image, text
+
+    def test_mlps_use_approximate_gelu(self):
+        """The MLPs use `nn.GELU(approximate="tanh")`, not the exact GELU.
+
+        See `ActivationTest`. The block is recomputed with each formulation
+        and must match the tanh approximation only.
+        """
+        block = self._build_block()
+        image, text, modulation, pos = _block_inputs(seed=4)
+
+        actual_image, actual_text = block(
+            image=image,
+            text=text,
+            modulation_encoding=modulation,
+            positional_encoding=pos,
+        )
+
+        expected_image, expected_text = self._reference_forward(
+            block, image, text, modulation, pos, order="text_first"
+        )
+        self.assertAllClose(actual_image, expected_image, atol=1e-5)
+        self.assertAllClose(actual_text, expected_text, atol=1e-5)
+
+        exact_image, exact_text = self._reference_forward(
+            block,
+            image,
+            text,
+            modulation,
+            pos,
+            order="text_first",
+            activation=lambda x: keras.activations.gelu(x, approximate=False),
+        )
+        self.assertNotAllClose(actual_image, exact_image, atol=1e-5)
+        self.assertNotAllClose(actual_text, exact_text, atol=1e-5)
 
     def test_attention_sequence_is_text_first(self):
         """`FluxBackbone` builds RoPE ids as `concat([text_ids, image_ids])`.
@@ -416,11 +469,7 @@ class ConfigRoundTripTest(TestCase):
             TimestepEmbedding,
             {"dim": 8, "max_period": 500, "time_factor": 10.0},
         ),
-        (
-            "flux_rope_attention",
-            FluxRoPEAttention,
-            {"dropout_p": 0.1, "is_causal": True},
-        ),
+        ("flux_rope_attention", FluxRoPEAttention, {}),
         ("embed_nd", EmbedND, {"theta": 500, "axes_dim": AXES_DIM}),
         ("mlp_embedder", MLPEmbedder, {"hidden_dim": HIDDEN_SIZE}),
         ("qk_norm", QKNorm, {"input_dim": HEAD_DIM}),
@@ -467,10 +516,51 @@ class ConfigRoundTripTest(TestCase):
 
 class DTypeTest(TestCase):
     def test_timestep_embedding_casts_low_precision_input(self):
-        """`t` arrives as bfloat16 under a mixed policy; output must be f32."""
+        """A float32 layer embeds a bfloat16 `t` in float32."""
         t = ops.cast(ops.convert_to_tensor([0.5, 0.75]), "bfloat16")
         out = TimestepEmbedding(dim=8)(t)
         self.assertEqual(keras.backend.standardize_dtype(out.dtype), "float32")
+
+    def test_timestep_embedding_returns_compute_dtype(self):
+        """The sinusoid is computed in float32, then cast to the policy.
+
+        `t` must not be autocast first: bfloat16 rounds 0.7391 to 0.73828,
+        which moves the scaled timestep by almost a full unit.
+        """
+        t = np.array([0.7391, 0.25], dtype="float32")
+        expected = TimestepEmbedding(dim=8)(t)
+        for policy in ("mixed_float16", "mixed_bfloat16", "bfloat16"):
+            out = TimestepEmbedding(dim=8, dtype=policy)(t)
+            self.assertEqual(
+                keras.backend.standardize_dtype(out.dtype),
+                keras.dtype_policies.get(policy).compute_dtype,
+            )
+            self.assertAllClose(
+                ops.cast(out, "float32"), expected, atol=1e-2, rtol=1e-2
+            )
+
+    def test_embed_nd_keeps_positions_under_low_precision(self):
+        """Positions are not autocast: bfloat16 cannot represent 257."""
+        ids = np.array(
+            [[[0, 0, 257], [0, 3, 301], [0, 7, 511]]], dtype="float32"
+        )
+        expected = EmbedND(theta=10_000, axes_dim=AXES_DIM)(ids)
+        out = EmbedND(theta=10_000, axes_dim=AXES_DIM, dtype="bfloat16")(ids)
+        self.assertEqual(keras.backend.standardize_dtype(out.dtype), "float32")
+        self.assertAllClose(out, expected, atol=1e-6)
+
+    def test_qk_norm_keeps_compute_dtype(self):
+        """`q` and `k` stay in the compute dtype, like `v`."""
+        q = ops.ones((BATCH, NUM_HEADS, 4, HEAD_DIM), dtype="bfloat16")
+        layer = QKNorm(HEAD_DIM, dtype="bfloat16")
+        for out in layer(q, q):
+            self.assertEqual(
+                keras.backend.standardize_dtype(out.dtype), "bfloat16"
+            )
+        for norm in (layer.query_norm, layer.key_norm):
+            self.assertEqual(
+                keras.backend.standardize_dtype(norm.scale.dtype), "bfloat16"
+            )
 
     def test_apply_rope_keeps_input_dtype(self):
         """The reference rotates in float32, then `.type_as(xq)`.
@@ -511,22 +601,12 @@ class ActivationTest(TestCase):
     formulation -- a genuinely different function. The discrepancy is small
     per-layer, which is exactly why it survived review: it does not change
     shapes and looks plausible in isolation.
+
+    `DoubleStreamBlockTest.test_mlps_use_approximate_gelu` checks the block.
     """
 
-    def test_double_block_mlps_use_approximate_gelu(self):
-        block = DoubleStreamBlock(
-            hidden_size=HIDDEN_SIZE, num_heads=NUM_HEADS, mlp_ratio=2.0
-        )
-        for mlp in (block.image_mlp, block.text_mlp):
-            self.assertIs(mlp.layers[1].activation, gelu_approximate)
-        x = np.linspace(-4.0, 4.0, 128).astype("float32")
-        self.assertAllClose(
-            block.image_mlp.layers[1](x),
-            keras.activations.gelu(x, approximate=True),
-        )
-
     def test_approximate_and_exact_gelu_actually_differ(self):
-        # Guards the test above from passing vacuously: if the two
+        # Guards the block test from passing vacuously: if the two
         # formulations were interchangeable there would be nothing to fix.
         x = np.linspace(-4.0, 4.0, 128).astype("float32")
         gap = np.abs(

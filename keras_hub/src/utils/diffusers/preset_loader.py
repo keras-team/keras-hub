@@ -1,19 +1,11 @@
 """Convert diffusers pipelines to KerasHub."""
 
-import contextlib
-
 from keras_hub.src.utils.diffusers import convert_flux
 from keras_hub.src.utils.diffusers import convert_flux2
 from keras_hub.src.utils.preset_utils import PresetLoader
 from keras_hub.src.utils.preset_utils import check_file_exists
-from keras_hub.src.utils.preset_utils import jax_memory_cleanup
 from keras_hub.src.utils.preset_utils import load_json
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
-
-try:
-    import safetensors
-except ImportError:
-    safetensors = None
 
 
 class DiffusersSafetensorLoader(SafetensorLoader):
@@ -36,35 +28,22 @@ class DiffusersSafetensorLoader(SafetensorLoader):
     """
 
     def __init__(self, preset, subfolder):
-        # `SafetensorLoader.__init__` is not called on purpose: it looks for a
-        # `model.safetensors.index.json` at the root of `preset`.
-        contextlib.ExitStack.__init__(self)
-        if safetensors is None:
-            raise ImportError(
-                "Converting from the diffusers model format requires the "
-                "safetensors package. Please install with "
-                "`pip install safetensors`."
-            )
-        self.preset = preset
-        self.prefix = None
-        self.safetensor_config = None
-        self.fname = None
-        self.safetensor_files = {}
-        self.safetensor_keys = {}
-        self.safetensor_aliases = {}
         for name in ("diffusion_pytorch_model", "model"):
-            index_file = f"{subfolder}/{name}.safetensors.index.json"
-            if check_file_exists(preset, index_file):
-                index = load_json(preset, index_file)
-                weight_map = {
-                    key: f"{subfolder}/{fname}"
-                    for key, fname in index["weight_map"].items()
+            config_file = f"{subfolder}/{name}.safetensors.index.json"
+            if check_file_exists(preset, config_file):
+                super().__init__(preset, config_file=config_file)
+                # The index names its shards relative to its own folder.
+                weight_map = self.safetensor_config["weight_map"]
+                self.safetensor_config["weight_map"] = {
+                    key: f"{subfolder}/{shard}"
+                    for key, shard in weight_map.items()
                 }
-                self.safetensor_config = {**index, "weight_map": weight_map}
                 return
             fname = f"{subfolder}/{name}.safetensors"
             if check_file_exists(preset, fname):
-                self.fname = fname
+                # A single file: there is no index to look for, and the one
+                # at the root of `preset` must not be used.
+                super().__init__(preset, fname=fname, config_file=None)
                 return
         raise FileNotFoundError(
             f"`{subfolder}/` in preset `{preset}` has no safetensors weights."
@@ -180,7 +159,6 @@ class DiffusersPresetLoader(PresetLoader):
             convert_weights: Called as `convert_weights(model, loader)`, with
                 a `DiffusersSafetensorLoader` over the folder.
         """
-        jax_memory_cleanup(model)
         with DiffusersSafetensorLoader(self.preset, name) as loader:
             convert_weights(model, loader)
 

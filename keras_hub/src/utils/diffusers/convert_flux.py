@@ -171,7 +171,7 @@ def convert_backbone_config(hf_config):
         "guidance_embed": hf_config["guidance_embeds"],
         # Sequence axes stay dynamic so a preset built from this config can
         # run at any resolution and prompt length.
-        "image_shape": (None, input_channels),
+        "latent_shape": (None, input_channels),
         "text_shape": (None, hf_config["joint_attention_dim"]),
         "image_ids_shape": (None, 3),
         "text_ids_shape": (None, 3),
@@ -210,13 +210,11 @@ def _port_double_block(loader, block, prefix):
     )
     port_dense(loader, block.image_attn_proj, f"{attn}.to_out.0")
     port_dense(loader, block.text_attn_proj, f"{attn}.to_add_out")
-    # `image_mlp` and `text_mlp` are `Sequential(Dense, GELU, Dense)`.
-    port_dense(loader, block.image_mlp.layers[0], f"{prefix}.ff.net.0.proj")
-    port_dense(loader, block.image_mlp.layers[2], f"{prefix}.ff.net.2")
-    port_dense(
-        loader, block.text_mlp.layers[0], f"{prefix}.ff_context.net.0.proj"
-    )
-    port_dense(loader, block.text_mlp.layers[2], f"{prefix}.ff_context.net.2")
+    # Each MLP is `Dense -> GELU -> Dense`.
+    port_dense(loader, block.image_mlp_input, f"{prefix}.ff.net.0.proj")
+    port_dense(loader, block.image_mlp_output, f"{prefix}.ff.net.2")
+    port_dense(loader, block.text_mlp_input, f"{prefix}.ff_context.net.0.proj")
+    port_dense(loader, block.text_mlp_output, f"{prefix}.ff_context.net.2")
 
 
 def _port_single_block(loader, block, prefix):
@@ -272,11 +270,8 @@ def convert_weights(backbone, loader):
         _port_double_block(loader, block, f"transformer_blocks.{i}")
     for i, block in enumerate(backbone.single_blocks):
         _port_single_block(loader, block, f"single_transformer_blocks.{i}")
-    # `adaLN_modulation` is `Sequential(SiLU, Dense)`.
     port_norm_out(
-        loader,
-        backbone.final_layer.adaLN_modulation.layers[1],
-        "norm_out.linear",
+        loader, backbone.final_layer.adaLN_modulation, "norm_out.linear"
     )
     port_dense(loader, backbone.final_layer.linear, "proj_out")
     loader.check_complete(backbone)

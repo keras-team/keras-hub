@@ -19,10 +19,15 @@ class TimestepEmbedding(keras.layers.Layer):
             element. These values may be fractional.
 
     Returns:
-        A tensor of shape `(N, dim)` representing the positional embeddings.
+        A tensor of shape `(N, dim)` representing the positional embeddings,
+        in the compute dtype of the layer.
     """
 
     def __init__(self, dim=256, max_period=10000, time_factor=1000.0, **kwargs):
+        # `t` must reach `call` in its own dtype. Autocasting it to a
+        # low-precision compute dtype (e.g. bfloat16) would round the
+        # timestep before it is scaled by `time_factor`.
+        kwargs["autocast"] = False
         super().__init__(**kwargs)
         self.dim = dim
         self.max_period = max_period
@@ -34,14 +39,14 @@ class TimestepEmbedding(keras.layers.Layer):
         # `floatx()` rather than a hardcoded "float32": under a bfloat16
         # policy floatx is still float32, but this avoids silently
         # downcasting when the model is genuinely run in float64.
-        compute_dtype = keras.backend.floatx()
-        t = ops.cast(t, compute_dtype) * self.time_factor
+        float_dtype = keras.backend.floatx()
+        t = ops.cast(t, float_dtype) * self.time_factor
         half_dim = self.dim // 2
 
         freqs = ops.exp(
-            -ops.log(ops.cast(self.max_period, compute_dtype))
-            * ops.arange(half_dim, dtype=compute_dtype)
-            / ops.cast(half_dim, compute_dtype)
+            -ops.log(ops.cast(self.max_period, float_dtype))
+            * ops.arange(half_dim, dtype=float_dtype)
+            / ops.cast(half_dim, float_dtype)
         )
 
         args = t[..., None] * freqs[None, ...]
@@ -56,7 +61,8 @@ class TimestepEmbedding(keras.layers.Layer):
                 [embedding, ops.zeros_like(embedding[..., :1])], axis=-1
             )
 
-        return embedding
+        # Only the result is cast to the compute dtype of the layer.
+        return ops.cast(embedding, self.compute_dtype)
 
     def get_config(self):
         config = super().get_config()
@@ -114,6 +120,10 @@ def apply_rope(xq, xk, freqs_cis):
     # Rotate in float32 and cast back afterwards, as the reference does
     # (`xq.float()` ... `.type_as(xq)`). Otherwise the float32 `freqs_cis`
     # silently promotes low-precision `q`/`k` to float32.
+    # A layer with a low-precision dtype policy autocasts `freqs_cis` to its
+    # compute dtype, and not every backend promotes mixed dtypes, so it is
+    # cast to float32 as well.
+    freqs_cis = ops.cast(freqs_cis, "float32")
     xq_ = ops.reshape(ops.cast(xq, "float32"), (*ops.shape(xq)[:-1], -1, 2))
     xk_ = ops.reshape(ops.cast(xk, "float32"), (*ops.shape(xk)[:-1], -1, 2))
 
@@ -144,9 +154,6 @@ class FluxRoPEAttention(keras.layers.Layer):
     """Computes the attention mechanism with RoPE.
 
     Args:
-        dropout_p: float. Dropout probability. Defaults to `0.0`.
-        is_causal: bool. If True, applies causal masking. Defaults to
-            `False`.
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `trainable`, `dtype` etc.
 
@@ -160,43 +167,18 @@ class FluxRoPEAttention(keras.layers.Layer):
         KerasTensor: The resulting tensor from the attention mechanism.
     """
 
-    def __init__(self, dropout_p=0.0, is_causal=False, **kwargs):
-        super().__init__(**kwargs)
-        self.dropout_p = dropout_p
-        self.is_causal = is_causal
-
     def call(self, q, k, v, positional_encoding):
         # Apply the RoPE transformation
         q, k = apply_rope(q, k, positional_encoding)
 
         # Scaled dot-product attention
-        x = scaled_dot_product_attention(
-            q, k, v, dropout_p=self.dropout_p, is_causal=self.is_causal
-        )
+        x = scaled_dot_product_attention(q, k, v)
         x = ops.transpose(x, (0, 2, 1, 3))
         b, s, h, d = ops.shape(x)
         return ops.reshape(x, (b, s, h * d))
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "dropout_p": self.dropout_p,
-                "is_causal": self.is_causal,
-            }
-        )
-        return config
 
-
-def scaled_dot_product_attention(
-    query,
-    key,
-    value,
-    attn_mask=None,
-    dropout_p=0.0,
-    is_causal=False,
-    scale=None,
-):
+def scaled_dot_product_attention(query, key, value):
     """
     Computes the scaled dot-product attention.
 
@@ -204,51 +186,21 @@ def scaled_dot_product_attention(
         query: KerasTensor. Query tensor of shape (..., L, D).
         key: KerasTensor. Key tensor of shape (..., S, D).
         value: KerasTensor. Value tensor of shape (..., S, D).
-        attn_mask: KerasTensor, optional. Attention mask tensor. Defaults to
-            None.
-        dropout_p: float, optional. Dropout probability. Defaults to 0.0.
-        is_causal: bool, optional. If True, applies causal masking. Defaults to
-            False.
-        scale: float, optional. Scale factor for attention. Defaults to None.
 
     Returns:
         KerasTensor: The output tensor from the attention mechanism.
     """
     q_shape = query.shape
-    k_shape = key.shape
 
-    L = q_shape[-2] if q_shape[-2] is not None else ops.shape(query)[-2]
-    S = k_shape[-2] if k_shape[-2] is not None else ops.shape(key)[-2]
     D = q_shape[-1] if q_shape[-1] is not None else ops.shape(query)[-1]
 
-    scale_factor = (
-        1 / ops.sqrt(ops.cast(D, dtype=query.dtype)) if scale is None else scale
-    )
-    attn_bias = ops.zeros((L, S), dtype=query.dtype)
-
-    if is_causal:
-        assert attn_mask is None
-        temp_mask = ops.ones((L, S), dtype=ops.bool)
-        temp_mask = ops.tril(temp_mask, diagonal=0)
-        attn_bias = ops.where(temp_mask, attn_bias, float("-inf"))
-
-    if attn_mask is not None:
-        if ops.shape(attn_mask)[-1] == 1:
-            attn_bias += attn_mask
-        else:
-            attn_bias = ops.where(attn_mask, attn_bias, float("-inf"))
+    scale_factor = 1 / ops.sqrt(ops.cast(D, dtype=query.dtype))
 
     # Compute attention weights
     attn_weight = (
         ops.matmul(query, ops.transpose(key, axes=[0, 1, 3, 2])) * scale_factor
     )
-    attn_weight += attn_bias
     attn_weight = keras.activations.softmax(attn_weight, axis=-1)
-
-    if dropout_p > 0.0:
-        attn_weight = keras.layers.Dropout(dropout_p)(
-            attn_weight, training=True
-        )
 
     return ops.matmul(attn_weight, value)
 

@@ -37,9 +37,21 @@ class Flux2BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
             expected_output_shape=(2, 12, 16),
-            run_mixed_precision_check=False,
             run_quantization_check=False,
         )
+
+    def test_latent_shape_defaults_to_input_channels(self):
+        # Not FLUX.2's 128 channels: the default must follow the model.
+        init_kwargs = dict(self.init_kwargs)
+        del init_kwargs["latent_shape"]
+        backbone = Flux2Backbone(**init_kwargs)
+        self.assertEqual(tuple(backbone.latent_shape), (None, 16))
+        output = backbone(self.input_data)
+        self.assertEqual(tuple(ops.shape(output)), (2, 12, 16))
+
+    def test_rejects_latent_shape_channel_mismatch(self):
+        with self.assertRaisesRegex(ValueError, "latent_shape"):
+            Flux2Backbone(**{**self.init_kwargs, "latent_shape": (12, 128)})
 
     def test_guidance_embed(self):
         backbone = Flux2Backbone(**{**self.init_kwargs, "guidance_embed": True})
