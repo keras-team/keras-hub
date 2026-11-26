@@ -234,7 +234,16 @@ class UnlimitedOCRBackboneTest(TestCase):
         init_kwargs = {**self.init_kwargs, "vision_encoder": vision_encoder}
         backbone = UnlimitedOCRBackbone(**init_kwargs)
         self.assertEqual(backbone.dtype_policy.name, "float32")
-        self.assertEqual(backbone.vision_encoder.dtype_policy.name, "float32")
+        self._assert_encoder_dtype(backbone.vision_encoder, "float32")
+
+    def _assert_encoder_dtype(self, encoder, dtype):
+        self.assertEqual(encoder.dtype_policy.name, dtype)
+        for sublayer in encoder._flatten_layers():
+            # `Sequential` makes an input layer, which keeps float32.
+            if isinstance(sublayer, keras.layers.InputLayer):
+                continue
+            self.assertEqual(sublayer.compute_dtype, dtype, sublayer.name)
+            self.assertEqual(sublayer.variable_dtype, dtype, sublayer.name)
 
     @pytest.mark.large
     def test_from_preset_round_trip(self):
@@ -260,9 +269,9 @@ class UnlimitedOCRBackboneTest(TestCase):
         UnlimitedOCRBackbone(**init_kwargs).save_to_preset(preset_dir)
         restored = UnlimitedOCRBackbone.from_preset(preset_dir, dtype="float32")
         self.assertEqual(restored.dtype_policy.name, "float32")
-        self.assertEqual(restored.vision_encoder.dtype_policy.name, "float32")
+        self._assert_encoder_dtype(restored.vision_encoder, "float32")
+        # `from_preset()` does not keep the saved dtype. It uses the global
+        # policy, as for the other KerasHub models.
         restored = UnlimitedOCRBackbone.from_preset(preset_dir)
-        self.assertEqual(
-            restored.vision_encoder.dtype_policy.name,
-            restored.dtype_policy.name,
-        )
+        self.assertEqual(restored.dtype_policy.name, "float32")
+        self._assert_encoder_dtype(restored.vision_encoder, "float32")

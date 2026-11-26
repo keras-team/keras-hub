@@ -41,6 +41,7 @@ class UnlimitedOCRCausalLMTest(TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
+        vocab += ["<|User|>", "<|Assistant|>", "<|EOT|>"]
         vocab = sorted(set(vocab))
         vocab = dict([(token, i) for i, token in enumerate(vocab)])
         tokenizer = UnlimitedOCRTokenizer(vocabulary=vocab, merges=merges)
@@ -253,6 +254,34 @@ class UnlimitedOCRCausalLMTest(TestCase):
             self.assertAllEqual(
                 predictions[row, positions], token_ids[row, positions + 1]
             )
+
+    def test_ragged_contrastive_generate_matches_single_row(self):
+        # The contrastive sampler keeps the hidden states of all positions.
+        # The decode loop feeds the image placeholders of the long row as
+        # plain text. The history must keep the prefill hidden states.
+        causal_lm = UnlimitedOCRCausalLM(**self.init_kwargs)
+        causal_lm.compile(sampler="contrastive")
+        image = np.random.randint(0, 256, (30, 30, 3)).astype("float32")
+        prompts = ["airplane", "airplane at <image>airport"]
+        ragged = self.preprocessor.generate_preprocess(
+            {"prompts": prompts, "images": [image]}
+        )
+        single = self.preprocessor.generate_preprocess(
+            {"prompts": prompts[1:], "images": [image]}
+        )
+        causal_lm.preprocessor = None
+        for seed in range(3):
+            with self.subTest(seed=seed):
+                rng = np.random.RandomState(seed)
+                for weight in causal_lm.weights:
+                    values = rng.normal(scale=0.5, size=weight.shape)
+                    weight.assign(values.astype("float32"))
+                ragged_ids = causal_lm.generate(ragged, stop_token_ids=None)
+                single_ids = causal_lm.generate(single, stop_token_ids=None)
+                self.assertAllEqual(
+                    ops.convert_to_numpy(ragged_ids["token_ids"])[1],
+                    ops.convert_to_numpy(single_ids["token_ids"])[0],
+                )
 
     def test_ragged_generate_when_the_longer_row_ends_in_an_image(self):
         # The long row ends in an image placeholder. Its first generated

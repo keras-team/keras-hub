@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -5,6 +6,7 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
     UnlimitedOCRVisionEncoder,
 )
 from keras_hub.src.tests.test_case import TestCase
+from keras_hub.src.utils.tensor_utils import tf
 
 
 class UnlimitedOCRVisionEncoderTest(TestCase):
@@ -75,9 +77,66 @@ class UnlimitedOCRVisionEncoderTest(TestCase):
         self.assertAllClose(
             output[..., 16:], sam.reshape(1, 4, 16), atol=1e-5, rtol=1e-5
         )
+        x = encoder.clip_embedding(ops.convert_to_tensor(sam))
+        x = encoder.clip_pre_layer_norm(x)
+        for layer in encoder.clip_layers:
+            x = layer(x)
+        # The CLIP class token does not reach the output.
+        clip = ops.convert_to_numpy(x)[:, 1:]
+        self.assertAllClose(output[..., :16], clip, atol=1e-5, rtol=1e-5)
+
+    def test_predict_on_a_fresh_encoder(self):
+        encoder = UnlimitedOCRVisionEncoder(**self.init_kwargs)
+        output = encoder.predict(np.zeros((2, 64, 64, 3), "float32"), verbose=0)
+        self.assertEqual(output.shape, (2, 4, 32))
 
     def test_hidden_dims_must_match(self):
         kwargs = dict(self.init_kwargs)
         kwargs["clip_hidden_dim"] = 8
         with self.assertRaisesRegex(ValueError, "clip_hidden_dim"):
             UnlimitedOCRVisionEncoder(**kwargs)
+
+    def test_predict_at_two_image_sizes(self):
+        # `predict` retraces at the second size with unknown height and width.
+        first = np.random.uniform(size=(2, 64, 64, 3)).astype("float32")
+        second = np.random.uniform(size=(2, 96, 96, 3)).astype("float32")
+        first_output = self.encoder.predict(first, verbose=0)
+        second_output = self.encoder.predict(second, verbose=0)
+        self.assertEqual(first_output.shape, (2, 4, 32))
+        self.assertEqual(second_output.shape, (2, 9, 32))
+        self.assertAllClose(
+            second_output,
+            ops.convert_to_numpy(self.encoder(second)),
+            atol=1e-4,
+            rtol=1e-4,
+        )
+
+    def test_xla_compiles_at_two_image_sizes(self):
+        # One XLA function with unknown height and width serves both sizes.
+        if keras.config.backend() != "tensorflow":
+            self.skipTest("Only TensorFlow compiles with `tf.function`.")
+        compiled = tf.function(
+            self.encoder,
+            jit_compile=True,
+            input_signature=[tf.TensorSpec([None, None, None, 3], tf.float32)],
+        )
+        for size in (64, 96):
+            images = np.random.uniform(size=(2, size, size, 3)).astype(
+                "float32"
+            )
+            self.assertAllClose(
+                compiled(images),
+                self.encoder(images),
+                atol=1e-4,
+                rtol=1e-4,
+            )
+
+    def test_channels_first_raises(self):
+        original = keras.config.image_data_format()
+        keras.config.set_image_data_format("channels_first")
+        try:
+            with self.assertRaisesRegex(ValueError, "channels_last"):
+                UnlimitedOCRVisionEncoder(**self.init_kwargs)
+        finally:
+            keras.config.set_image_data_format(original)
+        UnlimitedOCRVisionEncoder(**self.init_kwargs)

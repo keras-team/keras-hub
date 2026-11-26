@@ -2,6 +2,7 @@ import keras
 from keras import ops
 
 from keras_hub.src.utils.keras_utils import fused_attention_op_available
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 class MLP(keras.layers.Layer):
@@ -102,9 +103,39 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
             tensor: Extracted positional embeddings according to relative
                 positions.
         """
-        max_rel_dist = 2 * max(query_size, key_size) - 1
+        static = isinstance(query_size, int) and isinstance(key_size, int)
+        if static:
+            max_rel_dist = 2 * max(query_size, key_size) - 1
+            query_scale = max(key_size / query_size, 1.0)
+            key_scale = max(query_size / key_size, 1.0)
+        else:
+            # A size is a tensor when the image size is dynamic.
+            query_float = ops.cast(query_size, self.compute_dtype)
+            key_float = ops.cast(key_size, self.compute_dtype)
+            max_rel_dist = 2 * ops.maximum(query_size, key_size) - 1
+            query_scale = ops.maximum(key_float / query_float, 1.0)
+            key_scale = ops.maximum(query_float / key_float, 1.0)
         rel_pos_resized = rel_pos
-        if ops.shape(rel_pos)[0] != max_rel_dist:
+        if not static:
+            # `ops.image.resize` needs integer sizes. Interpolate the table
+            # with the same half-pixel weights as its bilinear mode.
+            table_size = ops.shape(rel_pos)[0]
+            ratio = ops.cast(table_size, "float32") / ops.cast(
+                max_rel_dist, "float32"
+            )
+            source = (
+                ops.cast(ops.arange(max_rel_dist), "float32") + 0.5
+            ) * ratio - 0.5
+            source = ops.maximum(source, 0.0)
+            lower = ops.minimum(ops.floor(source), table_size - 1)
+            upper = ops.minimum(lower + 1, table_size - 1)
+            fraction = ops.cast(source - lower, rel_pos.dtype)[:, None]
+            rel_pos_resized = (
+                ops.take(rel_pos, ops.cast(lower, "int32"), axis=0)
+                * (1 - fraction)
+                + ops.take(rel_pos, ops.cast(upper, "int32"), axis=0) * fraction
+            )
+        elif ops.shape(rel_pos)[0] != max_rel_dist:
             # Resize the table along its length axis, then gather below.
             rel_pos_resized = ops.image.resize(
                 ops.reshape(
@@ -117,17 +148,19 @@ class AddRelativePositionalEmbedding(keras.layers.Layer):
             )
             rel_pos_resized = ops.squeeze(rel_pos_resized, axis=(0, -1))
         # Query coordinates
-        query_coordinates = ops.cast(
-            ops.arange(query_size), dtype=self.compute_dtype
-        )[:, None] * (max(key_size / query_size, 1.0))
+        query_coordinates = (
+            ops.cast(ops.arange(query_size), dtype=self.compute_dtype)[:, None]
+            * query_scale
+        )
         # Key coordinates
-        key_coordinates = ops.cast(
-            ops.arange(key_size), dtype=self.compute_dtype
-        )[None, :] * (max(query_size / key_size, 1.0))
+        key_coordinates = (
+            ops.cast(ops.arange(key_size), dtype=self.compute_dtype)[None, :]
+            * key_scale
+        )
         # Relative coordinates
         relative_coordinates = (query_coordinates - key_coordinates) + (
-            key_size - 1
-        ) * max(query_size / key_size, 1.0)
+            (key_size - 1) if static else (key_float - 1.0)
+        ) * key_scale
         relative_coordinates = ops.cast(relative_coordinates, dtype="int32")
         return ops.take(rel_pos_resized, relative_coordinates, 0)
 
@@ -281,12 +314,17 @@ class MultiHeadAttentionWithRelativePE(keras.layers.Layer):
             )
             return ops.transpose(tensor, axes=(0, 2, 1, 3))
 
+        # The JAX Splash kernel on TPU ignores `bias`. Disable it there.
+        flash_attention = None
+        if bias is not None and running_on_tpu():
+            flash_attention = False
         x = ops.dot_product_attention(
             to_heads(queries),
             to_heads(keys),
             to_heads(values),
             bias=bias,
             scale=self.scale,
+            flash_attention=flash_attention,
         )
         return ops.reshape(x, (-1, height, width, self.num_heads, self.key_dim))
 
@@ -355,7 +393,10 @@ class WindowPartitioning(keras.layers.Layer):
         pad_width = (
             self.window_size - width % self.window_size
         ) % self.window_size
-        if pad_height > 0 or pad_width > 0:
+        dynamic = not isinstance(pad_height, int) or not isinstance(
+            pad_width, int
+        )
+        if dynamic or pad_height > 0 or pad_width > 0:
             x = ops.pad(x, ((0, 0), (0, pad_height), (0, pad_width), (0, 0)))
         height_padded, width_padded = height + pad_height, width + pad_width
         x = ops.reshape(

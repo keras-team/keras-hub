@@ -108,9 +108,6 @@ def convert_backbone_config(transformers_config):
     vision_encoder = UnlimitedOCRVisionEncoder(
         **_get_vision_configs(transformers_config)
     )
-    # The tile size is not in the model config. The backbone default of 640
-    # matches the released checkpoint. Pass `local_image_size` to
-    # `from_preset()` for another tile size.
     return {
         "vocabulary_size": text_config["vocab_size"],
         "num_layers": text_config["num_hidden_layers"],
@@ -141,7 +138,22 @@ def convert_backbone_config(transformers_config):
         "image_token_id": transformers_config.get(
             "image_token_id", _DEFAULT_IMAGE_TOKEN_ID
         ),
+        # The model config has no tile size. `load_backbone_config` sets the
+        # image sizes from `preprocessor_config.json`. Without that file, the
+        # global size comes from the SAM config and the tile size keeps the
+        # backbone default.
         "global_image_size": vision_encoder.sam_image_size,
+    }
+
+
+def load_backbone_config(preset, transformers_config):
+    if not check_file_exists(preset, "preprocessor_config.json"):
+        return {}
+    preprocessor_config = load_json(preset, "preprocessor_config.json")
+    size = preprocessor_config["size"]
+    return {
+        "global_image_size": max(size["height"], size["width"]),
+        "local_image_size": preprocessor_config["tile_size"],
     }
 
 
@@ -168,9 +180,9 @@ def load_image_converter_config(preset, transformers_config):
 
 
 def load_preprocessor_config(preset, transformers_config):
-    # The checkpoint has no sequence length. 4096 fits the image tokens of a
-    # page with 12 tiles (1513) and leaves room for the output.
-    return {"sequence_length": 4096}
+    # The checkpoint has no sequence length. 8192 is the smallest power of two
+    # that fits two pages of 32 tiles (7586 image tokens).
+    return {"sequence_length": 8192}
 
 
 def convert_weights(backbone, loader, transformers_config):

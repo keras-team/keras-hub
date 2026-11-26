@@ -1,3 +1,6 @@
+import keras
+import numpy as np
+
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
     UnlimitedOCRTokenizer,
 )
@@ -16,6 +19,8 @@ class UnlimitedOCRTokenizerTest(TestCase):
             self.vocab.extend([a, b, a + b])
         self.vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         self.vocab += ["<｜▁pad▁｜>", "<image>"]
+        self.chat_tokens = ["<|User|>", "<|Assistant|>", "<|EOT|>"]
+        self.vocab += self.chat_tokens
         self.markers = ["<|det|>", "<|/det|>", "<|grounding|>"]
         self.vocab += self.markers
         self.vocab = sorted(set(self.vocab))
@@ -23,6 +28,7 @@ class UnlimitedOCRTokenizerTest(TestCase):
         # The converter passes the added tokens of `tokenizer.json`.
         special_tokens = ["<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         special_tokens += ["<｜▁pad▁｜>", "<image>"]
+        special_tokens += self.chat_tokens
         self.init_kwargs = {
             "vocabulary": self.vocab,
             "merges": self.merges,
@@ -51,6 +57,19 @@ class UnlimitedOCRTokenizerTest(TestCase):
         self.assertEqual(tokenizer.pad_token_id, self.vocab["<｜▁pad▁｜>"])
         self.assertEqual(tokenizer.image_token_id, self.vocab["<image>"])
         self.assertIn(tokenizer.image_token_id, tokenizer.special_token_ids)
+
+    def test_chat_tokens_are_special(self):
+        tokenizer = UnlimitedOCRTokenizer(**self.init_kwargs)
+        for token in self.chat_tokens:
+            self.assertEqual(
+                list(tokenizer(token)), [self.vocab[token]], msg=token
+            )
+            self.assertIn(self.vocab[token], tokenizer.special_token_ids)
+        self.assertEqual(tokenizer.user_token_id, self.vocab["<|User|>"])
+        self.assertEqual(
+            tokenizer.assistant_token_id, self.vocab["<|Assistant|>"]
+        )
+        self.assertEqual(tokenizer.eot_token_id, self.vocab["<|EOT|>"])
 
     def test_markers_are_single_tokens_but_not_special(self):
         tokenizer = UnlimitedOCRTokenizer(**self.init_kwargs)
@@ -106,3 +125,55 @@ class UnlimitedOCRTokenizerTest(TestCase):
         outputs = [x.decode("utf-8") for x in next(iter(dataset)).numpy()]
         expected = tokenizer.detokenize(tokenizer(self.input_data))
         self.assertEqual(outputs, list(expected))
+
+    def _to_lists(self, tokens):
+        if hasattr(tokens, "to_list"):
+            tokens = tokens.to_list()
+        elif not isinstance(tokens, (list, tuple)):
+            tokens = np.asarray(tokens).tolist()
+        return keras.tree.map_structure(
+            lambda x: x.decode("utf-8") if isinstance(x, bytes) else x, tokens
+        )
+
+    def test_string_dtype_tf_data_matches_direct_call(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        for sequence_length in (None, 10):
+            tokenizer = UnlimitedOCRTokenizer(
+                **self.init_kwargs,
+                dtype="string",
+                sequence_length=sequence_length,
+            )
+            expected = self._to_lists(tokenizer(self.input_data))
+            dataset = (
+                tf.data.Dataset.from_tensor_slices(self.input_data)
+                .batch(2)
+                .map(tokenizer)
+            )
+            self.assertEqual(self._to_lists(next(iter(dataset))), expected)
+            unbatched = tf.data.Dataset.from_tensor_slices(self.input_data).map(
+                tokenizer
+            )
+            first = self._to_lists(next(iter(unbatched)))
+            self.assertEqual(first, expected[0])
+        # The padding token is a string, not an id.
+        self.assertIn(tokenizer.pad_token, expected[1])
+
+    def test_rank_two_input_in_tf_data(self):
+        if tf is None:
+            self.skipTest("TensorFlow is not installed.")
+        data = [self.input_data, self.input_data[::-1]]
+        for dtype in ("int32", "string"):
+            for sequence_length in (None, 10):
+                tokenizer = UnlimitedOCRTokenizer(
+                    **self.init_kwargs,
+                    dtype=dtype,
+                    sequence_length=sequence_length,
+                )
+                output = (
+                    tf.data.Dataset.from_tensor_slices([data])
+                    .map(tokenizer)
+                    .get_single_element()
+                )
+                expected = [self._to_lists(tokenizer(row)) for row in data]
+                self.assertEqual(self._to_lists(output), expected)

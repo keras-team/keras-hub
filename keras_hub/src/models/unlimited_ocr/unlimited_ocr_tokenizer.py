@@ -7,6 +7,7 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
 )
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import tf
 
@@ -40,6 +41,14 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
     tokens as single tokens. The checkpoint converter also keeps every added
     token of `tokenizer.json`, such as `"<|det|>"`, as a single token.
 
+    The `generate()` text drops the special tokens: the start, end, padding
+    and image tokens, and the chat tokens `"<|User|>"`, `"<|Assistant|>"` and
+    `"<|EOT|>"`. The text keeps the layout markers, such as `"<|det|>"` and
+    `"<|/det|>"`. In each block of the output, the markers enclose the
+    category and the bounding box. The recognized text follows the closing
+    marker. The text keeps the markers on purpose, so that a caller can
+    separate the category and box from the text.
+
     Args:
         vocabulary: dict or `None`. Maps token strings to integer ids.
         merges: list or `None`. The BPE merge rules.
@@ -48,6 +57,16 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         pad_token: str. The padding token.
         image_token: str. The placeholder token of the image features.
             Defaults to `"<image>"`.
+        user_token: str. The chat token that starts a user turn.
+            Defaults to `"<|User|>"`.
+        assistant_token: str. The chat token that starts an assistant turn.
+            Defaults to `"<|Assistant|>"`.
+        eot_token: str. The chat token that ends a turn.
+            Defaults to `"<|EOT|>"`.
+        unsplittable_tokens: list or `None`. Strings that the tokenizer never
+            splits, such as `"<|det|>"` and `"<|/det|>"`. The checkpoint
+            converter passes the added tokens of `tokenizer.json`. A
+            tokenizer without this argument splits the markers.
 
     Example:
 
@@ -77,12 +96,18 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         eos_token="<｜end▁of▁sentence｜>",
         pad_token="<｜▁pad▁｜>",
         image_token="<image>",
+        user_token="<|User|>",
+        assistant_token="<|Assistant|>",
+        eot_token="<|EOT|>",
         **kwargs,
     ):
         self._add_special_token(bos_token, "start_token")
         self._add_special_token(eos_token, "end_token")
         self._add_special_token(pad_token, "pad_token")
         self._add_special_token(image_token, "image_token")
+        self._add_special_token(user_token, "user_token")
+        self._add_special_token(assistant_token, "assistant_token")
+        self._add_special_token(eot_token, "eot_token")
         super().__init__(vocabulary=vocabulary, merges=merges, **kwargs)
 
     def _set_vocabulary_and_merges_tokenizers(self, vocabulary, merges):
@@ -110,6 +135,7 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
         # gives other ids for this checkpoint. This method calls the
         # `tokenizers` backend from the graph instead.
         self._maybe_initialized_tokenizers()
+        as_string = is_string_dtype(self.compute_dtype)
 
         def _encode(string_tensor):
             values = string_tensor.numpy().tolist()
@@ -117,17 +143,24 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
             encodings = self._tokenizer.encode_batch(
                 strings, add_special_tokens=False
             )
-            return tf.ragged.constant(
-                [e.ids for e in encodings], dtype=self.compute_dtype
-            )
+            if as_string:
+                rows = [e.tokens for e in encodings]
+            else:
+                rows = [e.ids for e in encodings]
+            return tf.ragged.constant(rows, dtype=self.compute_dtype)
 
         inputs = tf.convert_to_tensor(inputs)
-        unbatched = inputs.shape.rank == 0
-        if unbatched:
-            inputs = tf.expand_dims(inputs, 0)
+        rank = inputs.shape.rank
+        if rank is None:
+            raise ValueError(
+                "`tokenize()` inputs must have a known rank. "
+                f"Received: {inputs}"
+            )
+        # Flatten the input to one dimension for the backend.
+        flat_inputs = tf.reshape(inputs, [-1])
         tokens = tf.py_function(
             _encode,
-            [inputs],
+            [flat_inputs],
             Tout=tf.RaggedTensorSpec(
                 shape=[None, None],
                 dtype=self.compute_dtype,
@@ -135,13 +168,22 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
             ),
         )
         if self.sequence_length:
-            output_shape = tokens.shape.as_list()
-            output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(
-                shape=output_shape, default_value=self.pad_token_id
+                shape=[None, self.sequence_length],
+                default_value=self._get_pad_value(),
             )
-        if unbatched:
-            tokens = tokens[0]
+            if rank != 1:
+                shape = tf.concat([tf.shape(inputs), [self.sequence_length]], 0)
+                tokens = tf.reshape(tokens, shape)
+                tokens.set_shape(inputs.shape.concatenate(self.sequence_length))
+            return tokens
+        # Restore the leading shape of the input as ragged rows.
+        if rank == 0:
+            return tokens[0]
+        for size in reversed(range(1, rank)):
+            tokens = tf.RaggedTensor.from_uniform_row_length(
+                tokens, tf.cast(tf.shape(inputs)[size], "int64")
+            )
         return tokens
 
     @preprocessing_function
@@ -184,6 +226,9 @@ class UnlimitedOCRTokenizer(BytePairTokenizer):
                 "eos_token": self.end_token,
                 "pad_token": self.pad_token,
                 "image_token": self.image_token,
+                "user_token": self.user_token,
+                "assistant_token": self.assistant_token,
+                "eot_token": self.eot_token,
             }
         )
         return config

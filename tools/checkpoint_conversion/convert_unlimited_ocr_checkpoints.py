@@ -77,34 +77,6 @@ def load_images():
     return load(PAGE_FILE), load(RECEIPT_FILE)
 
 
-def get_hf_stripped_tokens(tokenizer):
-    """Returns the token strings that HF removes with `skip_special_tokens`.
-
-    The HF tokenizer marks these tokens as special. KerasHub keeps some of
-    them in the text, for example `<|det|>` and `<td>`. Tokens such as
-    `<PAGE>` and `<table>` are not special, so HF keeps them.
-    """
-    return sorted(
-        (
-            str(token)
-            for token in tokenizer.added_tokens_decoder.values()
-            if token.special
-        ),
-        key=len,
-        reverse=True,
-    )
-
-
-def strip_tokens(text, tokens):
-    """Removes every string in `tokens` from `text`.
-
-    Pass `tokens` longest first, so a token never loses part of a longer one.
-    """
-    for token in tokens:
-        text = text.replace(token, "")
-    return text
-
-
 def precompute_hf_outputs(hf_preset, cases):
     """Runs the HF model on every case and frees the model.
 
@@ -124,7 +96,6 @@ def precompute_hf_outputs(hf_preset, cases):
         hf_preset, dtype=torch.float32
     ).eval()
     results = {"num_parameters": model.num_parameters(), "cases": {}}
-    stripped_tokens = get_hf_stripped_tokens(processor.tokenizer)
     for label, (prompt, images, crop_to_patches) in cases.items():
         kwargs = {
             "text": [prompt],
@@ -139,7 +110,6 @@ def precompute_hf_outputs(hf_preset, cases):
         result = {
             "token_ids": inputs["input_ids"].numpy(),
             "logits": logits,
-            "stripped_tokens": stripped_tokens,
         }
         if not FLAGS.skip_generate:
             with torch.no_grad():
@@ -148,7 +118,7 @@ def precompute_hf_outputs(hf_preset, cases):
                 )
             prompt_length = inputs["input_ids"].shape[1]
             result["text"] = processor.batch_decode(
-                generated[:, prompt_length:], skip_special_tokens=True
+                generated[:, prompt_length:], skip_special_tokens=False
             )[0]
         results["cases"][label] = result
     del model, processor
@@ -337,9 +307,8 @@ def test_generation(label, keras_model, keras_inputs, case, result):
     new_text = keras_text[len(prompt_text) :]
     assert len(new_text) > 0, f"[{label}] KerasHub generated no new text"
     print(f"\n[{label}] HF generated: {result['text']!r}")
-    # HF drops its special tokens when it decodes. Drop the same tokens from
-    # the KerasHub text, so both texts print in the same form.
-    new_text = strip_tokens(new_text, result["stripped_tokens"])
+    # The HF text keeps its special tokens. The check compares the raw
+    # strings, so a leaked or wrong tag fails it.
     print(f"[{label}] KH generated: {new_text!r}")
     np.testing.assert_equal(
         new_text,
@@ -347,6 +316,53 @@ def test_generation(label, keras_model, keras_inputs, case, result):
         err_msg=f"[{label}] the generated text differs from HF",
     )
     print(f"[{label}] ✓ generated text matches HF")
+
+
+def test_saved_preset_generation(preset_dir, cases, hf_results):
+    """Loads the saved preset in float32 and runs the generation check.
+
+    The check is the same as `test_generation`. It confirms that the
+    saved files give the HF text after a round trip through disk.
+
+    Args:
+        preset_dir: str. The directory of the saved preset.
+        cases: dict. Maps a label to a `(prompt, images, crop_to_patches)`
+            tuple.
+        hf_results: dict. The output of `precompute_hf_outputs`.
+    """
+    print("\n--- Saved Preset Generation ---")
+    keras_model = keras_hub.models.UnlimitedOCRCausalLM.from_preset(
+        preset_dir, dtype="float32"
+    )
+    # `compile` defaults to the `top_k` sampler, which samples at random.
+    keras_model.compile(sampler="greedy")
+    failures = []
+    for label, result in hf_results["cases"].items():
+        keras_inputs = run_check(
+            failures,
+            f"[{label}] saved preset preprocessing",
+            preprocess_keras,
+            keras_model,
+            cases[label],
+            result,
+        )
+        if keras_inputs is None:
+            continue
+        run_check(
+            failures,
+            f"[{label}] saved preset generation",
+            test_generation,
+            label,
+            keras_model,
+            keras_inputs,
+            cases[label],
+            result,
+        )
+    if failures:
+        raise AssertionError(
+            f"{len(failures)} check(s) failed: {', '.join(failures)}"
+        )
+    print("\n✓ Saved preset generation matches HF.")
 
 
 def run_check(failures, name, check, *args):
@@ -490,6 +506,12 @@ def main(_):
     )
     keras_model.save_to_preset(f"./{preset}")
     print(f"-> Saved the preset to ./{preset}")
+
+    if not FLAGS.skip_generate:
+        del keras_model
+        keras.backend.clear_session()
+        gc.collect()
+        test_saved_preset_generation(f"./{preset}", cases, hf_results)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ class UnlimitedOCRAttention(keras.layers.Layer):
         super().__init__(**kwargs)
         if num_key_value_heads is None:
             num_key_value_heads = num_query_heads
-        if num_query_heads % num_key_value_heads != 0:
+        if num_key_value_heads < 1 or num_query_heads % num_key_value_heads:
             raise ValueError(
                 "`num_key_value_heads` must divide `num_query_heads`. "
                 f"Received: num_query_heads={num_query_heads}, "
@@ -59,6 +59,12 @@ class UnlimitedOCRAttention(keras.layers.Layer):
         # b = batch size, q = query length, k = key/value length,
         # m = model dim, u = number of heads, h = head dim.
         hidden_dim = inputs_shape[-1]
+        if hidden_dim % self.num_query_heads != 0:
+            raise ValueError(
+                "`num_query_heads` must divide the hidden dimension. "
+                f"Received: hidden_dim={hidden_dim}, "
+                f"num_query_heads={self.num_query_heads}"
+            )
         head_dim = hidden_dim // self.num_query_heads
         self._inv_norm_factor = 1.0 / math.sqrt(head_dim)
 
@@ -214,6 +220,36 @@ class UnlimitedOCRAttention(keras.layers.Layer):
             attention_scores = self._softmax(attention_scores)
         attention_scores = ops.cast(attention_scores, self.compute_dtype)
         return ops.einsum("buqk,bkuh->bquh", attention_scores, value)
+
+    def compute_output_shape(self, hidden_states_shape, cache_shape=None):
+        # The output keeps the input shape. The cache keeps its shape.
+        if cache_shape is None:
+            return hidden_states_shape
+        return hidden_states_shape, cache_shape
+
+    def compute_output_spec(
+        self,
+        hidden_states,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=None,
+        cache_write_mask=None,
+    ):
+        # Keras reads shapes only from backend tensors and `KerasTensor`s.
+        # This override also accepts NumPy arrays and returns the cache.
+        cache_shape = None if cache is None else tuple(cache.shape)
+        output_shape = self.compute_output_shape(
+            tuple(hidden_states.shape), cache_shape
+        )
+        if cache is None:
+            return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+        return (
+            keras.KerasTensor(output_shape[0], dtype=self.compute_dtype),
+            keras.KerasTensor(
+                output_shape[1],
+                dtype=keras.backend.standardize_dtype(cache.dtype),
+            ),
+        )
 
     def get_config(self):
         config = super().get_config()

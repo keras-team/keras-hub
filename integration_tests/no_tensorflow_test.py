@@ -208,6 +208,7 @@ class NoTensorflow(unittest.TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
+        vocab += ["<|User|>", "<|Assistant|>", "<|EOT|>"]
         vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
         tokenizer = keras_hub.models.UnlimitedOCRTokenizer(
             vocabulary=vocab, merges=merges
@@ -233,4 +234,10 @@ class NoTensorflow(unittest.TestCase):
         )
         self.assertEqual(np.shape(outputs["token_ids"]), (64,))
         self.assertEqual(np.shape(outputs["pixel_values"]), (1, 64, 64, 3))
-        self.assertEqual(np.shape(outputs["patches_grid"]), (1, 2))
+        self.assertEqual(
+            np.shape(outputs["pixel_values_local"]), (2, 40, 40, 3)
+        )
+        self.assertEqual(np.asarray(outputs["patches_grid"]).tolist(), [[2, 1]])
+        image_token_id = tokenizer.image_token_id
+        token_ids = np.asarray(outputs["token_ids"])
+        self.assertEqual(int((token_ids == image_token_id).sum()), 17)

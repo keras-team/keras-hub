@@ -48,22 +48,66 @@ def _bicubic_antialias_matrix(size_in, size_out):
     return weights / weights.sum(axis=1, keepdims=True)
 
 
+def _bicubic_antialias_matrix_dynamic(size_in, size_out):
+    """The same weights as `_bicubic_antialias_matrix` for a tensor size.
+
+    Args:
+        size_in: int. The input size of the axis.
+        size_out: int or scalar int tensor. The output size of the axis.
+
+    Returns:
+        A `(size_out, size_in)` float32 tensor.
+    """
+    size_in_float = ops.cast(size_in, "float64")
+    size_out_float = ops.cast(size_out, "float64")
+    scale = size_in_float / size_out_float
+    filter_scale = ops.maximum(scale, 1.0)
+    support = 2.0 * filter_scale
+    center = (ops.arange(size_out, dtype="float64") + 0.5) * scale
+    start = ops.maximum(ops.floor(center - support + 0.5), 0.0)
+    stop = ops.minimum(ops.floor(center + support + 0.5), size_in_float)
+    index = ops.cast(ops.arange(size_in), "float64")[None, :]
+    inside = ops.logical_and(index >= start[:, None], index < stop[:, None])
+    x = ops.abs((index + 0.5 - center[:, None]) / filter_scale)
+    near = ((-0.5 + 2) * x - (-0.5 + 3)) * x * x + 1
+    far = (((x - 5) * x + 8) * x - 4) * -0.5
+    weights = ops.where(x < 1, near, ops.where(x < 2, far, 0.0))
+    weights = weights * ops.cast(inside, "float64")
+    weights = weights / ops.sum(weights, axis=1, keepdims=True)
+    return ops.cast(weights, "float32")
+
+
+def _spatial_size(x):
+    """Return `(height, width)`, with a tensor for each unknown size."""
+    shape = ops.shape(x)
+    return shape[1], shape[2]
+
+
 def _resize_bicubic(x, size):
     """Resize a `(1, height, width, channels)` tensor with bicubic weights.
 
     The resize runs in float32, like the Hugging Face source
-    (modeling_unlimited_ocr.py:638).
+    (modeling_unlimited_ocr.py:638). A size can be a scalar tensor when the
+    image size is dynamic.
     """
     dtype = x.dtype
     x = ops.cast(x, "float32")
     if keras.config.backend() == "tensorflow":
         # The antialiased resize op of TensorFlow does not compile with XLA.
-        height_weights = ops.convert_to_tensor(
-            _bicubic_antialias_matrix(x.shape[1], size[0]), dtype="float32"
-        )
-        width_weights = ops.convert_to_tensor(
-            _bicubic_antialias_matrix(x.shape[2], size[1]), dtype="float32"
-        )
+        weights = []
+        for size_in, size_out in zip(x.shape[1:3], size):
+            if isinstance(size_out, int):
+                weights.append(
+                    ops.convert_to_tensor(
+                        _bicubic_antialias_matrix(size_in, size_out),
+                        dtype="float32",
+                    )
+                )
+            else:
+                weights.append(
+                    _bicubic_antialias_matrix_dynamic(size_in, size_out)
+                )
+        height_weights, width_weights = weights
         x = ops.einsum("oh,bhwc->bowc", height_weights, x)
         x = ops.einsum("pw,bowc->bopc", width_weights, x)
         return ops.cast(x, dtype)
@@ -103,9 +147,14 @@ class UnlimitedOCRSamPositionEmbedding(keras.layers.Layer):
         self.built = True
 
     def call(self, x):
-        height, width = x.shape[1], x.shape[2]
+        height, width = _spatial_size(x)
         pos_embed = self.pos_embed
-        if height != self.grid_size or width != self.grid_size:
+        if (
+            not isinstance(height, int)
+            or not isinstance(width, int)
+            or height != self.grid_size
+            or width != self.grid_size
+        ):
             pos_embed = _resize_bicubic(pos_embed, (height, width))
         return x + pos_embed
 
@@ -156,7 +205,7 @@ class UnlimitedOCRCLIPEmbedding(keras.layers.Layer):
 
     def call(self, x):
         batch = ops.shape(x)[0]
-        height, width = x.shape[1], x.shape[2]
+        height, width = _spatial_size(x)
         x = ops.reshape(x, (batch, height * width, self.hidden_dim))
         class_embedding = ops.broadcast_to(
             ops.reshape(self.class_embedding, (1, 1, self.hidden_dim)),
@@ -165,7 +214,12 @@ class UnlimitedOCRCLIPEmbedding(keras.layers.Layer):
         x = ops.concatenate([class_embedding, x], axis=1)
 
         position_embedding = self.position_embedding
-        if height != self.grid_size or width != self.grid_size:
+        if (
+            not isinstance(height, int)
+            or not isinstance(width, int)
+            or height != self.grid_size
+            or width != self.grid_size
+        ):
             patch_positions = ops.reshape(
                 position_embedding[1:],
                 (1, self.grid_size, self.grid_size, self.hidden_dim),
@@ -180,7 +234,10 @@ class UnlimitedOCRCLIPEmbedding(keras.layers.Layer):
         return x + position_embedding[None, ...]
 
     def compute_output_spec(self, x):
-        shape = (x.shape[0], x.shape[1] * x.shape[2] + 1, self.hidden_dim)
+        num_tokens = None
+        if x.shape[1] is not None and x.shape[2] is not None:
+            num_tokens = x.shape[1] * x.shape[2] + 1
+        shape = (x.shape[0], num_tokens, self.hidden_dim)
         return keras.KerasTensor(shape, dtype=self.compute_dtype)
 
     def get_config(self):
@@ -539,11 +596,12 @@ class UnlimitedOCRImageFeatureExtractor(keras.layers.Layer):
         run_batch = (
             max(batch, 1) if isinstance(batch, int) else ops.maximum(batch, 1)
         )
-        zero_row = ops.zeros((1, *features.shape[1:]), dtype=features.dtype)
+        zero_row = ops.zeros(
+            (1, *ops.shape(features)[1:]), dtype=features.dtype
+        )
         features = ops.concatenate([features, zero_row], axis=0)
-        features = ops.take(features, ops.arange(run_batch), axis=0)
-        features = self.multimodal_projector(features)
-        return ops.take(features, ops.arange(batch), axis=0)
+        features = self.multimodal_projector(features[:run_batch, ...])
+        return features[:batch, ...]
 
     def _flatten(self, images):
         return ops.reshape(images, (-1, *images.shape[2:]))
@@ -604,7 +662,7 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
     its placeholders. This matches `masked_scatter` on each sample.
 
     A sample with fewer images than the other samples has padding images
-    and padding tiles. They have a grid of `(0, 0)` and zero pixels. No
+    and padding tiles. They have a grid of `(-1, -1)` and zero pixels. No
     placeholder selects them, because the padding follows the real images.
 
     The layer needs no data-dependent shapes. It computes, for every
@@ -628,7 +686,7 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
             are in row-major order.
         patches_grid: int tensor of shape `(batch, max_images, 2)`. The
             number of tile columns and tile rows of each image. An image
-            with no tiles, and a padding image, has `(0, 0)`.
+            with no tiles has `(0, 0)`. A padding image has `(-1, -1)`.
     """
 
     def __init__(self, hidden_dim, image_token_id, **kwargs):
@@ -682,6 +740,10 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         grid = ops.cast(patches_grid, "int32")
         padding = ops.zeros((batch_size, 1, 2), dtype="int32")
         grid = ops.concatenate([grid, padding], axis=1)
+        # A padding image has the grid `(-1, -1)`. It keeps the size of a
+        # global view, but the check does not count its tokens.
+        is_real_image = grid[..., 0] >= 0
+        grid = ops.maximum(grid, 0)
         columns, rows = grid[..., 0], grid[..., 1]
         tiles = columns * rows
         local_tokens = rows * local_side * (columns * local_side + 1)
@@ -689,9 +751,14 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         image_offset = ops.cumsum(image_tokens, axis=1) - image_tokens
         tile_offset = ops.cumsum(tiles, axis=1) - tiles
 
+        is_image = ops.equal(token_ids, self.image_token_id)
+        self._check_feature_count(
+            is_image,
+            image_tokens[:, :-1] * ops.cast(is_real_image[:, :-1], "int32"),
+        )
+
         # The ordinal of a placeholder is its rank among the placeholders of
         # its sample.
-        is_image = ops.equal(token_ids, self.image_token_id)
         ordinal = ops.cumsum(ops.cast(is_image, "int32"), axis=1) - 1
         ordinal = ops.maximum(ordinal, 0)
         slot = (
@@ -781,6 +848,26 @@ class UnlimitedOCRImageTextEmbeddingMerger(keras.layers.Layer):
         )
         features = ops.take(bank, bank_index, axis=0)
         return ops.where(is_image[..., None], features, token_embeddings)
+
+    def _check_feature_count(self, is_image, image_tokens):
+        # Count the placeholders of each sample and the tokens that its real
+        # images provide. The check runs only with concrete values. It does
+        # not run under tracing.
+        try:
+            placeholders = ops.convert_to_numpy(
+                ops.sum(ops.cast(is_image, "int32"), axis=1)
+            )
+            provided = ops.convert_to_numpy(ops.sum(image_tokens, axis=1))
+        except Exception:
+            return
+        for row, (count, available) in enumerate(zip(placeholders, provided)):
+            if count != available:
+                raise ValueError(
+                    "The image features and the image placeholder tokens "
+                    f"do not match. Sample {row} has {count} placeholder "
+                    f"token(s). Its images need {available} placeholder "
+                    "token(s)."
+                )
 
     def compute_output_spec(
         self,

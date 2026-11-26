@@ -201,3 +201,53 @@ class UnlimitedOCRImageConverterTest(TestCase):
         expected = self.converter._call_python([image])
         for key in expected:
             self.assertAllClose(expected[key], mapped[key].numpy())
+
+    def test_channels_first_raises(self):
+        with self.assertRaisesRegex(ValueError, "channels_last"):
+            UnlimitedOCRImageConverter(
+                **self.init_kwargs, data_format="channels_first"
+            )
+
+    def test_channels_last_is_accepted(self):
+        for data_format in (None, "channels_last"):
+            converter = UnlimitedOCRImageConverter(
+                **self.init_kwargs, data_format=data_format
+            )
+            self.assertEqual(converter.data_format, "channels_last")
+
+    def test_unused_argument_with_other_value_raises(self):
+        for name, value in [
+            ("image_size", (5, 5)),
+            ("interpolation", "bilinear"),
+            ("antialias", False),
+            ("crop_to_aspect_ratio", True),
+            ("pad_to_aspect_ratio", True),
+            ("scale", 2.0),
+            ("offset", 1.0),
+            ("bounding_box_format", "xyxy"),
+            ("dtype", "float16"),
+        ]:
+            with self.assertRaisesRegex(ValueError, name):
+                UnlimitedOCRImageConverter(**self.init_kwargs, **{name: value})
+
+    def test_unused_argument_with_fixed_value_is_accepted(self):
+        fixed = {
+            "image_size": None,
+            "interpolation": "bicubic",
+            "antialias": True,
+            "crop_to_aspect_ratio": False,
+            "pad_to_aspect_ratio": False,
+            "scale": None,
+            "offset": None,
+            "bounding_box_format": "yxyx",
+            "dtype": "float32",
+        }
+        for name, value in fixed.items():
+            UnlimitedOCRImageConverter(**self.init_kwargs, **{name: value})
+        UnlimitedOCRImageConverter(**self.init_kwargs, scale=1.0, offset=0.0)
+        UnlimitedOCRImageConverter(**self.init_kwargs, **fixed)
+
+    def test_config_round_trips(self):
+        config = self.converter.get_config()
+        restored = UnlimitedOCRImageConverter.from_config(config)
+        self.assertEqual(restored.get_config(), config)

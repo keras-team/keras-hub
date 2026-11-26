@@ -24,6 +24,9 @@ from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
     _bicubic_antialias_matrix,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
+    _bicubic_antialias_matrix_dynamic,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_layers import (
     _resize_bicubic,
 )
 from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
@@ -229,7 +232,7 @@ class UnlimitedOCRExpertsTest(TestCase):
         dense = layer(self.tokens, self.routing_weights)
         gathered = layer(self.tokens, self.routing_weights, self.top_k_index)
         self.assertAllClose(
-            gathered, dense, **_tolerance(1e-5, 1e-5, 1e-2, 1e-2)
+            gathered, dense, **_tolerance(1e-5, 1e-5, 2e-3, 2e-3)
         )
 
     def test_silu_runs_in_float32_for_bfloat16(self):
@@ -271,10 +274,36 @@ class UnlimitedOCRResizeTest(TestCase):
             self.assertEqual(matrix.shape, (size_out, size_in))
             self.assertAllClose(matrix.sum(axis=1), np.ones(size_out))
 
+    def test_dynamic_bicubic_matrix_matches_static_matrix(self):
+        for size_in, size_out in ((16, 10), (16, 5), (4, 9), (7, 7)):
+            dynamic = _bicubic_antialias_matrix_dynamic(
+                size_in, ops.convert_to_tensor(size_out, dtype="int32")
+            )
+            self.assertAllClose(
+                dynamic,
+                _bicubic_antialias_matrix(size_in, size_out),
+                atol=1e-5,
+                rtol=1e-5,
+            )
+
+    def test_bicubic_resize_with_tensor_size_matches_static_size(self):
+        if keras.config.backend() != "tensorflow":
+            self.skipTest("Only the TensorFlow path builds the matrices.")
+        x = ops.convert_to_tensor(
+            np.random.normal(size=(1, 16, 16, 3)).astype("float32")
+        )
+        size = (ops.convert_to_tensor(10), ops.convert_to_tensor(24))
+        self.assertAllClose(
+            _resize_bicubic(x, size),
+            _resize_bicubic(x, (10, 24)),
+            atol=1e-5,
+            rtol=1e-5,
+        )
+
     def test_bicubic_resize_matches_keras_antialias_resize(self):
         # Keras resizes with the same kernel as PyTorch `antialias=True`.
         x = np.random.normal(size=(1, 16, 16, 3)).astype("float32")
-        for size in ((10, 10), (5, 7), (16, 16)):
+        for size in ((10, 10), (5, 7), (16, 16), (24, 20)):
             expected = ops.image.resize(
                 x,
                 size,
@@ -284,7 +313,7 @@ class UnlimitedOCRResizeTest(TestCase):
             )
             actual = _resize_bicubic(ops.convert_to_tensor(x), size)
             self.assertAllClose(
-                actual, expected, **_tolerance(1e-4, 1e-4, 1e-2, 1e-2)
+                actual, expected, **_tolerance(1e-4, 1e-4, 5e-3, 5e-3)
             )
 
 
@@ -311,8 +340,14 @@ class UnlimitedOCRSamPositionEmbeddingTest(TestCase):
         small = np.zeros((2, 3, 3, 3), "float32")
         output = ops.convert_to_numpy(layer(small))
         self.assertEqual(output.shape, (2, 3, 3, 3))
-        # A resized table stays inside the range of the original values.
-        self.assertLessEqual(output.max(), table.max() * 1.5)
+        # The resized table is the bicubic resize of the original table.
+        expected = ops.convert_to_numpy(
+            _resize_bicubic(ops.convert_to_tensor(table), (3, 3))
+        )
+        self.assertAllClose(
+            output, np.broadcast_to(expected, (2, 3, 3, 3)), atol=1e-5
+        )
+        self.assertGreater(np.abs(output).max(), 0.1)
 
 
 class UnlimitedOCRCLIPEmbeddingTest(TestCase):
@@ -348,6 +383,12 @@ class UnlimitedOCRCLIPEmbeddingTest(TestCase):
             np.broadcast_to(class_embedding + positions[0], (2, 4)),
             atol=1e-6,
         )
+        grid = positions[1:].reshape(1, 3, 3, 4)
+        resized = ops.convert_to_numpy(
+            _resize_bicubic(ops.convert_to_tensor(grid), (2, 2))
+        ).reshape(1, 4, 4)
+        patches = x[:, :2, :2].reshape(2, 4, 4)
+        self.assertAllClose(small[:, 1:], patches + resized, atol=1e-5)
 
 
 class UnlimitedOCRMergerTest(TestCase):
@@ -373,7 +414,7 @@ class UnlimitedOCRMergerTest(TestCase):
             "global_features": self.global_features,
             "local_features": self.local_features,
             "patches_grid": np.array(
-                [[[2, 1], [0, 0]], [[1, 2], [0, 0]]], dtype="int32"
+                [[[2, 1], [0, 0]], [[1, 2], [-1, -1]]], dtype="int32"
             ),
         }
 
@@ -446,6 +487,88 @@ class UnlimitedOCRMergerTest(TestCase):
         ]
         output = ops.convert_to_numpy(layer(**self.input_data))
         self.assertAllClose(output, expected, atol=1e-4)
+
+    def test_merger_rejects_more_placeholders_than_features(self):
+        # Each sample has one image of 3 tokens (1 global token, 1 newline
+        # and 1 separator). Sample 0 has 4 placeholders.
+        d = self.hidden_dim
+        token_ids = np.full((2, 6), 3, dtype="int32")
+        token_ids[0, 1:5] = self.image_token_id
+        token_ids[1, 1:4] = self.image_token_id
+        layer = UnlimitedOCRImageTextEmbeddingMerger(
+            hidden_dim=d, image_token_id=self.image_token_id
+        )
+        arguments = (
+            token_ids,
+            np.zeros((2, 6, d), "float32"),
+            np.ones((2, 1, d), "float32"),
+            np.zeros((0, 4, d), "float32"),
+            np.zeros((2, 1, 2), "int32"),
+        )
+        with self.assertRaisesRegex(ValueError, "placeholder"):
+            layer(*arguments)
+        token_ids[0, 4] = 3
+        layer(*arguments)
+
+    def test_merger_rejects_placeholders_for_a_padding_image(self):
+        # Each real image has no tile and gives 3 tokens (1 global token,
+        # 1 newline and 1 separator). Sample 1 has one real image and one
+        # padding image, so it gives 3 tokens.
+        d = self.hidden_dim
+        token_ids = np.full((2, 8), 3, dtype="int32")
+        token_ids[0, 1:7] = self.image_token_id
+        token_ids[1, 1:5] = self.image_token_id
+        layer = UnlimitedOCRImageTextEmbeddingMerger(
+            hidden_dim=d, image_token_id=self.image_token_id
+        )
+        arguments = (
+            token_ids,
+            np.zeros((2, 8, d), "float32"),
+            np.ones((4, 1, d), "float32"),
+            np.zeros((0, 4, d), "float32"),
+            np.array([[[0, 0], [0, 0]], [[0, 0], [-1, -1]]], "int32"),
+        )
+        with self.assertRaisesRegex(ValueError, "Sample 1"):
+            layer(*arguments)
+        token_ids[1, 4] = 3
+        layer(*arguments)
+
+    def test_merger_rejects_fewer_placeholders_than_features(self):
+        # Each real image has no tile and gives 3 tokens. Row 0 has two real
+        # images (6 tokens). Row 1 has one real image and one padding image
+        # (3 tokens). Row 2 has no image (0 tokens).
+        d = self.hidden_dim
+        counts = [6, 3, 0]
+        layer = UnlimitedOCRImageTextEmbeddingMerger(
+            hidden_dim=d, image_token_id=self.image_token_id
+        )
+
+        def run(counts):
+            token_ids = np.full((3, 8), 3, dtype="int32")
+            for row, count in enumerate(counts):
+                token_ids[row, 1 : 1 + count] = self.image_token_id
+            return layer(
+                token_ids,
+                np.zeros((3, 8, d), "float32"),
+                np.ones((6, 1, d), "float32"),
+                np.zeros((0, 4, d), "float32"),
+                np.array(
+                    [
+                        [[0, 0], [0, 0]],
+                        [[0, 0], [-1, -1]],
+                        [[-1, -1], [-1, -1]],
+                    ],
+                    "int32",
+                ),
+            )
+
+        run(counts)
+        with self.assertRaisesRegex(ValueError, "Sample 0.*5.*6"):
+            run([5, 3, 0])
+        with self.assertRaisesRegex(ValueError, "Sample 1.*2.*3"):
+            run([6, 2, 0])
+        with self.assertRaisesRegex(ValueError, "Sample 2"):
+            run([6, 3, 1])
 
     def test_merger_without_images(self):
         d = self.hidden_dim

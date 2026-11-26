@@ -1,3 +1,5 @@
+from unittest import mock
+
 import keras
 import numpy as np
 from keras import ops
@@ -5,14 +7,18 @@ from keras import ops
 from keras_hub.src.models.vit_det.vit_layers import (
     AddRelativePositionalEmbedding,
 )
+from keras_hub.src.models.vit_det.vit_layers import (
+    MultiHeadAttentionWithRelativePE,
+)
 from keras_hub.src.models.vit_det.vit_layers import WindowedTransformerEncoder
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.utils.keras_utils import running_on_gpu
+from keras_hub.src.utils.keras_utils import running_on_tpu
 
 
 def _tolerance(atol, rtol, gpu_atol, gpu_rtol):
-    """Return the tolerances. GPU matmuls use TF32 and need larger ones."""
-    if running_on_gpu():
+    """Return the tolerances. GPU and TPU matmuls need larger ones."""
+    if running_on_gpu() or running_on_tpu():
         return {"atol": gpu_atol, "rtol": gpu_rtol}
     return {"atol": atol, "rtol": rtol}
 
@@ -40,6 +46,19 @@ class AddRelativePositionalEmbeddingTest(TestCase):
         self.assertAllClose(
             rel_pos[self.rows, self.cols], expected, atol=1e-4, rtol=1e-4
         )
+
+    def test_get_rel_pos_with_tensor_sizes_matches_integer_sizes(self):
+        layer = AddRelativePositionalEmbedding(input_size=(64, 64), key_dim=4)
+        for size in (40, 64, 5):
+            expected = layer._get_rel_pos(size, size, self.table)
+            actual = layer._get_rel_pos(
+                ops.convert_to_tensor(size, dtype="int32"),
+                ops.convert_to_tensor(size, dtype="int32"),
+                self.table,
+            )
+            self.assertAllClose(
+                actual, expected, **_tolerance(1e-5, 1e-5, 1e-4, 1e-3)
+            )
 
     def test_get_rel_pos_when_table_resizes_with_channels_first(self):
         layer = AddRelativePositionalEmbedding(input_size=(64, 64), key_dim=4)
@@ -106,7 +125,7 @@ class AddRelativePositionalEmbeddingTest(TestCase):
         self.assertAllClose(
             output[:, ::23, ::23],
             expected,
-            **_tolerance(1e-3, 1e-4, 1e-2, 1e-2),
+            **_tolerance(1e-3, 1e-4, 5e-3, 1e-3),
         )
 
     def test_bias_equals_the_terms_added_to_a_zero_map(self):
@@ -124,6 +143,38 @@ class AddRelativePositionalEmbeddingTest(TestCase):
         zeros = np.zeros((2, height * width, height * width), "float32")
         self.assertAllClose(
             layer(None, **kwargs), layer(zeros, **kwargs), atol=1e-6
+        )
+
+
+class MultiHeadAttentionWithRelativePETest(TestCase):
+    def test_fused_attention_matches_unfused_attention(self):
+        # The sequence length (256) must be a multiple of 128. Smaller
+        # lengths do not reach the TPU Splash kernel.
+        layer = MultiHeadAttentionWithRelativePE(
+            num_heads=2, key_dim=64, use_rel_pos=True, input_size=(16, 16)
+        )
+        rng = np.random.RandomState(0)
+        inputs = rng.normal(size=(1, 16, 16, 128)).astype("float32")
+        layer(inputs)
+        table_shape = layer.add_decomposed_relative_pe.rel_pos_h.shape
+        layer.add_decomposed_relative_pe.rel_pos_h.assign(
+            rng.normal(size=table_shape).astype("float32")
+        )
+        table_shape = layer.add_decomposed_relative_pe.rel_pos_w.shape
+        layer.add_decomposed_relative_pe.rel_pos_w.assign(
+            rng.normal(size=table_shape).astype("float32")
+        )
+        target = "keras_hub.src.models.vit_det.vit_layers"
+        with mock.patch(
+            f"{target}.fused_attention_op_available", return_value=True
+        ):
+            fused = ops.convert_to_numpy(layer(inputs))
+        with mock.patch(
+            f"{target}.fused_attention_op_available", return_value=False
+        ):
+            unfused = ops.convert_to_numpy(layer(inputs))
+        self.assertAllClose(
+            fused, unfused, **_tolerance(1e-4, 1e-4, 5e-3, 1e-3)
         )
 
 

@@ -273,6 +273,46 @@ class UnlimitedOCRTransformerDecoder(keras.layers.Layer):
             )
         return mask
 
+    def compute_output_shape(
+        self, decoder_sequence_shape, self_attention_cache_shape=None
+    ):
+        # The output keeps the input shape. The cache keeps its shape.
+        if self_attention_cache_shape is None:
+            return decoder_sequence_shape
+        return decoder_sequence_shape, self_attention_cache_shape
+
+    def compute_output_spec(
+        self,
+        decoder_sequence,
+        decoder_padding_mask=None,
+        decoder_attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
+        prefill_length=None,
+        cache_write_mask=None,
+    ):
+        # Keras reads shapes only from backend tensors and `KerasTensor`s.
+        # This override also accepts NumPy arrays and returns the cache.
+        cache_shape = (
+            None
+            if self_attention_cache is None
+            else tuple(self_attention_cache.shape)
+        )
+        output_shape = self.compute_output_shape(
+            tuple(decoder_sequence.shape), cache_shape
+        )
+        if self_attention_cache is None:
+            return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
+        return (
+            keras.KerasTensor(output_shape[0], dtype=self.compute_dtype),
+            keras.KerasTensor(
+                output_shape[1],
+                dtype=keras.backend.standardize_dtype(
+                    self_attention_cache.dtype
+                ),
+            ),
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(

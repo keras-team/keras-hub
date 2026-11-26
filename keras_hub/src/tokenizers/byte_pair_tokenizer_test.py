@@ -71,6 +71,54 @@ class BytePairTokenizerTest(TestCase):
         ]
         self.assertAllEqual(call_output, expected)
 
+    def test_string_output_padding(self):
+        vocab = {"a": 0, "b": 1, "Ġ": 2, "ab": 3, "Ġab": 4}
+        merges = ["a b", "Ġ ab"]
+        data = ["ab", "ab ab"]
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            dtype="string",
+            sequence_length=4,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        expected = [["ab", "", "", ""], ["ab", "Ġab", "", ""]]
+        self.assertAllEqual(tokenizer(data), expected)
+        self.assertAllEqual(tokenizer("ab"), expected[0])
+        dataset = tf.data.Dataset.from_tensor_slices(data).batch(2)
+        self.assertAllEqual(next(iter(dataset.map(tokenizer))), expected)
+
+    def _check_padding_with_pad_token(self, dtype, expected):
+        class PadTokenizer(BytePairTokenizer):
+            def __init__(self, **kwargs):
+                self._add_special_token("<pad>", "pad_token")
+                super().__init__(**kwargs)
+
+        tokenizer = PadTokenizer(
+            vocabulary={"a": 0, "b": 1, "Ġ": 2, "ab": 3, "Ġab": 4, "<pad>": 5},
+            merges=["a b", "Ġ ab"],
+            dtype=dtype,
+            sequence_length=4,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        data = ["ab", "ab ab"]
+        self.assertAllEqual(tokenizer(data), expected)
+        self.assertAllEqual(tokenizer("ab"), expected[0])
+        dataset = tf.data.Dataset.from_tensor_slices(data).batch(2)
+        self.assertAllEqual(next(iter(dataset.map(tokenizer))), expected)
+
+    def test_int_output_padding_uses_pad_token_id(self):
+        self._check_padding_with_pad_token(
+            "int32", [[3, 5, 5, 5], [3, 4, 5, 5]]
+        )
+
+    def test_string_output_padding_uses_pad_token(self):
+        pad = "<pad>"
+        self._check_padding_with_pad_token(
+            "string",
+            [["ab", pad, pad, pad], ["ab", "Ġab", pad, pad]],
+        )
+
     def test_tokenize_with_special_tokens(self):
         vocab = {"sp": 0, "s": 1, "p": 2}
         merges = ["s p"]

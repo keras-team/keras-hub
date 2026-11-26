@@ -1,6 +1,7 @@
 import functools
 import math
 
+import keras
 import numpy as np
 from keras import ops
 
@@ -108,6 +109,21 @@ def _resize_uint8(image, height, width):
     return _resize_axis(image, 0, height)
 
 
+# The base class arguments that the layer fixes. Each entry lists the fixed
+# value first, then the other values that mean the same.
+_FIXED_BASE_ARGUMENTS = {
+    "scale": (None, 1.0),
+    "offset": (None, 0.0),
+    "dtype": ("float32",),
+    "image_size": (None,),
+    "crop_to_aspect_ratio": (False,),
+    "pad_to_aspect_ratio": (False,),
+    "interpolation": ("bicubic",),
+    "antialias": (True,),
+    "bounding_box_format": ("yxyx",),
+}
+
+
 @keras_hub_export("keras_hub.layers.UnlimitedOCRImageConverter")
 class UnlimitedOCRImageConverter(ImageConverter):
     """Converts raw images into `UnlimitedOCRBackbone` image inputs.
@@ -135,6 +151,14 @@ class UnlimitedOCRImageConverter(ImageConverter):
         all images one after the other.
     - `"patches_grid"`: int array of shape `(num_images, 2)`. The columns and
         rows of tiles of each image. An image with no tiles has `(0, 0)`.
+
+    The layer supports only the channels-last data format. It raises a
+    `ValueError` for `data_format="channels_first"`. The layer fixes the base
+    arguments `image_size=None`, `interpolation="bicubic"`, `antialias=True`,
+    `crop_to_aspect_ratio=False`, `pad_to_aspect_ratio=False`,
+    `bounding_box_format="yxyx"`, and `dtype="float32"`. The layer uses no
+    `scale` and no `offset`. It raises a `ValueError` for any other value of
+    these arguments. It accepts the fixed values, so a saved config loads.
 
     Args:
         global_size: int. The side of the global view in pixels. Defaults to
@@ -193,26 +217,38 @@ class UnlimitedOCRImageConverter(ImageConverter):
         rescale_factor=1.0 / 255.0,
         **kwargs,
     ):
-        # Drop the base class arguments that this layer fixes or does not
-        # use. A config from the base class `get_config` can carry them.
-        for key in (
-            "scale",
-            "offset",
-            "dtype",
-            "image_size",
-            "crop_to_aspect_ratio",
-            "pad_to_aspect_ratio",
-            "interpolation",
-            "antialias",
-            "bounding_box_format",
-        ):
-            kwargs.pop(key, None)
+        # Reject the base class arguments that this layer fixes or does not
+        # use, unless the value equals the fixed value. A config from the
+        # base class `get_config` can carry them.
+        for key, accepted in _FIXED_BASE_ARGUMENTS.items():
+            if key not in kwargs:
+                continue
+            value = kwargs.pop(key)
+            if key == "dtype":
+                try:
+                    value = keras.dtype_policies.get(value).name
+                except (ValueError, TypeError):
+                    pass
+            if value not in accepted:
+                raise ValueError(
+                    f"`UnlimitedOCRImageConverter` does not support "
+                    f"`{key}`. The layer always uses {accepted[0]!r}. "
+                    f"Remove the argument. Received: {key}={value!r}"
+                )
+        data_format = kwargs.pop("data_format", None)
+        if data_format not in (None, "channels_last"):
+            raise ValueError(
+                "`UnlimitedOCRImageConverter` supports only the "
+                '`"channels_last"` data format. Remove `data_format` or set '
+                f'it to `"channels_last"`. Received: {data_format!r}'
+            )
         super().__init__(
             image_size=None,
             crop_to_aspect_ratio=False,
             interpolation="bicubic",
             antialias=True,
             dtype="float32",
+            data_format="channels_last",
             **kwargs,
         )
         self.global_size = global_size

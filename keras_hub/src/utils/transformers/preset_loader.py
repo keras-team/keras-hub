@@ -178,7 +178,14 @@ class TransformersPresetLoader(PresetLoader):
             )
         else:
             keras_config = self.converter.convert_backbone_config(self.config)
-        backbone = cls(**{**keras_config, **kwargs})
+        # An optional hook reads backbone arguments from other files of the
+        # preset.
+        extra = {}
+        if hasattr(self.converter, "load_backbone_config"):
+            extra = self.converter.load_backbone_config(
+                self.preset, self.config
+            )
+        backbone = cls(**{**keras_config, **extra, **kwargs})
         if load_weights:
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)

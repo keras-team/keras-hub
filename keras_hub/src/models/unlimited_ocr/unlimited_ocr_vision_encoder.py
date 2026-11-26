@@ -24,6 +24,9 @@ class UnlimitedOCRVisionEncoder(keras.Model):
     features on the channel axis. The output has
     `clip_hidden_dim + sam_downsample_channels[-1]` channels.
 
+    The layer supports only the channels-last image data format. The
+    constructor raises a `ValueError` for any other global setting.
+
     The layer accepts any image size that the SAM windows and grids allow.
     It resizes the absolute and relative position tables to the input grid.
     The model uses one global view and local tiles of different sizes.
@@ -98,6 +101,14 @@ class UnlimitedOCRVisionEncoder(keras.Model):
         clip_patch_size=14,
         **kwargs,
     ):
+        if keras.config.image_data_format() != "channels_last":
+            raise ValueError(
+                "`UnlimitedOCRVisionEncoder` supports only the channels-last "
+                "image data format. Call "
+                '`keras.config.set_image_data_format("channels_last")` '
+                "before you build the encoder. "
+                f"Received: {keras.config.image_data_format()}"
+            )
         super().__init__(**kwargs)
         if clip_hidden_dim != sam_downsample_channels[-1]:
             raise ValueError(
@@ -248,10 +259,9 @@ class UnlimitedOCRVisionEncoder(keras.Model):
         run_batch = (
             max(batch, 1) if isinstance(batch, int) else ops.maximum(batch, 1)
         )
-        zero_image = ops.zeros((1, *x.shape[1:]), dtype=x.dtype)
+        zero_image = ops.zeros((1, *ops.shape(x)[1:]), dtype=x.dtype)
         x = ops.concatenate([x, zero_image], axis=0)
-        x = ops.take(x, ops.arange(run_batch), axis=0)
-        return ops.take(self._encode(x), ops.arange(batch), axis=0)
+        return self._encode(x[:run_batch, ...])[:batch, ...]
 
     def _encode(self, x):
         # === SAM encoder ===
@@ -271,10 +281,9 @@ class UnlimitedOCRVisionEncoder(keras.Model):
             x = layer(x)
 
         batch = ops.shape(sam_features)[0]
-        height, width = sam_features.shape[1], sam_features.shape[2]
         sam_features = ops.reshape(
             sam_features,
-            (batch, height * width, self.sam_downsample_channels[-1]),
+            (batch, -1, self.sam_downsample_channels[-1]),
         )
         # The CLIP class token does not reach the output
         # (modeling_unlimited_ocr.py:968-969).

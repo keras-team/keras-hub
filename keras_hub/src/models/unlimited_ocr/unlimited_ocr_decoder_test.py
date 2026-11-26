@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -132,25 +133,79 @@ class UnlimitedOCRDecoderTest(TestCase):
     def test_sliding_window_changes_output(self):
         # With a short window and a long decode, the R-SWA output must differ
         # from full causal attention. This guards a mask that never applies.
+        # Both runs decode through the cache, so only the mask differs.
         layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
         seq_len = 8
         x = np.random.normal(size=(1, seq_len, 16)).astype("float32")
-        full = ops.convert_to_numpy(layer(x))
-        cache = ops.zeros((1, 2, seq_len, 2, 8))
         prefill = ops.convert_to_tensor([2], dtype="int32")
-        outputs = []
-        for index in range(seq_len):
-            step, cache = layer(
-                x[:, index : index + 1],
-                self_attention_cache=cache,
-                self_attention_cache_update_index=index,
-                prefill_length=prefill,
-            )
-            outputs.append(ops.convert_to_numpy(step))
-        windowed = np.concatenate(outputs, axis=1)
+
+        def decode(prefill_length):
+            cache = ops.zeros((1, 2, seq_len, 2, 8))
+            outputs = []
+            for index in range(seq_len):
+                step, cache = layer(
+                    x[:, index : index + 1],
+                    self_attention_cache=cache,
+                    self_attention_cache_update_index=index,
+                    prefill_length=prefill_length,
+                )
+                outputs.append(ops.convert_to_numpy(step))
+            return np.concatenate(outputs, axis=1)
+
+        windowed = decode(prefill)
+        full = decode(None)
         # Positions before the window fills match full attention.
         self.assertAllClose(
             windowed[:, :3], full[:, :3], **_tolerance(1e-4, 1e-4, 1e-2, 1e-2)
         )
         difference = np.abs(windowed[:, 7] - full[:, 7]).max()
-        self.assertGreater(float(difference), 1e-3)
+        self.assertGreater(float(difference), 1e-2)
+
+    def test_compute_output_shape(self):
+        layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
+        self.assertEqual(layer.compute_output_shape((2, 6, 16)), (2, 6, 16))
+
+    def test_compute_output_shape_with_cache(self):
+        layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
+        output_shape, cache_shape = layer.compute_output_shape(
+            (2, 6, 16), self_attention_cache_shape=(2, 2, 8, 2, 8)
+        )
+        self.assertEqual(output_shape, (2, 6, 16))
+        self.assertEqual(cache_shape, (2, 2, 8, 2, 8))
+
+    def test_compute_output_spec(self):
+        layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
+        cache = np.zeros((2, 2, 8, 2, 8), dtype="float32")
+        # NumPy, backend tensor and symbolic inputs give the same spec.
+        for x in (
+            self.input_data,
+            ops.convert_to_tensor(self.input_data),
+            keras.KerasTensor((2, 6, 16)),
+        ):
+            spec = layer.compute_output_spec(x)
+            self.assertEqual(spec.shape, (2, 6, 16))
+            output_spec, cache_spec = layer.compute_output_spec(
+                x,
+                self_attention_cache=cache,
+                self_attention_cache_update_index=0,
+                prefill_length=np.array([2, 4], dtype="int32"),
+            )
+            self.assertEqual(output_spec.shape, (2, 6, 16))
+            self.assertEqual(cache_spec.shape, (2, 2, 8, 2, 8))
+
+    def test_functional_model_with_cache(self):
+        layer = UnlimitedOCRTransformerDecoder(**self.init_kwargs)
+        inputs = keras.Input(shape=(6, 16))
+        cache = keras.Input(shape=(2, 8, 2, 8))
+        outputs = layer(
+            inputs,
+            self_attention_cache=cache,
+            self_attention_cache_update_index=0,
+        )
+        model = keras.Model([inputs, cache], outputs)
+        output, new_cache = model.predict(
+            [self.input_data, np.zeros((2, 2, 8, 2, 8), dtype="float32")],
+            verbose=0,
+        )
+        self.assertEqual(output.shape, (2, 6, 16))
+        self.assertEqual(new_cache.shape, (2, 2, 8, 2, 8))

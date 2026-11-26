@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 from keras import ops
 
@@ -151,3 +152,54 @@ class UnlimitedOCRAttentionTest(TestCase):
         layer = UnlimitedOCRAttention(**self.init_kwargs)
         with self.assertRaisesRegex(ValueError, "cache_update_index"):
             layer(self.input_data, cache_update_index=0)
+
+    def test_hidden_dim_must_divide_query_heads(self):
+        layer = UnlimitedOCRAttention(num_query_heads=3)
+        with self.assertRaisesRegex(ValueError, "num_query_heads"):
+            layer.build((2, 6, 14))
+
+    def test_zero_key_value_heads_raise(self):
+        with self.assertRaisesRegex(ValueError, "num_key_value_heads"):
+            UnlimitedOCRAttention(num_query_heads=4, num_key_value_heads=0)
+
+    def test_compute_output_shape(self):
+        layer = UnlimitedOCRAttention(**self.init_kwargs)
+        self.assertEqual(layer.compute_output_shape((2, 6, 16)), (2, 6, 16))
+
+    def test_compute_output_shape_with_cache(self):
+        layer = UnlimitedOCRAttention(**self.init_kwargs)
+        output_shape, cache_shape = layer.compute_output_shape(
+            (2, 6, 16), cache_shape=(2, 2, 8, 2, 8)
+        )
+        self.assertEqual(output_shape, (2, 6, 16))
+        self.assertEqual(cache_shape, (2, 2, 8, 2, 8))
+
+    def test_compute_output_spec(self):
+        layer = UnlimitedOCRAttention(**self.init_kwargs)
+        cache = np.zeros((2, 2, 8, 2, 8), dtype="float32")
+        # NumPy, backend tensor and symbolic inputs give the same spec.
+        for x in (
+            self.input_data,
+            ops.convert_to_tensor(self.input_data),
+            keras.KerasTensor((2, 6, 16)),
+        ):
+            spec = layer.compute_output_spec(x)
+            self.assertEqual(spec.shape, (2, 6, 16))
+            output_spec, cache_spec = layer.compute_output_spec(
+                x, cache=cache, cache_update_index=0
+            )
+            self.assertEqual(output_spec.shape, (2, 6, 16))
+            self.assertEqual(cache_spec.shape, (2, 2, 8, 2, 8))
+
+    def test_functional_model_with_cache(self):
+        layer = UnlimitedOCRAttention(**self.init_kwargs)
+        inputs = keras.Input(shape=(6, 16))
+        cache = keras.Input(shape=(2, 8, 2, 8))
+        outputs = layer(inputs, cache=cache, cache_update_index=0)
+        model = keras.Model([inputs, cache], outputs)
+        output, new_cache = model.predict(
+            [self.input_data, np.zeros((2, 2, 8, 2, 8), dtype="float32")],
+            verbose=0,
+        )
+        self.assertEqual(output.shape, (2, 6, 16))
+        self.assertEqual(new_cache.shape, (2, 2, 8, 2, 8))

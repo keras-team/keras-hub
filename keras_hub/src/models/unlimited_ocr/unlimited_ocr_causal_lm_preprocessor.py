@@ -52,8 +52,9 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
       tiles of each image.
 
     A sample with fewer images, or tiles, than the largest count has zero
-    padding after its real images, and the grid `(0, 0)` for each padding
-    image. A single prompt, not in a batch, has no batch axis.
+    padding after its real images, and the grid `(-1, -1)` for each padding
+    image. An image with no tiles has the grid `(0, 0)`. A single prompt,
+    not in a batch, has no batch axis.
 
     For generation, the layer has the methods `generate_preprocess()` and
     `generate_postprocess()`. `keras_hub.models.UnlimitedOCRCausalLM` calls
@@ -64,8 +65,8 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         image_converter: A `keras_hub.layers.UnlimitedOCRImageConverter`
             instance.
         sequence_length: int. The length of the packed inputs. The sequence
-            must hold all image tokens of the prompt. A page with tiles
-            needs a few thousand tokens. Defaults to `1024`.
+            must hold all image tokens of the prompt and the generated text.
+            A page with 32 tiles needs 3793 image tokens. Defaults to `8192`.
         add_start_token: bool. If `True`, the layer prepends the start token
             to each sequence. Defaults to `True`.
         add_end_token: bool. If `True`, the layer appends the end token to
@@ -81,7 +82,7 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
     ```python
     cls = keras_hub.models.UnlimitedOCRCausalLMPreprocessor
     preprocessor = cls.from_preset(
-        "unlimited_ocr", sequence_length=4096
+        "unlimited_ocr", sequence_length=8192
     )
     preprocessor.generate_preprocess(
         {
@@ -100,7 +101,7 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         self,
         tokenizer,
         image_converter=None,
-        sequence_length=1024,
+        sequence_length=8192,
         add_start_token=True,
         add_end_token=True,
         **kwargs,
@@ -120,8 +121,11 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
             return []
         if tf is not None and isinstance(images, tf.Tensor):
             images = images.numpy()
-        if hasattr(images, "shape"):
-            images = convert_to_numpy(images)
+        if not isinstance(images, (list, tuple)):
+            if hasattr(images, "shape"):
+                images = convert_to_numpy(images)
+            else:
+                images = np.asarray(images)
             if images.ndim == 3:
                 return [images]
             if images.ndim in (4, 5):
@@ -198,7 +202,7 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
         grouped_tiles = np.zeros(
             (batch_size, max_tiles) + pixel_values_local.shape[1:], "float32"
         )
-        grouped_grid = np.zeros((batch_size, max_images, 2), "int32")
+        grouped_grid = np.full((batch_size, max_images, 2), -1, "int32")
         image_offset = tile_offset = 0
         for index, (count, num_tiles) in enumerate(
             zip(image_counts, tile_counts)
@@ -236,8 +240,8 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
             tiles_per_image, image_prompt, batch_size
         )
 
-        def gather(values, counts):
-            # Appends one zero row. Padding slots point to this row.
+        def gather(values, counts, padding=0):
+            # Appends one padding row. Padding slots point to this row.
             max_count = tf.reduce_max(tf.concat([counts, [0]], axis=0))
             start = tf.cumsum(counts, exclusive=True)
             slot = tf.range(max_count)[None, :]
@@ -247,14 +251,14 @@ class UnlimitedOCRCausalLMPreprocessor(CausalLMPreprocessor):
                 tf.shape(values)[0],
             )
             zero_shape = tf.concat([[1], tf.shape(values)[1:]], axis=0)
-            zero = tf.zeros(zero_shape, values.dtype)
-            padded = tf.concat([values, zero], axis=0)
+            pad_row = tf.fill(zero_shape, tf.cast(padding, values.dtype))
+            padded = tf.concat([values, pad_row], axis=0)
             return tf.gather(padded, index)
 
         return (
             gather(pixel_values, image_counts),
             gather(pixel_values_local, tile_counts),
-            gather(patches_grid, image_counts),
+            gather(patches_grid, image_counts, padding=-1),
         )
 
     def _process_python(self, prompts, images, sequence_length, add_labels):

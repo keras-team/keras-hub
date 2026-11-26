@@ -222,29 +222,16 @@ class UnlimitedOCRCausalLM(CausalLM):
         # Start at the first index that has no user token.
         index = ops.min(row_lengths)
 
-        # The first decode step of a row feeds its last prompt token as plain
-        # text. The step has no image features, so an image token at this
-        # position gets the wrong output. The prefill pass has the right
-        # output. Each row takes the prefill output at its last prompt token.
-        batch_size = ops.shape(token_ids)[0]
-        last_index = ops.maximum(row_lengths, 1) - 1
-        last_index = ops.broadcast_to(
-            last_index[:, None, None],
-            (batch_size, 1, ops.shape(hidden_states)[-1]),
-        )
-        prefill_hidden = ops.squeeze(
-            ops.take_along_axis(hidden_states, last_index, axis=1), axis=1
-        )
-        prefill_logits = self.backbone.token_embedding(
-            prefill_hidden, reverse=True
-        )
-
+        # The decode loop feeds the prompt tokens of a row as plain text.
+        # The step has no image features, so an image token gets the wrong
+        # output. The prefill pass has the right output. Each step takes the
+        # prefill output at every position below the row length.
         # The sampler passes `cache` through the loop, so the cache carries
         # these tensors. Each tensor has the batch size as its first axis.
-        cache = (cache, prefill_logits, prefill_hidden, row_lengths)
+        cache = (cache, hidden_states, row_lengths)
 
         def next(prompt, cache, index):
-            cache, prefill_logits, prefill_hidden, row_lengths = cache
+            cache, prefill_hidden, row_lengths = cache
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
             batch_size = ops.shape(prompt)[0]
@@ -257,12 +244,23 @@ class UnlimitedOCRCausalLM(CausalLM):
             )
             logits = ops.squeeze(logits, axis=1)
             hidden_states = ops.squeeze(hidden_states, axis=1)
-            # A row is at its first step when `index` equals its length.
-            is_first_step = ops.equal(index, row_lengths)[:, None]
+            prefill_step_hidden = ops.squeeze(
+                ops.slice(
+                    prefill_hidden,
+                    [0, cache_update_index, 0],
+                    [batch_size, 1, ops.shape(prefill_hidden)[-1]],
+                ),
+                axis=1,
+            )
+            prefill_step_logits = self.backbone.token_embedding(
+                prefill_step_hidden, reverse=True
+            )
+            # A row is in its prompt while the fed token is a prompt token.
+            in_prompt = ops.less(cache_update_index, row_lengths)[:, None]
             return (
-                ops.where(is_first_step, prefill_logits, logits),
-                ops.where(is_first_step, prefill_hidden, hidden_states),
-                (cache, prefill_logits, prefill_hidden, row_lengths),
+                ops.where(in_prompt, prefill_step_logits, logits),
+                ops.where(in_prompt, prefill_step_hidden, hidden_states),
+                (cache, prefill_hidden, row_lengths),
             )
 
         token_ids = self.sampler(

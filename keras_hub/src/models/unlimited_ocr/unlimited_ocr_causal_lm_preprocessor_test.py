@@ -29,6 +29,7 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
             vocab.extend([a, b, a + b])
         vocab += ["!", "<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
         vocab += ["<｜▁pad▁｜>", "<image>"]
+        vocab += ["<|User|>", "<|Assistant|>", "<|EOT|>"]
         vocab += ["<|det|>", "<|/det|>"]
         vocab = sorted(set(vocab))
         vocab = dict([(token, i) for i, token in enumerate(vocab)])
@@ -97,7 +98,7 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
         self.assertEqual(pixel_values.shape, (2, 2, 64, 64, 3))
         self.assertEqual(pixel_values_local.shape, (2, 4, 40, 40, 3))
         self.assertAllEqual(
-            x["patches_grid"], [[[2, 1], [2, 1]], [[2, 1], [0, 0]]]
+            x["patches_grid"], [[[2, 1], [2, 1]], [[2, 1], [-1, -1]]]
         )
         # The padding image and the padding tiles have zero pixels.
         self.assertAllEqual(pixel_values[1, 1], np.zeros((64, 64, 3)))
@@ -158,6 +159,26 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
         shape = tuple(x["pixel_values_local"].shape)
         self.assertEqual(shape, (2, 2, 40, 40, 3))
         self.assertAllEqual(x["patches_grid"], [[[2, 1]], [[0, 0]]])
+
+    def test_pil_image_input(self):
+        image_module = pytest.importorskip("PIL.Image")
+        pil_image = image_module.fromarray(self.wide_image.astype("uint8"))
+        array_image = np.asarray(pil_image)
+        preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
+        prompts = ["<image>airplane"]
+        from_pil = preprocessor.generate_preprocess(
+            {"prompts": prompts, "images": [pil_image]}
+        )
+        from_array = preprocessor.generate_preprocess(
+            {"prompts": prompts, "images": [array_image]}
+        )
+        self.assertAllEqual(from_pil["token_ids"], from_array["token_ids"])
+        self.assertAllEqual(from_pil["patches_grid"], [[[2, 1]]])
+        self.assertAllClose(
+            from_pil["pixel_values"], from_array["pixel_values"]
+        )
+        x, _, _ = preprocessor({"prompts": prompts, "images": [pil_image]})
+        self.assertEqual(x["pixel_values_local"].shape[1], 2)
 
     def test_images_are_matched_to_placeholders_in_order(self):
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
@@ -388,14 +409,17 @@ class UnlimitedOCRCausalLMPreprocessorTest(TestCase):
                 {"prompts": ["<image>airport"], "images": [self.wide_image]}
             )
 
-    def test_generate_postprocess_keeps_ocr_markers(self):
+    def test_generate_postprocess_strips_chat_tokens_keeps_ocr_markers(self):
         preprocessor = UnlimitedOCRCausalLMPreprocessor(**self.init_kwargs)
         vocab = self.tokenizer.vocabulary
         ids = [
             self.tokenizer.start_token_id,
+            vocab["<|User|>"],
+            vocab["<|Assistant|>"],
             vocab["<|det|>"],
             self.tokenizer.token_to_id("ai"),
             vocab["<|/det|>"],
+            vocab["<|EOT|>"],
             self.tokenizer.end_token_id,
         ]
         text = preprocessor.generate_postprocess(

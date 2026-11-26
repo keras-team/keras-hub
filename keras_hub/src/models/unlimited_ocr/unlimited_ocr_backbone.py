@@ -63,7 +63,7 @@ class UnlimitedOCRBackbone(Backbone):
     after the other. The tiles of one image are in row-major order. An
     image with no tiles has the grid `(0, 0)`. A sample with fewer images
     than the other samples has padding images with zero pixels and the grid
-    `(0, 0)`. The padding follows the real images. The placeholder tokens of
+    `(-1, -1)`. The padding follows the real images. The placeholder tokens of
     a sample select its images in order.
 
     The default constructor gives a randomly initialized model. To load a
@@ -164,11 +164,11 @@ class UnlimitedOCRBackbone(Backbone):
         local_image_size=80,
     )
     # The 4x4 global view needs 21 placeholders: 4 rows of 4 tokens and a
-    # newline, plus one separator. This short input has only 7.
+    # newline, plus one separator. The input has exactly 21.
     model(
         {
-            "token_ids": np.array([[1, 99, 99, 99, 99, 99, 99, 99, 2]]),
-            "padding_mask": np.ones((1, 9), dtype="int32"),
+            "token_ids": np.array([[1] + [99] * 21 + [2]]),
+            "padding_mask": np.ones((1, 23), dtype="int32"),
             "pixel_values": np.zeros((1, 1, 128, 128, 3), dtype="float32"),
             "pixel_values_local": np.zeros((1, 0, 80, 80, 3), dtype="float32"),
             "patches_grid": np.zeros((1, 1, 2), dtype="int32"),

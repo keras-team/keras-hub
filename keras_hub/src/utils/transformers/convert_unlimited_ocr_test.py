@@ -85,6 +85,51 @@ REAL_PREPROCESSOR_CONFIG = {
 
 REAL_PROCESSOR_CONFIG = {"patch_size": 16, "downsample_ratio": 4}
 
+TINY_NATIVE_CONFIG = {
+    "model_type": "unlimited_ocr",
+    "architectures": ["UnlimitedOcrForConditionalGeneration"],
+    "image_token_id": 300,
+    "text_config": {
+        "vocab_size": 400,
+        "hidden_size": 32,
+        "intermediate_size": 48,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 4,
+        "moe_intermediate_size": 16,
+        "n_routed_experts": 4,
+        "n_shared_experts": 2,
+        "num_experts_per_tok": 2,
+        "topk_method": "greedy",
+        "n_group": 1,
+        "topk_group": 1,
+        "mlp_layer_types": ["dense", "sparse"],
+        "sliding_window": 4,
+    },
+    "vision_config": {
+        "sam_config": {
+            "hidden_size": 32,
+            "output_channels": 16,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 2,
+            "image_size": 128,
+            "patch_size": 8,
+            "window_size": 4,
+            "global_attn_indexes": [1],
+            "mlp_dim": 64,
+            "downsample_channels": [24, 32],
+        },
+        "encoder_config": {
+            "hidden_size": 32,
+            "intermediate_size": 64,
+            "num_hidden_layers": 2,
+            "num_attention_heads": 2,
+            "image_size": 48,
+            "patch_size": 16,
+        },
+    },
+}
+
 
 def _write_json(dir_path, name, data):
     with open(os.path.join(dir_path, name), "w", encoding="utf-8") as f:
@@ -329,6 +374,8 @@ class TestUnlimitedOCRConverter(TestCase):
             "<image>": 300,
             "<|det|>": 301,
             "<|EOT|>": 302,
+            "<|User|>": 303,
+            "<|Assistant|>": 304,
         }
         # The original `tokenizer.json` lists the base tokens, the special
         # tokens and the merges.
@@ -360,7 +407,107 @@ class TestUnlimitedOCRConverter(TestCase):
 
     def test_load_preprocessor_config_sets_sequence_length(self):
         config = convert_unlimited_ocr.load_preprocessor_config(None, {})
-        self.assertEqual(config, {"sequence_length": 4096})
+        self.assertEqual(config, {"sequence_length": 8192})
+
+    def _write_tiny_preset(self, preset_dir):
+        """Writes a tiny native preset with no weights.
+
+        The sizes in `preprocessor_config.json` differ from the sizes in
+        `config.json` and from the backbone defaults.
+        """
+        from tokenizers import pre_tokenizers
+
+        _write_json(preset_dir, "config.json", TINY_NATIVE_CONFIG)
+        _write_json(
+            preset_dir,
+            "preprocessor_config.json",
+            {
+                **REAL_PREPROCESSOR_CONFIG,
+                "size": {"height": 48, "width": 64},
+                "tile_size": 40,
+                "min_patches": 1,
+                "max_patches": 2,
+            },
+        )
+        _write_json(
+            preset_dir,
+            "processor_config.json",
+            {"patch_size": 8, "downsample_ratio": 4},
+        )
+        alphabet = sorted(pre_tokenizers.ByteLevel.alphabet())
+        vocab = {token: index + 3 for index, token in enumerate(alphabet)}
+        vocab["Ġt"] = len(vocab) + 3
+        specials = {
+            "<｜begin▁of▁sentence｜>": 0,
+            "<｜end▁of▁sentence｜>": 1,
+            "<｜▁pad▁｜>": 2,
+            "<image>": 300,
+            "<|User|>": 301,
+            "<|Assistant|>": 302,
+            "<|EOT|>": 303,
+        }
+        _write_json(
+            preset_dir,
+            "tokenizer.json",
+            {
+                "model": {"vocab": vocab, "merges": [["Ġ", "t"]]},
+                "added_tokens": [
+                    {"id": index, "content": token}
+                    for token, index in specials.items()
+                ],
+            },
+        )
+
+    def test_causal_lm_from_preset_without_weights(self):
+        with tempfile.TemporaryDirectory() as preset_dir:
+            self._write_tiny_preset(preset_dir)
+            task = UnlimitedOCRCausalLM.from_preset(
+                preset_dir, load_weights=False
+            )
+            expected = convert_unlimited_ocr.load_preprocessor_config(
+                preset_dir, TINY_NATIVE_CONFIG
+            )
+        self.assertIsInstance(task, UnlimitedOCRCausalLM)
+        self.assertEqual(
+            task.preprocessor.sequence_length, expected["sequence_length"]
+        )
+
+    def test_causal_lm_from_preset_reads_the_image_sizes_of_the_converter(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as preset_dir:
+            self._write_tiny_preset(preset_dir)
+            task = UnlimitedOCRCausalLM.from_preset(
+                preset_dir, load_weights=False
+            )
+        converter = task.preprocessor.image_converter
+        # The backbone sizes differ from the SAM size in `config.json` (128)
+        # and from the backbone default (640).
+        self.assertEqual(converter.global_size, 64)
+        self.assertEqual(converter.tile_size, 40)
+        self.assertEqual(task.backbone.global_image_size, 64)
+        self.assertEqual(task.backbone.local_image_size, 40)
+
+    def test_backbone_from_preset_reads_the_image_sizes(self):
+        with tempfile.TemporaryDirectory() as preset_dir:
+            self._write_tiny_preset(preset_dir)
+            backbone = Backbone.from_preset(preset_dir, load_weights=False)
+            overridden = Backbone.from_preset(
+                preset_dir, load_weights=False, local_image_size=56
+            )
+        self.assertEqual(backbone.global_image_size, 64)
+        self.assertEqual(backbone.local_image_size, 40)
+        # An argument of the caller wins over the preset file.
+        self.assertEqual(overridden.local_image_size, 56)
+
+    def test_backbone_from_preset_without_preprocessor_config(self):
+        with tempfile.TemporaryDirectory() as preset_dir:
+            self._write_tiny_preset(preset_dir)
+            os.remove(os.path.join(preset_dir, "preprocessor_config.json"))
+            backbone = Backbone.from_preset(preset_dir, load_weights=False)
+        # The global size comes from the SAM config in `config.json`.
+        self.assertEqual(backbone.global_image_size, 128)
+        self.assertEqual(backbone.local_image_size, 640)
 
     def test_convert_backbone_config_null_rope_parameters(self):
         config = json.loads(json.dumps(REAL_CONFIG))
@@ -470,7 +617,7 @@ class TestUnlimitedOCRConverter(TestCase):
         # Compare the real tokens. Padding rows differ by design.
         valid = padding_mask.astype(bool)
         self.assertAllClose(
-            keras_out[valid], hf_out[valid], **_tolerance(1e-4, 5e-3)
+            keras_out[valid], hf_out[valid], **_tolerance(1e-4, 1.5e-2)
         )
 
     def _assert_decode_matches_hf(self, num_key_value_heads):

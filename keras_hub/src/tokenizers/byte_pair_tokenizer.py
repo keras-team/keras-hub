@@ -707,6 +707,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def _split_strings_tf(self, inputs):
         return split_strings_for_bpe(inputs, self.unsplittable_tokens)
 
+    def _get_pad_value(self):
+        """The value that pads the output up to `sequence_length`.
+
+        The value is the registered pad token, or `0` and `""` if the
+        tokenizer has none.
+        """
+        if is_int_dtype(self.compute_dtype):
+            return getattr(self, "pad_token_id", 0)
+        return getattr(self, "pad_token", None) or ""
+
     @preprocessing_function
     def _tokenize_tf(self, inputs):
         self._maybe_initialized_tf()
@@ -760,7 +770,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
+            tokens = tokens.to_tensor(
+                shape=output_shape, default_value=self._get_pad_value()
+            )
 
         # Convert to a dense output if input in scalar
         if unbatched:
@@ -811,9 +823,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 tokens[: self.sequence_length] for tokens in batched_tokens
             ]
             # Pad sequences to `sequence_length`.
-            pad_token_id = getattr(self, "pad_token_id", 0)
+            pad_value = self._get_pad_value()
             batched_tokens = [
-                tokens + [pad_token_id] * (self.sequence_length - len(tokens))
+                tokens + [pad_value] * (self.sequence_length - len(tokens))
                 for tokens in batched_tokens
             ]
             if is_int_dtype(self.compute_dtype):
