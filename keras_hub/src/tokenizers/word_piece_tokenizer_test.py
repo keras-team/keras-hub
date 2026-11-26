@@ -226,6 +226,19 @@ class WordPieceTokenizerTest(TestCase):
             [["ah", "半", "推", "zz"]],
         )
 
+    def test_split_on_cjk_is_serialized(self):
+        vocab_data = ["[UNK]", "你", "好", "你好"]
+        tokenizer = self.make_tokenizer(
+            vocabulary=vocab_data, split_on_cjk=False
+        )
+        config = tokenizer.get_config()
+        # `get_config` does not save `_allow_python_workflow`.
+        config["_allow_python_workflow"] = self._allow_python_workflow
+        revived = WordPieceTokenizer.from_config(config)
+        revived.set_vocabulary(vocab_data)
+        self.assertFalse(revived.split_on_cjk)
+        self.assertAllEqual(revived(["你好"]), [[3]])
+
     def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
