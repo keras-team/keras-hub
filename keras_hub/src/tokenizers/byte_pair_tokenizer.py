@@ -112,14 +112,16 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
-def split_strings_for_bpe(inputs, unsplittable_tokens=None):
+def split_strings_for_bpe(
+    inputs, unsplittable_tokens=None, split_pattern_1=SPLIT_PATTERN_1
+):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
     # token "६" before leading space of non-space characters and after the
     # trailing space, e.g., " keras" will be "६ keras".
     inputs = tf.strings.regex_replace(
-        inputs, rf"( )([^\s{SPECIAL_WHITESPACES}])", r"६\1\2"
+        inputs, rf"( )([^\s६{SPECIAL_WHITESPACES}])", r"६\1\2"
     )
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
@@ -130,14 +132,15 @@ def split_strings_for_bpe(inputs, unsplittable_tokens=None):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
             inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
-    raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
+    raw_tokens = tf_text.regex_split(inputs, split_pattern_1, split_pattern_1)
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
     if unsplittable_tokens:
-        # Replace special tokens alternate with originals.
-        for token, alt in zip(unsplittable_tokens, alts):
+        # Replace special tokens alternate with originals. Restore longer
+        # alts first; `ĴB` is a prefix of `ĴBA`.
+        for token, alt in reversed(list(zip(unsplittable_tokens, alts))):
             escaped_alt = re.escape(alt)
             raw_tokens = tf.strings.regex_replace(
                 raw_tokens, escaped_alt, token
@@ -701,6 +704,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         self.cache.insert(tokens, tokenized_words)
 
+    def _split_strings_tf(self, inputs):
+        return split_strings_for_bpe(inputs, self.unsplittable_tokens)
+
     @preprocessing_function
     def _tokenize_tf(self, inputs):
         self._maybe_initialized_tf()
@@ -716,7 +722,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 "`tokenize()` inputs should be a string, list of strings, or "
                 f"string tensor with rank < 2. Received: {inputs}"
             )
-        raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
+        raw_tokens = self._split_strings_tf(inputs)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 

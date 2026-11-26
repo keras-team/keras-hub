@@ -207,6 +207,30 @@ class Gemma3CausalLMTest(TestCase, parameterized.TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
+    def test_text_generate_without_preprocessor(self):
+        prompt_ids = self.text_preprocessor.generate_preprocess(
+            ["the quick brown fox", "the quick"]
+        )
+        causal_lm = Gemma3CausalLM(
+            preprocessor=None,
+            backbone=self.text_backbone,
+        )
+        outputs = causal_lm.generate(prompt_ids, stop_token_ids=None)
+        self.assertEqual(set(outputs.keys()), {"token_ids", "padding_mask"})
+        self.assertEqual(
+            outputs["token_ids"].shape, prompt_ids["token_ids"].shape
+        )
+        self.assertAllEqual(
+            outputs["token_ids"][0, :5], prompt_ids["token_ids"][0, :5]
+        )
+        self.assertAllEqual(
+            outputs["token_ids"][1, :3], prompt_ids["token_ids"][1, :3]
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"],
+            ops.ones_like(outputs["token_ids"], dtype="bool"),
+        )
+
     @parameterized.named_parameters(
         ("text_and_vision", "text_and_vision"), ("text_only", "text_only")
     )

@@ -122,14 +122,9 @@ MODEL_TOKENIZER_CONFIGS = {
 
 def _to_numpy_dict(weights_dict):
     """Convert a weight dict to a plain numpy dict for safetensors."""
-    import numpy as np
-
     result = {}
     for k, v in weights_dict.items():
-        tensor = v.value if hasattr(v, "value") else v
-        result[k] = np.array(
-            tensor.numpy() if hasattr(tensor, "numpy") else tensor
-        )
+        result[k] = keras.ops.convert_to_numpy(v)
     return result
 
 
@@ -263,7 +258,7 @@ def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
                 b = t.reshape(-1).view(torch.uint8).numpy().tobytes()
                 f.write(b)
 
-    elif backend in ("tensorflow", "jax", "openvino"):
+    else:
         # Use safetensors.numpy for backend-agnostic serialization; this
         # correctly handles 0-D scalar tensors that the TF writer rejects.
         from safetensors.numpy import save_file
@@ -273,8 +268,6 @@ def export_backbone(backbone, path, include_lm_head=False, tokenizer=None):
             weights_path,
             metadata={"format": "pt"},
         )
-    else:
-        raise ValueError(f"Unsupported backend: {backend}")
 
 
 def export_tokenizer(tokenizer, path):

@@ -24,6 +24,7 @@ from keras_hub.src.utils.keras_utils import running_on_gpu
 
 class PaliGemmaCausalLMTest(TestCase):
     def setUp(self):
+        super().setUp()
         self.batch_size = 2
         self.text_sequence_length = 16
         self.image_size = 16
@@ -133,12 +134,14 @@ class PaliGemmaCausalLMTest(TestCase):
                 dtype="int32",
             ),
         }
+        # PyTorch CPU vs LiteRT XNNPACK float32 drift reaches 4.19e-6 max and
+        # 3.07e-7 mean across 41 seeds.
         self.run_litert_export_test(
             cls=PaliGemmaCausalLM,
             init_kwargs=self.init_kwargs,
             input_data=input_data,
             comparison_mode="statistical",
-            output_thresholds={"*": {"max": 2e-6, "mean": 1e-6}},
+            output_thresholds={"*": {"max": 2e-5, "mean": 2e-6}},
         )
 
     def test_pali_gemma_causal_model(self):
