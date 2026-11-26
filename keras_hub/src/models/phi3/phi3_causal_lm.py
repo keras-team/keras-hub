@@ -205,5 +205,8 @@ class Phi3CausalLM(CausalLM):
                 stop_token_ids.append(end_of_turn_id)
 
         return super().generate(
-            inputs, max_length, stop_token_ids, strip_prompt
+            inputs,
+            max_length=max_length,
+            stop_token_ids=stop_token_ids,
+            strip_prompt=strip_prompt,
         )
