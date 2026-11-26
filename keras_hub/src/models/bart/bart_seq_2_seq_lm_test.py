@@ -127,16 +127,11 @@ class BartSeq2SeqLMTest(TestCase):
             self.assertAllEqual(inputs["decoder_text"], output)
 
     def test_generate_compilation(self):
-        seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
-        # Assert we do not recompile with successive calls.
-        seq_2_seq_lm.generate(" airplane at airport")
-        first_fn = seq_2_seq_lm.generate_function
-        seq_2_seq_lm.generate(" airplane at airport")
-        second_fn = seq_2_seq_lm.generate_function
-        self.assertEqual(first_fn, second_fn)
-        # Assert we do recompile after compile is called.
-        seq_2_seq_lm.compile(sampler="greedy")
-        self.assertIsNone(seq_2_seq_lm.generate_function)
+        self.run_generate_compilation_test(
+            cls=BartSeq2SeqLM,
+            init_kwargs=self.init_kwargs,
+            prompt=" airplane at airport",
+        )
 
     def test_beam_search(self):
         seq_2_seq_lm = BartSeq2SeqLM(
