@@ -4,6 +4,7 @@ from keras.src.saving import serialization_lib
 
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_hub.src.tokenizers.byte_pair_tokenizer import split_strings_for_bpe
 
 VOCAB_PATH = keras.utils.get_file(
     None,
@@ -90,6 +91,24 @@ class BytePairTokenizerTest(TestCase):
         )
         output = tokenizer("sp")
         self.assertAllEqual(output, [0])
+
+    def test_tokenize_with_more_than_ten_special_tokens(self):
+        # The TensorFlow placeholders are `ĴA`, `ĴB`, ..., `ĴBA`, so from the
+        # eleventh token on a placeholder starts with an earlier one.
+        tokens = [f"<|t{i}|>" for i in range(12)]
+        vocab = {"sp": 0, "s": 1, "p": 2}
+        for token in tokens:
+            vocab[token] = len(vocab)
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=["s p"],
+            unsplittable_tokens=tokens,
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        for token in tokens:
+            self.assertAllEqual(tokenizer(token), [vocab[token]])
+        output = tokenizer(f"sp{tokens[10]}{tokens[1]}")
+        self.assertAllEqual(output, [0, vocab[tokens[10]], vocab[tokens[1]]])
 
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
@@ -199,6 +218,15 @@ class BytePairTokenizerTest(TestCase):
                 tokenizer.set_vocabulary_and_merges(vocab_path, merges_path)
 
 
+class _CharSplitBytePairTokenizer(BytePairTokenizer):
+    """Splits on every non-space character in the TensorFlow workflow."""
+
+    def _split_strings_tf(self, inputs):
+        return split_strings_for_bpe(
+            inputs, self.unsplittable_tokens, split_pattern_1=r"\S"
+        )
+
+
 class BytePairTokenizerTFTest(BytePairTokenizerTest):
     """Set `_allow_python_workflow=False` to test TF execution."""
 
@@ -210,3 +238,21 @@ class BytePairTokenizerTFTest(BytePairTokenizerTest):
             merges=MERGE_PATH,
             _allow_python_workflow=self._allow_python_workflow,
         )
+
+    def test_split_strings_tf_override_is_used(self):
+        # A subclass can replace the TensorFlow pre-split through the
+        # `_split_strings_tf` hook and its `split_pattern_1` argument.
+        kwargs = {
+            "vocabulary": {"sp": 0, "s": 1, "p": 2},
+            "merges": ["s p"],
+            "_allow_python_workflow": False,
+        }
+        self.assertAllEqual(BytePairTokenizer(**kwargs)("sp"), [0])
+        self.assertAllEqual(_CharSplitBytePairTokenizer(**kwargs)("sp"), [1, 2])
+
+    def test_split_strings_for_bpe_marker_after_spaces(self):
+        # The `६` marker is excluded from the character after a space, so a
+        # run of spaces before a literal `६` stays one piece and the marker
+        # itself is dropped.
+        pieces = split_strings_for_bpe(tf.constant(["a  \u096c"]))
+        self.assertEqual(pieces.to_list(), [[b"a", b"  "]])

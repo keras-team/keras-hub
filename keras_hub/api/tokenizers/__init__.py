@@ -101,6 +101,9 @@ from keras_hub.src.models.mpnet.mpnet_tokenizer import (
 from keras_hub.src.models.muse_glimmer.muse_glimmer_tokenizer import (
     MuseGlimmerTokenizer as MuseGlimmerTokenizer,
 )
+from keras_hub.src.models.openai_privacy_filter.openai_privacy_filter_tokenizer import (
+    OpenAIPrivacyFilterTokenizer as OpenAIPrivacyFilterTokenizer,
+)
 from keras_hub.src.models.opt.opt_tokenizer import OPTTokenizer as OPTTokenizer
 from keras_hub.src.models.pali_gemma.pali_gemma_tokenizer import (
     PaliGemmaTokenizer as PaliGemmaTokenizer,
@@ -128,6 +131,9 @@ from keras_hub.src.models.qwen3_5.qwen3_5_tokenizer import (
 )
 from keras_hub.src.models.qwen3_5_moe.qwen3_5_moe_tokenizer import (
     Qwen3_5MoeTokenizer as Qwen3_5MoeTokenizer,
+)
+from keras_hub.src.models.qwen3_asr.qwen3_asr_tokenizer import (
+    Qwen3ASRTokenizer as Qwen3ASRTokenizer,
 )
 from keras_hub.src.models.qwen3_moe.qwen3_moe_tokenizer import (
     Qwen3MoeTokenizer as Qwen3MoeTokenizer,
