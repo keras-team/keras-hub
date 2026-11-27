@@ -1,4 +1,6 @@
+import ntpath
 import os
+from unittest import mock
 
 import pytest
 import tensorflow as tf
@@ -25,6 +27,9 @@ class SimpleTokenizer(Tokenizer):
 
     def detokenize(self, inputs):
         return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
+
+    def load_assets(self, path):
+        self.loaded_assets_dir = path
 
 
 class TokenizerTest(TestCase):
@@ -135,3 +140,32 @@ class TokenizerTest(TestCase):
         export_path = os.path.join(self.get_temp_dir(), "unsupported_tokenizer")
         with self.assertRaises(ValueError):
             tokenizer.export_to_transformers(export_path)
+
+    def test_load_preset_assets_uses_posix_separators(self):
+        tokenizer = SimpleTokenizer()
+        tokenizer.file_assets = ["vocabulary.txt"]
+        with (
+            mock.patch(
+                "keras_hub.src.tokenizers.tokenizer.get_file",
+                return_value="/tmp/assets/tokenizer/vocabulary.txt",
+            ) as mock_get_file,
+            mock.patch("os.path", ntpath),
+        ):
+            tokenizer.load_preset_assets("kaggle://org/model/keras/preset")
+
+        mock_get_file.assert_called_once_with(
+            "kaggle://org/model/keras/preset",
+            "assets/tokenizer/vocabulary.txt",
+        )
+        self.assertEqual(tokenizer.loaded_assets_dir, "/tmp/assets/tokenizer")
+
+    def test_load_preset_assets_without_file_assets(self):
+        for file_assets in (None, []):
+            tokenizer = SimpleTokenizer()
+            tokenizer.file_assets = file_assets
+            with mock.patch(
+                "keras_hub.src.tokenizers.tokenizer.get_file"
+            ) as mock_get_file:
+                tokenizer.load_preset_assets("kaggle://org/model/keras/preset")
+
+            mock_get_file.assert_not_called()
