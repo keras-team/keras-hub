@@ -3,6 +3,9 @@ from keras.layers import ReversibleEmbedding
 
 from keras_hub.src.api_export import keras_hub_export
 from keras_hub.src.models.backbone import Backbone
+from keras_hub.src.models.deberta_v3.deberta_v2_conv_layer import (
+    DebertaV2ConvLayer,
+)
 from keras_hub.src.models.deberta_v3.disentangled_attention_encoder import (
     DisentangledAttentionEncoder,
 )
@@ -50,6 +53,14 @@ class DebertaV3Backbone(Backbone):
             `max_sequence_length`.
         bucket_size: int. The size of the relative position buckets. Generally
             equal to `max_sequence_length // 2`.
+        conv_kernel_size: int. The kernel size of the convolution block that
+            the original DeBERTa-v2 checkpoints (e.g. `deberta-v2-xlarge`)
+            apply after the first transformer layer. `0` (the default)
+            disables the block, as in DeBERTa-v3.
+        conv_activation: string. The activation of the convolution block.
+            Only used when `conv_kernel_size > 0`.
+        conv_groups: int. The number of groups of the convolution block.
+            Only used when `conv_kernel_size > 0`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -93,6 +104,9 @@ class DebertaV3Backbone(Backbone):
         dropout=0.1,
         max_sequence_length=512,
         bucket_size=256,
+        conv_kernel_size=0,
+        conv_activation="gelu",
+        conv_groups=1,
         dtype=None,
         **kwargs,
     ):
@@ -137,6 +151,19 @@ class DebertaV3Backbone(Backbone):
                 name=f"disentangled_attention_encoder_layer_{i}",
             )
             self.transformer_layers.append(layer)
+        self.conv_layer = None
+        if conv_kernel_size > 0:
+            self.conv_layer = DebertaV2ConvLayer(
+                hidden_dim=hidden_dim,
+                kernel_size=conv_kernel_size,
+                groups=conv_groups,
+                activation=conv_activation,
+                dropout=dropout,
+                layer_norm_epsilon=1e-7,
+                kernel_initializer=deberta_kernel_initializer(),
+                dtype=dtype,
+                name="conv_layer",
+            )
 
         # === Functional Model ===
         token_id_input = keras.Input(
@@ -149,12 +176,15 @@ class DebertaV3Backbone(Backbone):
         x = self.embeddings_layer_norm(x)
         x = self.embeddings_dropout(x)
         rel_embeddings = self.relative_embeddings(x)
-        for transformer_layer in self.transformer_layers:
+        embeddings = x
+        for i, transformer_layer in enumerate(self.transformer_layers):
             x = transformer_layer(
                 x,
                 rel_embeddings=rel_embeddings,
                 padding_mask=padding_mask_input,
             )
+            if i == 0 and self.conv_layer is not None:
+                x = self.conv_layer(embeddings, x, padding_mask_input)
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
@@ -174,6 +204,9 @@ class DebertaV3Backbone(Backbone):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.bucket_size = bucket_size
+        self.conv_kernel_size = conv_kernel_size
+        self.conv_activation = conv_activation
+        self.conv_groups = conv_groups
         self.start_token_index = 0
 
     def get_config(self):
@@ -188,6 +221,9 @@ class DebertaV3Backbone(Backbone):
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
                 "bucket_size": self.bucket_size,
+                "conv_kernel_size": self.conv_kernel_size,
+                "conv_activation": self.conv_activation,
+                "conv_groups": self.conv_groups,
             }
         )
         return config
