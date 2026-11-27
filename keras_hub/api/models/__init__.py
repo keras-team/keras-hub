@@ -1088,6 +1088,21 @@ from keras_hub.src.models.token_classifier import (
 from keras_hub.src.models.token_classifier_preprocessor import (
     TokenClassifierPreprocessor as TokenClassifierPreprocessor,
 )
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
+    UnlimitedOCRBackbone as UnlimitedOCRBackbone,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_causal_lm import (
+    UnlimitedOCRCausalLM as UnlimitedOCRCausalLM,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_causal_lm_preprocessor import (
+    UnlimitedOCRCausalLMPreprocessor as UnlimitedOCRCausalLMPreprocessor,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_tokenizer import (
+    UnlimitedOCRTokenizer as UnlimitedOCRTokenizer,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_vision_encoder import (
+    UnlimitedOCRVisionEncoder as UnlimitedOCRVisionEncoder,
+)
 from keras_hub.src.models.vgg.vgg_backbone import VGGBackbone as VGGBackbone
 from keras_hub.src.models.vgg.vgg_image_classifier import (
     VGGImageClassifier as VGGImageClassifier,

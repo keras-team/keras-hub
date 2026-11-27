@@ -1,0 +1,392 @@
+import keras
+from keras import ops
+
+from keras_hub.src.api_export import keras_hub_export
+from keras_hub.src.models.causal_lm import CausalLM
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_backbone import (
+    UnlimitedOCRBackbone,
+)
+from keras_hub.src.models.unlimited_ocr.unlimited_ocr_causal_lm_preprocessor import (  # noqa: E501
+    UnlimitedOCRCausalLMPreprocessor,
+)
+from keras_hub.src.utils.tensor_utils import any_equal
+
+
+@keras_hub_export("keras_hub.models.UnlimitedOCRCausalLM")
+class UnlimitedOCRCausalLM(CausalLM):
+    """An end-to-end Unlimited-OCR model for document parsing.
+
+    A causal language model predicts the next token from the previous tokens.
+    This task reads the text and the images of a prompt. It generates the
+    parsed text of the page. You can use this task for fine-tuning with
+    `fit()`.
+
+    This model has a `generate()` method. The `sampler` argument of
+    `compile()` controls the generation strategy. By default, the model uses
+    `"greedy"` sampling.
+
+    The HuggingFace generation config blocks repeated 35-grams in the last 128
+    tokens. `generate()` has no such blocker, and no KerasHub sampler has one.
+    If the model loops, `generate()` repeats the text until `max_length`.
+
+    During generation, the model uses the reference sliding window attention
+    (R-SWA). Each new token attends to all prompt tokens, including the image
+    tokens, and to the last `sliding_window` positions. Training and `score`
+    use full causal attention.
+
+    Args:
+        backbone: A `keras_hub.models.UnlimitedOCRBackbone` instance.
+        preprocessor: A `keras_hub.models.UnlimitedOCRCausalLMPreprocessor`
+            or `None`. If `None`, the model does not preprocess its inputs.
+
+    Example:
+    ```python
+    causal_lm = keras_hub.models.UnlimitedOCRCausalLM.from_preset(
+        "unlimited_ocr"
+    )
+    causal_lm.compile(sampler="greedy")
+    causal_lm.generate(
+        {
+            "prompts": "<image>document parsing.",
+            "images": [page_image],
+        },
+        max_length=4096,
+    )
+    ```
+    """
+
+    backbone_cls = UnlimitedOCRBackbone
+    preprocessor_cls = UnlimitedOCRCausalLMPreprocessor
+
+    def __init__(self, backbone, preprocessor=None, **kwargs):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # === Functional Model ===
+        # This must be "backbone.input" i.e. the full input structure,
+        # rather than "backbone.inputs" which is the flattened list of inputs.
+        inputs = backbone.input
+        hidden_states = backbone(inputs)
+        outputs = backbone.token_embedding(hidden_states, reverse=True)
+        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+
+    def compile(
+        self,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
+        sampler="greedy",
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            sampler=sampler,
+            **kwargs,
+        )
+
+    def _normalize_generate_inputs(self, inputs):
+        """Normalize the inputs of `generate()`.
+
+        The base method sets the scalar flag from the last key of a dict. The
+        key `"images"` can come after `"prompts"`. This method sets the flag
+        from `"prompts"` only.
+        """
+        has_prompts = isinstance(inputs, dict) and "prompts" in inputs
+        if self.preprocessor is None or not has_prompts:
+            return super()._normalize_generate_inputs(inputs)
+        normalize = super()._normalize_generate_inputs
+        (prompts,), input_is_scalar = normalize(inputs["prompts"])
+        return [{**inputs, "prompts": prompts}], input_is_scalar
+
+    def call_with_cache(
+        self,
+        token_ids,
+        cache,
+        cache_update_index,
+        image_features=None,
+        patches_grid=None,
+        prefill_length=None,
+        compute_logits=True,
+    ):
+        """Forward pass of `UnlimitedOCRCausalLM` with cache.
+
+        `call_with_cache` runs the model for autoregressive inference. It
+        caches the key and value tensors of the attention layers. The cache
+        avoids a new computation for the tokens that the model has seen.
+
+        Args:
+            token_ids: int tensor of shape `(batch_size, length)`.
+            cache: float tensor. The cache of keys and values.
+            cache_update_index: int or int tensor. The position of the first
+                token of `token_ids` in the whole sequence.
+            image_features: A `(global_features, local_features)` tuple of
+                projected image features, or `None`. The features replace
+                the embeddings of the image tokens before the decoder layers
+                run.
+            patches_grid: int tensor of shape `(batch_size, max_images, 2)`.
+                Required when `image_features` is set.
+            prefill_length: int tensor of shape `(batch_size,)`, or `None`.
+                The number of prompt tokens of each row. When set, the
+                attention layers use the R-SWA mask. The layers also keep
+                the cache entries of a row while `cache_update_index` is
+                below its value, so one token per call is required. The
+                prefill pass of the cache uses `None`.
+            compute_logits: bool. If `False`, the method does not run the
+                language model head and returns `None` for the logits.
+
+        Returns:
+            A `(logits, hidden_states, cache)` tuple.
+        """
+        x = self.backbone.token_embedding(token_ids)
+        if image_features is not None:
+            global_features, local_features = image_features
+            x = self.backbone.image_text_embedding_merger(
+                token_ids, x, global_features, local_features, patches_grid
+            )
+        # The prefill pass wrote the keys and values of the prompt tokens.
+        # The decode loop feeds those tokens again as plain text. The cache
+        # must keep the prefill entries, which include the image features.
+        cache_write_mask = None
+        if prefill_length is not None:
+            cache_write_mask = ops.greater_equal(
+                ops.cast(cache_update_index, "int32"),
+                ops.cast(prefill_length, "int32"),
+            )
+        # Each decoder layer has a cache. The layers update them separately.
+        updated_cache = []
+        for i in range(self.backbone.num_layers):
+            current_cache = cache[:, i, ...]
+            x, next_cache = self.backbone.transformer_layers[i](
+                x,
+                self_attention_cache=current_cache,
+                self_attention_cache_update_index=cache_update_index,
+                prefill_length=prefill_length,
+                cache_write_mask=cache_write_mask,
+            )
+            updated_cache.append(next_cache)
+        cache = ops.stack(updated_cache, axis=1)
+        hidden_states = self.backbone.layer_norm(x)
+        logits = None
+        if compute_logits:
+            logits = self.backbone.token_embedding(hidden_states, reverse=True)
+        return logits, hidden_states, cache
+
+    def _build_cache(self, token_ids, image_features=None, patches_grid=None):
+        """Build an empty cache for use with `call_with_cache()`."""
+        batch_size = ops.shape(token_ids)[0]
+        max_length = ops.shape(token_ids)[1]
+        shape = [
+            batch_size,
+            self.backbone.num_layers,
+            2,
+            max_length,
+            self.backbone.num_key_value_heads,
+            self.backbone.head_dim,
+        ]
+        cache = ops.zeros(shape, dtype=self.compute_dtype)
+        # Seed the cache. The prompt is the prefill, so every token attends
+        # causally.
+        _, hidden_states, cache = self.call_with_cache(
+            token_ids,
+            cache,
+            0,
+            image_features=image_features,
+            patches_grid=patches_grid,
+            compute_logits=False,
+        )
+        return hidden_states, cache
+
+    def score(
+        self,
+        token_ids,
+        padding_mask=None,
+        scoring_mode="logits",
+        layer_intercept_fn=None,
+        target_ids=None,
+    ):
+        """Score a generation represented by the provided token ids.
+
+        The method uses full causal attention, as `fit()` does.
+
+        Args:
+            token_ids: A `(batch_size, length)` int tensor, or a dict. The
+                dict has the keys `"token_ids"` and `"padding_mask"`. For
+                images, it also has the keys `"pixel_values"`,
+                `"pixel_values_local"` and `"patches_grid"`.
+            padding_mask: A `(batch_size, length)` tensor, or `None`. The
+                method ignores this argument when `token_ids` is a dict that
+                has `"padding_mask"`.
+            scoring_mode: `"logits"` or `"loss"`. `"logits"` returns the
+                logits. `"loss"` returns the per-token loss.
+            layer_intercept_fn: A function, or `None`. The function takes
+                `(activations, layer_index)` and returns the new activations.
+                The index is `-1` for the embeddings.
+            target_ids: A `(batch_size, length)` int tensor. Required when
+                `scoring_mode` is `"loss"`.
+
+        Returns:
+            The logits of shape `(batch_size, length, vocabulary_size)`, or
+            the per-token loss of shape `(batch_size, length)`.
+        """
+        if scoring_mode not in ("logits", "loss"):
+            raise ValueError(
+                "Unsupported scoring_mode. Must be 'logits' or 'loss'."
+            )
+        if scoring_mode == "loss" and target_ids is None:
+            raise ValueError(
+                "Cannot compute loss without targets. Please provide "
+                "target token ids via the target_ids parameter."
+            )
+
+        image_inputs = {}
+        if isinstance(token_ids, dict):
+            padding_mask = token_ids.get("padding_mask", padding_mask)
+            image_inputs = token_ids
+            token_ids = token_ids["token_ids"]
+
+        if padding_mask is None:
+            padding_mask = ops.ones(ops.shape(token_ids)[:2], dtype="int32")
+
+        if layer_intercept_fn is None:
+
+            def layer_intercept_fn(x, unused_i):
+                return x
+
+        x = self.backbone.token_embedding(token_ids)
+        if "pixel_values" in image_inputs:
+            global_features, local_features = (
+                self.backbone.image_feature_extractor(
+                    image_inputs["pixel_values"],
+                    image_inputs["pixel_values_local"],
+                )
+            )
+            x = self.backbone.image_text_embedding_merger(
+                token_ids,
+                x,
+                global_features,
+                local_features,
+                image_inputs["patches_grid"],
+            )
+        x = layer_intercept_fn(x, -1)
+        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
+            x = transformer_layer(x, decoder_padding_mask=padding_mask)
+            x = layer_intercept_fn(x, i)
+        x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
+
+        if scoring_mode == "logits":
+            return logits
+
+        per_token_loss_fn = keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True, reduction="none"
+        )
+        per_token_loss = per_token_loss_fn(target_ids, logits)
+        return per_token_loss * ops.cast(padding_mask, per_token_loss.dtype)
+
+    def generate_step(self, inputs, stop_token_ids=None):
+        """A compilable generation function for a single batch of inputs.
+
+        Args:
+            inputs: A dictionary with the keys `"token_ids"` and
+                `"padding_mask"`. For images, it also has the keys
+                `"pixel_values"`, `"pixel_values_local"` and
+                `"patches_grid"`.
+            stop_token_ids: List of ids of end tokens to stop on. If all
+                sequences have produced a new stop token, generation stops.
+        """
+        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
+
+        # Compute the image features once, at prefill.
+        image_features = None
+        patches_grid = None
+        if "pixel_values" in inputs:
+            image_features = self.backbone.image_feature_extractor(
+                inputs["pixel_values"], inputs["pixel_values_local"]
+            )
+            patches_grid = inputs["patches_grid"]
+
+        hidden_states, cache = self._build_cache(
+            token_ids,
+            image_features=image_features,
+            patches_grid=patches_grid,
+        )
+        # The lengths of the user prompts. The prompt tokens are the prefill
+        # tokens of the R-SWA.
+        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+        # Start at the first index that has no user token.
+        index = ops.min(row_lengths)
+
+        # The decode loop feeds the prompt tokens of a row as plain text.
+        # The step has no image features, so an image token gets the wrong
+        # output. The prefill pass has the right output. Each step takes the
+        # prefill output at every position below the row length.
+        # The sampler passes `cache` through the loop, so the cache carries
+        # these tensors. Each tensor has the batch size as its first axis.
+        cache = (cache, hidden_states, row_lengths)
+
+        def next(prompt, cache, index):
+            cache, prefill_hidden, row_lengths = cache
+            # The cache index is the index of our previous token.
+            cache_update_index = index - 1
+            batch_size = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
+            _, hidden_states, cache = self.call_with_cache(
+                prompt,
+                cache,
+                cache_update_index,
+                prefill_length=row_lengths,
+                compute_logits=False,
+            )
+            hidden_states = ops.squeeze(hidden_states, axis=1)
+            prefill_step_hidden = ops.squeeze(
+                ops.slice(
+                    prefill_hidden,
+                    [0, cache_update_index, 0],
+                    [batch_size, 1, ops.shape(prefill_hidden)[-1]],
+                ),
+                axis=1,
+            )
+            # A row is in its prompt while the fed token is a prompt token.
+            in_prompt = ops.less(cache_update_index, row_lengths)[:, None]
+            hidden_states = ops.where(
+                in_prompt, prefill_step_hidden, hidden_states
+            )
+            # Project the selected hidden state once.
+            logits = self.backbone.token_embedding(hidden_states, reverse=True)
+            return (
+                logits,
+                hidden_states,
+                (cache, prefill_hidden, row_lengths),
+            )
+
+        token_ids = self.sampler(
+            next=next,
+            prompt=token_ids,
+            cache=cache,
+            index=index,
+            mask=padding_mask,
+            stop_token_ids=stop_token_ids,
+            hidden_states=hidden_states,
+            model=self,
+        )
+
+        # Compute an output padding mask with the token ids we updated.
+        if stop_token_ids is not None:
+            # Build a mask of stop tokens that are not in the original prompt.
+            end_locations = any_equal(
+                token_ids, stop_token_ids, ops.logical_not(padding_mask)
+            )
+            end_locations = ops.cast(end_locations, "int32")
+            # Use cumsum to get ones in all locations after the end locations.
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
+            # Our padding mask is the inverse of these overflow locations.
+            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
+        else:
+            # Without early stopping, all locations have been updated.
+            padding_mask = ops.ones_like(token_ids, dtype="bool")
+        return {"token_ids": token_ids, "padding_mask": padding_mask}

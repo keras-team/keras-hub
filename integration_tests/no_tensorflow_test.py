@@ -197,3 +197,47 @@ class NoTensorflow(unittest.TestCase):
             keras_hub.layers.RandomDeletion(
                 rate=0.5, max_deletions=1, skip_fn=skip_fn
             )
+
+    def test_unlimited_ocr_generate_preprocess_works(self):
+        merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        merges += ["Ġai r", "Ġa i", "pla ne"]
+        vocab = []
+        for merge in merges:
+            a, b = merge.split(" ")
+            vocab.extend([a, b, a + b])
+        vocab += ["<｜begin▁of▁sentence｜>", "<｜end▁of▁sentence｜>"]
+        vocab += ["<｜▁pad▁｜>", "<image>"]
+        vocab += ["<|User|>", "<|Assistant|>", "<|EOT|>"]
+        vocab = {token: i for i, token in enumerate(sorted(set(vocab)))}
+        tokenizer = keras_hub.models.UnlimitedOCRTokenizer(
+            vocabulary=vocab, merges=merges
+        )
+        # A 64 pixel view gives 2x2 global tokens. A 40 pixel tile gives 2x2
+        # local tokens.
+        converter = keras_hub.layers.UnlimitedOCRImageConverter(
+            global_size=64,
+            tile_size=40,
+            min_tiles=2,
+            max_tiles=6,
+            patch_size=8,
+            downsample_ratio=4,
+        )
+        preprocessor = keras_hub.models.UnlimitedOCRCausalLMPreprocessor(
+            tokenizer, image_converter=converter, sequence_length=64
+        )
+        outputs = preprocessor.generate_preprocess(
+            {
+                "prompts": "<image>airplane",
+                "images": np.ones((50, 100, 3), dtype="float32"),
+            }
+        )
+        self.assertEqual(np.shape(outputs["token_ids"]), (64,))
+        self.assertEqual(np.shape(outputs["pixel_values"]), (1, 64, 64, 3))
+        self.assertEqual(
+            np.shape(outputs["pixel_values_local"]), (2, 40, 40, 3)
+        )
+        self.assertEqual(np.asarray(outputs["patches_grid"]).tolist(), [[2, 1]])
+        image_token_id = tokenizer.image_token_id
+        token_ids = np.asarray(outputs["token_ids"])
+        self.assertEqual(int((token_ids == image_token_id).sum()), 17)

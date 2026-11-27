@@ -51,6 +51,7 @@ from keras_hub.src.utils.transformers import convert_smolvlm2
 from keras_hub.src.utils.transformers import convert_swin_transformer
 from keras_hub.src.utils.transformers import convert_t5gemma
 from keras_hub.src.utils.transformers import convert_t5gemma2
+from keras_hub.src.utils.transformers import convert_unlimited_ocr
 from keras_hub.src.utils.transformers import convert_vit
 from keras_hub.src.utils.transformers import convert_xlm_roberta
 from keras_hub.src.utils.transformers.safetensor_utils import SafetensorLoader
@@ -155,6 +156,8 @@ class TransformersPresetLoader(PresetLoader):
             self.converter = convert_t5gemma
         elif model_type == "t5gemma2":
             self.converter = convert_t5gemma2
+        elif model_type == "unlimited_ocr":
+            self.converter = convert_unlimited_ocr
         else:
             raise ValueError(
                 "KerasHub has no converter for huggingface/transformers models "
@@ -175,7 +178,14 @@ class TransformersPresetLoader(PresetLoader):
             )
         else:
             keras_config = self.converter.convert_backbone_config(self.config)
-        backbone = cls(**{**keras_config, **kwargs})
+        # An optional hook reads backbone arguments from other files of the
+        # preset.
+        extra = {}
+        if hasattr(self.converter, "load_backbone_config"):
+            extra = self.converter.load_backbone_config(
+                self.preset, self.config
+            )
+        backbone = cls(**{**keras_config, **extra, **kwargs})
         if load_weights:
             with SafetensorLoader(self.preset) as loader:
                 self.converter.convert_weights(backbone, loader, self.config)
