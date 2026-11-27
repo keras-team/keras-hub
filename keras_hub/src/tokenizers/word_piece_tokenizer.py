@@ -16,6 +16,7 @@ from keras_hub.src.utils.tensor_utils import canonicalize_python_token_inputs
 from keras_hub.src.utils.tensor_utils import casefold_utf8
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import convert_to_ragged_batch
+from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import is_int_dtype
 from keras_hub.src.utils.tensor_utils import is_string_dtype
 from keras_hub.src.utils.tensor_utils import preprocessing_function
@@ -150,19 +151,61 @@ def _get_split_patterns(split_on_cjk, special_tokens):
     return regex.compile(split_pattern), regex.compile(keep_split_pattern)
 
 
-def _regex_split(text, delimiter_pattern, keep_pattern):
-    """Python equivalent of `tf_text.regex_split` for a single string."""
-    words = []
+def _regex_split_spans(text, delimiter_pattern, keep_pattern):
+    """Character spans of the words `_regex_split` splits `text` into."""
+    spans = []
     position = 0
     for match in delimiter_pattern.finditer(text):
         if match.start() > position:
-            words.append(text[position : match.start()])
+            spans.append((position, match.start()))
         if keep_pattern.fullmatch(match.group()):
-            words.append(match.group())
+            spans.append(match.span())
         position = match.end()
     if position < len(text):
-        words.append(text[position:])
-    return words
+        spans.append((position, len(text)))
+    return spans
+
+
+def _regex_split(text, delimiter_pattern, keep_pattern):
+    """Python equivalent of `tf_text.regex_split` for a single string."""
+    spans = _regex_split_spans(text, delimiter_pattern, keep_pattern)
+    return [text[start:end] for start, end in spans]
+
+
+def _strip_accents(text):
+    # Normalize unicode to NFD, which splits out accent mark characters,
+    # then remove the accent marks.
+    text = unicodedata.normalize("NFD", text)
+    return "".join(c for c in text if unicodedata.category(c) != "Mn")
+
+
+def _normalize_with_offsets(text, normalize_fn):
+    """Apply `normalize_fn` to `text`, tracking the source of each character.
+
+    Returns a tuple `(normalized, starts, ends)`. `starts` and `ends` have one
+    entry per character of `normalized`, and `text[starts[i]:ends[i]]` is the
+    text that `normalized[i]` was produced from.
+    """
+    normalized = normalize_fn(text)
+    if normalized == text:
+        return text, list(range(len(text))), list(range(1, len(text) + 1))
+    starts, ends = [], []
+    start = 0
+    while start < len(text):
+        # Unicode normalization is local, but not always per character, e.g.
+        # NFKC composes a letter with the accent that follows it. So grow
+        # each chunk until its normalization lines up with the full one.
+        end = start + 1
+        chunk = normalize_fn(text[start:end])
+        while end < len(text) and not normalized.startswith(chunk, len(starts)):
+            end += 1
+            chunk = normalize_fn(text[start:end])
+        if end == len(text):
+            chunk = normalized[len(starts) :]
+        starts.extend([start] * len(chunk))
+        ends.extend([end] * len(chunk))
+        start = end
+    return normalized, starts, ends
 
 
 def pretokenize_python(
@@ -193,10 +236,7 @@ def pretokenize_python(
         A list of pre-tokenized words.
     """
     if strip_accents:
-        # Normalize unicode to NFD, which splits out accent mark characters,
-        # then remove the accent marks.
-        text = unicodedata.normalize("NFD", text)
-        text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+        text = _strip_accents(text)
     special_tokens = tuple(special_tokens) if special_tokens else ()
     if split:
         delimiter_pattern, keep_pattern = _get_split_patterns(
@@ -209,6 +249,50 @@ def pretokenize_python(
         # Do not lowercase special tokens. They often contain capital
         # letters, e.g. `"[CLS]"`.
         words = [w if w in special_tokens else casefold_utf8(w) for w in words]
+    return words
+
+
+def pretokenize_with_offsets_python(
+    text,
+    lowercase=False,
+    strip_accents=True,
+    split=True,
+    split_on_cjk=True,
+    special_tokens=None,
+):
+    """`pretokenize_python` that also tracks where each word came from.
+
+    Takes the same arguments as `pretokenize_python`.
+
+    Returns:
+        A list of `(word, starts, ends)` tuples, one per pre-tokenized word.
+        `starts` and `ends` have one entry per character of `word`, and
+        `text[starts[i]:ends[i]]` is the input text that `word[i]` was
+        produced from.
+    """
+    if strip_accents:
+        text, starts, ends = _normalize_with_offsets(text, _strip_accents)
+    else:
+        starts, ends = list(range(len(text))), list(range(1, len(text) + 1))
+    special_tokens = tuple(special_tokens) if special_tokens else ()
+    if split:
+        delimiter_pattern, keep_pattern = _get_split_patterns(
+            split_on_cjk, special_tokens
+        )
+        spans = _regex_split_spans(text, delimiter_pattern, keep_pattern)
+    else:
+        spans = [(0, len(text))]
+    words = []
+    for start, end in spans:
+        word = text[start:end]
+        word_starts, word_ends = starts[start:end], ends[start:end]
+        if lowercase and word not in special_tokens:
+            word, fold_starts, fold_ends = _normalize_with_offsets(
+                word, casefold_utf8
+            )
+            word_starts = [word_starts[i] for i in fold_starts]
+            word_ends = [word_ends[i - 1] for i in fold_ends]
+        words.append((word, word_starts, word_ends))
     return words
 
 
@@ -430,6 +514,20 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ... )
     >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
     'the quick brown fox .'
+
+    Token offsets.
+    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+    >>> inputs = "The quick brown fox."
+    >>> tokenizer = keras_hub.tokenizers.WordPieceTokenizer(
+    ...     vocabulary=vocab,
+    ...     lowercase=True,
+    ...     dtype="string",
+    ... )
+    >>> tokens, starts, ends = tokenizer.tokenize_with_offsets(inputs)
+    >>> tokens
+    ['the', 'qu', '##ick', 'br', '##own', 'fox', '.']
+    >>> [inputs[start:end] for start, end in zip(starts, ends)]
+    ['The', 'qu', 'ick', 'br', 'own', 'fox', '.']
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -718,18 +816,54 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         words, _, _ = canonicalize_python_string_inputs(inputs)
         return [words], False
 
-    def _tokenize_python(self, inputs):
-        special_tokens = self._special_tokens_for_splitting()
+    def _canonicalize_python_inputs(self, inputs):
+        """Canonicalize inputs to a list of samples, each a list of strings.
+
+        Returns a tuple `(samples, batched, outer_shape)`, see
+        `canonicalize_python_string_inputs`.
+        """
         if self.split:
             inputs, batched, outer_shape = canonicalize_python_string_inputs(
                 inputs
             )
-            samples = [[text] for text in inputs]
-        else:
-            # Pre-split: rank-2 inputs are [batch, words] (each row is a
-            # list of already-split words), not a dense outer shape.
-            samples, batched = self._canonicalize_presplit_inputs(inputs)
-            outer_shape = None
+            return [[text] for text in inputs], batched, outer_shape
+        # Pre-split: rank-2 inputs are [batch, words] (each row is a
+        # list of already-split words), not a dense outer shape.
+        samples, batched = self._canonicalize_presplit_inputs(inputs)
+        return samples, batched, None
+
+    def _pack_python_outputs(self, outputs, dtype, batched, outer_shape):
+        """Pad per-sample `outputs` and restore the shape of the inputs."""
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            pad_value = 0 if is_int_dtype(dtype) else ""
+            outputs = [
+                values[: self.sequence_length]
+                + [pad_value] * (self.sequence_length - len(values))
+                for values in outputs
+            ]
+            if is_int_dtype(dtype):
+                # Dense int outputs are arrays, so that direct calls return
+                # backend tensors and Grain pipelines return NumPy.
+                outputs = np.array(outputs, dtype=dtype)
+
+        if outer_shape is not None:
+            return restore_outer_shape(outputs, outer_shape)
+
+        if not batched:
+            outputs = outputs[0]
+            if not self.sequence_length and is_int_dtype(dtype):
+                # An unbatched sequence is dense even without
+                # `sequence_length`, so return an array here too. Without
+                # this, the output would fall back to NumPy's default int64
+                # rather than the `compute_dtype` the TF path returns. String
+                # outputs stay a Python list, matching the TF path.
+                outputs = np.array(outputs, dtype=dtype)
+        return outputs
+
+    def _tokenize_python(self, inputs):
+        special_tokens = self._special_tokens_for_splitting()
+        samples, batched, outer_shape = self._canonicalize_python_inputs(inputs)
 
         batched_tokens = []
         for sample in samples:
@@ -749,36 +883,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 tokens = [self._token_to_id_map[token] for token in tokens]
             batched_tokens.append(tokens)
 
-        # Convert to a dense output if `sequence_length` is set.
-        if self.sequence_length:
-            pad_value = 0 if is_int_dtype(self.compute_dtype) else ""
-            batched_tokens = [
-                tokens[: self.sequence_length]
-                + [pad_value] * (self.sequence_length - len(tokens))
-                for tokens in batched_tokens
-            ]
-            if is_int_dtype(self.compute_dtype):
-                # Dense int outputs are arrays, so that direct calls return
-                # backend tensors and Grain pipelines return NumPy.
-                batched_tokens = np.array(
-                    batched_tokens, dtype=self.compute_dtype
-                )
-
-        if outer_shape is not None:
-            return restore_outer_shape(batched_tokens, outer_shape)
-
-        if not batched:
-            batched_tokens = batched_tokens[0]
-            if not self.sequence_length and is_int_dtype(self.compute_dtype):
-                # An unbatched sequence is dense even without
-                # `sequence_length`, so return an array here too. Without
-                # this, the output would fall back to NumPy's default int64
-                # rather than the `compute_dtype` the TF path returns. String
-                # outputs stay a Python list, matching the TF path.
-                batched_tokens = np.array(
-                    batched_tokens, dtype=self.compute_dtype
-                )
-        return batched_tokens
+        return self._pack_python_outputs(
+            batched_tokens, self.compute_dtype, batched, outer_shape
+        )
 
     def tokenize(self, inputs):
         self._check_vocabulary()
@@ -786,6 +893,87 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             return self._tokenize_tf(inputs)
         else:
             return self._tokenize_python(inputs)
+
+    def _tokenize_with_offsets_python(self, inputs):
+        special_tokens = self._special_tokens_for_splitting()
+        samples, batched, outer_shape = self._canonicalize_python_inputs(inputs)
+        suffix_length = len(self.suffix_indicator)
+
+        batched_tokens, batched_starts, batched_ends = [], [], []
+        for sample in samples:
+            tokens, starts, ends = [], [], []
+            for text in sample:
+                words = pretokenize_with_offsets_python(
+                    text,
+                    self.lowercase,
+                    self.strip_accents,
+                    self.split,
+                    self.split_on_cjk,
+                    special_tokens,
+                )
+                for word, word_starts, word_ends in words:
+                    pieces = self._tokenize_word_python(word)
+                    tokens.extend(pieces)
+                    # Word pieces tile the word, so their lengths give their
+                    # offsets. A lone piece, which may be the OOV token,
+                    # covers the whole word.
+                    position = 0
+                    for i, piece in enumerate(pieces):
+                        length = len(piece) - (suffix_length if i else 0)
+                        if len(pieces) == 1:
+                            length = len(word)
+                        starts.append(word_starts[position])
+                        ends.append(word_ends[position + length - 1])
+                        position += length
+            if is_int_dtype(self.compute_dtype):
+                tokens = [self._token_to_id_map[token] for token in tokens]
+            batched_tokens.append(tokens)
+            batched_starts.append(starts)
+            batched_ends.append(ends)
+
+        return tuple(
+            self._pack_python_outputs(outputs, dtype, batched, outer_shape)
+            for outputs, dtype in (
+                (batched_tokens, self.compute_dtype),
+                (batched_starts, "int32"),
+                (batched_ends, "int32"),
+            )
+        )
+
+    def tokenize_with_offsets(self, inputs):
+        """Tokenize strings, and locate each token in its input string.
+
+        The offsets of a token are the start (inclusive) and end (exclusive)
+        of the span of input text it was produced from. They count
+        characters, as Python string indexing does, and refer to the string
+        as passed in, before any lowercasing or accent stripping. So
+        `inputs[start:end]` is the text behind a token.
+
+        A word that maps to the `oov_token` is covered by that single token.
+        If `sequence_length` is set, offsets are truncated like the tokens
+        and padded with `0`. If `split=False`, offsets are relative to the
+        pre-split word each token came from.
+
+        Offsets are computed in Python, so this method cannot be called
+        inside a `tf.function` or a `tf.data` pipeline.
+
+        Args:
+            inputs: A string, or a list, array or tensor of strings. Accepts
+                the same inputs as `tokenize()`.
+
+        Returns:
+            A tuple `(tokens, start_offsets, end_offsets)`. `tokens` is the
+            output of `tokenize()`. `start_offsets` and `end_offsets` are
+            `"int32"` and have the same shape as `tokens`.
+        """
+        self._check_vocabulary()
+        if in_tf_function():
+            raise NotImplementedError(
+                "`tokenize_with_offsets()` computes offsets in Python, and "
+                "cannot be called inside a `tf.function` or a `tf.data` "
+                "pipeline."
+            )
+        return self._tokenize_with_offsets_python(inputs)
 
     @preprocessing_function
     def _detokenize_tf(self, inputs):

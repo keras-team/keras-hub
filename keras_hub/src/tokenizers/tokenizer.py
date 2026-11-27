@@ -100,6 +100,29 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
+    def tokenize_with_offsets(self, inputs, *args, **kwargs):
+        """Transform strings into tokens, with the offsets of each token.
+
+        Offsets locate each token in the string it was produced from. They
+        count characters, as Python string indexing does, so
+        `inputs[start:end]` is the text behind a token.
+
+        Args:
+            inputs: Input tensor, or dict/list/tuple of input tensors.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            A `(tokens, start_offsets, end_offsets)` tuple. `tokens` is the
+            output of `tokenize()`. `start_offsets` and `end_offsets` have the
+            same shape as `tokens`, and hold the inclusive start and exclusive
+            end offset of each token.
+        """
+        raise NotImplementedError(
+            "No implementation of `tokenize_with_offsets()` was found for "
+            f"{self.__class__.__name__}."
+        )
+
     def get_vocabulary(self):
         """Get the tokenizer vocabulary as a list of strings terms."""
         raise NotImplementedError(

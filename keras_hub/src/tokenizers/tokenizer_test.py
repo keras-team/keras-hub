@@ -78,6 +78,10 @@ class TokenizerTest(TestCase):
         with self.assertRaises(NotImplementedError):
             Tokenizer()(["the quick brown fox"])
 
+    def test_missing_tokenize_with_offsets_raises(self):
+        with self.assertRaises(NotImplementedError):
+            SimpleTokenizer().tokenize_with_offsets(["the quick brown fox"])
+
     @parameterized.parameters(
         (AlbertTokenizer, "albert_base_en_uncased", "sentencepiece"),
         (RobertaTokenizer, "roberta_base_en", "bytepair"),
