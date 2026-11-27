@@ -397,6 +397,178 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(tokenizer("a" * 100), [1] + [2] * 99)
         self.assertAllEqual(tokenizer("a" * 101), [0])
 
+    def test_tokenize_with_offsets(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data, lowercase=True)
+        # An out-of-vocabulary word ("whale") is covered by a single token.
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            "The quick brown whale."
+        )
+        self.assertAllEqual(tokens, [1, 2, 3, 4, 5, 0, 7])
+        self.assertAllEqual(starts, [0, 4, 6, 10, 12, 16, 21])
+        self.assertAllEqual(ends, [3, 6, 9, 12, 15, 21, 22])
+        self.assertDTypeEqual(starts, "int32")
+        self.assertDTypeEqual(ends, "int32")
+
+    def test_tokenize_with_offsets_batch(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data, dtype="string")
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            ["the fox.", "quick"]
+        )
+        self.assertAllEqual(tokens, [["the", "fox", "."], ["qu", "##ick"]])
+        self.assertAllEqual(starts, [[0, 4, 7], [0, 2]])
+        self.assertAllEqual(ends, [[3, 7, 8], [2, 5]])
+        # Rank 2 inputs keep their outer dimensions.
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            [["the fox."], ["quick"]]
+        )
+        self.assertAllEqual(tokens, [[["the", "fox", "."]], [["qu", "##ick"]]])
+        self.assertAllEqual(starts, [[[0, 4, 7]], [[0, 2]]])
+        self.assertAllEqual(ends, [[[3, 7, 8]], [[2, 5]]])
+
+    def test_tokenize_with_offsets_dense(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = self.make_tokenizer(
+            vocabulary=vocab_data, sequence_length=4
+        )
+        # Offsets are padded with 0 and truncated like the tokens.
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            ["the fox.", "the quick brown fox."]
+        )
+        self.assertAllEqual(tokens, [[1, 6, 7, 0], [1, 2, 3, 4]])
+        self.assertAllEqual(starts, [[0, 4, 7, 0], [0, 4, 6, 10]])
+        self.assertAllEqual(ends, [[3, 7, 8, 0], [3, 6, 9, 12]])
+        self.assertDTypeEqual(starts, "int32")
+
+    def test_tokenize_with_offsets_normalization(self):
+        # Offsets refer to the input string, even when lowercasing and
+        # accent stripping change its length: "é" as two characters loses
+        # one, while "ß" and "ﬁ" each become two.
+        vocab_data = ["[UNK]", "cafe", "stra", "##s", "##e", "fi", "##sh"]
+        tokenizer = self.make_tokenizer(
+            vocabulary=vocab_data,
+            lowercase=True,
+            strip_accents=True,
+            dtype="string",
+        )
+        text = "Café cafe\u0301 Straße ﬁsh"
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(text)
+        self.assertAllEqual(
+            tokens,
+            ["cafe", "cafe", "stra", "##s", "##s", "##e", "fi", "##sh"],
+        )
+        self.assertAllEqual(starts, [0, 5, 11, 15, 15, 16, 18, 19])
+        self.assertAllEqual(ends, [4, 9, 15, 16, 16, 17, 19, 21])
+        self.assertEqual(
+            [text[start:end] for start, end in zip(starts, ends)],
+            ["Café", "cafe", "Stra", "ß", "ß", "e", "ﬁ", "sh"],
+        )
+
+    def test_tokenize_with_offsets_special_tokens_and_cjk(self):
+        vocab_data = ["[UNK]", "[MASK]", "ah", "半", "推", "zz"]
+        tokenizer = self.make_tokenizer(
+            vocabulary=vocab_data,
+            dtype="string",
+            special_tokens=["[MASK]"],
+            special_tokens_in_strings=True,
+        )
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            "ah半推zz[MASK]ah"
+        )
+        self.assertAllEqual(tokens, ["ah", "半", "推", "zz", "[MASK]", "ah"])
+        self.assertAllEqual(starts, [0, 2, 3, 4, 6, 12])
+        self.assertAllEqual(ends, [2, 3, 4, 6, 12, 14])
+
+    def test_tokenize_with_offsets_no_splitting(self):
+        # With `split=False`, offsets are relative to each pre-split word.
+        vocab_data = ["[UNK]", "the", "qu", "##ick"]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data, split=False)
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            ["the", "quick", "whale"]
+        )
+        self.assertAllEqual(tokens, [1, 2, 3, 0])
+        self.assertAllEqual(starts, [0, 0, 2, 0])
+        self.assertAllEqual(ends, [3, 2, 5, 5])
+        tokens, starts, ends = tokenizer.tokenize_with_offsets(
+            [["the", "quick"], ["whale"]]
+        )
+        self.assertAllEqual(tokens, [[1, 2, 3], [0]])
+        self.assertAllEqual(starts, [[0, 0, 2], [0]])
+        self.assertAllEqual(ends, [[3, 2, 5], [5]])
+
+    def test_tokenize_with_offsets_counts_characters(self):
+        # "é" is one character but two UTF-8 bytes. Offsets count characters,
+        # including for bytes and tensor inputs.
+        tokenizer = self.make_tokenizer(vocabulary=["[UNK]", "fox"])
+        for inputs in ["é fox", "é fox".encode("utf-8"), tf.constant("é fox")]:
+            tokens, starts, ends = tokenizer.tokenize_with_offsets(inputs)
+            self.assertAllEqual(tokens, [0, 1])
+            self.assertAllEqual(starts, [0, 2])
+            self.assertAllEqual(ends, [1, 5])
+        for inputs in [np.array(["é fox"]), tf.constant(["é fox"])]:
+            tokens, starts, ends = tokenizer.tokenize_with_offsets(inputs)
+            self.assertAllEqual(tokens, [[0, 1]])
+            self.assertAllEqual(starts, [[0, 2]])
+            self.assertAllEqual(ends, [[1, 5]])
+
+    def test_tokenize_with_offsets_errors_in_tf_data(self):
+        vocab_data = ["[UNK]", "the", "fox"]
+        tokenizer = self.make_tokenizer(vocabulary=vocab_data)
+        ds = tf.data.Dataset.from_tensor_slices(["the fox"])
+        with self.assertRaisesRegex(NotImplementedError, "tf.data"):
+            ds.map(tokenizer.tokenize_with_offsets)
+
+    def test_tokenize_with_offsets_matches_tokenize(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Parity test only runs from the python path.")
+        corpus = [
+            "The quick brown fox.",
+            "hi[MASK]there, you! [CLS]x",
+            "Hello,World.  多个 test\u200bab",
+            "Café cafe\u0301 Straße ﬁsh İ ǅ Σ",
+            "x\u0301\u0323y 가각 \u1100\u1161\u11a8",
+            "  leading and trailing  ",
+            "a" * 101,
+            "",
+        ]
+        vocab_data = [
+            "[PAD]", "[UNK]", "[CLS]", "[MASK]", "the", "qu", "##ick", "br",
+            "##own", "fox", ".", ",", "!", "hi", "t", "##h", "##ere", "you",
+            "x", "y", "test", "a", "##a", "##b", "多", "个", "leading", "and",
+            "trailing", "caf", "##e", "##é", "stra", "##s", "##ß", "f",
+            "##i", "ﬁ", "##sh", "i", "##\u0307", "##\u0301", "##\u0323",
+            "가", "##각",
+        ]  # fmt: skip
+        for kwargs in [
+            {},
+            {"lowercase": True},
+            {"strip_accents": True},
+            {"lowercase": True, "strip_accents": True, "split_on_cjk": False},
+            {
+                "lowercase": True,
+                "special_tokens": ["[MASK]", "[CLS]"],
+                "special_tokens_in_strings": True,
+            },
+            {"dtype": "string", "lowercase": True, "strip_accents": True},
+            {"sequence_length": 8},
+        ]:
+            tokenizer = WordPieceTokenizer(vocabulary=vocab_data, **kwargs)
+            tokens, starts, ends = tokenizer.tokenize_with_offsets(corpus)
+            self.assertAllEqual(tokens, tokenizer.tokenize(corpus))
+            for text in corpus:
+                tokens, starts, ends = tokenizer.tokenize_with_offsets(text)
+                self.assertAllEqual(tokens, tokenizer.tokenize(text))
+                if "sequence_length" in kwargs:
+                    continue
+                # Every token has a non-empty span of `text`, and spans
+                # never move backwards.
+                starts, ends = starts.tolist(), ends.tolist()
+                self.assertEqual(starts, sorted(starts))
+                self.assertEqual(ends, sorted(ends))
+                for start, end in zip(starts, ends):
+                    self.assertTrue(0 <= start < end <= len(text))
+
     @pytest.mark.skipif(grain is None, reason="grain is not installed")
     def test_grain_outputs_numpy(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
