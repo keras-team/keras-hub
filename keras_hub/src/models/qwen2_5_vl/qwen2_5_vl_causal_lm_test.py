@@ -127,6 +127,24 @@ class Qwen2_5VLCausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :5],
         )
 
+    def _prefill_hidden_states(self, causal_lm, inputs):
+        """Prefill hidden states through the same path `generate()`
+        uses, including the interleaving first `call_with_cache`."""
+        normalized, _ = causal_lm._normalize_generate_inputs(dict(inputs))
+        preprocessed = causal_lm.preprocessor.generate_preprocess(normalized[0])
+        img_embeddings = causal_lm.backbone.vision_encoder(
+            preprocessed["pixel_values"],
+            preprocessed["image_grid_thw"],
+        )
+        hidden_states, _ = causal_lm._build_cache(
+            preprocessed["token_ids"],
+            preprocessed["padding_mask"],
+            img_embeddings=img_embeddings,
+            vision_indices=preprocessed["vision_indices"],
+            position_ids=preprocessed["position_ids"],
+        )
+        return ops.convert_to_numpy(hidden_states)
+
     def test_generate_with_image(self):
         """Multimodal generate: image embeddings interleave into prefill."""
         keras.utils.set_random_seed(0)
@@ -135,18 +153,23 @@ class Qwen2_5VLCausalLMTest(TestCase):
         )
         causal_lm.compile(sampler="greedy")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
-        outputs = []
+        hidden_states = []
         for value in (0.0, 255.0):
             image = np.full((4, 4, 3), value, dtype="float32")
+            inputs = {"prompts": prompt, "images": image}
             output = causal_lm.generate(
-                {"prompts": prompt, "images": image},
+                inputs,
                 max_length=20,
                 strip_prompt=True,
                 stop_token_ids=None,
             )
             self.assertTrue(isinstance(output, str))
-            outputs.append(output)
-        self.assertNotEqual(outputs[0], outputs[1])
+            hidden_states.append(self._prefill_hidden_states(causal_lm, inputs))
+        # Greedy decodings can coincide for different images; prefill
+        # hidden states cannot unless the vision embeddings are dropped.
+        self.assertGreater(
+            np.max(np.abs(hidden_states[0] - hidden_states[1])), 1e-3
+        )
 
     def test_generate_with_video(self):
         """Video inputs flow through the shared image converter, with
@@ -158,22 +181,26 @@ class Qwen2_5VLCausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.preprocessor.video_converter)
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
-        outputs = []
+        hidden_states = []
         for value in (0.0, 255.0):
             video = np.full((8, 2, 2, 3), value, dtype="float32")
+            inputs = {
+                "prompts": prompt,
+                "videos": [video],
+                "second_per_grid_ts": [0.5],
+            }
             output = causal_lm.generate(
-                {
-                    "prompts": prompt,
-                    "videos": [video],
-                    "second_per_grid_ts": [0.5],
-                },
+                inputs,
                 max_length=36,
                 strip_prompt=True,
                 stop_token_ids=None,
             )
             self.assertTrue(isinstance(output, str))
-            outputs.append(output)
-        self.assertNotEqual(outputs[0], outputs[1])
+            hidden_states.append(self._prefill_hidden_states(causal_lm, inputs))
+        # Same rationale as `test_generate_with_image`.
+        self.assertGreater(
+            np.max(np.abs(hidden_states[0] - hidden_states[1])), 1e-3
+        )
 
     def test_fit_with_image(self):
         """fit() trains through the multimodal preprocessor path; all
