@@ -727,6 +727,7 @@ class DiagonalGaussianDistributionSampler(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "method": self.method,
                 "axis": self.axis,
                 "seed": self.seed,
             }
