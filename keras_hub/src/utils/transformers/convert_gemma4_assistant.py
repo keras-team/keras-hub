@@ -1,18 +1,30 @@
 import numpy as np
 
-from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
 from keras_hub.src.samplers.top_k_sampler import TopKSampler
 from keras_hub.src.samplers.top_p_sampler import TopPSampler
 from keras_hub.src.utils.preset_utils import check_file_exists
 from keras_hub.src.utils.preset_utils import load_json
-from keras_hub.src.utils.transformers.convert_gemma4 import (
-    _convert_decoder_block,
-)
-from keras_hub.src.utils.transformers.convert_gemma4 import (
-    convert_backbone_config as target_convert_config,
-)
 
-backbone_cls = Gemma4Backbone
+
+def _get_target_module(transformers_config):
+    model_type = transformers_config.get("model_type", "")
+    if model_type == "gemma4_unified_assistant":
+        from keras_hub.src.models.gemma4_unified import gemma4_unified_backbone
+
+        Gemma4UnifiedBackbone = gemma4_unified_backbone.Gemma4UnifiedBackbone
+        from keras_hub.src.utils.transformers import convert_gemma4_unified
+
+        return Gemma4UnifiedBackbone, convert_gemma4_unified
+
+    from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
+    from keras_hub.src.utils.transformers import convert_gemma4
+
+    return Gemma4Backbone, convert_gemma4
+
+
+def check_backbone_class(transformers_config):
+    cls, _ = _get_target_module(transformers_config)
+    return cls
 
 
 def convert_backbone_config(transformers_config):
@@ -20,7 +32,8 @@ def convert_backbone_config(transformers_config):
     for assistant.
     """
     # Delegate to the target model's backbone config converter.
-    config = target_convert_config(transformers_config)
+    _, module = _get_target_module(transformers_config)
+    config = module.convert_backbone_config(transformers_config)
     return config
 
 
@@ -84,7 +97,8 @@ def convert_weights(backbone, loader, transformers_config):
         # to bypass redundant safe-tensor load checks without altering the
         # backbone.
         decoder_layer.attention.is_kv_shared_layer = True
-        _convert_decoder_block(decoder_layer, i, loader, hf_key)
+        _, module = _get_target_module(transformers_config)
+        module._convert_decoder_block(decoder_layer, i, loader, hf_key)
 
     loader.port_weight(
         keras_variable=backbone.get_layer("token_embedding").embeddings,
