@@ -1,3 +1,5 @@
+from unittest import mock
+
 import keras
 import tensorflow as tf
 from keras.src.saving import serialization_lib
@@ -153,6 +155,121 @@ class BytePairTokenizerTest(TestCase):
             self.tokenizer.id_to_token(self.tokenizer.vocabulary_size())
         with self.assertRaises(ValueError):
             self.tokenizer.id_to_token(-1)
+
+    def test_tf_workflow_without_tensorflow_raises(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Already tested in BytePairTokenizerTest.")
+        with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
+            tokenizer = BytePairTokenizer(
+                vocabulary=VOCAB_PATH,
+                merges=MERGE_PATH,
+                _allow_python_workflow=False,
+            )
+            revived = BytePairTokenizer.from_config(tokenizer.get_config())
+            self.assertEqual(set(dir(tokenizer)), set(dir(revived)))
+            self.run_serialization_test(tokenizer)
+
+            stale = BytePairTokenizer(
+                vocabulary={"a": 0, "b": 1, "ab": 2},
+                merges=["a b"],
+                _allow_python_workflow=True,
+            )
+            self.assertIsNotNone(stale._tokenizer)
+            stale._allow_python_workflow = False
+            stale.set_vocabulary_and_merges(
+                {"a": 0, "b": 1, "ab": 2},
+                ["a b"],
+            )
+            self.assertIsNone(stale._tokenizer)
+
+            # A failed TF build must not leave partial state behind.
+            vocabulary = tokenizer.vocabulary
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                tokenizer._set_vocabulary_and_merges_tf({"x": 0}, [])
+            self.assertIs(tokenizer.vocabulary, vocabulary)
+
+            with self.assertRaisesRegex(ImportError, "requires `tensorflow`"):
+                tokenizer.tokenize("brown.")
+
+    def test_token_to_id(self):
+        tokenizer = BytePairTokenizer(
+            vocabulary={"a": 0, "b": 1, "ab": 2},
+            merges=["a b"],
+            _allow_python_workflow=self._allow_python_workflow,
+        )
+        self.assertEqual(tokenizer.token_to_id("ab"), 2)
+        with self.assertRaises(ValueError):
+            tokenizer.token_to_id("missing")
+
+    def test_bpe_subclasses_tf_workflow_without_tensorflow(self):
+        if not self._allow_python_workflow:
+            self.skipTest("Already tested in BytePairTokenizerTest.")
+        from keras_hub.src.models.clip.clip_tokenizer import CLIPTokenizer
+        from keras_hub.src.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+        from keras_hub.src.models.roberta.roberta_tokenizer import (
+            RobertaTokenizer,
+        )
+        from keras_hub.src.models.sam3.sam3_tokenizer import SAM3Tokenizer
+
+        cases = [
+            (
+                CLIPTokenizer,
+                {
+                    "a": 0,
+                    "b": 1,
+                    "ab": 2,
+                    "<|startoftext|>": 3,
+                    "<|endoftext|>": 4,
+                },
+                4,
+            ),
+            (
+                SAM3Tokenizer,
+                {
+                    "a": 0,
+                    "b": 1,
+                    "ab": 2,
+                    "<|startoftext|>": 3,
+                    "<|endoftext|>": 4,
+                },
+                4,
+            ),
+            (
+                GPT2Tokenizer,
+                {"a": 0, "b": 1, "ab": 2, "<|endoftext|>": 3},
+                3,
+            ),
+            (
+                RobertaTokenizer,
+                {
+                    "a": 0,
+                    "b": 1,
+                    "ab": 2,
+                    "<s>": 3,
+                    "<pad>": 4,
+                    "</s>": 5,
+                    "<mask>": 6,
+                },
+                5,
+            ),
+        ]
+        with mock.patch("keras_hub.src.utils.tensor_utils.tf", None):
+            for cls, vocab, expected_end_id in cases:
+                tok = cls(
+                    vocabulary=vocab,
+                    merges=["a b"],
+                    _allow_python_workflow=False,
+                )
+                self.assertEqual(tok.end_token_id, expected_end_id)
+                self.assertEqual(
+                    tok.id_to_token(expected_end_id), tok.end_token
+                )
+                revived = cls.from_config(tok.get_config())
+                self.assertEqual(set(dir(tok)), set(dir(revived)))
+                with self.assertRaisesRegex(
+                    ImportError, "requires `tensorflow`"
+                ):
+                    tok.tokenize("ab")
 
     def test_whitespace_split(self):
         input_data = "\n\n\n  s"

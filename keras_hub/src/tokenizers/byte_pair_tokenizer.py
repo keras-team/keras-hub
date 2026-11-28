@@ -423,13 +423,17 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
         # Dummy attrs for serialization compatibility.
         if not hasattr(self, "cache"):
-            self.byte2unicode = None
-            self.unicode2byte = None
-            self.cache = None
-            self.id_to_token_map = None
-            self.token_to_id_map = None
-            self.merge_ranks_lookup_default = None
-            self.merge_ranks = None
+            self._clear_tf_state()
+
+    def _clear_tf_state(self):
+        """Reset the attributes built by `_set_vocabulary_and_merges_tf`."""
+        self.byte2unicode = None
+        self.unicode2byte = None
+        self.cache = None
+        self.id_to_token_map = None
+        self.token_to_id_map = None
+        self.merge_ranks_lookup_default = None
+        self.merge_ranks = None
 
     def set_vocabulary_and_merges(self, vocabulary, merges):
         """Set the vocabulary and merge rules from data or files."""
@@ -438,13 +442,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             self.vocabulary = None
             self.merges = None
             # _set_vocabulary_and_merges_tf
-            self.byte2unicode = None
-            self.unicode2byte = None
-            self.cache = None
-            self.id_to_token_map = None
-            self.token_to_id_map = None
-            self.merge_ranks_lookup_default = None
-            self.merge_ranks = None
+            self._clear_tf_state()
             # _set_vocabulary_and_merges_tokenizers
             self._tokenizer = None
             return
@@ -496,12 +494,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # When using `BytePairTokenizer` with `tf.data`, it must be built
         # outside the `tf.data` pipeline. So we always call
         # `_set_vocabulary_and_merges_tf`.
+        self.vocabulary = vocabulary
+        self.merges = merges
         try:
             self._set_vocabulary_and_merges_tf(vocabulary, merges)
         except ImportError:
-            pass
+            self._clear_tf_state()
         if self._allow_python_workflow:
             self._set_vocabulary_and_merges_tokenizers(vocabulary, merges)
+        else:
+            self._tokenizer = None
 
         self._update_special_token_ids()
 
@@ -534,7 +536,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         return len(self.vocabulary)
 
     def _id_to_token_tf(self, id):
-        self._maybe_initialized_tf()
         # This will be slow, but keep memory usage down compared to building a
         # dict. Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
@@ -557,29 +558,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
         self._check_vocabulary()
-        if self._use_tf_workflow():
-            return self._id_to_token_tf(id)
-        else:
+        if self._tokenizer is not None:
             return self._id_to_token_tokenizers(id)
-
-    def _token_to_id_tf(self, token):
-        self._maybe_initialized_tf()
-        return self.vocabulary[token]
-
-    def _token_to_id_tokenizers(self, token):
-        self._maybe_initialized_tokenizers()
-        token_id = self._tokenizer.token_to_id(token)
-        if token_id is None:
-            raise ValueError(f"Token '{token}' is not in the vocabulary.")
-        return token_id
+        return self._id_to_token_tf(id)
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
         self._check_vocabulary()
-        if self._use_tf_workflow():
-            return self._token_to_id_tf(token)
-        else:
-            return self._token_to_id_tokenizers(token)
+        if token not in self.vocabulary:
+            raise ValueError(f"Token '{token}' is not in the vocabulary.")
+        return self.vocabulary[token]
 
     def _bpe_merge_one_step_tf(self, words, mask):
         """Perform one step of byte-pair merge."""

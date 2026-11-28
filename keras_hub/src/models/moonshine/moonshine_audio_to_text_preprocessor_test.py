@@ -1,4 +1,6 @@
+import inspect
 import os
+from unittest import mock
 
 import keras
 import numpy as np
@@ -15,11 +17,23 @@ from keras_hub.src.models.moonshine.moonshine_tokenizer import (
 )
 from keras_hub.src.tests.test_case import TestCase
 from keras_hub.src.tests.test_case import assert_grain_safe_types
+from keras_hub.src.utils import tensor_utils
 
 try:
     import grain
 except ImportError:
     grain = None
+
+
+def _device_type(x):
+    """The device type a backend tensor lives on: `"cpu"`, `"gpu"`, ..."""
+    if keras.backend.backend() == "tensorflow":
+        return x.device.rsplit("device:", 1)[-1].split(":")[0].lower()
+    if keras.backend.backend() == "jax":
+        return next(iter(x.devices())).platform
+    if keras.backend.backend() == "torch":
+        return x.device.type
+    raise ValueError(f"Unsupported backend: {keras.backend.backend()}")
 
 
 class MoonshineAudioToTextPreprocessorTest(TestCase):
@@ -96,6 +110,60 @@ class MoonshineAudioToTextPreprocessorTest(TestCase):
             (1, 16000, 1),
         )
         self.assertAllClose(output["decoder_token_ids"].shape, [1, 8])
+
+    @pytest.mark.skipif(grain is None, reason="grain is not installed")
+    def test_grain_pipeline_generate_preprocess(self):
+        preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)
+        expected = preprocessor.generate_preprocess(self.input_data[0])
+        ds = grain.MapDataset.source([self.input_data[0]])
+        # Without TensorFlow, `preprocessing_function` is a no-op, so the
+        # undecorated `_generate_preprocess` covers the `tf is None` path.
+        unwrapped = inspect.unwrap(
+            MoonshineAudioToTextPreprocessor._generate_preprocess
+        )
+        orig_logical_not = keras.ops.logical_not
+        orig_convert = tensor_utils.convert_preprocessing_inputs
+        seen_devices = []
+        input_devices = []
+
+        def tracked_logical_not(*args, **kwargs):
+            result = orig_logical_not(*args, **kwargs)
+            seen_devices.append(_device_type(result))
+            return result
+
+        def tracked_convert(*args, **kwargs):
+            result = orig_convert(*args, **kwargs)
+            # Only the top-level call sees the feature dict; nested calls
+            # convert its values.
+            if isinstance(result, dict):
+                input_devices.append(_device_type(result["audio"]))
+            return result
+
+        with (
+            mock.patch.object(
+                keras.ops, "logical_not", side_effect=tracked_logical_not
+            ),
+            mock.patch.object(
+                tensor_utils, "convert_preprocessing_inputs", tracked_convert
+            ),
+        ):
+            (output,) = list(ds.map(preprocessor.generate_preprocess))
+            with mock.patch.object(
+                MoonshineAudioToTextPreprocessor,
+                "_generate_preprocess",
+                unwrapped,
+            ):
+                (unwrapped_output,) = list(
+                    ds.map(preprocessor.generate_preprocess)
+                )
+
+        assert_grain_safe_types(output)
+        self.assertAllClose(output, expected)
+        assert_grain_safe_types(unwrapped_output)
+        self.assertAllClose(unwrapped_output, expected)
+        self.assertEqual(seen_devices, ["cpu", "cpu"])
+        expected_inputs = [] if tensor_utils.tf is None else ["cpu"]
+        self.assertEqual(input_devices, expected_inputs)
 
     def test_generate_postprocess(self):
         preprocessor = MoonshineAudioToTextPreprocessor(**self.init_kwargs)

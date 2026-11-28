@@ -216,7 +216,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         try:
             self._set_proto_tf(proto_bytes)
         except ImportError:
-            pass
+            self._sentence_piece = None
 
         # Use native sentencepiece to extract vocabulary metadata.
         # This avoids TF ops (.numpy()), making this code safe in
@@ -270,14 +270,6 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self._check_vocabulary()
         return list(self._vocabulary)
 
-    def _id_to_token_tf(self, id):
-        self._maybe_initialized_tf()
-        return self._vocabulary[id]
-
-    def _id_to_token_spm(self, id):
-        self._maybe_initialized_spm()
-        return self._sentence_piece_spm.IdToPiece(id)
-
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
         self._check_vocabulary()
@@ -286,10 +278,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
                 f"Received: {id}"
             )
-        if self._use_tf_workflow():
-            return self._id_to_token_tf(id)
-        else:
-            return self._id_to_token_spm(id)
+        return self._vocabulary[id]
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
