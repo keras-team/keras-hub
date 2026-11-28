@@ -20,6 +20,7 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_video_converter import (
 from keras_hub.src.models.qwen3_5.qwen3_5_causal_lm_preprocessor import (
     QwenVLSpecialTokenMixin,
 )
+from keras_hub.src.utils.tensor_utils import convert_to_numpy
 from keras_hub.src.utils.tensor_utils import in_tf_function
 from keras_hub.src.utils.tensor_utils import preprocessing_function
 from keras_hub.src.utils.tensor_utils import strip_to_ragged
@@ -28,6 +29,64 @@ try:
     import tensorflow as tf
 except ImportError:
     tf = None
+
+
+def _flatten_media(node, leaf_ndim):
+    """Recursively flatten arbitrarily nested media to leaf arrays.
+
+    Media values may arrive as plain arrays, lists of arrays (with
+    matching or differing shapes), batched tensors, or nested lists
+    (e.g. media grouped per prompt through `generate()`). A leaf is an
+    array of ``leaf_ndim`` or fewer dims — ``(H, W, C)``/``(H, W)`` for
+    images, ``(T, H, W, C)`` for videos. Deeper arrays are split along
+    axis 0; ragged nodes are flattened element-wise.
+    """
+    if not isinstance(node, (list, tuple)):
+        try:
+            # `convert_to_numpy` also handles backend tensors (e.g. CUDA)
+            # that `np.asarray` cannot inspect.
+            arr = convert_to_numpy(node)
+        except (ValueError, TypeError, RuntimeError):
+            arr = None
+        if arr is None or arr.dtype == object:
+            return [node]
+        if arr.ndim <= leaf_ndim:
+            return [arr]
+        return [
+            leaf
+            for i in range(arr.shape[0])
+            for leaf in _flatten_media(arr[i], leaf_ndim)
+        ]
+    try:
+        arr = convert_to_numpy(node)
+    except (ValueError, TypeError, RuntimeError):
+        arr = None
+    if arr is not None and arr.dtype != object:
+        if arr.ndim > leaf_ndim:
+            return _flatten_media(arr, leaf_ndim)
+        if arr.ndim <= leaf_ndim and any(
+            isinstance(elem, (list, tuple)) for elem in node
+        ):
+            # A single leaf expressed as nested lists (e.g. a
+            # `RaggedTensor.to_list()` row), not a list of elements.
+            return [arr]
+    return [leaf for elem in node for leaf in _flatten_media(elem, leaf_ndim)]
+
+
+def _empty_media(media):
+    # Empty collections behave like absent media, so placeholder
+    # counts get the descriptive mismatch error downstream. `generate()`
+    # wraps media lists one level deeper, so emptiness is recursive.
+    if isinstance(media, (list, tuple)):
+        return len(media) == 0 or all(_empty_media(item) for item in media)
+    # Tensorized nested empty lists have a zero elsewhere in their shape.
+    shape = getattr(media, "shape", None)
+    return shape is not None and len(shape) > 0 and 0 in shape
+
+
+def _has_media_markers(prompts_list, image_token, video_token):
+    """True when any flattened string prompt carries a media marker."""
+    return any(image_token in p or video_token in p for p in prompts_list)
 
 
 @keras_hub_export("keras_hub.models.Qwen2VLCausalLMPreprocessor")
@@ -57,8 +116,8 @@ class Qwen2VLCausalLMPreprocessor(
         image_converter: A ``Qwen2VLImageConverter`` instance, or ``None``
             for text-only mode.
         video_converter: A ``Qwen2VLVideoConverter`` instance, or ``None``.
-            Falls back to ``image_converter`` when unset, since Qwen2-VL
-            applies identical preprocessing to video frames and images.
+            When unset, video preprocessing falls back to
+            ``image_converter`` (shared, so bounds mutations propagate).
         sequence_length: int. Total padded sequence length. Default 1024.
         add_start_token: bool. Prepend BOS token. Default ``False``.
         add_end_token: bool. Append EOS token. Default ``True``.
@@ -87,6 +146,9 @@ class Qwen2VLCausalLMPreprocessor(
             **kwargs,
         )
         self.image_converter = image_converter
+        # `None` defers to `self.image_converter` at use sites, so the
+        # two media paths share one converter object and serialization
+        # round-trips keep that identity.
         self.video_converter = video_converter
 
         # Token strings — these are static.
@@ -155,10 +217,87 @@ class Qwen2VLCausalLMPreprocessor(
             for p in prompts
         ], True
 
+    def _carries_media_markers(self, x):
+        """True when dict prompts still carry media markers.
+
+        Plain strings always take the text-only path, matching the base
+        preprocessor. Symbolic tensors under `tf.data` tracing cannot be
+        decoded; they report no markers so that path stays traceable.
+        """
+        if not isinstance(x, dict) or in_tf_function():
+            return False
+        prompts = x.get("prompts")
+        if prompts is None:
+            return False
+        prompts_list, _ = self._flatten_prompts(prompts)
+        return _has_media_markers(
+            prompts_list, self.image_token, self.video_token
+        )
+
     def _merge_size(self):
         """Spatial merge factor from whichever converter is configured."""
         converter = self.image_converter or self.video_converter
         return getattr(converter, "merge_size", 2)
+
+    def _media_inputs(self, x, images=None, videos=None):
+        """Extract images/videos from the input; empty counts as absent."""
+        if isinstance(x, dict):
+            if images is None:
+                images = x.get("images", None)
+            if videos is None:
+                videos = x.get("videos", None)
+        if _empty_media(images):
+            images = None
+        if _empty_media(videos):
+            videos = None
+        return images, videos
+
+    def _expand_multimodal(self, x, images, videos, sequence_length):
+        """Run converters, expand media markers, check sequence fit."""
+        if not self.built:
+            self.build(None)
+        self._check_converters(images, videos)
+        prompts_list, batched = self._flatten_prompts(x["prompts"])
+        (
+            vision_out_images,
+            vision_out_videos,
+            num_image_tokens,
+            num_video_tokens,
+        ) = self._process_media(images, videos)
+        expanded_sequences = self._expand_prompts(
+            prompts_list, num_image_tokens, num_video_tokens
+        )
+        self._check_sequence_length(expanded_sequences, sequence_length)
+        return expanded_sequences, vision_out_images, vision_out_videos, batched
+
+    def _vision_bundle(
+        self, token_ids, vision_out_images, vision_out_videos, sgt
+    ):
+        """``vision_indices``/``position_ids``/concatenated encoder inputs.
+
+        Media are consumed in prompt order across the batch. Returns
+        ``None`` pieces when no media is present.
+        """
+        if vision_out_images is None and vision_out_videos is None:
+            return {}
+        img_grid = vision_out_images["grid_thw"] if vision_out_images else None
+        vid_grid = vision_out_videos["grid_thw"] if vision_out_videos else None
+        pixel_values_list = []
+        grid_list = []
+        if vision_out_images is not None:
+            pixel_values_list.append(vision_out_images["pixel_values"])
+            grid_list.append(vision_out_images["grid_thw"])
+        if vision_out_videos is not None:
+            pixel_values_list.append(vision_out_videos["pixel_values"])
+            grid_list.append(vision_out_videos["grid_thw"])
+        return {
+            "vision_indices": self._compute_vision_indices(token_ids),
+            "position_ids": self._compute_position_ids(
+                token_ids, img_grid, vid_grid, second_per_grid_ts=sgt
+            ),
+            "pixel_values": ops.concatenate(pixel_values_list, axis=0),
+            "image_grid_thw": ops.concatenate(grid_list, axis=0),
+        }
 
     def _process_media(self, images, videos):
         """Run converters and count merged tokens per media item."""
@@ -258,7 +397,27 @@ class Qwen2VLCausalLMPreprocessor(
             np.concatenate([img_indices, vid_indices]).astype("int32")
         )
 
-    def _compute_position_ids(self, token_ids, image_grid_thw, video_grid_thw):
+    def _temporal_position(self, frame, is_video, media_index, sgt):
+        """Temporal position component for a vision token.
+
+        Qwen2-VL uses the raw frame index for all media. Subclasses may
+        override to apply time-aware scaling — e.g. Qwen2.5-VL multiplies
+        the frame index by ``tokens_per_second * second_per_grid_ts``.
+
+        Args:
+            frame: int. Temporal patch index of the token.
+            is_video: bool. Whether the token belongs to a video span.
+            media_index: int. Index of the media item in its grid.
+            sgt: ``second_per_grid_ts`` list from ``_compute_position_ids``,
+                or ``None``.
+        Returns:
+            int temporal offset to add to the span's ``current_pos``.
+        """
+        return frame
+
+    def _compute_position_ids(
+        self, token_ids, image_grid_thw, video_grid_thw, second_per_grid_ts=None
+    ):
         """Build 3-channel M-RoPE position IDs matching HF's algorithm.
 
         For text tokens all 3 channels hold the same sequential position.
@@ -279,6 +438,9 @@ class Qwen2VLCausalLMPreprocessor(
             token_ids: int32 tensor ``(batch, seq_len)``.
             image_grid_thw: int32 tensor ``(num_images, 3)`` or ``None``.
             video_grid_thw: int32 tensor ``(num_videos, 3)`` or ``None``.
+            second_per_grid_ts: optional per-video temporal scale. Unused by
+                Qwen2-VL (fixed interval 1); consumed by subclasses via
+                ``_temporal_position``.
         Returns:
             int32 tensor ``(batch, 3, seq_len)``.
         """
@@ -293,6 +455,22 @@ class Qwen2VLCausalLMPreprocessor(
 
         image_grid_np = _grid_to_numpy(image_grid_thw)
         video_grid_np = _grid_to_numpy(video_grid_thw)
+
+        if second_per_grid_ts is not None:
+            # float64 keeps truncation boundaries exact (e.g. 10/3 in
+            # float32 truncates a temporal position differently).
+            second_per_grid_ts = np.asarray(
+                convert_to_numpy(second_per_grid_ts), dtype=np.float64
+            )
+            if (
+                second_per_grid_ts.ndim != 1
+                or second_per_grid_ts.shape[0] != video_grid_np.shape[0]
+            ):
+                raise ValueError(
+                    "`second_per_grid_ts` must be a 1-D sequence with one "
+                    f"value per video (got {video_grid_np.shape[0]} video "
+                    f"grids); received shape {second_per_grid_ts.shape}."
+                )
 
         batch_size, seq_len = token_ids_np.shape
         merge_size = self._merge_size()
@@ -326,11 +504,13 @@ class Qwen2VLCausalLMPreprocessor(
                         t_grid = int(image_grid_np[img_idx, 0])
                         h_grid = int(image_grid_np[img_idx, 1])
                         w_grid = int(image_grid_np[img_idx, 2])
+                        media_index = img_idx
                         img_idx += 1
                     else:
                         t_grid = int(video_grid_np[vid_idx, 0])
                         h_grid = int(video_grid_np[vid_idx, 1])
                         w_grid = int(video_grid_np[vid_idx, 2])
+                        media_index = vid_idx
                         vid_idx += 1
 
                     llm_grid_h = h_grid // merge_size
@@ -339,13 +519,24 @@ class Qwen2VLCausalLMPreprocessor(
                     n_tokens = t_grid * frame_tokens
 
                     span_end = min(i + n_tokens, seq_len)
-                    for vi in range(span_end - i):
-                        frame = vi // frame_tokens
-                        h_idx = (vi // llm_grid_w) % llm_grid_h
-                        w_idx = vi % llm_grid_w
-                        t_pos[i + vi] = current_pos + frame
-                        h_pos[i + vi] = current_pos + h_idx
-                        w_pos[i + vi] = current_pos + w_idx
+                    span = span_end - i
+                    # h/w indices repeat identically every frame; only the
+                    # temporal channel advances per frame.
+                    vi = np.arange(span)
+                    frames = vi // frame_tokens
+                    t_vals = np.array(
+                        [
+                            self._temporal_position(
+                                f, is_video, media_index, second_per_grid_ts
+                            )
+                            for f in range(t_grid)
+                        ]
+                    )
+                    t_pos[i:span_end] = current_pos + t_vals[frames]
+                    h_pos[i:span_end] = (
+                        current_pos + (vi // llm_grid_w) % llm_grid_h
+                    )
+                    w_pos[i:span_end] = current_pos + vi % llm_grid_w
 
                     current_pos += max(llm_grid_h, llm_grid_w)
                     i = span_end
@@ -378,125 +569,104 @@ class Qwen2VLCausalLMPreprocessor(
 
         return ops.convert_to_tensor(all_pos, dtype="int32")
 
-    def _preprocess_images(self, images):
-        """Convert raw images to patch tensors using the image converter.
+    def _preprocess_media_items(self, media, leaf_ndim, converter):
+        """Convert raw media to patch tensors through ``converter``.
 
-        Args:
-            images: A single image ``(H, W, C)``, a list of images, or a
-                batched array ``(B, H, W, C)``.
+        Media may arrive nested (e.g. per-prompt batching through
+        `generate()`), as `tf.RaggedTensor`s, or as dense tensors;
+        flatten recursively to leaf arrays — ``(H, W, C)``/``(H, W)``
+        for images, ``(T, H, W, C)`` for videos.
+
         Returns:
-            dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
-            ``image_grid_thw`` ``(num_images, 3)``.
+            dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)``
+            and ``grid_thw`` ``(num_items, 3)``.
         """
-        # Normalize to a flat list of individual 3-D images. A list of
-        # differently-shaped images arrives as a `tf.RaggedTensor` after
-        # preprocessing input conversion.
-        if tf is not None and isinstance(images, tf.RaggedTensor):
-            flat_images = [np.array(img.to_list()) for img in images]
-        elif isinstance(images, (list, tuple)):
-            flat_images = []
-            for img in images:
-                if hasattr(img, "shape") and len(img.shape) == 4:
-                    for i in range(img.shape[0]):
-                        flat_images.append(img[i])
-                else:
-                    flat_images.append(img)
-        elif hasattr(images, "shape") and len(images.shape) == 4:
-            flat_images = [images[i] for i in range(images.shape[0])]
-        else:
-            flat_images = [images]
+        if tf is not None and isinstance(media, tf.RaggedTensor):
+            media = media.to_list()
+        flat_media = _flatten_media(media, leaf_ndim=leaf_ndim)
 
         all_patches = []
         all_grid_thw = []
-        for img in flat_images:
-            if isinstance(img, np.ndarray) and img.ndim == 2:
-                img = np.stack([img] * 3, axis=-1)
-
-            result = self.image_converter(img)
-            patches = result["patches"]
-            grid_thw = result["grid_thw"]
-
-            patches = ops.convert_to_tensor(patches)
-            grid_thw = ops.convert_to_tensor(grid_thw)
-
-            all_patches.append(patches)
-            all_grid_thw.append(grid_thw)
+        for item in flat_media:
+            is_gray = isinstance(item, np.ndarray) and item.ndim == 2
+            if leaf_ndim == 3 and is_gray:
+                item = np.stack([item] * 3, axis=-1)
+            result = converter(item)
+            all_patches.append(ops.convert_to_tensor(result["patches"]))
+            all_grid_thw.append(ops.convert_to_tensor(result["grid_thw"]))
 
         return {
             "pixel_values": ops.concatenate(all_patches, axis=0),
             "grid_thw": ops.concatenate(all_grid_thw, axis=0),
         }
+
+    def _preprocess_images(self, images):
+        """Convert raw images to patch tensors using the image converter."""
+        return self._preprocess_media_items(images, 3, self.image_converter)
 
     def _preprocess_videos(self, videos):
-        """Convert raw videos to patch tensors using the video converter.
-
-        Args:
-            videos: A single video ``(T, H, W, C)``, a list of videos, or a
-                batched array ``(B, T, H, W, C)``.
-        Returns:
-            dict with ``pixel_values`` ``(total_patches, T, pH, pW, C)`` and
-            ``grid_thw`` ``(num_videos, 3)``.
-        """
-        if tf is not None and isinstance(videos, tf.RaggedTensor):
-            flat_videos = [np.array(vid.to_list()) for vid in videos]
-        elif isinstance(videos, (list, tuple)):
-            flat_videos = []
-            for vid in videos:
-                if hasattr(vid, "shape") and len(vid.shape) == 5:
-                    for i in range(vid.shape[0]):
-                        flat_videos.append(vid[i])
-                else:
-                    flat_videos.append(vid)
-        elif hasattr(videos, "shape") and len(videos.shape) == 5:
-            flat_videos = [videos[i] for i in range(videos.shape[0])]
-        else:
-            flat_videos = [videos]
-
+        """Convert raw videos to patch tensors using the video converter."""
         converter = self.video_converter or self.image_converter
-        all_patches = []
-        all_grid_thw = []
-        for vid in flat_videos:
-            result = converter(vid)
-            patches = result["patches"]
-            grid_thw = result["grid_thw"]
+        return self._preprocess_media_items(videos, 4, converter)
 
-            patches = ops.convert_to_tensor(patches)
-            grid_thw = ops.convert_to_tensor(grid_thw)
-
-            all_patches.append(patches)
-            all_grid_thw.append(grid_thw)
-
-        return {
-            "pixel_values": ops.concatenate(all_patches, axis=0),
-            "grid_thw": ops.concatenate(all_grid_thw, axis=0),
-        }
-
-    @preprocessing_function
     def call(
         self,
         x,
         y=None,
         sample_weight=None,
         sequence_length=None,
+        second_per_grid_ts=None,
+    ):
+        # popped before input conversion so dtypes and ragged structure
+        # survive tensorization.
+        if second_per_grid_ts is None and isinstance(x, dict):
+            second_per_grid_ts = x.get("second_per_grid_ts")
+            if second_per_grid_ts is not None:
+                x = dict(x)
+                x.pop("second_per_grid_ts")
+        images = videos = None
+        if isinstance(x, dict) and ("images" in x or "videos" in x):
+            x = dict(x)
+            images = x.pop("images", None)
+            videos = x.pop("videos", None)
+        return self._call(
+            x,
+            y=y,
+            sample_weight=sample_weight,
+            sequence_length=sequence_length,
+            second_per_grid_ts=second_per_grid_ts,
+            images=images,
+            videos=videos,
+        )
+
+    @preprocessing_function
+    def _call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+        second_per_grid_ts=None,
+        images=None,
+        videos=None,
     ):
         sequence_length = sequence_length or self.sequence_length
-
-        images = None
-        videos = None
-        if isinstance(x, dict):
-            images = x.get("images", None)
-            videos = x.get("videos", None)
+        images, videos = self._media_inputs(x, images, videos)
 
         # Text-only fast path: media-free inputs delegate to the base
         # class, whose tokenizer/packer path is safe under `tf.data`
         # tracing. A dict carrying "responses" keeps the eager multimodal
-        # path so labels are packed, since the base path cannot.
+        # path so labels are packed, since the base path cannot. Prompts
+        # that still carry media markers after empty-media normalization
+        # also take the multimodal path, where `_expand_prompts` raises
+        # the descriptive placeholder/media count mismatch.
+        if isinstance(x, dict):
+            responses_text = x.get("responses", None)
+        else:
+            responses_text = None
         if images is None and videos is None:
-            responses = (
-                x.get("responses", None) if isinstance(x, dict) else None
-            )
-            if responses is None:
-                prompts = x["prompts"] if isinstance(x, dict) else x
+            prompts = x["prompts"] if isinstance(x, dict) else x
+            if responses_text is None and not self._carries_media_markers(x):
                 return super().call(
                     prompts,
                     y=y,
@@ -504,37 +674,14 @@ class Qwen2VLCausalLMPreprocessor(
                     sequence_length=sequence_length,
                 )
 
-        if not self.built:
-            self.build(None)
-
-        def _empty(media):
-            # Empty collections behave like absent media, so placeholder
-            # counts get the descriptive mismatch error downstream.
-            if isinstance(media, (list, tuple)):
-                return len(media) == 0
-            shape = getattr(media, "shape", None)
-            return shape is not None and len(shape) > 0 and shape[0] == 0
-
-        if _empty(images):
-            images = None
-        if _empty(videos):
-            videos = None
-        self._check_converters(images, videos)
-        prompts_list, batched = self._flatten_prompts(x["prompts"])
-        responses_text = x.get("responses", None)
-
-        # Process media, expand markers, then pack prompts (+ responses).
         (
+            expanded_sequences,
             vision_out_images,
             vision_out_videos,
-            num_image_tokens,
-            num_video_tokens,
-        ) = self._process_media(images, videos)
-        expanded_sequences = self._expand_prompts(
-            prompts_list, num_image_tokens, num_video_tokens
-        )
-        self._check_sequence_length(expanded_sequences, sequence_length)
+            batched,
+        ) = self._expand_multimodal(x, images, videos, sequence_length)
 
+        # Pack prompts (+ responses), shifting for next-token labels.
         if responses_text is not None:
             responses, _ = self._flatten_prompts(responses_text)
             response_ids = [
@@ -567,33 +714,15 @@ class Qwen2VLCausalLMPreprocessor(
             }
             y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
 
-        # 5. Vision indices, M-RoPE positions, and merged encoder inputs.
-        if vision_out_images is not None or vision_out_videos is not None:
-            vision_indices = self._compute_vision_indices(x_out["token_ids"])
-            img_grid = (
-                vision_out_images["grid_thw"] if vision_out_images else None
+        x_out.update(
+            self._vision_bundle(
+                x_out["token_ids"],
+                vision_out_images,
+                vision_out_videos,
+                second_per_grid_ts,
             )
-            vid_grid = (
-                vision_out_videos["grid_thw"] if vision_out_videos else None
-            )
-            pos_ids = self._compute_position_ids(
-                x_out["token_ids"], img_grid, vid_grid
-            )
-            x_out["vision_indices"] = vision_indices
-            x_out["position_ids"] = pos_ids
+        )
 
-            pixel_values_list = []
-            grid_list = []
-            if vision_out_images is not None:
-                pixel_values_list.append(vision_out_images["pixel_values"])
-                grid_list.append(vision_out_images["grid_thw"])
-            if vision_out_videos is not None:
-                pixel_values_list.append(vision_out_videos["pixel_values"])
-                grid_list.append(vision_out_videos["grid_thw"])
-            x_out["pixel_values"] = ops.concatenate(pixel_values_list, axis=0)
-            x_out["image_grid_thw"] = ops.concatenate(grid_list, axis=0)
-
-        # 6. Squeeze batch dim for unbatched inputs.
         if not batched:
             for key in ("token_ids", "padding_mask", "position_ids"):
                 if key in x_out:
@@ -603,8 +732,37 @@ class Qwen2VLCausalLMPreprocessor(
 
         return keras.utils.pack_x_y_sample_weight(x_out, y, sample_weight)
 
+    def generate_preprocess(
+        self, x, sequence_length=None, second_per_grid_ts=None
+    ):
+        # Same pre-conversion capture as `call`.
+        if second_per_grid_ts is None and isinstance(x, dict):
+            second_per_grid_ts = x.get("second_per_grid_ts")
+            if second_per_grid_ts is not None:
+                x = dict(x)
+                x.pop("second_per_grid_ts")
+        images = videos = None
+        if isinstance(x, dict) and ("images" in x or "videos" in x):
+            x = dict(x)
+            images = x.pop("images", None)
+            videos = x.pop("videos", None)
+        return self._generate_preprocess(
+            x,
+            sequence_length=sequence_length,
+            second_per_grid_ts=second_per_grid_ts,
+            images=images,
+            videos=videos,
+        )
+
     @preprocessing_function
-    def generate_preprocess(self, x, sequence_length=None):
+    def _generate_preprocess(
+        self,
+        x,
+        sequence_length=None,
+        second_per_grid_ts=None,
+        images=None,
+        videos=None,
+    ):
         """Preprocess inputs for generation (prompt-only, no labels).
 
         Accepts either:
@@ -617,79 +775,56 @@ class Qwen2VLCausalLMPreprocessor(
             inputs, ``pixel_values``, ``image_grid_thw``,
             ``vision_indices``, ``position_ids``.
         """
-        # Check whether the input has images/videos.
-        images = None
-        videos = None
-        if isinstance(x, dict):
-            images = x.get("images", None)
-            videos = x.get("videos", None)
+        images, videos = self._media_inputs(x, images, videos)
 
         # Text-only: delegate to the base class entirely. The base class
         # expects bare strings, so unwrap a `{"prompts": ...}` dict first.
         if images is None and videos is None:
             prompts = x["prompts"] if isinstance(x, dict) else x
-            return super().generate_preprocess(
-                prompts, sequence_length=sequence_length
-            )
-
-        # Multimodal path.
-        if not self.built:
-            self.build(None)
-        self._check_converters(images, videos)
+            if not self._carries_media_markers(x):
+                return super().generate_preprocess(
+                    prompts, sequence_length=sequence_length
+                )
 
         sequence_length = sequence_length or self.sequence_length
-        prompts_list, batched = self._flatten_prompts(x["prompts"])
         (
+            expanded_sequences,
             vision_out_images,
             vision_out_videos,
-            num_image_tokens,
-            num_video_tokens,
-        ) = self._process_media(images, videos)
+            batched,
+        ) = self._expand_multimodal(x, images, videos, sequence_length)
 
-        # Media are consumed in prompt order across the batch, so each
-        # prompt gets the slice of token counts for the markers it contains.
-        expanded_sequences = self._expand_prompts(
-            prompts_list, num_image_tokens, num_video_tokens
-        )
-
-        # 5. Pack to fixed length.
-        self._check_sequence_length(expanded_sequences, sequence_length)
         token_ids, padding_mask = self.packer(
             expanded_sequences,
             sequence_length=sequence_length,
             add_end_value=False,
         )
-
-        # 6. Compute vision indices & M-RoPE position IDs.
-        vision_indices = self._compute_vision_indices(token_ids)
-
-        img_grid = vision_out_images["grid_thw"] if vision_out_images else None
-        vid_grid = vision_out_videos["grid_thw"] if vision_out_videos else None
-        pos_ids = self._compute_position_ids(token_ids, img_grid, vid_grid)
-
-        # 7. Build combined pixel_values / image_grid_thw for the encoder.
-        pixel_values_list = []
-        grid_list = []
-        if vision_out_images is not None:
-            pixel_values_list.append(vision_out_images["pixel_values"])
-            grid_list.append(vision_out_images["grid_thw"])
-        if vision_out_videos is not None:
-            pixel_values_list.append(vision_out_videos["pixel_values"])
-            grid_list.append(vision_out_videos["grid_thw"])
-
-        combined_pixel_values = ops.concatenate(pixel_values_list, axis=0)
-        combined_grid_thw = ops.concatenate(grid_list, axis=0)
-
-        return {
-            "token_ids": token_ids if batched else ops.squeeze(token_ids, 0),
-            "padding_mask": (
-                padding_mask if batched else ops.squeeze(padding_mask, 0)
-            ),
-            "pixel_values": combined_pixel_values,
-            "image_grid_thw": combined_grid_thw,
-            "vision_indices": vision_indices,
-            "position_ids": (pos_ids if batched else ops.squeeze(pos_ids, 0)),
+        x_out = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
         }
+        x_out.update(
+            self._vision_bundle(
+                token_ids,
+                vision_out_images,
+                vision_out_videos,
+                second_per_grid_ts,
+            )
+        )
+
+        if not batched:
+            for key in ("token_ids", "padding_mask", "position_ids"):
+                if key in x_out:
+                    x_out[key] = ops.squeeze(x_out[key], axis=0)
+        return x_out
+
+    def _vision_strip_ids(self):
+        """Special token ids to strip from generated output."""
+        ids_to_strip = list(self.tokenizer.special_token_ids)
+        for tok_id in self._special_token_map.values():
+            if tok_id not in ids_to_strip:
+                ids_to_strip.append(tok_id)
+        return ids_to_strip
 
     def _generate_postprocess_python(self, x):
         if not self.built:
@@ -699,11 +834,7 @@ class Qwen2VLCausalLMPreprocessor(
         token_ids = keras.ops.convert_to_numpy(token_ids).astype("int32")
         padding_mask = keras.ops.convert_to_numpy(padding_mask).astype("bool")
 
-        # Collect all IDs to strip: base special tokens + vision tokens.
-        ids_to_strip = list(self.tokenizer.special_token_ids)
-        for tok_id in self._special_token_map.values():
-            if tok_id not in ids_to_strip:
-                ids_to_strip.append(tok_id)
+        ids_to_strip = self._vision_strip_ids()
 
         if token_ids.ndim == 1:
             mask = padding_mask
@@ -728,11 +859,7 @@ class Qwen2VLCausalLMPreprocessor(
         token_ids = keras.ops.convert_to_numpy(x["token_ids"])
         padding_mask = keras.ops.convert_to_numpy(x["padding_mask"])
 
-        # Collect all IDs to strip: base special tokens + vision tokens.
-        ids_to_strip = list(self.tokenizer.special_token_ids)
-        for tok_id in self._special_token_map.values():
-            if tok_id not in ids_to_strip:
-                ids_to_strip.append(tok_id)
+        ids_to_strip = self._vision_strip_ids()
 
         token_ids = strip_to_ragged(token_ids, padding_mask, ids_to_strip)
         output = self.tokenizer.detokenize(token_ids)
@@ -747,3 +874,43 @@ class Qwen2VLCausalLMPreprocessor(
         # `image_converter` and `video_converter` are serialized by the base
         # `Preprocessor.get_config`.
         return super().get_config()
+
+    @staticmethod
+    def _share_image_converter(video_converter, image_converter):
+        """Point ``video_converter.image_converter`` at the shared one.
+
+        A deserialized ``Qwen2VLVideoConverter`` carries its own copy of
+        the image converter, so mutating the canonical
+        ``preprocessor.image_converter`` (e.g. ``max_pixels``) would not
+        reach the video path. Rewire when the two configs match, which
+        is always true for converters loaded from the same preset.
+        """
+        if video_converter is None or image_converter is None:
+            return
+        nested = video_converter.image_converter
+        if nested is image_converter:
+            return
+        if type(nested) is not type(image_converter):
+            return
+        nested_config = nested.get_config()
+        image_config = image_converter.get_config()
+        nested_config.pop("name", None)
+        image_config.pop("name", None)
+        if nested_config == image_config:
+            video_converter.image_converter = image_converter
+
+    @classmethod
+    def from_config(cls, config):
+        preprocessor = super().from_config(config)
+        cls._share_image_converter(
+            preprocessor.video_converter, preprocessor.image_converter
+        )
+        return preprocessor
+
+    @classmethod
+    def _add_missing_kwargs(cls, loader, kwargs):
+        kwargs = super()._add_missing_kwargs(loader, kwargs)
+        cls._share_image_converter(
+            kwargs.get("video_converter"), kwargs.get("image_converter")
+        )
+        return kwargs

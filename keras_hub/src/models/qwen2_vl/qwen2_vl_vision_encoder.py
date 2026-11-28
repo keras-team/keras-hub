@@ -44,7 +44,14 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
         self.proj.build((input_shape[0], self.embed_dim))
         self.built = True
 
-    def call(self, x, position_embeddings, segment_ids=None):
+    def call(
+        self,
+        x,
+        position_embeddings,
+        segment_ids=None,
+        window_ids=None,
+        window_cap=None,
+    ):
         """
         Args:
             x: Tensor of shape ``(seq_len, embed_dim)``.
@@ -55,6 +62,11 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
                 patches in the same segment (HF ``cu_seqlens`` semantics,
                 expressed as a mask so this stays traceable under
                 ``tf.function``). ``None`` means full attention over ``x``.
+            window_ids: int32 tensor ``(seq_len,)`` assigning each token to
+                a window (Qwen2.5-VL windowed attention). Mutually
+                exclusive with ``segment_ids``.
+            window_cap: int. Maximum tokens per window. Required when
+                ``window_ids`` is given.
         Returns:
             Tensor of shape ``(seq_len, embed_dim)``.
         """
@@ -83,68 +95,118 @@ class Qwen2VLVisionAttention(keras.layers.Layer):
         k = ops.transpose(k, (1, 0, 2))
         v = ops.transpose(v, (1, 0, 2))
 
-        # Per-frame attention: mask out cross-segment attention. For long
-        # sequences the score matrix is computed in fixed-size query chunks
-        # so peak memory is (heads, chunk, seq) rather than (heads, seq,
-        # seq) — HF avoids the O(S^2) buffer via flash/varlen kernels or
-        # per-segment torch.split + sdpa. Chunk starts are clamped so every
-        # slice is exactly `chunk` rows (dynamic slice *sizes* are not
-        # XLA-compilable inside generate_step); the overlapping tail chunk
-        # rewrites identical values.
-        #
-        # `chunk` also bounds the (heads, chunk, seq) score tensor below
-        # 2**31 elements: several TF GPU kernels index with int32 and fault
-        # past that (e.g. 16 heads x 2048 x 80k patches overflows).
-        chunk = 1024
+        if window_ids is not None:
+            # Block-sparse windowed attention (Qwen2.5-VL): windows are
+            # contiguous runs <= `window_cap`, so a query block needs only
+            # a 3*cap key span — O(seq * cap) with static shapes.
+            cap = window_cap
+            nseg = (seq_len + cap - 1) // cap
+            pad = nseg * cap - seq_len
+            win_pad = ops.pad(window_ids, [[0, pad]], constant_values=-1)
+            q_p = ops.pad(q, [[0, 0], [0, pad], [0, 0]])
 
-        def _attend_queries(q_c, seg_c):
-            """(H, chunk, D) queries vs all keys -> (H, chunk, D)."""
-            sc = ops.einsum("hid,hjd->hij", q_c, k) * self.scale
+            block0 = ops.expand_dims(ops.arange(nseg, dtype="int32") * cap, 1)
+            key_rel = block0 - cap + ops.arange(3 * cap, dtype="int32")
+            # Out-of-range slots are masked so the boundary token they
+            # clip to isn't counted twice.
+            key_in_range = ops.reshape(
+                (key_rel >= 0) & (key_rel < seq_len), (-1,)
+            )
+            key_idx = ops.reshape(ops.clip(key_rel, 0, seq_len - 1), (-1,))
+            k_b = ops.reshape(
+                ops.take(k, key_idx, axis=1),
+                (self.num_heads, nseg, 3 * cap, self.head_dim),
+            )
+            v_b = ops.reshape(
+                ops.take(v, key_idx, axis=1),
+                (self.num_heads, nseg, 3 * cap, self.head_dim),
+            )
+            q_b = ops.reshape(q_p, (self.num_heads, nseg, cap, self.head_dim))
+            win_q = ops.reshape(win_pad, (nseg, cap))
+            win_k = ops.reshape(ops.take(win_pad, key_idx), (nseg, 3 * cap))
+
+            sc = ops.einsum("hnqd,hnkd->hnqk", q_b, k_b) * self.scale
             sc = ops.cast(sc, "float32")
-            if seg_c is not None:
-                same = ops.equal(
-                    ops.expand_dims(seg_c, axis=1),
-                    ops.expand_dims(segment_ids, axis=0),
-                )
-                sc = ops.where(ops.expand_dims(same, axis=0), sc, float("-inf"))
+            same = ops.equal(
+                ops.expand_dims(win_q, 2), ops.expand_dims(win_k, 1)
+            ) & ops.reshape(key_in_range, (nseg, 1, 3 * cap))
+            # Padded queries (window_id -1) match no key: all -inf logits
+            # give a NaN softmax, which NaNs grads on backward. Unmask
+            # in-range keys on those rows; the outputs are sliced away.
+            padded_q = ops.equal(win_q, -1)
+            same = same | (
+                ops.expand_dims(padded_q, axis=2)
+                & ops.reshape(key_in_range, (nseg, 1, 3 * cap))
+            )
+            sc = ops.where(ops.expand_dims(same, axis=0), sc, float("-inf"))
             sc = ops.softmax(sc, axis=-1)
             sc = ops.cast(sc, self.compute_dtype)
-            return ops.einsum("hij,hjd->hid", sc, v)
-
-        def _full():
-            return _attend_queries(q, segment_ids)
-
-        def _chunked():
-            num_chunks = (seq_len + chunk - 1) // chunk
-            out = ops.zeros(
-                (self.num_heads, seq_len, self.head_dim), self.compute_dtype
+            out = ops.einsum("hnqk,hnkd->hnqd", sc, v_b)
+            out = ops.reshape(out, (self.num_heads, nseg * cap, self.head_dim))
+            out = ops.slice(
+                out,
+                (0, 0, 0),
+                (self.num_heads, seq_len, self.head_dim),
             )
-
-            def _attend_chunk(i, out):
-                s = ops.minimum(i * chunk, seq_len - chunk)
-                q_c = ops.slice(
-                    q, (0, s, 0), (self.num_heads, chunk, self.head_dim)
-                )
-                if segment_ids is None:
-                    seg_c = None
-                else:
-                    seg_c = ops.slice(segment_ids, (s,), (chunk,))
-                out_c = _attend_queries(q_c, seg_c)  # (H, chunk, D)
-                hi = ops.repeat(ops.arange(self.num_heads), chunk)
-                si = ops.tile(s + ops.arange(chunk), (self.num_heads,))
-                idx = ops.cast(ops.stack([hi, si], axis=1), "int32")
-                upd = ops.reshape(out_c, (-1, self.head_dim))
-                return ops.scatter_update(out, idx, upd)
-
-            return ops.fori_loop(0, num_chunks, _attend_chunk, out)
-
-        static_len = x.shape[0]
-        if isinstance(static_len, int):
-            # Static shape (eager, jit with a fixed signature)
-            out = _full() if static_len <= chunk else _chunked()
         else:
-            # Symbolic shape (functional graph, tf.function)
-            out = _full()
+            # Per-frame attention in fixed-size query chunks: keeps peak
+            # memory at (heads, chunk, seq) and bounds the score tensor
+            # below 2**31 elements (int32-indexed TF GPU kernels). Chunk
+            # starts clamp so every slice is exactly `chunk` rows —
+            # dynamic sizes aren't XLA-compilable.
+            chunk = 1024
+
+            def _attend_queries(q_c, seg_c):
+                """(H, chunk, D) queries vs all keys -> (H, chunk, D)."""
+                sc = ops.einsum("hid,hjd->hij", q_c, k) * self.scale
+                sc = ops.cast(sc, "float32")
+                if seg_c is not None:
+                    same = ops.equal(
+                        ops.expand_dims(seg_c, axis=1),
+                        ops.expand_dims(segment_ids, axis=0),
+                    )
+                    sc = ops.where(
+                        ops.expand_dims(same, axis=0), sc, float("-inf")
+                    )
+                sc = ops.softmax(sc, axis=-1)
+                sc = ops.cast(sc, self.compute_dtype)
+                return ops.einsum("hij,hjd->hid", sc, v)
+
+            def _full():
+                return _attend_queries(q, segment_ids)
+
+            def _chunked():
+                num_chunks = (seq_len + chunk - 1) // chunk
+                out = ops.zeros(
+                    (self.num_heads, seq_len, self.head_dim),
+                    self.compute_dtype,
+                )
+
+                def _attend_chunk(i, out):
+                    s = ops.minimum(i * chunk, seq_len - chunk)
+                    q_c = ops.slice(
+                        q, (0, s, 0), (self.num_heads, chunk, self.head_dim)
+                    )
+                    if segment_ids is None:
+                        seg_c = None
+                    else:
+                        seg_c = ops.slice(segment_ids, (s,), (chunk,))
+                    out_c = _attend_queries(q_c, seg_c)  # (H, chunk, D)
+                    hi = ops.repeat(ops.arange(self.num_heads), chunk)
+                    si = ops.tile(s + ops.arange(chunk), (self.num_heads,))
+                    idx = ops.cast(ops.stack([hi, si], axis=1), "int32")
+                    upd = ops.reshape(out_c, (-1, self.head_dim))
+                    return ops.scatter_update(out, idx, upd)
+
+                return ops.fori_loop(0, num_chunks, _attend_chunk, out)
+
+            static_len = x.shape[0]
+            if isinstance(static_len, int):
+                # Static shape (eager, jit with a fixed signature)
+                out = _full() if static_len <= chunk else _chunked()
+            else:
+                # Symbolic shape (functional graph, tf.function)
+                out = _full()
 
         out = ops.transpose(out, (1, 0, 2))  # (S, H, D)
         out = ops.reshape(out, (seq_len, self.embed_dim))
@@ -198,6 +260,10 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
     Uses standard ``LayerNormalization`` (with bias) and QuickGELU MLP.
     """
 
+    # Subclasses (Qwen2.5-VL) swap these implementations.
+    norm_cls = keras.layers.LayerNormalization
+    mlp_cls = Qwen2VLVisionMLP
+
     def __init__(self, embed_dim, num_heads, mlp_dim, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.embed_dim = embed_dim
@@ -206,7 +272,7 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
         self.epsilon = epsilon
 
     def build(self, input_shape):
-        self.norm1 = keras.layers.LayerNormalization(
+        self.norm1 = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="norm1"
         )
         self.norm1.build(input_shape)
@@ -217,11 +283,11 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
             name="attn",
         )
         self.attn.build(input_shape)
-        self.norm2 = keras.layers.LayerNormalization(
+        self.norm2 = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="norm2"
         )
         self.norm2.build(input_shape)
-        self.mlp = Qwen2VLVisionMLP(
+        self.mlp = self.mlp_cls(
             embed_dim=self.embed_dim,
             mlp_dim=self.mlp_dim,
             dtype=self.dtype_policy,
@@ -230,12 +296,25 @@ class Qwen2VLVisionBlock(keras.layers.Layer):
         self.mlp.build(input_shape)
         self.built = True
 
-    def call(self, x, position_embeddings, segment_ids=None):
+    def call(
+        self,
+        x,
+        position_embeddings,
+        segment_ids=None,
+        window_ids=None,
+        window_cap=None,
+    ):
         # Vision always runs in float32 for stability.
         x = ops.cast(x, "float32")
         normed = self.norm1(x)
         normed = ops.cast(normed, self.compute_dtype)
-        attn_out = self.attn(normed, position_embeddings, segment_ids)
+        attn_out = self.attn(
+            normed,
+            position_embeddings,
+            segment_ids=segment_ids,
+            window_ids=window_ids,
+            window_cap=window_cap,
+        )
         x = x + ops.cast(attn_out, "float32")
 
         normed = self.norm2(x)
@@ -279,8 +358,11 @@ class Qwen2VLPatchMerger(keras.layers.Layer):
         self.epsilon = epsilon
         self.merged_dim = embed_dim * spatial_merge_size * spatial_merge_size
 
+    # Subclasses (Qwen2.5-VL) swap the normalization implementation.
+    norm_cls = keras.layers.LayerNormalization
+
     def build(self, input_shape):
-        self.ln_q = keras.layers.LayerNormalization(
+        self.ln_q = self.norm_cls(
             epsilon=self.epsilon, dtype="float32", name="ln_q"
         )
         self.ln_q.build((None, self.embed_dim))
@@ -356,6 +438,13 @@ class Qwen2VLVisionEncoder(keras.Model):
         dtype: compute dtype; the vision tower always runs in float32.
     """
 
+    # Subclasses (Qwen2.5-VL) swap these implementations.
+    vision_block_cls = Qwen2VLVisionBlock
+    patch_merger_cls = Qwen2VLPatchMerger
+
+    def _vision_mlp_dim(self):
+        return int(self.embed_dim * self.mlp_ratio)
+
     def __init__(
         self,
         patch_size=14,
@@ -388,7 +477,7 @@ class Qwen2VLVisionEncoder(keras.Model):
         self.epsilon = epsilon
 
         self.head_dim = embed_dim // num_heads
-        mlp_dim = int(embed_dim * mlp_ratio)
+        mlp_dim = self._vision_mlp_dim()
 
         # Vision rotary inverse frequencies (matches HF `persistent=False`,
         # i.e. computed at runtime, not a stored weight).
@@ -410,7 +499,7 @@ class Qwen2VLVisionEncoder(keras.Model):
         )
 
         self.blocks = [
-            Qwen2VLVisionBlock(
+            self.vision_block_cls(
                 embed_dim=embed_dim,
                 num_heads=num_heads,
                 mlp_dim=mlp_dim,
@@ -421,7 +510,7 @@ class Qwen2VLVisionEncoder(keras.Model):
             for i in range(depth)
         ]
 
-        self.merger = Qwen2VLPatchMerger(
+        self.merger = self.patch_merger_cls(
             embed_dim=embed_dim,
             out_dim=self.out_dim,
             spatial_merge_size=spatial_merge_size,
@@ -540,6 +629,25 @@ class Qwen2VLVisionEncoder(keras.Model):
         _, _, segment_ids = self._per_patch_layout(grid_thw, seq_len)
         return segment_ids
 
+    def _encode_tokens(self, hidden_states, grid_thw):
+        """Run the ViT blocks and patch merger over embedded patches.
+
+        ``hidden_states`` is ``(seq_len, embed_dim)`` from ``patch_embed``
+        where ``seq_len`` includes the appended dummy merge group;
+        ``grid_thw`` includes the dummy grid row. Subclasses override to
+        change the attention layout (Qwen2.5-VL windowed attention).
+
+        Returns ``(seq_len // merge_size**2, out_dim)`` merged tokens in
+        the original patch order; ``call`` slices off the dummy group.
+        """
+        seq_len = ops.shape(hidden_states)[0]
+        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
+        segment_ids = self._segment_ids(grid_thw, seq_len)
+
+        for blk in self.blocks:
+            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
+        return self.merger(hidden_states)
+
     def call(self, pixel_values, grid_thw):
         """Forward pass through the vision encoder.
 
@@ -575,10 +683,8 @@ class Qwen2VLVisionEncoder(keras.Model):
                 merged = ops.expand_dims(merged, axis=0)
             return merged
 
-        # `ops.cond` can't express a 0-vs-N patch branch under `jax.jit`
-        # (branches must return equal shapes). Instead, always encode by
-        # appending one dummy merge group and gathering the real tokens
-        # back out.
+        # `ops.cond` can't branch on 0-vs-N patches under jit (equal
+        # branch shapes required); encode a dummy group and gather back.
         num_patches = ops.shape(pixel_values)[0]
         num_merged = num_patches // (
             self.spatial_merge_size * self.spatial_merge_size
@@ -606,14 +712,7 @@ class Qwen2VLVisionEncoder(keras.Model):
         )
         hidden_states = ops.cast(hidden_states, "float32")
 
-        seq_len = ops.shape(hidden_states)[0]
-        position_embeddings = self._rot_pos_emb(grid_thw, seq_len)
-        segment_ids = self._segment_ids(grid_thw, seq_len)
-
-        for blk in self.blocks:
-            hidden_states = blk(hidden_states, position_embeddings, segment_ids)
-
-        merged = self.merger(hidden_states)
+        merged = self._encode_tokens(hidden_states, grid_thw)
         merged = ops.take(merged, ops.arange(num_merged), axis=0)
 
         if batched:

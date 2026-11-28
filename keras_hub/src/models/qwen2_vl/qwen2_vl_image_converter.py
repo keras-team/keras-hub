@@ -9,6 +9,94 @@ from keras_hub.src.layers.preprocessing.image_converter import ImageConverter
 from keras_hub.src.models.qwen2_vl.qwen2_vl_backbone import Qwen2VLBackbone
 
 
+def _cubic_weight(x):
+    """Evaluates the bicubic kernel (`a=-0.5`) with NumPy."""
+    x = np.abs(x)
+    near = ((-0.5 + 2) * x - (-0.5 + 3)) * x * x + 1
+    far = (((x - 5) * x + 8) * x - 4) * -0.5
+    return np.where(x < 1, near, np.where(x < 2, far, 0.0))
+
+
+def _resize_weights(size_in, size_out):
+    """Computes the separable bicubic weights of one axis.
+
+    Antialiased bicubic (`align_corners=False`, `a=-0.5`): taps past
+    the image edge are dropped before normalization, and the tap count
+    is clamped to `ceil(2*support)*2 + 1` per ATen.
+
+    Returns:
+        `float64` array of shape `(size_out, size_in)`.
+    """
+    scale = size_in / size_out
+    filter_scale = max(scale, 1.0)
+    support = 2.0 * filter_scale
+    max_interp = int(np.ceil(support)) * 2 + 1
+    center = (np.arange(size_out) + 0.5) * scale
+    start = np.maximum(np.floor(center - support + 0.5).astype(np.int64), 0)
+    stop = np.minimum(
+        np.floor(center + support + 0.5).astype(np.int64), size_in
+    )
+    xsize = np.minimum(stop - start, max_interp)
+    index = np.arange(size_in)[None, :]
+    inside = (index >= start[:, None]) & (index < (start + xsize)[:, None])
+    weights = _cubic_weight((index + 0.5 - center[:, None]) / filter_scale)
+    weights = weights * inside
+    return weights / weights.sum(axis=1, keepdims=True)
+
+
+def _quantized_weights(size_in, size_out):
+    """Integer-quantized `_resize_weights` for the `uint8` resize path.
+
+    Matches ATen's adaptive int16 quantization: `precision` is the
+    smallest `p` such that the largest normalized weight reaches int16
+    range (`wt_max * 2**(p+1) >= 32767.5`), and each weight is
+    `round(weight * 2**precision)` (half away from zero).
+
+    Returns:
+        `(weights, precision)`. `weights` is a `float64` array of integer
+        values with shape `(size_out, size_in)`.
+    """
+    weights = _resize_weights(size_in, size_out)
+    wt_max = float(weights.max())
+    precision = 0
+    while precision < 22 and int(0.5 + wt_max * 2.0 ** (precision + 1)) < (
+        1 << 15
+    ):
+        precision += 1
+    scaled = weights * 2.0**precision
+    half = np.where(scaled < 0, -0.5, 0.5)
+    return np.trunc(scaled + half), precision
+
+
+def _resize_axis(image, axis, size_out, quantized):
+    """Resizes one axis of an image with separable bicubic weights.
+
+    Args:
+        image: float64 array.
+        axis: int. The axis to resize.
+        size_out: int. The output size of the axis.
+        quantized: bool. Use the `uint8` integer path — weights are
+            quantized and the result rounded/clipped to integers
+            after each pass.
+
+    Returns:
+        A `float64` array with the axis resized.
+    """
+    if quantized:
+        weights, precision = _quantized_weights(image.shape[axis], size_out)
+    else:
+        weights, precision = (
+            _resize_weights(image.shape[axis], size_out),
+            0,
+        )
+    image = np.tensordot(weights, image, axes=(1, axis))
+    image = np.moveaxis(image, 0, axis)
+    if quantized:
+        image = np.floor((image + 2.0 ** (precision - 1)) / 2.0**precision)
+        image = np.clip(image, 0, 255)
+    return image
+
+
 def smart_resize(
     height, width, factor=28, min_pixels=56 * 56, max_pixels=12845056
 ):
@@ -127,7 +215,7 @@ class Qwen2VLImageConverter(ImageConverter):
         self.image_std = np.array(image_std, dtype="float32")
         self._factor = patch_size * merge_size
 
-    def call(self, image):
+    def call(self, image, min_pixels=None, max_pixels=None):
         """Preprocess a single image, a video clip, or a list of images.
 
         Args:
@@ -135,6 +223,14 @@ class Qwen2VLImageConverter(ImageConverter):
                 ``(T, H, W, C)`` for a video clip, or a **list** of
                 NumPy arrays (each ``(H, W, C)``) for multiple separate
                 images. Pixel values should be in ``[0, 255]``.
+            min_pixels: int or ``None``. Optional per-call override for
+                ``self.min_pixels``, used by ``Qwen2VLVideoConverter`` to
+                apply video-specific bounds. ``None`` uses the configured
+                value.
+            max_pixels: int or ``None``. Optional per-call override for
+                ``self.max_pixels``, used by ``Qwen2VLVideoConverter`` to
+                enforce the per-frame video pixel budget. ``None`` uses
+                the configured value.
 
         Returns:
             Dict with keys:
@@ -147,11 +243,17 @@ class Qwen2VLImageConverter(ImageConverter):
         """
         # Handle a list of separate images by processing each one
         # independently and concatenating the results.
-        if isinstance(image, list):
+        if isinstance(image, (list, tuple)):
+            if len(image) == 0:
+                raise ValueError(
+                    "Expected at least one image, got an empty collection."
+                )
             all_patches = []
             all_grids = []
             for img in image:
-                out = self.call(img)
+                out = self.call(
+                    img, min_pixels=min_pixels, max_pixels=max_pixels
+                )
                 all_patches.append(out["patches"])
                 all_grids.append(out["grid_thw"])
             return {
@@ -159,6 +261,9 @@ class Qwen2VLImageConverter(ImageConverter):
                 "grid_thw": np.concatenate(all_grids, axis=0),
             }
 
+        # Torchvision takes the quantized integer resize path only for
+        # `uint8` inputs; float32 always uses the floating-point path.
+        quantized = np.asarray(ops.convert_to_numpy(image)).dtype == np.uint8
         image = np.asarray(ops.convert_to_numpy(image), dtype="float32")
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
@@ -166,24 +271,29 @@ class Qwen2VLImageConverter(ImageConverter):
             image = image[np.newaxis]
 
         height, width = image.shape[1], image.shape[2]
+        effective_min_pixels = (
+            self.min_pixels if min_pixels is None else min_pixels
+        )
+        effective_max_pixels = (
+            self.max_pixels if max_pixels is None else max_pixels
+        )
         resized_h, resized_w = smart_resize(
             height,
             width,
             factor=self._factor,
-            min_pixels=self.min_pixels,
-            max_pixels=self.max_pixels,
+            min_pixels=effective_min_pixels,
+            max_pixels=effective_max_pixels,
         )
 
         if resized_h != height or resized_w != width:
-            image = ops.convert_to_numpy(
-                ops.image.resize(
-                    image,
-                    (resized_h, resized_w),
-                    interpolation="bicubic",
-                    antialias=True,
-                )
-            )
-            image = np.clip(image, 0.0, 255.0)
+            # Separable bicubic, width then height. `uint8` inputs use
+            # the quantized path with per-pass rounding and clipping.
+            image = image.astype("float64")
+            image = _resize_axis(image, 2, resized_w, quantized)
+            image = _resize_axis(image, 1, resized_h, quantized)
+            image = image.astype("float32")
+            if quantized:
+                image = np.clip(image, 0.0, 255.0)
         patches = image
 
         patches = patches / np.float32(255.0)

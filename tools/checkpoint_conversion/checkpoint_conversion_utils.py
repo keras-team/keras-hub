@@ -1,7 +1,10 @@
 import hashlib
 import os
+import shutil
 import tarfile
 import zipfile
+
+import numpy as np
 
 
 def get_md5_checksum(file_path):
@@ -61,3 +64,61 @@ def download_gcs_file(gcs_uri, destination_file_name):
 
     # Download the file
     blob.download_to_filename(destination_file_name)
+
+
+def extract_response(text):
+    """Strip the prompt/chat-template prefix from generated text."""
+    if "assistant\n" in text:
+        return text.split("assistant\n", 1)[1].strip()
+    return text.strip()
+
+
+def count_keras_params(backbone):
+    """Count unique parameters (handles tied weights)."""
+    from keras import ops
+
+    unique = {id(w): w for w in backbone.weights}.values()
+    return sum(ops.convert_to_numpy(w).size for w in unique)
+
+
+def test_parameter_count(keras_backbone, hf_param_count):
+    print("\n" + "=" * 50)
+    print("PARAMETER COUNT COMPARISON")
+    print("=" * 50)
+    keras_params = count_keras_params(keras_backbone)
+    print(f"\n  KerasHub params: {keras_params:,}")
+    print(f"  HF params:       {hf_param_count:,}")
+    assert keras_params == hf_param_count, (
+        f"Parameter count mismatch: keras={keras_params}, hf={hf_param_count}"
+    )
+    print("  Parameter counts match.")
+
+
+def save_preset(keras_model, preset_name):
+    """Save the model to ``./<preset_name>`` and return the path."""
+    preset_path = f"./{preset_name}"
+    if os.path.exists(preset_path):
+        print(f"\n-> Removing existing preset at {preset_path}...")
+        shutil.rmtree(preset_path)
+    print(f"-> Saving KerasHub preset to {preset_path}...")
+    keras_model.save_to_preset(preset_path)
+    print(f"  Preset saved to {preset_path}")
+    return preset_path
+
+
+def validate_reloaded_preset(model_cls, preset_path):
+    """Reload the saved artifact and run a forward sanity check."""
+    from keras import ops
+
+    print("\n" + "=" * 50)
+    print("SAVE/RELOAD VALIDATION")
+    print("=" * 50)
+    reloaded = model_cls.from_preset(preset_path)
+    preprocessed = reloaded.preprocessor.generate_preprocess(
+        ["What is the capital of France?"], sequence_length=8
+    )
+    logits = ops.convert_to_numpy(reloaded(preprocessed))
+    assert np.isfinite(logits).all(), (
+        "reloaded model produced non-finite logits"
+    )
+    print("  Reloaded preset produces finite logits.")

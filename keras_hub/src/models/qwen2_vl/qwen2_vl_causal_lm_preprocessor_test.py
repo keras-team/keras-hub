@@ -49,6 +49,14 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
             max_pixels=100,
         )
 
+    def _video_converter(self):
+        """Video converter with small bounds so test grids stay tiny."""
+        return Qwen2VLVideoConverter(
+            image_converter=self._image_converter(),
+            min_pixels=16,
+            max_pixels=100,
+        )
+
     def test_preprocessor_basics(self):
         self.run_preprocessor_test(
             cls=Qwen2VLCausalLMPreprocessor,
@@ -92,6 +100,71 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         preprocessor = Qwen2VLCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
+
+    def test_plain_string_with_media_marker_uses_text_path(self):
+        """Markers in bare strings are plain text, as on the base class."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=16,
+        )
+        out = preprocessor.generate_preprocess("<|image_pad|> air")
+        self.assertNotIn("pixel_values", out)
+        x, _, _ = preprocessor("<|image_pad|> air")
+        self.assertNotIn("pixel_values", x)
+
+    def test_mixed_size_uint8_batch_pixels_match_single(self):
+        """Mixed-size uint8 batch converts exactly as each image alone."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=64,
+        )
+        rng = np.random.RandomState(0)
+        img_a = rng.randint(0, 256, (4, 4, 3)).astype("uint8")
+        img_b = rng.randint(0, 256, (6, 5, 3)).astype("uint8")
+        prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
+        alone = preprocessor.generate_preprocess(
+            {"prompts": [prompt], "images": [img_a]}
+        )
+        batch = preprocessor.generate_preprocess(
+            {"prompts": [prompt, prompt], "images": [[img_a], [img_b]]}
+        )
+        pa = ops.convert_to_numpy(alone["pixel_values"])
+        pb = ops.convert_to_numpy(batch["pixel_values"])
+        self.assertAllClose(pb[: pa.shape[0]], pa, atol=1e-6)
+
+    def test_generate_preprocess_nested_empty_images_text_only(self):
+        """Empty media collections, including `generate()`'s nested wrap,
+        behave like absent media."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=16,
+        )
+        expected = preprocessor.generate_preprocess("air")
+        # `([],)` reaches the `_empty_media` recursion.
+        for images in ([], [[]], ([],)):
+            out = preprocessor.generate_preprocess(
+                {"prompts": "air", "images": images}
+            )
+            self.assertAllEqual(out["token_ids"], expected["token_ids"])
+            self.assertAllEqual(out["padding_mask"], expected["padding_mask"])
+            self.assertNotIn("pixel_values", out)
+
+    def test_generate_preprocess_marker_with_empty_images_raises(self):
+        """A marker with empty media gets the count error, not a
+        converter failure."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=16,
+        )
+        for images in ([], [[]]):
+            with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
+                preprocessor.generate_preprocess(
+                    {"prompts": "<|image_pad|> air", "images": images}
+                )
 
     def test_generate_preprocess_with_image(self):
         """Image input: marker expansion, vision_indices, position_ids."""
@@ -216,10 +289,9 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
 
     def test_generate_preprocess_with_video(self):
         """Video input: temporal grid produces t*h*w tokens."""
-        image_converter = self._image_converter()
         preprocessor = Qwen2VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             sequence_length=32,
         )
 
@@ -249,9 +321,7 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
     def test_generate_preprocess_with_video_converter_only(self):
         """Videos work with `image_converter=None`; merge size comes from
         the video converter's inner image converter."""
-        video_converter = Qwen2VLVideoConverter(
-            image_converter=self._image_converter()
-        )
+        video_converter = self._video_converter()
         preprocessor = Qwen2VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
             video_converter=video_converter,
@@ -287,10 +357,9 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         leaves a temporal max above the last text position, so pad
         positions must start at llm max + 1.
         """
-        image_converter = self._image_converter()
         preprocessor = Qwen2VLCausalLMPreprocessor(
             tokenizer=self.tokenizer,
-            image_converter=image_converter,
+            video_converter=self._video_converter(),
             sequence_length=32,
         )
 
@@ -357,6 +426,32 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         # Placeholder with no images at all.
         with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
             preprocessor({"prompts": [pad + " air"], "images": []})
+
+    def test_video_falls_back_to_image_converter(self):
+        """`video_converter=None` stays None: videos defer to the shared
+        `image_converter` (HF's image-processor fallback for videos)."""
+        image_converter = self._image_converter()
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=image_converter,
+            sequence_length=32,
+        )
+        self.assertIsNone(preprocessor.video_converter)
+
+        video = np.ones((8, 2, 2, 3), dtype="float32")
+        tok = self.tokenizer
+        prompt = (
+            tok.vision_start_token
+            + tok.video_token
+            + tok.vision_end_token
+            + " air"
+        )
+        out = preprocessor.generate_preprocess(
+            {"prompts": prompt, "videos": [video]}
+        )
+        self.assertEqual(
+            list(ops.convert_to_numpy(out["image_grid_thw"])[0]), [4, 2, 2]
+        )
 
     def test_missing_image_converter_error(self):
         preprocessor = Qwen2VLCausalLMPreprocessor(
