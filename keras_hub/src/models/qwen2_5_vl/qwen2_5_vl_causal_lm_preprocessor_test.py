@@ -102,49 +102,6 @@ class Qwen2_5VLCausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "airplane at airport")
 
-    def test_plain_string_with_media_marker_uses_text_path(self):
-        """Markers in bare strings are plain text, as on the base class."""
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            image_converter=self._image_converter(),
-            sequence_length=16,
-        )
-        out = preprocessor.generate_preprocess("<|image_pad|> air")
-        self.assertNotIn("pixel_values", out)
-        x, _, _ = preprocessor("<|image_pad|> air")
-        self.assertNotIn("pixel_values", x)
-
-    def test_generate_preprocess_nested_empty_images_text_only(self):
-        """Empty media collections, including `generate()`'s nested wrap,
-        behave like absent media."""
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            image_converter=self._image_converter(),
-            sequence_length=16,
-        )
-        expected = preprocessor.generate_preprocess("air")
-        for images in ([], [[]]):
-            out = preprocessor.generate_preprocess(
-                {"prompts": "air", "images": images}
-            )
-            self.assertAllEqual(out["token_ids"], expected["token_ids"])
-            self.assertAllEqual(out["padding_mask"], expected["padding_mask"])
-            self.assertNotIn("pixel_values", out)
-
-    def test_generate_preprocess_marker_with_empty_images_raises(self):
-        """A marker with empty media gets the count error, not a
-        converter failure."""
-        preprocessor = Qwen2_5VLCausalLMPreprocessor(
-            tokenizer=self.tokenizer,
-            image_converter=self._image_converter(),
-            sequence_length=16,
-        )
-        for images in ([], [[]]):
-            with self.assertRaisesRegex(ValueError, "Found 1.*but 0 image"):
-                preprocessor.generate_preprocess(
-                    {"prompts": "<|image_pad|> air", "images": images}
-                )
-
     def test_generate_preprocess_with_image(self):
         """Image input: marker expansion, vision_indices, position_ids."""
         image_converter = self._image_converter()

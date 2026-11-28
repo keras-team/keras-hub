@@ -127,23 +127,31 @@ class Qwen2_5VLCausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :5],
         )
 
-    def _prefill_hidden_states(self, causal_lm, inputs):
-        """Prefill hidden states through the same path `generate()`
-        uses, including the interleaving first `call_with_cache`."""
-        normalized, _ = causal_lm._normalize_generate_inputs(dict(inputs))
-        preprocessed = causal_lm.preprocessor.generate_preprocess(normalized[0])
-        img_embeddings = causal_lm.backbone.vision_encoder(
-            preprocessed["pixel_values"],
-            preprocessed["image_grid_thw"],
-        )
-        hidden_states, _ = causal_lm._build_cache(
-            preprocessed["token_ids"],
-            preprocessed["padding_mask"],
-            img_embeddings=img_embeddings,
-            vision_indices=preprocessed["vision_indices"],
-            position_ids=preprocessed["position_ids"],
-        )
-        return ops.convert_to_numpy(hidden_states)
+    def _generate_capturing_prefill(self, causal_lm, inputs, max_length):
+        """Run `generate()` and capture the prefill hidden states from the
+        `_build_cache` call inside it, so the capture covers everything
+        `generate_step` itself does with the media inputs."""
+        captured = []
+        original = causal_lm._build_cache
+
+        def spy(*args, **kwargs):
+            hidden_states, cache = original(*args, **kwargs)
+            captured.append(ops.convert_to_numpy(hidden_states))
+            return hidden_states, cache
+
+        causal_lm._build_cache = spy
+        try:
+            output = causal_lm.generate(
+                inputs,
+                max_length=max_length,
+                strip_prompt=True,
+                stop_token_ids=None,
+            )
+        finally:
+            del causal_lm._build_cache
+        self.assertTrue(isinstance(output, str))
+        self.assertLen(captured, 1)
+        return captured[0]
 
     def test_generate_with_image(self):
         """Multimodal generate: image embeddings interleave into prefill."""
@@ -157,14 +165,9 @@ class Qwen2_5VLCausalLMTest(TestCase):
         for value in (0.0, 255.0):
             image = np.full((4, 4, 3), value, dtype="float32")
             inputs = {"prompts": prompt, "images": image}
-            output = causal_lm.generate(
-                inputs,
-                max_length=20,
-                strip_prompt=True,
-                stop_token_ids=None,
+            hidden_states.append(
+                self._generate_capturing_prefill(causal_lm, inputs, 20)
             )
-            self.assertTrue(isinstance(output, str))
-            hidden_states.append(self._prefill_hidden_states(causal_lm, inputs))
         # Greedy decodings can coincide for different images; prefill
         # hidden states cannot unless the vision embeddings are dropped.
         self.assertGreater(
@@ -189,14 +192,9 @@ class Qwen2_5VLCausalLMTest(TestCase):
                 "videos": [video],
                 "second_per_grid_ts": [0.5],
             }
-            output = causal_lm.generate(
-                inputs,
-                max_length=36,
-                strip_prompt=True,
-                stop_token_ids=None,
+            hidden_states.append(
+                self._generate_capturing_prefill(causal_lm, inputs, 36)
             )
-            self.assertTrue(isinstance(output, str))
-            hidden_states.append(self._prefill_hidden_states(causal_lm, inputs))
         # Same rationale as `test_generate_with_image`.
         self.assertGreater(
             np.max(np.abs(hidden_states[0] - hidden_states[1])), 1e-3
@@ -278,23 +276,20 @@ class Qwen2_5VLCausalLMTest(TestCase):
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(sequence_length=16)
         )
-        image = np.ones((4, 4, 3), dtype="float32")
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
-        inputs = causal_lm.preprocessor.generate_preprocess(
-            {"prompts": [prompt], "images": [image]}
-        )
-        logits = ops.convert_to_numpy(causal_lm.score(inputs))
-        self.assertEqual(logits.shape[0], 1)
-        self.assertTrue(np.isfinite(logits).all())
+        logits = []
+        for value in (0.0, 255.0):
+            image = np.full((4, 4, 3), value, dtype="float32")
+            inputs = causal_lm.preprocessor.generate_preprocess(
+                {"prompts": [prompt], "images": [image]}
+            )
+            logits.append(ops.convert_to_numpy(causal_lm.score(inputs)))
+        self.assertEqual(logits[0].shape[0], 1)
+        self.assertTrue(np.isfinite(logits[0]).all())
 
-        # Vision embeddings must actually perturb the logits: scoring
-        # the same token ids without vision inputs differs.
-        text_only = {
-            "token_ids": inputs["token_ids"],
-            "padding_mask": inputs["padding_mask"],
-        }
-        logits_text = ops.convert_to_numpy(causal_lm.score(text_only))
-        self.assertGreater(np.abs(logits - logits_text).max(), 1e-4)
+        # a text-only comparison would pass even with the vision tower
+        # output zeroed.
+        self.assertGreater(np.abs(logits[0] - logits[1]).max(), 1e-4)
 
     def test_score_with_video_second_per_grid_ts(self):
         """`second_per_grid_ts` scales temporal positions enough to move

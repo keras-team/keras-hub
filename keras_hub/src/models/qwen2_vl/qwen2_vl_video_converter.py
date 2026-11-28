@@ -10,6 +10,24 @@ from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
 from keras_hub.src.utils.tensor_utils import convert_to_numpy
 
 
+def _nested_rank(x):
+    """Rank of a nested list/tensor structure, without host conversion.
+
+    Counts list nesting plus the rank of the innermost tensor/array, so
+    device tensors are inspected through their shape alone.
+    """
+    rank = 0
+    while isinstance(x, (list, tuple)):
+        if len(x) == 0:
+            return rank
+        x = x[0]
+        rank += 1
+    shape = getattr(x, "shape", None)
+    if shape is not None:
+        rank += len(shape)
+    return rank
+
+
 @keras_hub_export("keras_hub.layers.Qwen2VLVideoConverter")
 class Qwen2VLVideoConverter(VideoConverter):
     """Qwen2-VL video converter.
@@ -109,12 +127,17 @@ class Qwen2VLVideoConverter(VideoConverter):
                 raise ValueError(
                     "Expected at least one video clip, got an empty collection."
                 )
-            # A clip may be given as nested lists, whose first element is a
-            # list-like `(H, W, C)` frame. Bare ndarray frames instead form
-            # a collection of one-frame clips.
-            first = convert_to_numpy(video[0])
-            if isinstance(video[0], (list, tuple)) and first.ndim == 3:
-                return self._convert_clip(video)
+            first = video[0]
+            if isinstance(first, (list, tuple)):
+                if len(first) == 0:
+                    raise ValueError(
+                        "Expected at least one frame per video clip, got an "
+                        "empty clip."
+                    )
+                # structural rank check: no host copy of device tensors.
+                if _nested_rank(first) == 3:
+                    return self._convert_clip(video)
+            # otherwise a collection of clips, or bare one-frame clips.
             all_patches, all_grids = [], []
             for clip in video:
                 out = self._convert_clip(clip)
@@ -129,7 +152,16 @@ class Qwen2VLVideoConverter(VideoConverter):
     def _convert_clip(self, video):
         image_converter = self.image_converter
         max_pixels = self.max_pixels
-        video = convert_to_numpy(video)
+        if isinstance(video, (list, tuple)):
+            if len(video) == 0:
+                raise ValueError(
+                    "Expected at least one frame per video clip, got an "
+                    "empty clip."
+                )
+            # frame by frame: device tensors move to host once each.
+            video = np.stack([convert_to_numpy(f) for f in video], axis=0)
+        else:
+            video = convert_to_numpy(video)
         if self.cap_pixels_per_frame:
             factor = image_converter.patch_size * image_converter.merge_size
             total_pixels = int(self.max_video_tokens * factor * factor * 0.9)

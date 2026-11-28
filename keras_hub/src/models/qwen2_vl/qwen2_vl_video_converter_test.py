@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from keras import ops
 
 from keras_hub.src.models.qwen2_vl.qwen2_vl_image_converter import (
@@ -32,9 +31,9 @@ class Qwen2VLVideoConverterTest(TestCase):
             **kwargs,
         )
 
-    def _make_video(self, num_frames=4, height=56, width=56):
+    def _make_video(self, num_frames=4, height=56, width=56, seed=0):
         """Create a random video tensor (T, H, W, 3)."""
-        rng = np.random.default_rng(0)
+        rng = np.random.default_rng(seed)
         return rng.integers(0, 256, size=(num_frames, height, width, 3)).astype(
             "float32"
         )
@@ -102,17 +101,22 @@ class Qwen2VLVideoConverterTest(TestCase):
         self.assertEqual(result["patches"].shape[0], 32 + 32)
         self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [2, 4, 4]])
 
-    def test_5d_torch_tensor(self):
-        """A torch (B, T, H, W, C) tensor splits into B separate clips."""
-        torch = pytest.importorskip("torch")
+    def test_5d_backend_tensor(self):
+        """A backend (B, T, H, W, C) tensor splits into B separate clips,
+        each converting exactly as it does on its own."""
         converter = self._make_converter()
-        batched = np.stack(
-            [self._make_video(num_frames=4), self._make_video(num_frames=4)],
-            axis=0,
-        )
-        result = converter(torch.from_numpy(batched))
+        clip_a = self._make_video(num_frames=4, seed=0)
+        clip_b = self._make_video(num_frames=4, seed=1)
+        batched = ops.convert_to_tensor(np.stack([clip_a, clip_b], axis=0))
+        result = converter(batched)
         self.assertEqual(result["patches"].shape[0], 32 + 32)
         self.assertAllEqual(result["grid_thw"], [[2, 4, 4], [2, 4, 4]])
+        # per-clip comparison: same-clip-twice or first-clip-only fails.
+        alone_a = converter(clip_a)
+        alone_b = converter(clip_b)
+        n_a = alone_a["patches"].shape[0]
+        self.assertAllClose(result["patches"][:n_a], alone_a["patches"])
+        self.assertAllClose(result["patches"][n_a:], alone_b["patches"])
 
     def test_list_of_single_frame_arrays_with_different_sizes(self):
         """Ndarray frames are separate one-frame clips, even when ragged."""
@@ -123,6 +127,13 @@ class Qwen2VLVideoConverterTest(TestCase):
         ]
         result = converter(frames)
         self.assertAllEqual(result["grid_thw"], [[1, 4, 4], [1, 6, 6]])
+        # same-size frames are separate one-frame clips too.
+        frames = [
+            self._make_video(num_frames=1, seed=0)[0],
+            self._make_video(num_frames=1, seed=1)[0],
+        ]
+        result = converter(frames)
+        self.assertAllEqual(result["grid_thw"], [[1, 4, 4], [1, 4, 4]])
 
     def test_nested_list_is_one_clip(self):
         """A nested Python list of frames is one clip, not a collection."""
@@ -154,6 +165,8 @@ class Qwen2VLVideoConverterTest(TestCase):
             converter([])
         with self.assertRaises(ValueError):
             converter(())
+        with self.assertRaisesRegex(ValueError, "empty clip"):
+            converter([[]])
 
     def test_default_video_bounds(self):
         """A default converter applies image bounds, matching HF

@@ -113,6 +113,27 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
         x, _, _ = preprocessor("<|image_pad|> air")
         self.assertNotIn("pixel_values", x)
 
+    def test_mixed_size_uint8_batch_pixels_match_single(self):
+        """Mixed-size uint8 batch converts exactly as each image alone."""
+        preprocessor = Qwen2VLCausalLMPreprocessor(
+            tokenizer=self.tokenizer,
+            image_converter=self._image_converter(),
+            sequence_length=64,
+        )
+        rng = np.random.RandomState(0)
+        img_a = rng.randint(0, 256, (4, 4, 3)).astype("uint8")
+        img_b = rng.randint(0, 256, (6, 5, 3)).astype("uint8")
+        prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
+        alone = preprocessor.generate_preprocess(
+            {"prompts": [prompt], "images": [img_a]}
+        )
+        batch = preprocessor.generate_preprocess(
+            {"prompts": [prompt, prompt], "images": [[img_a], [img_b]]}
+        )
+        pa = ops.convert_to_numpy(alone["pixel_values"])
+        pb = ops.convert_to_numpy(batch["pixel_values"])
+        self.assertAllClose(pb[: pa.shape[0]], pa, atol=1e-6)
+
     def test_generate_preprocess_nested_empty_images_text_only(self):
         """Empty media collections, including `generate()`'s nested wrap,
         behave like absent media."""
@@ -122,7 +143,8 @@ class Qwen2VLCausalLMPreprocessorTest(TestCase):
             sequence_length=16,
         )
         expected = preprocessor.generate_preprocess("air")
-        for images in ([], [[]]):
+        # `([],)` reaches the `_empty_media` recursion.
+        for images in ([], [[]], ([],)):
             out = preprocessor.generate_preprocess(
                 {"prompts": "air", "images": images}
             )

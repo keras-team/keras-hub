@@ -35,13 +35,11 @@ def convert_backbone_config(transformers_config):
     # transformers 5.x renames "rope_scaling" to "rope_parameters" and may
     # serialize it as null; neither key is guaranteed alongside the other.
     rope_params = tc.get("rope_parameters") or tc.get("rope_scaling") or {}
+    # transformers 5.x nests `rope_theta` inside rope_parameters/rope_scaling.
     rope_theta = rope_params.get("rope_theta")
     if rope_theta is None:
-        rope_theta = tc.get("rope_theta")
-    if rope_theta is None:
-        rope_theta = 1000000
-    # M-RoPE section lives inside rope_parameters/rope_scaling in the HF
-    # config; HF defaults to [16, 24, 24].
+        rope_theta = tc["rope_theta"]
+    # configs saved by transformers 5.x omit `mrope_section`.
     mrope_section = rope_params.get("mrope_section", [16, 24, 24])
     # Outer level in transformers 5.x; inside text_config in 4.x.
     if "tie_word_embeddings" in transformers_config:
@@ -51,22 +49,27 @@ def convert_backbone_config(transformers_config):
 
     vision_encoder = None
     if vision_config is not None:
+        # released configs write "in_chans".
+        if "in_chans" in vision_config:
+            in_channels = vision_config["in_chans"]
+        else:
+            in_channels = vision_config["in_channels"]
         vision_encoder = Qwen2_5VLVisionEncoder(
+            in_channels=in_channels,
+            embed_dim=vision_config["hidden_size"],
+            out_dim=vision_config["out_hidden_size"],
+            intermediate_dim=vision_config["intermediate_size"],
+            # omitted by the 32B release; HF defaults apply.
             patch_size=vision_config.get("patch_size", 14),
             temporal_patch_size=vision_config.get("temporal_patch_size", 2),
-            in_channels=vision_config.get(
-                "in_chans", vision_config.get("in_channels", 3)
-            ),
-            embed_dim=vision_config.get("hidden_size", 3584),
-            out_dim=vision_config.get("out_hidden_size", 3584),
             depth=vision_config.get("depth", 32),
             num_heads=vision_config.get("num_heads", 16),
-            intermediate_dim=vision_config.get("intermediate_size", 3420),
             spatial_merge_size=vision_config.get("spatial_merge_size", 2),
             window_size=vision_config.get("window_size", 112),
             fullatt_block_indexes=vision_config.get(
                 "fullatt_block_indexes", [7, 15, 23, 31]
             ),
+            # omitted by all released configs.
             theta=(vision_config.get("rope_parameters") or {}).get(
                 "rope_theta", vision_config.get("rope_theta", 10000.0)
             ),
@@ -83,12 +86,12 @@ def convert_backbone_config(transformers_config):
         "mrope_section": mrope_section,
         "layer_norm_epsilon": tc["rms_norm_eps"],
         "tie_word_embeddings": tie_word_embeddings,
-        "use_sliding_window_attention": tc.get("use_sliding_window", False),
+        "use_sliding_window_attention": tc["use_sliding_window"],
         "dropout": tc["attention_dropout"],
     }
     # transformers 5.x serializes `sliding_window` as null when unused.
     # Omit it then so the backbone default applies.
-    if tc.get("sliding_window") is not None:
+    if tc["sliding_window"] is not None:
         result["sliding_window_size"] = tc["sliding_window"]
     if vision_encoder is not None:
         result["vision_encoder"] = vision_encoder
@@ -104,8 +107,7 @@ def load_preprocessor_config(preset, transformers_config):
     vision_config = transformers_config.get("vision_config")
     if vision_config is None:
         return None
-    # Sparse vision configs may omit it; HF's vision config defaults to 4.
-    return {"tokens_per_second": vision_config.get("tokens_per_second", 4)}
+    return {"tokens_per_second": vision_config["tokens_per_second"]}
 
 
 def load_video_converter_config(preset, transformers_config):

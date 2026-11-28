@@ -85,24 +85,28 @@ class ConvertBackboneConfigTest(TestCase):
 
     def test_sparse_vision_config_uses_defaults(self):
         """32B omits keys that match `Qwen2_5_VLVisionConfig` defaults."""
+        # mirrors the released 32B vision config.
         hf_config = {
             "text_config": _text_config(),
             "vision_config": {
-                "depth": 64,
                 "hidden_size": 1280,
+                "in_chans": 3,
                 "intermediate_size": 3456,
-                "num_heads": 16,
-                "out_hidden_size": 3584,
+                "out_hidden_size": 5120,
+                "tokens_per_second": 2,
             },
         }
         result = convert_qwen2_5_vl.convert_backbone_config(hf_config)
         vision = result["vision_encoder"]
         self.assertEqual(vision.patch_size, 14)
         self.assertEqual(vision.temporal_patch_size, 2)
+        self.assertEqual(vision.depth, 32)
+        self.assertEqual(vision.num_heads, 16)
         self.assertEqual(vision.spatial_merge_size, 2)
         self.assertEqual(vision.window_size, 112)
         self.assertEqual(list(vision.fullatt_block_indexes), [7, 15, 23, 31])
         self.assertEqual(vision.intermediate_dim, 3456)
+        self.assertEqual(vision.out_dim, 5120)
 
     def test_text_only_config(self):
         result = convert_qwen2_5_vl.convert_backbone_config(

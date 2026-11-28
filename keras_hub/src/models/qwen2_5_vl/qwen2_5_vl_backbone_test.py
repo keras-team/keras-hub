@@ -1,6 +1,7 @@
 import keras
 import numpy as np
 import pytest
+from keras import ops
 
 from keras_hub.src.models.qwen2_5_vl.qwen2_5_vl_backbone import (
     Qwen2_5VLBackbone,
@@ -141,9 +142,21 @@ class Qwen2_5VLMultimodalBackboneTest(TestCase):
         self.assertTrue(hasattr(model, "interleave_embeddings"))
 
     def test_multimodal_backbone_forward(self):
+        """Vision embeddings must reach the sequence at the vision
+        positions."""
         backbone = Qwen2_5VLBackbone(**self.init_kwargs)
-        output = backbone(self._vision_inputs())
-        self.assertEqual(tuple(output.shape), (1, 8, 128))
+        outputs = []
+        for value in (0.0, 1.0):
+            inputs = self._vision_inputs()
+            inputs["pixel_values"] = np.full_like(inputs["pixel_values"], value)
+            outputs.append(ops.convert_to_numpy(backbone(inputs)))
+        # without interleaving, both forwards would be bit-identical at
+        # the vision positions.
+        vision_positions = np.arange(1, 7)
+        vision_diff = np.abs(
+            outputs[0][0, vision_positions] - outputs[1][0, vision_positions]
+        ).max()
+        self.assertGreater(vision_diff, 1e-3)
 
     def test_backbone_text_only_injection(self):
         """Multimodal backbone accepts text-only inputs via __call__."""

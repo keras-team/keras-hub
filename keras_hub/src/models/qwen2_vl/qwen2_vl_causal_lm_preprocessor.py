@@ -239,13 +239,13 @@ class Qwen2VLCausalLMPreprocessor(
         converter = self.image_converter or self.video_converter
         return getattr(converter, "merge_size", 2)
 
-    def _media_inputs(self, x):
+    def _media_inputs(self, x, images=None, videos=None):
         """Extract images/videos from the input; empty counts as absent."""
-        images = None
-        videos = None
         if isinstance(x, dict):
-            images = x.get("images", None)
-            videos = x.get("videos", None)
+            if images is None:
+                images = x.get("images", None)
+            if videos is None:
+                videos = x.get("videos", None)
         if _empty_media(images):
             images = None
         if _empty_media(videos):
@@ -617,19 +617,26 @@ class Qwen2VLCausalLMPreprocessor(
         sequence_length=None,
         second_per_grid_ts=None,
     ):
-        # Popped ahead of input conversion so float64 values are not
-        # downcast to float32 during tensorization.
+        # popped before input conversion so dtypes and ragged structure
+        # survive tensorization.
         if second_per_grid_ts is None and isinstance(x, dict):
             second_per_grid_ts = x.get("second_per_grid_ts")
             if second_per_grid_ts is not None:
                 x = dict(x)
                 x.pop("second_per_grid_ts")
+        images = videos = None
+        if isinstance(x, dict) and ("images" in x or "videos" in x):
+            x = dict(x)
+            images = x.pop("images", None)
+            videos = x.pop("videos", None)
         return self._call(
             x,
             y=y,
             sample_weight=sample_weight,
             sequence_length=sequence_length,
             second_per_grid_ts=second_per_grid_ts,
+            images=images,
+            videos=videos,
         )
 
     @preprocessing_function
@@ -640,9 +647,11 @@ class Qwen2VLCausalLMPreprocessor(
         sample_weight=None,
         sequence_length=None,
         second_per_grid_ts=None,
+        images=None,
+        videos=None,
     ):
         sequence_length = sequence_length or self.sequence_length
-        images, videos = self._media_inputs(x)
+        images, videos = self._media_inputs(x, images, videos)
 
         # Text-only fast path: media-free inputs delegate to the base
         # class, whose tokenizer/packer path is safe under `tf.data`
@@ -732,15 +741,27 @@ class Qwen2VLCausalLMPreprocessor(
             if second_per_grid_ts is not None:
                 x = dict(x)
                 x.pop("second_per_grid_ts")
+        images = videos = None
+        if isinstance(x, dict) and ("images" in x or "videos" in x):
+            x = dict(x)
+            images = x.pop("images", None)
+            videos = x.pop("videos", None)
         return self._generate_preprocess(
             x,
             sequence_length=sequence_length,
             second_per_grid_ts=second_per_grid_ts,
+            images=images,
+            videos=videos,
         )
 
     @preprocessing_function
     def _generate_preprocess(
-        self, x, sequence_length=None, second_per_grid_ts=None
+        self,
+        x,
+        sequence_length=None,
+        second_per_grid_ts=None,
+        images=None,
+        videos=None,
     ):
         """Preprocess inputs for generation (prompt-only, no labels).
 
@@ -754,7 +775,7 @@ class Qwen2VLCausalLMPreprocessor(
             inputs, ``pixel_values``, ``image_grid_thw``,
             ``vision_indices``, ``position_ids``.
         """
-        images, videos = self._media_inputs(x)
+        images, videos = self._media_inputs(x, images, videos)
 
         # Text-only: delegate to the base class entirely. The base class
         # expects bare strings, so unwrap a `{"prompts": ...}` dict first.
