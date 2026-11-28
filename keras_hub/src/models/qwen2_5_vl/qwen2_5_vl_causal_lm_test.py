@@ -159,7 +159,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(sequence_length=16)
         )
-        causal_lm.compile(sampler="greedy")
+        causal_lm.compile(sampler="greedy", run_eagerly=True)
         prompt = "<|vision_start|><|image_pad|><|vision_end|> air"
         hidden_states = []
         for value in (0.0, 255.0):
@@ -181,7 +181,7 @@ class Qwen2_5VLCausalLMTest(TestCase):
         causal_lm = Qwen2_5VLCausalLM(
             **self._multimodal_init_kwargs(sequence_length=32)
         )
-        causal_lm.compile(sampler="greedy")
+        causal_lm.compile(sampler="greedy", run_eagerly=True)
         self.assertIsNone(causal_lm.preprocessor.video_converter)
         prompt = "<|vision_start|><|video_pad|><|vision_end|> air"
         hidden_states = []
